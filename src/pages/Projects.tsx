@@ -178,13 +178,31 @@ export default function Projects() {
         )}
       </div>
 
-      <Button 
-        className="w-full mt-4" 
-        variant="outline"
-        onClick={() => handleEdit(project)}
-      >
-        Подробнее <ArrowRight className="w-4 h-4 ml-2" />
-      </Button>
+      <div className="flex gap-2 mt-4">
+        <Button 
+          className="flex-1" 
+          variant="default"
+          onClick={() => {
+            // Проверяем есть ли данные проекта на основе шаблона
+            const projectDataKey = `rb_project_data_${project.id}`;
+            const savedData = localStorage.getItem(projectDataKey);
+            if (savedData) {
+              navigate(`/project/${project.id}`);
+            } else {
+              handleEdit(project);
+            }
+          }}
+        >
+          Открыть <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
+        <Button 
+          variant="outline"
+          size="icon"
+          onClick={() => handleEdit(project)}
+        >
+          <Edit className="w-4 h-4" />
+        </Button>
+      </div>
     </Card>
   );
 
@@ -291,10 +309,15 @@ export default function Projects() {
           </h1>
           <p className="text-muted-foreground mt-1">Управление проектами компании</p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)} className="w-full md:w-auto">
-          <Plus className="w-4 h-4 mr-2" />
-          Создать проект
-        </Button>
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button onClick={() => navigate('/create-project')} className="flex-1 md:flex-none" variant="default">
+            <Plus className="w-4 h-4 mr-2" />
+            Создать из шаблона
+          </Button>
+          <Button onClick={() => setIsCreateModalOpen(true)} className="flex-1 md:flex-none" variant="outline">
+            Простой проект
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

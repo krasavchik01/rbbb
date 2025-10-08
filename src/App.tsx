@@ -16,6 +16,8 @@ import Bonuses from '@/pages/Bonuses';
 import UserManagement from '@/pages/UserManagement';
 import TemplateEditor from '@/pages/TemplateEditor';
 import TemplateConstructor from '@/pages/TemplateConstructor';
+import CreateProjectFromTemplate from '@/pages/CreateProjectFromTemplate';
+import ProjectWorkspace from '@/pages/ProjectWorkspace';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -140,6 +142,26 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <TemplateConstructor />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/create-project"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <CreateProjectFromTemplate />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/project/:id"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ProjectWorkspace />
                   </Layout>
                 </ProtectedRoute>
               }
