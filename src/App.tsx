@@ -14,6 +14,8 @@ import Employees from '@/pages/Employees';
 import Timesheets from '@/pages/Timesheets';
 import Bonuses from '@/pages/Bonuses';
 import UserManagement from '@/pages/UserManagement';
+import TemplateEditor from '@/pages/TemplateEditor';
+import TemplateConstructor from '@/pages/TemplateConstructor';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -118,6 +120,26 @@ function App() {
                 <ProtectedRoute adminOnly>
                   <Layout>
                     <UserManagement />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/template-editor"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <TemplateEditor />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/template-constructor/:id"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <TemplateConstructor />
                   </Layout>
                 </ProtectedRoute>
               }
