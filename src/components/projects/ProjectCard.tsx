@@ -102,11 +102,51 @@ export function ProjectCard({ project, onViewProject }: ProjectCardProps) {
         )}
       </div>
 
-      {/* Компания */}
+      {/* Компания и клиент */}
       {project.company && (
         <div className="mb-4">
           <span className="text-sm text-muted-foreground">Компания: </span>
           <span className="text-sm font-medium">{project.company.name}</span>
+        </div>
+      )}
+
+      {/* Информация о клиенте */}
+      {project.client_info && (
+        <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+          <h4 className="text-sm font-medium text-muted-foreground mb-2">Клиент</h4>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">{project.client_info.company_name}</span>
+              <span className="text-xs text-muted-foreground">{project.client_info.industry}</span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {project.client_info.contact_person} • {project.client_info.position}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {project.client_info.email} • {project.client_info.phone}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Отдел закупа */}
+      {project.procurement_department && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+          <h4 className="text-sm font-medium text-muted-foreground mb-2">Отдел закупа</h4>
+          <div className="space-y-1">
+            <div className="text-sm font-medium">{project.procurement_department.procurement_manager}</div>
+            <div className="text-xs text-muted-foreground">
+              {project.procurement_department.procurement_email} • {project.procurement_department.procurement_phone}
+            </div>
+            {project.procurement_department.budget_amount && (
+              <div className="text-xs text-muted-foreground">
+                Бюджет: {project.procurement_department.budget_amount.toLocaleString('ru-RU')} ₽
+                {project.procurement_department.budget_approved && (
+                  <span className="ml-2 text-green-600">✓ Утвержден</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

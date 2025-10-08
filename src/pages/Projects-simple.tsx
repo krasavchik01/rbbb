@@ -509,7 +509,7 @@ export default function Projects() {
       </Card>
 
       {/* Контент */}
-      <Tabs defaultValue="list" className="space-y-6">
+      <Tabs defaultValue="summary" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="list">Список</TabsTrigger>
           <TabsTrigger value="kanban">Kanban</TabsTrigger>

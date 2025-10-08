@@ -1,25 +1,27 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RB Partners Suite - Корпоративная платформа</title>
-    <meta name="description" content="Платформа для управления проектами, командами и бизнес-процессами группы компаний RB Partners Group" />
-    <meta name="author" content="RB Partners Group" />
-    <meta name="keywords" content="RB Partners, аудит ИТ, консалтинг, управление проектами, корпоративная платформа" />
-
-    <meta property="og:title" content="RB Partners Suite - Корпоративная платформа" />
-    <meta property="og:description" content="Платформа для управления проектами, командами и бизнес-процессами группы компаний RB Partners" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="RB Partners Suite - Система управления проектами и персоналом" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>RB Partners Suite</title>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => console.log('SW registered:', registration))
+            .catch(err => console.log('SW registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>

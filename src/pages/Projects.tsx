@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Calendar, Users, ArrowRight } from "lucide-react";
+import { CreateProjectForm } from "@/components/projects/CreateProjectForm";
 
 // Простые типы
 interface SimpleProject {
@@ -52,6 +54,7 @@ const demoProjects: SimpleProject[] = [
 export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredProjects, setFilteredProjects] = useState(demoProjects);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const navigate = useNavigate();
 
   const getStatusColor = (status: string) => {
@@ -121,10 +124,7 @@ export default function Projects() {
         </div>
         <Button 
           className="btn-gradient"
-          onClick={() => {
-            // TODO: Implement create project functionality
-            console.log('Create project clicked');
-          }}
+          onClick={() => setIsCreateModalOpen(true)}
         >
           <Plus className="w-4 h-4 mr-2" />
           Создать проект
@@ -228,6 +228,23 @@ export default function Projects() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Модальное окно создания проекта */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Создание нового проекта</DialogTitle>
+          </DialogHeader>
+          <CreateProjectForm
+            onSave={(projectData) => {
+              console.log('Создание проекта:', projectData);
+              // TODO: Implement actual project creation
+              setIsCreateModalOpen(false);
+            }}
+            onCancel={() => setIsCreateModalOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

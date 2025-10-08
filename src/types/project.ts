@@ -105,6 +105,32 @@ export interface Project {
   team?: ProjectTeamMember[];
   tasks?: Task[];
   completion_percentage?: number;
+  // Новые поля для информации о клиенте
+  client_info?: ClientInfo;
+  procurement_department?: ProcurementInfo;
+}
+
+export interface ClientInfo {
+  id?: string;
+  company_name: string;
+  contact_person: string;
+  position: string;
+  email: string;
+  phone: string;
+  address: string;
+  industry: string;
+  company_size: string;
+  website?: string;
+  notes?: string;
+}
+
+export interface ProcurementInfo {
+  procurement_manager: string;
+  procurement_email: string;
+  procurement_phone: string;
+  budget_approved: boolean;
+  budget_amount?: number;
+  procurement_notes?: string;
 }
 
 export interface ProjectTeamMember {

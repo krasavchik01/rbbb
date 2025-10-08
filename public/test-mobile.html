@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RB Partners - Тест мобильного</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+            border-radius: 20px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .status {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid #22c55e;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .link {
+            display: inline-block;
+            background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            margin: 10px;
+            font-weight: 500;
+        }
+        .info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">RB</div>
+        
+        <h1>RB Partners Suite</h1>
+        <p>Тест мобильного доступа</p>
+        
+        <div class="status">
+            <h3>✅ Сайт работает!</h3>
+            <p>Если вы видите эту страницу, значит мобильный доступ работает корректно.</p>
+        </div>
+        
+        <div class="info">
+            <h4>Информация о браузере:</h4>
+            <p id="userAgent">Загрузка...</p>
+            <p id="screenSize">Загрузка...</p>
+        </div>
+        
+        <a href="/" class="link">Перейти к основному приложению</a>
+        <a href="https://rb-partners-suite.vercel.app" class="link">Прямая ссылка</a>
+    </div>
+
+    <script>
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        document.getElementById('screenSize').textContent = `Экран: ${window.innerWidth}x${window.innerHeight}`;
+    </script>
+</body>
+</html>
