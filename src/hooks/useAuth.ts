@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { UserRole, hasPermission, getRoleInfo, ROLES } from '@/types/roles';
+import { UserRole, hasPermission, ROLE_LABELS } from '@/types/roles';
 
 interface User {
   id: string;

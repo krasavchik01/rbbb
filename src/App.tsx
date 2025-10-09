@@ -17,6 +17,7 @@ import UserManagement from '@/pages/UserManagement';
 import TemplateEditor from '@/pages/TemplateEditor';
 import TemplateConstructor from '@/pages/TemplateConstructor';
 import CreateProjectFromTemplate from '@/pages/CreateProjectFromTemplate';
+import CreateProjectProcurement from '@/pages/CreateProjectProcurement';
 import ProjectWorkspace from '@/pages/ProjectWorkspace';
 import SupabaseDiagnostics from '@/pages/SupabaseDiagnostics';
 import NotFound from '@/pages/NotFound';
@@ -153,6 +154,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <CreateProjectFromTemplate />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/create-project-procurement"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <CreateProjectProcurement />
                   </Layout>
                 </ProtectedRoute>
               }
