@@ -12,7 +12,9 @@ import {
   Calendar,
   UserCog,
   Key,
-  CheckSquare
+  CheckSquare,
+  Activity,
+  FileText
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -111,6 +113,20 @@ const menuItems: MenuItem[] = [
     title: "Роли", 
     url: "/role-management", 
     icon: Key,
+    permission: PERMISSIONS.MANAGE_ROLES,
+    allowedRoles: ['admin']
+  },
+  { 
+    title: "Шаблоны", 
+    url: "/template-editor", 
+    icon: FileText,
+    permission: PERMISSIONS.MANAGE_ROLES,
+    allowedRoles: ['admin', 'partner']
+  },
+  { 
+    title: "Диагностика", 
+    url: "/diagnostics", 
+    icon: Activity,
     permission: PERMISSIONS.MANAGE_ROLES,
     allowedRoles: ['admin']
   },

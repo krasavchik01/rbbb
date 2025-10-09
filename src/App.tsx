@@ -18,6 +18,7 @@ import TemplateEditor from '@/pages/TemplateEditor';
 import TemplateConstructor from '@/pages/TemplateConstructor';
 import CreateProjectFromTemplate from '@/pages/CreateProjectFromTemplate';
 import ProjectWorkspace from '@/pages/ProjectWorkspace';
+import SupabaseDiagnostics from '@/pages/SupabaseDiagnostics';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -162,6 +163,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <ProjectWorkspace />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/diagnostics"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <SupabaseDiagnostics />
                   </Layout>
                 </ProtectedRoute>
               }
