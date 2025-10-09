@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 import { ChecklistItem } from "@/types/project";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface TaskChecklistProps {
   checklist: ChecklistItem[];

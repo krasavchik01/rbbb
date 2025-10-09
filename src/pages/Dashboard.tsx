@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { RoleBasedAccess, RoleAccess } from "@/components/RoleBasedAccess";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS } from "@/types/roles";
 import { 
   LineChart, 

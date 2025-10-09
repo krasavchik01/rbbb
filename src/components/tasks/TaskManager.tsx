@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskChecklist } from "./TaskChecklist";
 import { KanbanBoard } from "./KanbanBoard";
 import { Task, TaskStatus, PriorityLevel, ChecklistItem, Project } from "@/types/project";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   Plus, 
   Edit2, 

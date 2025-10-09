@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TaskManager } from "@/components/tasks/TaskManager";
 import { KanbanBoard } from "@/components/tasks/KanbanBoard";
 import { Task, Project as ProjectType, PriorityLevel, TaskStatus } from "@/types/project";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   Search, 
   Filter, 

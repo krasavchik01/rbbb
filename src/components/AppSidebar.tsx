@@ -30,7 +30,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { RoleBasedAccess, RoleAccess } from "./RoleBasedAccess";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS, UserRole } from "@/types/roles";
 
 interface MenuItem {
@@ -53,6 +53,18 @@ const menuItems: MenuItem[] = [
     url: "/projects", 
     icon: FolderOpen,
     permission: PERMISSIONS.VIEW_PROJECTS
+  },
+  { 
+    title: "Создать проект (Закупки)", 
+    url: "/create-project-procurement", 
+    icon: FileText,
+    allowedRoles: ['procurement']
+  },
+  { 
+    title: "Утверждение проектов", 
+    url: "/project-approval", 
+    icon: CheckSquare,
+    allowedRoles: ['deputy_director', 'ceo']
   },
   { 
     title: "Сотрудники", 

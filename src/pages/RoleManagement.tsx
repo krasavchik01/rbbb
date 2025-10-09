@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoleBasedAccess, RoleAccess } from "@/components/RoleBasedAccess";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS, UserRole, ROLES, getAllRoles } from "@/types/roles";
 import { 
   Shield, 
