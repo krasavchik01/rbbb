@@ -24,6 +24,7 @@ import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/m
 import { ProjectData, ElementData } from "@/types/methodology";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProjectDataSync } from "@/hooks/useProjectDataSync";
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -37,8 +38,12 @@ export default function ProjectWorkspace() {
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
   const [project, setProject] = useState<any>(null);
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
+  
+  // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
+  const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } = 
+    useProjectDataSync(id || '');
 
-  // Загрузка данных проекта
+  // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
     if (!id) return;
 
@@ -50,26 +55,24 @@ export default function ProjectWorkspace() {
 
     setProject(foundProject);
 
-    // Загружаем данные проекта
-    const projectDataKey = `rb_project_data_${id}`;
-    const savedData = localStorage.getItem(projectDataKey);
-    
-    if (savedData) {
-      const data: ProjectData = JSON.parse(savedData);
-      setProjectData(data);
+    // Загружаем данные с автоматической синхронизацией
+    loadProjectData().then(data => {
+      if (data) {
+        setProjectData(data);
 
-      // Находим шаблон
-      const foundTemplate = templates.find(t => t.id === data.templateId);
-      if (foundTemplate) {
-        setTemplate(foundTemplate);
+        // Находим шаблон
+        const foundTemplate = templates.find(t => t.id === data.templateId);
+        if (foundTemplate) {
+          setTemplate(foundTemplate);
+        }
       }
-    }
-  }, [id, projects, templates]);
+    });
+  }, [id, projects, templates, loadProjectData]);
 
-  const saveProjectData = (data: ProjectData) => {
-    const projectDataKey = `rb_project_data_${id}`;
-    localStorage.setItem(projectDataKey, JSON.stringify(data));
+  const saveProjectDataLocal = (data: ProjectData) => {
     setProjectData(data);
+    // Автоматически синхронизируем с Supabase (если доступен)
+    syncSaveProjectData(data);
   };
 
   const handleElementUpdate = (stageId: string, elementId: string, updates: Partial<ElementData>) => {
@@ -107,7 +110,7 @@ export default function ProjectWorkspace() {
       percentage: totalElements > 0 ? Math.round((completedElements / totalElements) * 100) : 0
     };
 
-    saveProjectData(newData);
+    saveProjectDataLocal(newData);
 
     toast({
       title: "Сохранено",
@@ -358,9 +361,27 @@ export default function ProjectWorkspace() {
             <p className="text-sm text-muted-foreground">{template.name}</p>
           </div>
         </div>
-        <Badge className="bg-gradient-to-r from-blue-500 to-blue-700 text-lg px-4 py-2">
-          {projectData.completionStatus.percentage}% выполнено
-        </Badge>
+        <div className="flex items-center gap-3">
+          {/* Индикатор синхронизации */}
+          {syncStatus.isSyncing && (
+            <Badge variant="outline" className="animate-pulse">
+              🔄 Синхронизация...
+            </Badge>
+          )}
+          {!syncStatus.isSyncing && syncStatus.isOnline && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              ✅ Синхронизировано
+            </Badge>
+          )}
+          {!syncStatus.isSyncing && !syncStatus.isOnline && (
+            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+              💾 Только локально
+            </Badge>
+          )}
+          <Badge className="bg-gradient-to-r from-blue-500 to-blue-700 text-lg px-4 py-2">
+            {projectData.completionStatus.percentage}% выполнено
+          </Badge>
+        </div>
       </div>
 
       {/* Общий прогресс */}
@@ -466,4 +487,5 @@ export default function ProjectWorkspace() {
     </div>
   );
 }
+
 
