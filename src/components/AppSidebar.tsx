@@ -279,12 +279,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* User Info & Logout */}
-        <div className="mt-auto p-4 border-t border-glass-border space-y-3">
-          {/* Theme Toggle */}
-          <div className="flex items-center justify-center">
-            <ThemeToggle />
-          </div>
-          
+        <div className="mt-auto p-4 border-t border-glass-border">
           <div className="flex items-center justify-between">
             {!collapsed && (
               <div className="flex-1 min-w-0">

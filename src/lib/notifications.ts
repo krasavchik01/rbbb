@@ -1,148 +1,192 @@
 /**
  * Система уведомлений
+ * Управление уведомлениями с звуковыми оповещениями
  */
 
 export interface Notification {
   id: string;
-  type: 'project_created' | 'project_approved' | 'project_assigned' | 'task_assigned' | 'deadline_soon' | 'project_completed';
   title: string;
   message: string;
-  projectId?: string;
-  projectName?: string;
-  fromUserId?: string;
-  fromUserName?: string;
-  toUserId: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  timestamp: string;
   read: boolean;
-  createdAt: string;
+  userId: string;
+  actionUrl?: string;
 }
 
-/**
- * Создать уведомление
- */
-export function createNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'read'>): Notification {
+// Звуковое оповещение
+export const playNotificationSound = () => {
+  try {
+    const audio = new Audio('/notification-sound.mp3');
+    audio.volume = 0.5;
+    audio.play().catch(err => console.log('Could not play notification sound:', err));
+  } catch (error) {
+    console.log('Notification sound error:', error);
+  }
+};
+
+// Получить уведомления из localStorage
+export const getNotifications = (userId?: string): Notification[] => {
+  try {
+    const stored = localStorage.getItem('notifications');
+    if (!stored) return [];
+    
+    const all: Notification[] = JSON.parse(stored);
+    
+    // Фильтруем по userId если указан
+    if (userId) {
+      return all.filter(n => n.userId === userId);
+    }
+    
+    return all;
+  } catch (error) {
+    console.error('Error loading notifications:', error);
+    return [];
+  }
+};
+
+// Сохранить уведомления
+const saveNotifications = (notifications: Notification[]) => {
+  try {
+    localStorage.setItem('notifications', JSON.stringify(notifications));
+  } catch (error) {
+    console.error('Error saving notifications:', error);
+  }
+};
+
+// Добавить новое уведомление
+export const addNotification = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
   const newNotification: Notification = {
     ...notification,
-    id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    timestamp: new Date().toISOString(),
     read: false,
-    createdAt: new Date().toISOString(),
   };
-
-  // Сохраняем в localStorage
+  
   const notifications = getNotifications();
-  notifications.push(newNotification);
-  localStorage.setItem('rb_notifications', JSON.stringify(notifications));
-
-  return newNotification;
-}
-
-/**
- * Получить все уведомления
- */
-export function getNotifications(): Notification[] {
-  const data = localStorage.getItem('rb_notifications');
-  return data ? JSON.parse(data) : [];
-}
-
-/**
- * Получить уведомления для пользователя
- */
-export function getNotificationsForUser(userId: string): Notification[] {
-  return getNotifications().filter(n => n.toUserId === userId);
-}
-
-/**
- * Получить количество непрочитанных уведомлений
- */
-export function getUnreadCount(userId: string): number {
-  return getNotifications().filter(n => n.toUserId === userId && !n.read).length;
-}
-
-/**
- * Пометить уведомление как прочитанное
- */
-export function markAsRead(notificationId: string): void {
-  const notifications = getNotifications();
-  const index = notifications.findIndex(n => n.id === notificationId);
-  if (index > -1) {
-    notifications[index].read = true;
-    localStorage.setItem('rb_notifications', JSON.stringify(notifications));
+  notifications.unshift(newNotification);
+  
+  // Ограничиваем до 100 уведомлений
+  if (notifications.length > 100) {
+    notifications.splice(100);
   }
-}
+  
+  saveNotifications(notifications);
+  
+  // Воспроизводим звук
+  playNotificationSound();
+  
+  return newNotification;
+};
 
-/**
- * Пометить все уведомления как прочитанные
- */
-export function markAllAsRead(userId: string): void {
+// Отметить как прочитанное
+export const markAsRead = (notificationId: string) => {
   const notifications = getNotifications();
-  const updated = notifications.map(n => 
-    n.toUserId === userId ? { ...n, read: true } : n
-  );
-  localStorage.setItem('rb_notifications', JSON.stringify(updated));
-}
+  const notification = notifications.find(n => n.id === notificationId);
+  
+  if (notification) {
+    notification.read = true;
+    saveNotifications(notifications);
+  }
+};
 
-/**
- * Удалить уведомление
- */
-export function deleteNotification(notificationId: string): void {
+// Отметить все как прочитанные
+export const markAllAsRead = (userId: string) => {
+  const notifications = getNotifications();
+  notifications.forEach(n => {
+    if (n.userId === userId) {
+      n.read = true;
+    }
+  });
+  saveNotifications(notifications);
+};
+
+// Удалить уведомление
+export const deleteNotification = (notificationId: string) => {
   const notifications = getNotifications();
   const filtered = notifications.filter(n => n.id !== notificationId);
-  localStorage.setItem('rb_notifications', JSON.stringify(filtered));
-}
+  saveNotifications(filtered);
+};
 
-/**
- * Создать уведомление о новом проекте для зам. директора
- */
-export function notifyDeputyDirectorNewProject(projectId: string, projectName: string, clientName: string, fromUserId: string, fromUserName: string): void {
-  // Находим всех зам. директоров (для всех компаний MAK)
-  const deputyDirectors = [
-    { id: 'deputy-1', role: 'deputy_director' }, // Из AuthContext
-  ];
+// Получить количество непрочитанных
+export const getUnreadCount = (userId: string): number => {
+  const notifications = getNotifications(userId);
+  return notifications.filter(n => !n.read).length;
+};
 
-  deputyDirectors.forEach(deputy => {
-    createNotification({
-      type: 'project_created',
-      title: '📋 Новый проект на утверждение',
-      message: `Проект "${projectName}" для клиента "${clientName}" создан отделом закупок. Требуется назначить команду.`,
-      projectId,
-      projectName,
-      fromUserId,
-      fromUserName,
-      toUserId: deputy.id,
+// Создать уведомление о новом проекте
+export const notifyNewProject = (projectName: string, creatorName: string, recipientUserId: string) => {
+  return addNotification({
+    userId: recipientUserId,
+    title: '📋 Новый проект для утверждения',
+    message: `${creatorName} создал проект "${projectName}". Требуется ваше утверждение.`,
+    type: 'info',
+    actionUrl: '/project-approval',
+  });
+};
+
+// Уведомить зам. директора о новом проекте
+export const notifyDeputyDirectorNewProject = (projectName: string, clientName: string, amount: string) => {
+  // Находим зам. директора (обычно это 'deputy@mak.kz')
+  const deputyUserId = 'deputy-1'; // ID зам. директора из AuthContext
+  
+  return addNotification({
+    userId: deputyUserId,
+    title: '📋 Новый проект требует утверждения',
+    message: `Отдел закупок создал проект "${projectName}" для клиента ${clientName}. Сумма: ${amount} ₸. Требуется ваше утверждение.`,
+    type: 'info',
+    actionUrl: '/project-approval',
+  });
+};
+
+// Создать уведомление о назначении на проект
+export const notifyProjectAssignment = (projectName: string, role: string, recipientUserId: string) => {
+  return addNotification({
+    userId: recipientUserId,
+    title: '🎯 Вы назначены на проект',
+    message: `Вы назначены на проект "${projectName}" в роли ${role}.`,
+    type: 'success',
+    actionUrl: '/projects',
+  });
+};
+
+// Создать уведомление о дедлайне
+export const notifyDeadline = (projectName: string, daysLeft: number, recipientUserId: string) => {
+  return addNotification({
+    userId: recipientUserId,
+    title: '⏰ Приближается дедлайн',
+    message: `Проект "${projectName}" - осталось ${daysLeft} дней до дедлайна.`,
+    type: 'warning',
+    actionUrl: '/projects',
+  });
+};
+
+// Браузерные push-уведомления (опционально)
+export const requestNotificationPermission = async () => {
+  if (!('Notification' in window)) {
+    console.log('Browser does not support notifications');
+    return false;
+  }
+  
+  if (Notification.permission === 'granted') {
+    return true;
+  }
+  
+  if (Notification.permission !== 'denied') {
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  }
+  
+  return false;
+};
+
+// Показать браузерное уведомление
+export const showBrowserNotification = (title: string, message: string) => {
+  if (Notification.permission === 'granted') {
+    new Notification(title, {
+      body: message,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
     });
-  });
-}
-
-/**
- * Создать уведомление о назначении в проект
- */
-export function notifyTeamMembersAssigned(projectId: string, projectName: string, teamMemberIds: string[], fromUserId: string, fromUserName: string): void {
-  teamMemberIds.forEach(memberId => {
-    createNotification({
-      type: 'project_assigned',
-      title: '👥 Вы назначены в проект',
-      message: `Вы добавлены в команду проекта "${projectName}".`,
-      projectId,
-      projectName,
-      fromUserId,
-      fromUserName,
-      toUserId: memberId,
-    });
-  });
-}
-
-/**
- * Создать уведомление об утверждении проекта
- */
-export function notifyProjectApproved(projectId: string, projectName: string, partnerId: string, fromUserId: string, fromUserName: string): void {
-  createNotification({
-    type: 'project_approved',
-    title: '✅ Проект утвержден',
-    message: `Проект "${projectName}" утвержден и готов к работе.`,
-    projectId,
-    projectName,
-    fromUserId,
-    fromUserName,
-    toUserId: partnerId,
-  });
-}
-
+  }
+};
