@@ -6,41 +6,54 @@
 
 @layer base {
   :root {
-    /* Light Theme - Default */
+    /* Light Theme - Notion Style */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 9%;
+    
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 9%;
+    
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 180 85% 45%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 180 85% 45%;
+    --popover-foreground: 0 0% 9%;
+    
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    
+    --accent: 210 100% 95%;
+    --accent-foreground: 210 100% 50%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 210 100% 50%;
+    
     --success: 142 76% 45%;
-    --warning: 175 70% 50%;
-    --radius: 0.75rem;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --radius: 0.5rem;
     
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 10% 3.9%;
-    --sidebar-primary: 180 85% 45%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 180 85% 45%;
+    --sidebar-foreground: 0 0% 20%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-border: 0 0% 93%;
+    --sidebar-ring: 210 100% 50%;
     
-    --glass: 0 0% 98%;
-    --glass-border: 214.3 31.8% 85%;
+    --glass: 0 0% 100%;
+    --glass-border: 0 0% 90%;
   }
 
   .dark {
@@ -134,8 +147,9 @@
     min-height: 100vh;
   }
   
+  /* Notion-style clean white background for light theme */
   body:not(.dark) {
-    background: linear-gradient(135deg, hsl(210 40% 98%), hsl(220 60% 96%));
+    background: #ffffff;
   }
   
   .dark body {
@@ -148,6 +162,14 @@
     backdrop-filter: blur(12px);
     border: 1px solid hsl(var(--glass-border) / 0.5);
   }
+  
+  /* Light theme: clean cards like Notion */
+  body:not(.dark) .glass {
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid hsl(0 0% 90%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
 
   .glass-card {
     background: var(--gradient-glass);
@@ -155,18 +177,39 @@
     border: 1px solid hsl(var(--glass-border) / 0.3);
     box-shadow: var(--shadow-glass);
   }
+  
+  /* Light theme: clean cards like Notion */
+  body:not(.dark) .glass-card {
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid hsl(0 0% 90%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
 
   /* Glow Effects */
   .glow-primary {
     box-shadow: 0 0 30px hsl(var(--primary) / 0.4);
   }
+  
+  /* Light theme: subtle shadows instead of glow */
+  body:not(.dark) .glow-primary {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
 
   .glow-success {
     box-shadow: 0 0 30px hsl(var(--success) / 0.4);
   }
+  
+  body:not(.dark) .glow-success {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
 
   .glow-warning {
     box-shadow: 0 0 30px hsl(var(--warning) / 0.4);
+  }
+  
+  body:not(.dark) .glow-warning {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   /* Animations */
