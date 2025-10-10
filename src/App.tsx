@@ -21,6 +21,7 @@ import ProjectApproval from '@/pages/ProjectApproval';
 import ProjectWorkspace from '@/pages/ProjectWorkspace';
 import SupabaseDiagnostics from '@/pages/SupabaseDiagnostics';
 import DatabaseTest from '@/pages/DatabaseTest';
+import TeamManagement from '@/pages/TeamManagement';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -174,6 +175,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <ProjectApproval />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/team-management"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <TeamManagement />
                   </Layout>
                 </ProtectedRoute>
               }

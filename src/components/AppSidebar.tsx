@@ -70,6 +70,12 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['deputy_director', 'ceo']
   },
   { 
+    title: "Управление командой", 
+    url: "/team-management", 
+    icon: UserCog,
+    allowedRoles: ['deputy_director', 'ceo', 'partner']
+  },
+  { 
     title: "Сотрудники", 
     url: "/employees", 
     icon: Users,
