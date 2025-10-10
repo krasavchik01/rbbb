@@ -22,6 +22,8 @@ import { useNavigate } from "react-router-dom";
 import { RoleBasedAccess, RoleAccess } from "@/components/RoleBasedAccess";
 import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS } from "@/types/roles";
+import { ProjectFunnel } from "@/components/ProjectFunnel";
+import { useEffect, useState } from "react";
 import { 
   LineChart, 
   Line, 
@@ -44,7 +46,15 @@ import {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, checkPermission } = useAuth();
+  const { user, checkPermission, hasRole } = useAuth();
+  const [projects, setProjects] = useState<any[]>([]);
+
+  // Загружаем проекты из localStorage
+  useEffect(() => {
+    const loadedProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
+    setProjects(loadedProjects);
+  }, []);
+
   const topEmployees = [
     { id: 1, name: "Анна Иванова", role: "Руководитель проекта", kpi: 95, avatar: "AI" },
     { id: 2, name: "Михаил Петров", role: "Партнёр", kpi: 92, avatar: "МП" },
@@ -213,6 +223,13 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">Общая выручка</p>
         </div>
       </div>
+
+      {/* Воронка проектов для CEO */}
+      {hasRole && hasRole('ceo') && (
+        <div className="grid grid-cols-1 gap-6 animate-slide-up">
+          <ProjectFunnel projects={projects} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Top Employees */}

@@ -10,15 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Calendar, Users, ArrowRight, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Search, Calendar, Users, ArrowRight, Edit, Trash2, Eye, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { useProjects } from "@/hooks/useDataStore";
 import { useEmployees } from "@/hooks/useDataStore";
 import { Project } from "@/store/dataStore";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { exportProjectsToExcel, downloadImportTemplate, importProjectsFromExcel } from "@/lib/excelExport";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Projects() {
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { employees } = useEmployees();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -115,6 +118,70 @@ export default function Projects() {
     deleteProject(selectedProject.id);
     setIsDeleteDialogOpen(false);
     setSelectedProject(null);
+  };
+
+  // Функции импорта/экспорта
+  const handleExport = () => {
+    try {
+      exportProjectsToExcel(projects, `projects_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast({
+        title: "✅ Экспорт завершен",
+        description: `Экспортировано проектов: ${projects.length}`,
+      });
+    } catch (error) {
+      toast({
+        title: "❌ Ошибка экспорта",
+        description: error instanceof Error ? error.message : "Не удалось экспортировать проекты",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      downloadImportTemplate();
+      toast({
+        title: "📥 Шаблон скачан",
+        description: "Заполните шаблон и загрузите обратно",
+      });
+    } catch (error) {
+      toast({
+        title: "❌ Ошибка",
+        description: "Не удалось скачать шаблон",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const importedProjects = await importProjectsFromExcel(file);
+      
+      // Сохраняем в localStorage
+      const existingProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
+      const allProjects = [...existingProjects, ...importedProjects];
+      localStorage.setItem('rb_projects_v3', JSON.stringify(allProjects));
+      
+      toast({
+        title: "✅ Импорт завершен",
+        description: `Импортировано проектов: ${importedProjects.length}`,
+      });
+      
+      // Перезагружаем страницу чтобы обновить список
+      window.location.reload();
+    } catch (error) {
+      toast({
+        title: "❌ Ошибка импорта",
+        description: error instanceof Error ? error.message : "Не удалось импортировать проекты",
+        variant: "destructive",
+      });
+    }
+    
+    // Сбрасываем input
+    event.target.value = '';
   };
 
   const getStatusColor = (status: string) => {
@@ -309,7 +376,7 @@ export default function Projects() {
           </h1>
           <p className="text-muted-foreground mt-1">Управление проектами компании</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button onClick={() => navigate('/create-project')} className="flex-1 md:flex-none" variant="default">
             <Plus className="w-4 h-4 mr-2" />
             Создать из шаблона
@@ -317,6 +384,32 @@ export default function Projects() {
           <Button onClick={() => setIsCreateModalOpen(true)} className="flex-1 md:flex-none" variant="outline">
             Простой проект
           </Button>
+          
+          {/* Кнопки импорта/экспорта */}
+          <div className="flex gap-2 flex-1 md:flex-none">
+            <Button onClick={handleExport} variant="secondary" size="sm" className="flex-1 md:flex-none" title="Экспортировать в Excel">
+              <Download className="w-4 h-4 mr-2" />
+              Экспорт
+            </Button>
+            <Button onClick={handleDownloadTemplate} variant="secondary" size="sm" className="flex-1 md:flex-none" title="Скачать шаблон">
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Шаблон
+            </Button>
+            <label className="cursor-pointer">
+              <Button variant="secondary" size="sm" asChild title="Импортировать из Excel">
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Импорт
+                </span>
+              </Button>
+              <input 
+                type="file" 
+                accept=".xlsx,.xls" 
+                onChange={handleImport}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
       </div>
 

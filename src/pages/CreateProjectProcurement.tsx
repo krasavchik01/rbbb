@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getActiveCompanies } from "@/types/companies";
 import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo } from "@/types/project-v3";
+import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
 
 interface ContactPerson {
   name: string;
@@ -263,9 +264,18 @@ export default function CreateProjectProcurement() {
     existingProjects.push(project);
     localStorage.setItem('rb_projects_v3', JSON.stringify(existingProjects));
 
+    // Создаем уведомление для зам. директора
+    notifyDeputyDirectorNewProject(
+      project.id,
+      project.name,
+      clientName,
+      user?.id || 'procurement',
+      user?.name || 'Отдел закупок'
+    );
+
     toast({
-      title: "Проект создан!",
-      description: `Проект "${project.name}" отправлен на утверждение`,
+      title: "✅ Проект создан!",
+      description: `Проект "${project.name}" отправлен на утверждение. Зам. директор получил уведомление.`,
     });
 
     navigate('/projects');

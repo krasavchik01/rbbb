@@ -30,9 +30,11 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import { RoleBasedAccess, RoleAccess } from "./RoleBasedAccess";
 import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS, UserRole } from "@/types/roles";
+import { getUnreadCount } from "@/lib/notifications";
 
 interface MenuItem {
   title: string;
@@ -161,6 +163,24 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const { user, checkPermission, hasAnyRole, logout } = useAuth();
   const collapsed = state === "collapsed";
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Обновляем счетчик уведомлений
+  useEffect(() => {
+    if (!user) return;
+    
+    const updateCount = () => {
+      const count = getUnreadCount(user.id);
+      setUnreadCount(count);
+    };
+    
+    updateCount();
+    
+    // Обновляем каждые 5 секунд
+    const interval = setInterval(updateCount, 5000);
+    
+    return () => clearInterval(interval);
+  }, [user]);
 
   if (!user) return null;
 
@@ -213,8 +233,25 @@ export function AppSidebar() {
                           }`
                         }
                       >
-                        <item.icon className="w-5 h-5" />
-                        {!collapsed && <span className="font-medium">{item.title}</span>}
+                        <div className="relative">
+                          <item.icon className="w-5 h-5" />
+                          {item.url === "/notifications" && unreadCount > 0 && (
+                            <Badge 
+                              variant="destructive" 
+                              className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
+                            >
+                              {unreadCount > 9 ? '9+' : unreadCount}
+                            </Badge>
+                          )}
+                        </div>
+                        {!collapsed && (
+                          <span className="font-medium flex-1">{item.title}</span>
+                        )}
+                        {!collapsed && item.url === "/notifications" && unreadCount > 0 && (
+                          <Badge variant="destructive" className="ml-auto">
+                            {unreadCount}
+                          </Badge>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
