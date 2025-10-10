@@ -15,7 +15,8 @@ import {
   CheckSquare,
   Activity,
   FileText,
-  LogOut
+  LogOut,
+  Award
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -42,6 +43,7 @@ interface MenuItem {
   icon: any;
   permission?: string;
   allowedRoles?: UserRole[];
+  excludeRoles?: UserRole[]; // Роли, для которых пункт НЕ показывается
 }
 
 const menuItems: MenuItem[] = [
@@ -64,6 +66,12 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['procurement']
   },
   { 
+    title: "Тендеры", 
+    url: "/tenders", 
+    icon: Award,
+    allowedRoles: ['procurement']
+  },
+  { 
     title: "Утверждение проектов", 
     url: "/project-approval", 
     icon: CheckSquare,
@@ -79,43 +87,50 @@ const menuItems: MenuItem[] = [
     title: "HR", 
     url: "/hr", 
     icon: UserCheck,
-    permission: PERMISSIONS.VIEW_HR
+    permission: PERMISSIONS.VIEW_HR,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Тайм-щиты", 
     url: "/timesheets", 
     icon: Clock,
-    permission: PERMISSIONS.VIEW_TIMESHEETS
+    permission: PERMISSIONS.VIEW_TIMESHEETS,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Бонусы", 
     url: "/bonuses", 
     icon: Gift,
-    permission: PERMISSIONS.VIEW_BONUSES
+    permission: PERMISSIONS.VIEW_BONUSES,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Аналитика", 
     url: "/analytics", 
     icon: TrendingUp,
-    permission: PERMISSIONS.VIEW_ANALYTICS
+    permission: PERMISSIONS.VIEW_ANALYTICS,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Календарь", 
     url: "/calendar", 
     icon: Calendar,
-    permission: PERMISSIONS.VIEW_CALENDAR
+    permission: PERMISSIONS.VIEW_CALENDAR,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Задачи", 
     url: "/tasks", 
     icon: CheckSquare,
-    permission: PERMISSIONS.VIEW_PROJECTS
+    permission: PERMISSIONS.VIEW_PROJECTS,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Уведомления", 
     url: "/notifications", 
     icon: Bell,
-    permission: PERMISSIONS.VIEW_NOTIFICATIONS
+    permission: PERMISSIONS.VIEW_NOTIFICATIONS,
+    excludeRoles: ['procurement']
   },
   { 
     title: "Управление", 
@@ -214,8 +229,9 @@ export function AppSidebar() {
                 // Проверяем разрешения
                 const hasPermission = item.permission ? checkPermission(item.permission) : true;
                 const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
+                const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
 
-                if (!hasPermission || !hasRoleAccess) {
+                if (!hasPermission || !hasRoleAccess || isExcluded) {
                   return null;
                 }
 
