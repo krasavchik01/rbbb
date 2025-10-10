@@ -17,15 +17,15 @@ import {
   ListOrdered
 } from "lucide-react";
 import { useTemplates } from "@/hooks/useDataStore";
-import { ProjectTemplate, PROJECT_CATEGORIES } from "@/types/methodology";
+import { Template } from "@/lib/defaultTemplates";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function TemplateEditor() {
-  const { templates, deleteTemplate, duplicateTemplate, updateTemplate } = useTemplates();
+  const { templates, deleteTemplate, updateTemplate } = useTemplates();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -36,31 +36,23 @@ export default function TemplateEditor() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleDeleteClick = (template: ProjectTemplate) => {
+  const handleDeleteClick = (template: Template) => {
     setSelectedTemplate(template);
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!selectedTemplate) return;
-    deleteTemplate(selectedTemplate.id);
+    await deleteTemplate(selectedTemplate.id);
     setIsDeleteDialogOpen(false);
     setSelectedTemplate(null);
-  };
-
-  const handleDuplicate = (template: ProjectTemplate) => {
-    duplicateTemplate(template.id);
-  };
-
-  const handleToggleActive = (template: ProjectTemplate) => {
-    updateTemplate(template.id, { isActive: !template.isActive });
   };
 
   const handleCreateNew = () => {
     navigate('/template-constructor/new');
   };
 
-  const handleEdit = (template: ProjectTemplate) => {
+  const handleEdit = (template: Template) => {
     navigate(`/template-constructor/${template.id}`);
   };
 
@@ -99,9 +91,10 @@ export default function TemplateEditor() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все категории</SelectItem>
-            {PROJECT_CATEGORIES.map(category => (
-              <SelectItem key={category} value={category}>{category}</SelectItem>
-            ))}
+            <SelectItem value="audit">🔍 Аудит</SelectItem>
+            <SelectItem value="consulting">💼 Консалтинг</SelectItem>
+            <SelectItem value="valuation">📊 Оценка</SelectItem>
+            <SelectItem value="tax">🧾 Налоги</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -114,21 +107,21 @@ export default function TemplateEditor() {
         </Card>
         <Card className="p-4">
           <div className="text-2xl font-bold text-green-500">
-            {templates.filter(t => t.isActive).length}
+            {templates.filter(t => t.category === 'audit').length}
           </div>
-          <div className="text-sm text-muted-foreground">Активных</div>
+          <div className="text-sm text-muted-foreground">Аудит</div>
         </Card>
         <Card className="p-4">
           <div className="text-2xl font-bold text-blue-500">
-            {templates.reduce((sum, t) => sum + (t.usageCount || 0), 0)}
+            {templates.filter(t => t.category === 'consulting').length}
           </div>
-          <div className="text-sm text-muted-foreground">Использований</div>
+          <div className="text-sm text-muted-foreground">Консалтинг</div>
         </Card>
         <Card className="p-4">
-          <div className="text-2xl font-bold">
-            {new Set(templates.map(t => t.category)).size}
+          <div className="text-2xl font-bold text-purple-500">
+            {templates.filter(t => t.category === 'valuation').length}
           </div>
-          <div className="text-sm text-muted-foreground">Категорий</div>
+          <div className="text-sm text-muted-foreground">Оценка</div>
         </Card>
       </div>
 
@@ -144,13 +137,12 @@ export default function TemplateEditor() {
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="secondary">{template.category}</Badge>
-                  <Badge variant="outline">v{template.version}</Badge>
-                  {template.isActive ? (
-                    <Badge className="bg-green-500">Активен</Badge>
-                  ) : (
-                    <Badge variant="destructive">Неактивен</Badge>
-                  )}
+                  <Badge variant="secondary">
+                    {template.category === 'audit' && '🔍 Аудит'}
+                    {template.category === 'consulting' && '💼 Консалтинг'}
+                    {template.category === 'valuation' && '📊 Оценка'}
+                    {template.category === 'tax' && '🧾 Налоги'}
+                  </Badge>
                 </div>
               </div>
             </div>
@@ -162,14 +154,14 @@ export default function TemplateEditor() {
                 <div className="text-xs text-muted-foreground">Полей</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold">{template.stages.length}</div>
+                <div className="text-lg font-bold">{template.workStages.length}</div>
                 <div className="text-xs text-muted-foreground">Этапов</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-bold">
-                  {template.stages.reduce((sum, stage) => sum + stage.elements.length, 0)}
+                  {template.workStages.reduce((sum, stage) => sum + stage.procedures.length, 0)}
                 </div>
-                <div className="text-xs text-muted-foreground">Элементов</div>
+                <div className="text-xs text-muted-foreground">Процедур</div>
               </div>
             </div>
 
@@ -177,22 +169,21 @@ export default function TemplateEditor() {
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <ListOrdered className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Этапы:</span>
+                <span className="text-sm font-medium">Этапы работы:</span>
               </div>
               <div className="flex flex-wrap gap-1">
-                {template.stages.slice(0, 3).map((stage, index) => (
+                {template.workStages.slice(0, 3).map((stage) => (
                   <Badge 
                     key={stage.id} 
                     variant="outline" 
                     className="text-xs"
-                    style={{ borderColor: stage.color, color: stage.color }}
                   >
-                    {index + 1}. {stage.name}
+                    {stage.order}. {stage.name}
                   </Badge>
                 ))}
-                {template.stages.length > 3 && (
+                {template.workStages.length > 3 && (
                   <Badge variant="outline" className="text-xs">
-                    +{template.stages.length - 3} ещё
+                    +{template.workStages.length - 3} ещё
                   </Badge>
                 )}
               </div>
@@ -206,42 +197,22 @@ export default function TemplateEditor() {
                 variant="default"
               >
                 <Edit className="w-4 h-4 mr-1" />
-                Редактировать
-              </Button>
-              <Button 
-                onClick={() => handleToggleActive(template)}
-                variant="outline"
-                size="icon"
-                title={template.isActive ? "Деактивировать" : "Активировать"}
-              >
-                {template.isActive ? (
-                  <ToggleRight className="w-4 h-4 text-green-500" />
-                ) : (
-                  <ToggleLeft className="w-4 h-4" />
-                )}
-              </Button>
-              <Button 
-                onClick={() => handleDuplicate(template)}
-                variant="outline"
-                size="icon"
-                title="Создать копию"
-              >
-                <Copy className="w-4 h-4" />
+                Посмотреть
               </Button>
               <Button 
                 onClick={() => handleDeleteClick(template)}
                 variant="outline"
                 size="icon"
-                title="Удалить"
+                title="Удалить шаблон"
+                className="text-red-500 hover:bg-red-50"
               >
-                <Trash2 className="w-4 h-4 text-red-500" />
+                <Trash2 className="w-4 h-4" />
               </Button>
             </div>
 
             {/* Usage info */}
             <div className="mt-3 text-xs text-muted-foreground">
-              Использован {template.usageCount || 0} раз • 
-              Обновлён {new Date(template.updated_at).toLocaleDateString('ru-RU')}
+              Создан {new Date(template.createdAt).toLocaleDateString('ru-RU')}
             </div>
           </Card>
         ))}

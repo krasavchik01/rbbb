@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { dataStore, Employee, Project, Timesheet, Bonus } from '@/lib/dataStore';
+import { initializeDefaultTemplates, Template } from '@/lib/defaultTemplates';
 
 export function useEmployees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -213,13 +214,80 @@ export function useBonuses() {
 }
 
 export function useTemplates() {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadTemplates = useCallback(() => {
+    try {
+      setLoading(true);
+      const loadedTemplates = initializeDefaultTemplates();
+      setTemplates(loadedTemplates);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Ошибка загрузки шаблонов');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  const createTemplate = useCallback(async (template: Omit<Template, 'id' | 'createdAt'>) => {
+    try {
+      const newTemplate: Template = {
+        ...template,
+        id: `template-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      const existingTemplates = JSON.parse(localStorage.getItem('templates') || '[]');
+      const updatedTemplates = [newTemplate, ...existingTemplates];
+      localStorage.setItem('templates', JSON.stringify(updatedTemplates));
+      setTemplates(updatedTemplates);
+      return newTemplate;
+    } catch (err: any) {
+      setError(err.message || 'Ошибка создания шаблона');
+      throw err;
+    }
+  }, []);
+
+  const updateTemplate = useCallback(async (id: string, updates: Partial<Template>) => {
+    try {
+      const existingTemplates = JSON.parse(localStorage.getItem('templates') || '[]');
+      const updatedTemplates = existingTemplates.map((t: Template) =>
+        t.id === id ? { ...t, ...updates } : t
+      );
+      localStorage.setItem('templates', JSON.stringify(updatedTemplates));
+      setTemplates(updatedTemplates);
+      return updatedTemplates.find((t: Template) => t.id === id);
+    } catch (err: any) {
+      setError(err.message || 'Ошибка обновления шаблона');
+      throw err;
+    }
+  }, []);
+
+  const deleteTemplate = useCallback(async (id: string) => {
+    try {
+      const existingTemplates = JSON.parse(localStorage.getItem('templates') || '[]');
+      const updatedTemplates = existingTemplates.filter((t: Template) => t.id !== id);
+      localStorage.setItem('templates', JSON.stringify(updatedTemplates));
+      setTemplates(updatedTemplates);
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Ошибка удаления шаблона');
+      throw err;
+    }
+  }, []);
+
   return {
-    templates: [],
-    loading: false,
-    error: null,
-    createTemplate: async () => {},
-    updateTemplate: async () => {},
-    deleteTemplate: async () => {},
-    refresh: async () => {},
+    templates,
+    loading,
+    error,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate,
+    refresh: loadTemplates,
   };
 }

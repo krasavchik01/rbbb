@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Upload, Plus, Trash2, FileText, Building2, User, Calendar, DollarSign } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Upload, Plus, Trash2, FileText, Building2, User, Calendar, DollarSign, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getActiveCompanies } from "@/types/companies";
@@ -18,6 +19,11 @@ interface ContactPerson {
   position: string;
   phone: string;
   email: string;
+}
+
+interface ConsortiumMember {
+  companyId: string;
+  sharePercentage: number;
 }
 
 export default function CreateProjectProcurement() {
@@ -44,6 +50,13 @@ export default function CreateProjectProcurement() {
   const [companyId, setCompanyId] = useState("");
   const [projectType, setProjectType] = useState<ProjectType | "">("");
   
+  // Консорциум
+  const [isConsortium, setIsConsortium] = useState(false);
+  const [consortiumMembers, setConsortiumMembers] = useState<ConsortiumMember[]>([
+    { companyId: "", sharePercentage: 50 },
+    { companyId: "", sharePercentage: 50 },
+  ]);
+  
   // Файл договора
   const [contractFile, setContractFile] = useState<File | null>(null);
 
@@ -61,6 +74,40 @@ export default function CreateProjectProcurement() {
     const updated = [...contacts];
     updated[index][field] = value;
     setContacts(updated);
+  };
+
+  // Функции для консорциума
+  const addConsortiumMember = () => {
+    const currentTotal = consortiumMembers.reduce((sum, m) => sum + m.sharePercentage, 0);
+    const remaining = 100 - currentTotal;
+    setConsortiumMembers([...consortiumMembers, { companyId: "", sharePercentage: remaining > 0 ? remaining : 10 }]);
+  };
+
+  const removeConsortiumMember = (index: number) => {
+    if (consortiumMembers.length <= 2) {
+      toast({ title: "Ошибка", description: "Минимум 2 участника консорциума", variant: "destructive" });
+      return;
+    }
+    setConsortiumMembers(consortiumMembers.filter((_, i) => i !== index));
+  };
+
+  const updateConsortiumMember = (index: number, field: 'companyId' | 'sharePercentage', value: string | number) => {
+    const updated = [...consortiumMembers];
+    if (field === 'sharePercentage') {
+      updated[index][field] = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    } else {
+      updated[index][field] = value as string;
+    }
+    setConsortiumMembers(updated);
+  };
+
+  const getTotalShare = () => {
+    return consortiumMembers.reduce((sum, m) => sum + m.sharePercentage, 0);
+  };
+
+  const isShareValid = () => {
+    const total = getTotalShare();
+    return Math.abs(total - 100) < 0.01; // Допуск на погрешность
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,10 +141,37 @@ export default function CreateProjectProcurement() {
       toast({ title: "Ошибка", description: "Укажите сумму без НДС", variant: "destructive" });
       return false;
     }
-    if (!companyId) {
-      toast({ title: "Ошибка", description: "Выберите компанию", variant: "destructive" });
-      return false;
+    
+    // Валидация консорциума
+    if (isConsortium) {
+      // Проверка что все компании выбраны
+      const hasEmptyCompany = consortiumMembers.some(m => !m.companyId);
+      if (hasEmptyCompany) {
+        toast({ title: "Ошибка", description: "Выберите все компании консорциума", variant: "destructive" });
+        return false;
+      }
+      
+      // Проверка уникальности компаний
+      const companyIds = consortiumMembers.map(m => m.companyId);
+      const uniqueIds = new Set(companyIds);
+      if (uniqueIds.size !== companyIds.length) {
+        toast({ title: "Ошибка", description: "Компании в консорциуме должны быть уникальными", variant: "destructive" });
+        return false;
+      }
+      
+      // Проверка что сумма долей = 100%
+      if (!isShareValid()) {
+        toast({ title: "Ошибка", description: `Сумма долей должна быть 100% (сейчас ${getTotalShare().toFixed(1)}%)`, variant: "destructive" });
+        return false;
+      }
+    } else {
+      // Обычный проект - должна быть выбрана компания
+      if (!companyId) {
+        toast({ title: "Ошибка", description: "Выберите компанию", variant: "destructive" });
+        return false;
+      }
     }
+    
     if (!projectType) {
       toast({ title: "Ошибка", description: "Выберите вид проекта", variant: "destructive" });
       return false;
@@ -113,8 +187,18 @@ export default function CreateProjectProcurement() {
       id: `proj_${Date.now()}`,
       name: `${clientName} - ${contractSubject}`,
       type: projectType as ProjectType,
-      companyId: companyId,
-      companyName: companies.find(c => c.id === companyId)?.name || "",
+      
+      // Консорциум или обычная компания
+      isConsortium: isConsortium,
+      companyId: isConsortium ? undefined : companyId,
+      companyName: isConsortium ? "Консорциум" : (companies.find(c => c.id === companyId)?.name || ""),
+      consortiumMembers: isConsortium ? consortiumMembers.map(m => ({
+        companyId: m.companyId,
+        companyName: companies.find(c => c.id === m.companyId)?.name || "",
+        sharePercentage: m.sharePercentage,
+        shareAmount: (parseFloat(amountWithoutVAT) * m.sharePercentage) / 100,
+      })) : undefined,
+      
       status: 'new' as const,
       completionPercent: 0,
       
@@ -154,6 +238,16 @@ export default function CreateProjectProcurement() {
         totalCosts: parseFloat(amountWithoutVAT) * 0.3,
         grossProfit: parseFloat(amountWithoutVAT) * 0.7,
         profitMargin: 70,
+        
+        // Для консорциума - разбивка по компаниям
+        consortiumFinances: isConsortium ? consortiumMembers.map(m => ({
+          companyId: m.companyId,
+          companyName: companies.find(c => c.id === m.companyId)?.name || "",
+          sharePercentage: m.sharePercentage,
+          shareAmount: (parseFloat(amountWithoutVAT) * m.sharePercentage) / 100,
+          bonusBase: ((parseFloat(amountWithoutVAT) * m.sharePercentage) / 100) * 0.7,
+          totalBonusAmount: ((parseFloat(amountWithoutVAT) * m.sharePercentage) / 100) * 0.7 * 0.5,
+        })) : undefined,
       },
       
       financeChangeLogs: [],
@@ -435,23 +529,126 @@ export default function CreateProjectProcurement() {
             <p className="text-xs text-muted-foreground mt-1">В тенге (₸)</p>
           </div>
 
-          <div>
-            <Label htmlFor="companyId">
-              Наша компания <Badge variant="destructive" className="ml-2 text-xs">Обязательно</Badge>
-            </Label>
-            <Select value={companyId} onValueChange={setCompanyId}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Выберите компанию" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies.map(company => (
-                  <SelectItem key={company.id} value={company.id}>
-                    {company.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Чекбокс консорциума */}
+          <div className="md:col-span-2">
+            <div className="flex items-center space-x-2 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <Checkbox 
+                id="isConsortium" 
+                checked={isConsortium}
+                onCheckedChange={(checked) => setIsConsortium(checked as boolean)}
+              />
+              <Label htmlFor="isConsortium" className="text-sm font-medium cursor-pointer">
+                🤝 Проект консорциума (выполняют несколько наших компаний)
+              </Label>
+            </div>
           </div>
+
+          {/* Блок консорциума или обычный выбор компании */}
+          {!isConsortium ? (
+            <div>
+              <Label htmlFor="companyId">
+                Наша компания <Badge variant="destructive" className="ml-2 text-xs">Обязательно</Badge>
+              </Label>
+              <Select value={companyId} onValueChange={setCompanyId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Выберите компанию" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map(company => (
+                    <SelectItem key={company.id} value={company.id}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  <h4 className="font-semibold">Участники консорциума</h4>
+                  <Badge variant={isShareValid() ? "default" : "destructive"}>
+                    {getTotalShare().toFixed(1)}% из 100%
+                  </Badge>
+                </div>
+                <Button onClick={addConsortiumMember} variant="outline" size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Добавить участника
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {consortiumMembers.map((member, index) => (
+                  <Card key={index} className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <Label className="text-xs text-muted-foreground mb-1 block">Компания</Label>
+                        <Select 
+                          value={member.companyId} 
+                          onValueChange={(value) => updateConsortiumMember(index, 'companyId', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Выберите компанию" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {companies.map(company => (
+                              <SelectItem key={company.id} value={company.id}>
+                                {company.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="w-32">
+                        <Label className="text-xs text-muted-foreground mb-1 block">Доля %</Label>
+                        <Input
+                          type="number"
+                          value={member.sharePercentage}
+                          onChange={(e) => updateConsortiumMember(index, 'sharePercentage', e.target.value)}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="text-center font-bold"
+                        />
+                      </div>
+
+                      {consortiumMembers.length > 2 && (
+                        <Button
+                          onClick={() => removeConsortiumMember(index)}
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Расчет суммы для участника */}
+                    {amountWithoutVAT && parseFloat(amountWithoutVAT) > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-700">
+                        <p className="text-sm text-muted-foreground">
+                          Сумма участника: <span className="font-bold text-foreground">
+                            {((parseFloat(amountWithoutVAT) * member.sharePercentage) / 100).toLocaleString('ru-RU')} ₸
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+
+              {!isShareValid() && (
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    ⚠️ Сумма долей должна равняться 100%. Текущая сумма: <strong>{getTotalShare().toFixed(1)}%</strong>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="md:col-span-2">
             <Label htmlFor="projectType">
