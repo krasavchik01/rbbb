@@ -128,15 +128,26 @@ export const notifyNewProject = (projectName: string, creatorName: string, recip
 // Уведомить зам. директора о новом проекте
 export const notifyDeputyDirectorNewProject = (projectName: string, clientName: string, amount: string) => {
   // Находим зам. директора (обычно это 'deputy@mak.kz')
-  const deputyUserId = 'deputy-1'; // ID зам. директора из AuthContext
+  const deputyUserId = 'deputy_1'; // ID зам. директора из AuthContext
   
-  return addNotification({
+  console.log('🔔 Создаём уведомление для зам. директора:', {
+    userId: deputyUserId,
+    projectName,
+    clientName,
+    amount
+  });
+  
+  const notification = addNotification({
     userId: deputyUserId,
     title: '📋 Новый проект требует утверждения',
     message: `Отдел закупок создал проект "${projectName}" для клиента ${clientName}. Сумма: ${amount} ₸. Требуется ваше утверждение.`,
     type: 'info',
     actionUrl: '/project-approval',
   });
+  
+  console.log('✅ Уведомление создано:', notification);
+  
+  return notification;
 };
 
 // Создать уведомление о назначении на проект

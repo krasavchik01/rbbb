@@ -265,12 +265,11 @@ export default function CreateProjectProcurement() {
     localStorage.setItem('rb_projects_v3', JSON.stringify(existingProjects));
 
     // Создаем уведомление для зам. директора
+    const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountWithoutVAT);
     notifyDeputyDirectorNewProject(
-      project.id,
       project.name,
       clientName,
-      user?.id || 'procurement',
-      user?.name || 'Отдел закупок'
+      formattedAmount
     );
 
     toast({

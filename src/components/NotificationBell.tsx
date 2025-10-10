@@ -26,8 +26,10 @@ export function NotificationBell() {
   const loadNotifications = () => {
     if (!user) return;
     const userNotifications = getNotifications(user.id);
+    console.log('📬 Загрузка уведомлений для пользователя:', user.id, 'Найдено:', userNotifications.length);
     setNotifications(userNotifications.slice(0, 10)); // Показываем последние 10
     setUnreadCount(getUnreadCount(user.id));
+    console.log('🔔 Непрочитанных:', getUnreadCount(user.id));
   };
 
   useEffect(() => {
