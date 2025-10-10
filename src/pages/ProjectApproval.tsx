@@ -40,9 +40,38 @@ export default function ProjectApproval() {
   const [teamMembers, setTeamMembers] = useState<{[key: string]: string}>({});
   const [contractors, setContractors] = useState<Contractor[]>([]);
   
+  // Отображение для зам директора
+  const [selectedRoles, setSelectedRoles] = useState<{[key: string]: boolean}>({
+    partner: true // Партнер обязателен
+  });
+  
   // Новый ГПХ
   const [newContractorName, setNewContractorName] = useState("");
   const [newContractorAmount, setNewContractorAmount] = useState("");
+
+  // Демо-сотрудники с занятостью
+  const demoEmployees = [
+    { id: 'emp-1', name: 'Иванов И.И.', role: 'partner', activeProjects: 2, loadPercent: 85, location: 'office' },
+    { id: 'emp-2', name: 'Петров П.П.', role: 'partner', activeProjects: 1, loadPercent: 60, location: 'project' },
+    { id: 'emp-3', name: 'Сидоров С.С.', role: 'project_manager', activeProjects: 3, loadPercent: 95, location: 'office' },
+    { id: 'emp-4', name: 'Козлова К.К.', role: 'project_manager', activeProjects: 1, loadPercent: 45, location: 'office' },
+    { id: 'emp-5', name: 'Новикова Н.Н.', role: 'supervisor_3', activeProjects: 2, loadPercent: 70, location: 'project' },
+    { id: 'emp-6', name: 'Волков В.В.', role: 'supervisor_3', activeProjects: 1, loadPercent: 40, location: 'office' },
+    { id: 'emp-7', name: 'Морозова М.М.', role: 'supervisor_2', activeProjects: 1, loadPercent: 55, location: 'office' },
+    { id: 'emp-8', name: 'Лебедев Л.Л.', role: 'supervisor_2', activeProjects: 2, loadPercent: 80, location: 'office' },
+    { id: 'emp-9', name: 'Орлова О.О.', role: 'supervisor_1', activeProjects: 0, loadPercent: 0, location: 'office' },
+    { id: 'emp-10', name: 'Зайцев З.З.', role: 'supervisor_1', activeProjects: 1, loadPercent: 50, location: 'office' },
+    { id: 'emp-11', name: 'Соколова С.С.', role: 'tax_specialist_1', activeProjects: 3, loadPercent: 90, location: 'project' },
+    { id: 'emp-12', name: 'Медведев М.М.', role: 'tax_specialist_1', activeProjects: 1, loadPercent: 35, location: 'office' },
+    { id: 'emp-13', name: 'Кузнецов К.К.', role: 'tax_specialist_2', activeProjects: 2, loadPercent: 65, location: 'office' },
+    { id: 'emp-14', name: 'Белова Б.Б.', role: 'tax_specialist_2', activeProjects: 1, loadPercent: 40, location: 'office' },
+    { id: 'emp-15', name: 'Смирнова С.С.', role: 'assistant_3', activeProjects: 2, loadPercent: 75, location: 'office' },
+    { id: 'emp-16', name: 'Попов П.П.', role: 'assistant_3', activeProjects: 1, loadPercent: 30, location: 'office' },
+    { id: 'emp-17', name: 'Васильева В.В.', role: 'assistant_2', activeProjects: 1, loadPercent: 45, location: 'office' },
+    { id: 'emp-18', name: 'Николаев Н.Н.', role: 'assistant_2', activeProjects: 0, loadPercent: 0, location: 'office' },
+    { id: 'emp-19', name: 'Павлова П.П.', role: 'assistant_1', activeProjects: 1, loadPercent: 55, location: 'project' },
+    { id: 'emp-20', name: 'Федоров Ф.Ф.', role: 'assistant_1', activeProjects: 0, loadPercent: 0, location: 'office' },
+  ];
 
   // Загрузка проектов
   useEffect(() => {
@@ -327,7 +356,7 @@ export default function ProjectApproval() {
 
             <div className="space-y-6">
               {/* Информация о проекте */}
-              <Card className="p-4 bg-muted/50">
+              <Card className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-500">
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <Label className="text-xs">Клиент</Label>
@@ -342,6 +371,12 @@ export default function ProjectApproval() {
                     <p className="font-semibold text-green-600">{formatCurrency(selectedProject.contract.amountWithoutVAT)}</p>
                   </div>
                 </div>
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                    Вы назначаете команду и видите только занятость сотрудников. Финансовые расчёты выполняются автоматически.
+                  </p>
+                </div>
               </Card>
 
               {/* Назначение команды */}
@@ -351,133 +386,92 @@ export default function ProjectApproval() {
                   Назначение команды
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {PROJECT_ROLES.map(projectRole => (
-                    <div key={projectRole.role} className="space-y-2">
-                      <Label>
-                        {projectRole.label}
-                        {projectRole.role === 'partner' && (
-                          <Badge variant="destructive" className="ml-2 text-xs">Обязательно</Badge>
+                <div className="space-y-3">
+                  {PROJECT_ROLES.map(projectRole => {
+                    const availableEmployees = demoEmployees.filter(emp => emp.role === projectRole.role);
+                    const isRoleSelected = selectedRoles[projectRole.role];
+                    
+                    return (
+                      <div key={projectRole.role} className="border rounded-lg p-3">
+                        {/* Чекбокс для роли */}
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isRoleSelected || false}
+                              disabled={projectRole.role === 'partner'}
+                              onChange={(e) => {
+                                // Партнер всегда должен быть выбран
+                                if (projectRole.role === 'partner') return;
+                                
+                                setSelectedRoles({...selectedRoles, [projectRole.role]: e.target.checked});
+                                if (!e.target.checked) {
+                                  const newTeam = {...teamMembers};
+                                  delete newTeam[projectRole.role];
+                                  setTeamMembers(newTeam);
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-gray-300"
+                            />
+                            <span className="font-medium">{projectRole.label}</span>
+                            {projectRole.role === 'partner' && (
+                              <Badge variant="destructive" className="text-xs">Обязательно</Badge>
+                            )}
+                          </label>
+                        </div>
+
+                        {/* Выпадающий список сотрудников */}
+                        {isRoleSelected && (
+                          <div className="ml-7 space-y-2">
+                            <Select 
+                              value={teamMembers[projectRole.role] || ""} 
+                              onValueChange={(value) => setTeamMembers({...teamMembers, [projectRole.role]: value})}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Выберите сотрудника" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableEmployees.map(emp => (
+                                  <SelectItem key={emp.id} value={emp.id}>
+                                    <div className="flex items-center justify-between w-full gap-4">
+                                      <span>{emp.name}</span>
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <Badge 
+                                          variant="outline" 
+                                          className={
+                                            emp.loadPercent >= 80 ? 'bg-red-100 text-red-700' :
+                                            emp.loadPercent >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-green-100 text-green-700'
+                                          }
+                                        >
+                                          Загрузка: {emp.loadPercent}%
+                                        </Badge>
+                                        <Badge variant="outline">
+                                          Проектов: {emp.activeProjects}
+                                        </Badge>
+                                        <Badge 
+                                          variant="outline"
+                                          className={emp.location === 'office' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}
+                                        >
+                                          {emp.location === 'office' ? '🏢 В офисе' : '📍 На проекте'}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         )}
-                      </Label>
-                      <div className="flex gap-2">
-                        <Select 
-                          value={teamMembers[projectRole.role] || ""} 
-                          onValueChange={(value) => setTeamMembers({...teamMembers, [projectRole.role]: value})}
-                        >
-                          <SelectTrigger className="flex-1">
-                            <SelectValue placeholder="Выберите сотрудника" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user1">Иванов И.И.</SelectItem>
-                            <SelectItem value="user2">Петров П.П.</SelectItem>
-                            <SelectItem value="user3">Сидоров С.С.</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Badge variant="outline" className="px-3 flex items-center">
-                          {projectRole.bonusPercent}%
-                        </Badge>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* ГПХ */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <UserPlus className="w-5 h-5 text-primary" />
-                    ГПХ (Подрядчики)
-                  </h3>
-                </div>
+              {/* ГПХ убран - зам. директор не управляет финансами */}
 
-                {contractors.map(contractor => (
-                  <Card key={contractor.id} className="p-3 mb-2 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{contractor.name}</p>
-                      <p className="text-sm text-muted-foreground">{formatCurrency(contractor.amount)}</p>
-                    </div>
-                    <Button onClick={() => removeContractor(contractor.id)} variant="ghost" size="icon">
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </Card>
-                ))}
-
-                <Card className="p-4 bg-muted/30">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Имя ГПХ"
-                        value={newContractorName}
-                        onChange={(e) => setNewContractorName(e.target.value)}
-                      />
-                    </div>
-                    <div className="w-40">
-                      <Input
-                        type="number"
-                        placeholder="Сумма"
-                        value={newContractorAmount}
-                        onChange={(e) => setNewContractorAmount(e.target.value)}
-                      />
-                    </div>
-                    <Button onClick={addContractor} variant="outline">
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Финансовый расчёт */}
-              {finances && (
-                <Card className="p-6 bg-gradient-to-br from-blue-50 to-purple-50">
-                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-primary" />
-                    Финансовый расчёт
-                  </h3>
-
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span>Сумма без НДС:</span>
-                      <span className="font-semibold">{formatCurrency(finances.amountWithoutVAT)}</span>
-                    </div>
-                    <div className="flex justify-between text-red-600">
-                      <span>Минус ГПХ:</span>
-                      <span>-{formatCurrency(finances.totalContractorsAmount)}</span>
-                    </div>
-                    <div className="flex justify-between text-red-600">
-                      <span>Минус Предрасход (30%):</span>
-                      <span>-{formatCurrency(finances.preExpenseAmount)}</span>
-                    </div>
-                    <div className="border-t pt-2 flex justify-between font-semibold">
-                      <span>База для бонусов:</span>
-                      <span>{formatCurrency(finances.bonusBase)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Процент бонуса (50%):</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(finances.totalBonusAmount)}</span>
-                    </div>
-                    <div className="border-t pt-2"></div>
-                    <div className="flex justify-between text-blue-600">
-                      <span>Выплаты команде:</span>
-                      <span>-{formatCurrency(finances.totalPaidBonuses)}</span>
-                    </div>
-                    {finances.unassignedPercent > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Неназначено ({finances.unassignedPercent}%):</span>
-                        <span>+{formatCurrency(finances.unassignedAmount)}</span>
-                      </div>
-                    )}
-                    <div className="border-t pt-2"></div>
-                    <div className="flex justify-between font-bold text-lg">
-                      <span>Грязный доход:</span>
-                      <span className={finances.grossProfit > 0 ? 'text-green-600' : 'text-red-600'}>
-                        {formatCurrency(finances.grossProfit)} ({finances.profitMargin.toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              )}
+              {/* Финансовый расчёт убран - зам. директор его не видит */}
 
               {/* Действия */}
               <div className="flex gap-4">
