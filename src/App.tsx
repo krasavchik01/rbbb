@@ -180,16 +180,6 @@ function App() {
               }
             />
             <Route
-              path="/team-management"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <TeamManagement />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/project/:id"
               element={
                 <ProtectedRoute>

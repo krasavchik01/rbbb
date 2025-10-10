@@ -1,261 +1,735 @@
-import { Card } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KPIIndicator } from "@/components/KPIIndicator";
-import { ProgressBar } from "@/components/ProgressBar";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   Plus, 
   Search, 
-  Filter, 
   Mail,
   MapPin,
   Briefcase,
-  Star,
-  DollarSign
+  Eye,
+  Kanban,
+  TableIcon,
+  Clock,
+  Phone,
+  Award,
+  User
 } from "lucide-react";
 
+// Типы данных
+interface ProjectAssignment {
+  projectId: string;
+  projectName: string;
+  role: string;
+  startDate: string;
+  endDate: string;
+  hoursAllocated: number;
+  hoursSpent: number;
+  status: 'planned' | 'active' | 'completed';
+}
+
+interface EmployeeStats {
+  totalProjects: number;
+  activeProjects: number;
+  completedProjects: number;
+  utilizationRate: number; // % загрузки
+  averageScore: number; // Средний балл
+  onTimeDelivery: number; // % вовремя
+}
+
+interface TimesheetEntry {
+  date: string;
+  projectId: string;
+  projectName: string;
+  hours: number;
+  description: string;
+}
+
+interface Employee {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  email: string;
+  phone: string;
+  avatar?: string;
+  location: 'office' | 'project' | 'remote' | 'vacation';
+  currentProjects: ProjectAssignment[];
+  futureProjects: ProjectAssignment[];
+  stats: EmployeeStats;
+  timesheet: TimesheetEntry[];
+}
+
 export default function Employees() {
-  const navigate = useNavigate();
-  const employees = [
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+
+  // Демо-данные сотрудников
+  const employees: Employee[] = [
     {
-      id: 1,
-      name: "Анна Иванова",
-      email: "anna.ivanova@company.com",
-      role: "👤 Партнёр",
-      kpi: 95,
-      bonuses: "₽125,000",
-      engagement: 92,
-      avatar: "AI",
-      projects: [
-        { name: "Аудит налогов ПАО Газпром", role: "Партнёр" },
-        { name: "IT-аудит безопасности Сбербанк", role: "Консультант" }
+      id: 'emp-1',
+      name: 'Анна Иванова',
+      position: 'Старший аудитор',
+      department: 'Аудит',
+      email: 'a.ivanova@rbpartners.com',
+      phone: '+7 (777) 123-45-67',
+      location: 'project',
+      currentProjects: [
+        {
+          projectId: 'proj-1',
+          projectName: 'Аудит АО "Компания"',
+          role: 'Руководитель',
+          startDate: '2025-01-05',
+          endDate: '2025-02-15',
+          hoursAllocated: 160,
+          hoursSpent: 85,
+          status: 'active',
+        },
       ],
-      location: "Москва"
+      futureProjects: [
+        {
+          projectId: 'proj-4',
+          projectName: 'Оценка ТОО "Бизнес"',
+          role: 'Супервайзер',
+          startDate: '2025-02-20',
+          endDate: '2025-03-30',
+          hoursAllocated: 120,
+          hoursSpent: 0,
+          status: 'planned',
+        },
+      ],
+      stats: {
+        totalProjects: 12,
+        activeProjects: 1,
+        completedProjects: 11,
+        utilizationRate: 85,
+        averageScore: 4.8,
+        onTimeDelivery: 95,
+      },
+      timesheet: [
+        { date: '2025-01-09', projectId: 'proj-1', projectName: 'Аудит АО "Компания"', hours: 8, description: 'Проверка ОС' },
+        { date: '2025-01-08', projectId: 'proj-1', projectName: 'Аудит АО "Компания"', hours: 7.5, description: 'Анализ ДЗ' },
+        { date: '2025-01-07', projectId: 'proj-1', projectName: 'Аудит АО "Компания"', hours: 8, description: 'Тесты контролей' },
+      ],
     },
     {
-      id: 2,
-      name: "Михаил Петров",
-      email: "mikhail.petrov@company.com",
-      role: "🧑‍💼 Руководитель проекта",
-      kpi: 88,
-      bonuses: "₽85,000",
-      engagement: 87,
-      avatar: "МП",
-      projects: [
-        { name: "Аудит налогов ПАО Газпром", role: "Руководитель" },
-        { name: "Due Diligence ВТБ", role: "Руководитель" }
-      ],
-      location: "СПб"
+      id: 'emp-2',
+      name: 'Михаил Петров',
+      position: 'Ассистент',
+      department: 'Аудит',
+      email: 'm.petrov@rbpartners.com',
+      phone: '+7 (777) 234-56-78',
+      location: 'office',
+      currentProjects: [],
+      futureProjects: [],
+      stats: {
+        totalProjects: 5,
+        activeProjects: 0,
+        completedProjects: 5,
+        utilizationRate: 30,
+        averageScore: 4.2,
+        onTimeDelivery: 88,
+      },
+      timesheet: [],
     },
     {
-      id: 3,
-      name: "Елена Сидорова",
-      email: "elena.sidorova@company.com",
-      role: "🧱 Ассистент",
-      kpi: 82,
-      bonuses: "₽45,000",
-      engagement: 85,
-      avatar: "ЕС",
-      projects: [
-        { name: "Аудит ФНО Альфа-Банк", role: "Ассистент" },
-        { name: "IT-аудит безопасности Сбербанк", role: "Ассистент" }
+      id: 'emp-3',
+      name: 'Елена Сидорова',
+      position: 'Супервайзер',
+      department: 'Консалтинг',
+      email: 'e.sidorova@rbpartners.com',
+      phone: '+7 (777) 345-67-89',
+      location: 'project',
+      currentProjects: [
+        {
+          projectId: 'proj-2',
+          projectName: 'Трансформация МСФО',
+          role: 'Супервайзер',
+          startDate: '2025-01-10',
+          endDate: '2025-02-28',
+          hoursAllocated: 140,
+          hoursSpent: 45,
+          status: 'active',
+        },
+        {
+          projectId: 'proj-3',
+          projectName: 'Налоговый консалтинг',
+          role: 'Консультант',
+          startDate: '2025-01-15',
+          endDate: '2025-02-10',
+          hoursAllocated: 80,
+          hoursSpent: 20,
+          status: 'active',
+        },
       ],
-      location: "Москва"
+      futureProjects: [],
+      stats: {
+        totalProjects: 18,
+        activeProjects: 2,
+        completedProjects: 16,
+        utilizationRate: 95,
+        averageScore: 4.9,
+        onTimeDelivery: 98,
+      },
+      timesheet: [
+        { date: '2025-01-09', projectId: 'proj-2', projectName: 'Трансформация МСФО', hours: 6, description: 'Корректировки' },
+        { date: '2025-01-09', projectId: 'proj-3', projectName: 'Налоговый консалтинг', hours: 2, description: 'Встреча с клиентом' },
+      ],
     },
     {
-      id: 4,
-      name: "Дмитрий Козлов",
-      email: "dmitry.kozlov@company.com",
-      role: "👤 Партнёр",
-      kpi: 90,
-      bonuses: "₽150,000",
-      engagement: 94,
-      avatar: "ДК",
-      projects: [
-        { name: "IT-аудит безопасности Сбербанк", role: "Партнёр" }
+      id: 'emp-4',
+      name: 'Ирина Козлова',
+      position: 'Младший аудитор',
+      department: 'Аудит',
+      email: 'i.kozlova@rbpartners.com',
+      phone: '+7 (777) 456-78-90',
+      location: 'office',
+      currentProjects: [
+        {
+          projectId: 'proj-1',
+          projectName: 'Аудит АО "Компания"',
+          role: 'Ассистент',
+          startDate: '2025-01-05',
+          endDate: '2025-02-15',
+          hoursAllocated: 100,
+          hoursSpent: 55,
+          status: 'active',
+        },
       ],
-      location: "Новосибирск"
+      futureProjects: [],
+      stats: {
+        totalProjects: 8,
+        activeProjects: 1,
+        completedProjects: 7,
+        utilizationRate: 65,
+        averageScore: 4.5,
+        onTimeDelivery: 90,
+      },
+      timesheet: [
+        { date: '2025-01-09', projectId: 'proj-1', projectName: 'Аудит АО "Компания"', hours: 8, description: 'Документирование' },
+      ],
     },
-    {
-      id: 5,
-      name: "Ольга Морозова",
-      email: "olga.morozova@company.com",
-      role: "🧑‍💼 Руководитель проекта",
-      kpi: 85,
-      bonuses: "₽72,000",
-      engagement: 89,
-      avatar: "ОМ",
-      projects: [
-        { name: "Аудит налогов ПАО Газпром", role: "Руководитель" },
-        { name: "Due Diligence ВТБ", role: "Консультант" }
-      ],
-      location: "Казань"
-    },
-    {
-      id: 6,
-      name: "Сергей Волков",
-      email: "sergey.volkov@company.com",
-      role: "🧑‍💼 Руководитель проекта",
-      kpi: 79,
-      bonuses: "₽68,000",
-      engagement: 78,
-      avatar: "СВ",
-      projects: [
-        { name: "Due Diligence ВТБ", role: "Руководитель" }
-      ],
-      location: "Екатеринбург"
-    }
   ];
 
-  return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
-            Сотрудники
-          </h1>
-          <p className="text-muted-foreground mt-1">Управление командой и персоналом</p>
-        </div>
-        <Button 
-          className="btn-gradient"
-          onClick={() => {
-            // TODO: Implement add employee functionality
-            console.log('Add employee clicked');
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Добавить сотрудника
-        </Button>
-      </div>
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(emp =>
+      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.department.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery, employees]);
 
-      {/* Filters */}
-      <Card className="glass-card p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Поиск сотрудников..." 
-              className="pl-10 glass border-glass-border"
-            />
-          </div>
-          <Button 
-            variant="outline" 
-            className="btn-glass"
-            onClick={() => {
-              // TODO: Implement filters functionality
-              console.log('Filters clicked');
-            }}
-          >
-            <Filter className="w-4 h-4 mr-2" />
-            Фильтры
-          </Button>
+  const getLocationIcon = (location: Employee['location']) => {
+    switch (location) {
+      case 'office': return '🏢';
+      case 'project': return '📋';
+      case 'remote': return '🏠';
+      case 'vacation': return '🏖️';
+    }
+  };
+
+  const getLocationLabel = (location: Employee['location']) => {
+    switch (location) {
+      case 'office': return 'В офисе';
+      case 'project': return 'На проекте';
+      case 'remote': return 'Удаленно';
+      case 'vacation': return 'В отпуске';
+    }
+  };
+
+  const getUtilizationColor = (rate: number) => {
+    if (rate >= 90) return 'text-red-500';
+    if (rate >= 70) return 'text-green-500';
+    if (rate >= 50) return 'text-yellow-500';
+    return 'text-gray-500';
+  };
+
+  // Проверяем, является ли пользователь руководителем (зам. директора, CEO, партнер)
+  const isManager = user?.role === 'deputy_director' || user?.role === 'ceo' || user?.role === 'partner';
+
+  // Компонент краткого индикатора
+  const EmployeeQuickStats = ({ employee }: { employee: Employee }) => (
+    <div className="grid grid-cols-4 gap-2 mt-3 p-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border border-blue-400/20">
+      <div className="text-center">
+        <div className="text-lg font-bold text-blue-400">{employee.stats.activeProjects}</div>
+        <div className="text-xs text-muted-foreground">Активных</div>
+      </div>
+      <div className="text-center">
+        <div className={`text-lg font-bold ${getUtilizationColor(employee.stats.utilizationRate)}`}>
+          {employee.stats.utilizationRate}%
         </div>
+        <div className="text-xs text-muted-foreground">Загрузка</div>
+      </div>
+      <div className="text-center">
+        <div className="text-lg font-bold text-yellow-400">{employee.stats.averageScore}</div>
+        <div className="text-xs text-muted-foreground">Средний балл</div>
+      </div>
+      <div className="text-center">
+        <div className="text-lg font-bold text-green-400">{employee.stats.onTimeDelivery}%</div>
+        <div className="text-xs text-muted-foreground">Вовремя</div>
+      </div>
+    </div>
+  );
+
+  // Канбан вид (только для руководителей)
+  const KanbanView = () => (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Доступны */}
+      <Card className="border-green-500/30">
+        <CardHeader className="bg-green-500/10">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+            Доступны ({filteredEmployees.filter(e => e.stats.utilizationRate < 70).length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 space-y-3">
+          {filteredEmployees.filter(e => e.stats.utilizationRate < 70).map(emp => (
+            <Card key={emp.id} className="p-4 hover:shadow-lg transition-all cursor-pointer" onClick={() => setSelectedEmployee(emp)}>
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarFallback>{emp.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold truncate">{emp.name}</h4>
+                  <p className="text-sm text-muted-foreground truncate">{emp.position}</p>
+                </div>
+                <Badge variant="secondary">{emp.stats.utilizationRate}%</Badge>
+              </div>
+              <EmployeeQuickStats employee={emp} />
+            </Card>
+          ))}
+        </CardContent>
       </Card>
 
-      {/* Employees Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {employees.map((employee) => (
-          <Card key={employee.id} className="glass-card p-6 hover:scale-[1.02] transition-all duration-300">
-            {/* Employee Header */}
-            <div className="flex items-start space-x-4 mb-4">
-              <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-r from-primary to-warning rounded-full flex items-center justify-center">
-                  <span className="text-lg font-bold text-primary-foreground">{employee.avatar}</span>
+      {/* Загружены */}
+      <Card className="border-yellow-500/30">
+        <CardHeader className="bg-yellow-500/10">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse" />
+            Загружены ({filteredEmployees.filter(e => e.stats.utilizationRate >= 70 && e.stats.utilizationRate < 90).length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 space-y-3">
+          {filteredEmployees.filter(e => e.stats.utilizationRate >= 70 && e.stats.utilizationRate < 90).map(emp => (
+            <Card key={emp.id} className="p-4 hover:shadow-lg transition-all cursor-pointer" onClick={() => setSelectedEmployee(emp)}>
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarFallback>{emp.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold truncate">{emp.name}</h4>
+                  <p className="text-sm text-muted-foreground truncate">{emp.position}</p>
                 </div>
-                {employee.kpi >= 90 && (
-                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-warning rounded-full flex items-center justify-center">
-                    <Star className="w-3 h-3 text-warning-foreground" />
+                <Badge variant="secondary">{emp.stats.utilizationRate}%</Badge>
+              </div>
+              <EmployeeQuickStats employee={emp} />
+            </Card>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Перегружены */}
+      <Card className="border-red-500/30">
+        <CardHeader className="bg-red-500/10">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+            Перегружены ({filteredEmployees.filter(e => e.stats.utilizationRate >= 90).length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 space-y-3">
+          {filteredEmployees.filter(e => e.stats.utilizationRate >= 90).map(emp => (
+            <Card key={emp.id} className="p-4 hover:shadow-lg transition-all cursor-pointer border-red-500/30" onClick={() => setSelectedEmployee(emp)}>
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarFallback>{emp.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold truncate">{emp.name}</h4>
+                  <p className="text-sm text-muted-foreground truncate">{emp.position}</p>
+                </div>
+                <Badge variant="destructive">{emp.stats.utilizationRate}%</Badge>
+              </div>
+              <EmployeeQuickStats employee={emp} />
+            </Card>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // Табличный вид
+  const TableView = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="text-left p-4">Сотрудник</th>
+            <th className="text-left p-4">Позиция</th>
+            <th className="text-center p-4">Локация</th>
+            <th className="text-center p-4">Активных проектов</th>
+            {isManager && (
+              <>
+                <th className="text-center p-4">Загрузка</th>
+                <th className="text-center p-4">Средний балл</th>
+                <th className="text-center p-4">Вовремя %</th>
+              </>
+            )}
+            <th className="text-center p-4">Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredEmployees.map(emp => (
+            <tr key={emp.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+              <td className="p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar>
+                    <AvatarFallback>{emp.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="font-semibold">{emp.name}</div>
+                    <div className="text-sm text-muted-foreground">{emp.email}</div>
                   </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold">{employee.name}</h3>
-                <p className="text-sm text-muted-foreground mb-1">{employee.role}</p>
-                <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                  <Mail className="w-3 h-3" />
-                  <span>{employee.email}</span>
                 </div>
-                <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
-                  <MapPin className="w-3 h-3" />
-                  <span>{employee.location}</span>
+              </td>
+              <td className="p-4">{emp.position}</td>
+              <td className="p-4 text-center">
+                <Badge variant="outline">
+                  {getLocationIcon(emp.location)} {getLocationLabel(emp.location)}
+                </Badge>
+              </td>
+              <td className="p-4 text-center">
+                <Badge>{emp.stats.activeProjects}</Badge>
+              </td>
+              {isManager && (
+                <>
+                  <td className="p-4">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`font-bold ${getUtilizationColor(emp.stats.utilizationRate)}`}>
+                        {emp.stats.utilizationRate}%
+                      </span>
+                      <Progress value={emp.stats.utilizationRate} className="w-full h-2" />
+                    </div>
+                  </td>
+                  <td className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <Award className="w-4 h-4 text-yellow-500" />
+                      <span className="font-semibold">{emp.stats.averageScore}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-center text-green-500 font-semibold">
+                    {emp.stats.onTimeDelivery}%
+                  </td>
+                </>
+              )}
+              <td className="p-4">
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => setSelectedEmployee(emp)}>
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  {isManager && (
+                    <Button size="sm" variant="default" onClick={() => { setSelectedEmployee(emp); setIsAssignDialogOpen(true); }}>
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
-              </div>
-            </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
-            {/* KPI */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">KPI</span>
-                <KPIIndicator value={employee.kpi} size="sm" />
-              </div>
-            </div>
-
-            {/* Bonuses */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/20 border border-glass-border">
-                <div className="flex items-center space-x-2">
-                  <DollarSign className="w-4 h-4 text-success" />
-                  <span className="text-sm text-muted-foreground">Бонусы</span>
-                </div>
-                <span className="font-semibold text-success">{employee.bonuses}</span>
-              </div>
-            </div>
-
-            {/* Engagement */}
-            <div className="mb-4">
-              <ProgressBar 
-                value={employee.engagement}
-                variant={employee.engagement >= 90 ? "success" : employee.engagement >= 75 ? "warning" : "destructive"}
-                showLabel={false}
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>Вовлечённость</span>
-                <span>{employee.engagement}%</span>
-              </div>
-            </div>
-
-            {/* Projects */}
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-muted-foreground mb-2 flex items-center">
-                <Briefcase className="w-4 h-4 mr-1" />
-                Проекты ({employee.projects.length})
-              </h4>
-              <div className="space-y-2">
-                {employee.projects.map((project, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 rounded bg-secondary/10">
-                    <span className="text-sm">{project.name}</span>
-                    <span className="text-xs text-muted-foreground">{project.role}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex space-x-2">
-              <Button 
-                size="sm" 
-                className="btn-gradient flex-1"
-                onClick={() => navigate(`/employees/${employee.id}`, { state: { employee } })}
-              >
-                Подробнее
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="btn-glass"
-                onClick={() => {
-                  // TODO: Implement send email functionality
-                  console.log('Send email clicked:', employee.email);
-                }}
-              >
-                <Mail className="w-4 h-4" />
-              </Button>
-            </div>
-          </Card>
-        ))}
+  return (
+    <div className="space-y-6 animate-fade-in p-4 md:p-0">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
+            👥 Сотрудники
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {isManager ? 'Загрузка сотрудников, назначение на проекты, тайм-шиты' : 'Управление командой и персоналом'}
+          </p>
+        </div>
+        <Badge variant="outline" className="text-lg">
+          Всего: {filteredEmployees.length} сотрудников
+        </Badge>
       </div>
+
+      {/* Search and View Controls */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Поиск сотрудников..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        {isManager && (
+          <div className="flex gap-2">
+            <Button
+              variant={viewMode === 'kanban' ? 'default' : 'outline'}
+              onClick={() => setViewMode('kanban')}
+            >
+              <Kanban className="w-4 h-4 mr-2" />
+              Канбан
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'outline'}
+              onClick={() => setViewMode('table')}
+            >
+              <TableIcon className="w-4 h-4 mr-2" />
+              Таблица
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Views */}
+      {isManager ? (
+        <>
+          {viewMode === 'kanban' && <KanbanView />}
+          {viewMode === 'table' && <TableView />}
+        </>
+      ) : (
+        <TableView />
+      )}
+
+      {/* Employee Details Dialog */}
+      {selectedEmployee && !isAssignDialogOpen && (
+        <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-2xl flex items-center gap-3">
+                <Avatar className="w-12 h-12">
+                  <AvatarFallback className="text-lg">
+                    {selectedEmployee.name.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                {selectedEmployee.name}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {/* Контактная информация */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">📋 Основная информация</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold">{selectedEmployee.position}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">{selectedEmployee.department}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">{selectedEmployee.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">{selectedEmployee.phone}</span>
+                  </div>
+                  <div className="flex items-center gap-2 col-span-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <Badge>
+                      {getLocationIcon(selectedEmployee.location)} {getLocationLabel(selectedEmployee.location)}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Статистика (только для руководителей) */}
+              {isManager && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card className="p-4">
+                    <div className="text-2xl font-bold text-blue-500">{selectedEmployee.stats.totalProjects}</div>
+                    <div className="text-sm text-muted-foreground">Всего проектов</div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className={`text-2xl font-bold ${getUtilizationColor(selectedEmployee.stats.utilizationRate)}`}>
+                      {selectedEmployee.stats.utilizationRate}%
+                    </div>
+                    <div className="text-sm text-muted-foreground">Загрузка</div>
+                    <Progress value={selectedEmployee.stats.utilizationRate} className="mt-2 h-2" />
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-2xl font-bold text-yellow-500">{selectedEmployee.stats.averageScore}</div>
+                    <div className="text-sm text-muted-foreground">Средний балл</div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-2xl font-bold text-green-500">{selectedEmployee.stats.onTimeDelivery}%</div>
+                    <div className="text-sm text-muted-foreground">Вовремя</div>
+                  </Card>
+                </div>
+              )}
+
+              {/* Текущие проекты */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    <span>📋 Текущие проекты ({selectedEmployee.currentProjects.length})</span>
+                    {isManager && (
+                      <Button size="sm" onClick={() => setIsAssignDialogOpen(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Назначить
+                      </Button>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {selectedEmployee.currentProjects.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">Нет активных проектов</p>
+                  ) : (
+                    selectedEmployee.currentProjects.map(proj => (
+                      <Card key={proj.projectId} className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold">{proj.projectName}</h4>
+                          <Badge>{proj.role}</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mb-2">
+                          <div>📅 {new Date(proj.startDate).toLocaleDateString('ru-RU')} - {new Date(proj.endDate).toLocaleDateString('ru-RU')}</div>
+                          <div>⏱️ {proj.hoursSpent} / {proj.hoursAllocated} часов</div>
+                        </div>
+                        <Progress value={(proj.hoursSpent / proj.hoursAllocated) * 100} className="h-2" />
+                      </Card>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Будущие проекты */}
+              {selectedEmployee.futureProjects.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">🔮 Запланированные проекты ({selectedEmployee.futureProjects.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedEmployee.futureProjects.map(proj => (
+                      <Card key={proj.projectId} className="p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold">{proj.projectName}</h4>
+                          <Badge variant="outline">{proj.role}</Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          📅 Начало: {new Date(proj.startDate).toLocaleDateString('ru-RU')}
+                        </div>
+                      </Card>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Тайм-шит (только для руководителей) */}
+              {isManager && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">⏰ Тайм-шит (последние записи)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedEmployee.timesheet.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">Нет записей</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedEmployee.timesheet.map((entry, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                            <div className="flex-1">
+                              <div className="font-semibold">{entry.projectName}</div>
+                              <div className="text-sm text-muted-foreground">{entry.description}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-blue-500">{entry.hours}ч</div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(entry.date).toLocaleDateString('ru-RU')}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Assign Dialog (только для руководителей) */}
+      {isManager && isAssignDialogOpen && selectedEmployee && (
+        <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Назначить на проект: {selectedEmployee.name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Проект</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите проект" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="proj-1">Аудит АО "Компания"</SelectItem>
+                    <SelectItem value="proj-2">Трансформация МСФО</SelectItem>
+                    <SelectItem value="proj-3">Налоговый консалтинг</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Роль</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите роль" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="partner">Партнер</SelectItem>
+                    <SelectItem value="supervisor">Супервайзер</SelectItem>
+                    <SelectItem value="assistant">Ассистент</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Часов выделено</Label>
+                <Input type="number" placeholder="160" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+                Отмена
+              </Button>
+              <Button onClick={() => {
+                toast({
+                  title: "✅ Сотрудник назначен",
+                  description: `${selectedEmployee.name} назначен на проект`,
+                });
+                setIsAssignDialogOpen(false);
+              }}>
+                Назначить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
