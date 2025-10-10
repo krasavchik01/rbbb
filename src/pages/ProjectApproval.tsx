@@ -74,10 +74,20 @@ export default function ProjectApproval() {
   ];
 
   // Загрузка проектов
-  useEffect(() => {
+  const loadProjects = () => {
     const savedProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
     const pendingProjects = savedProjects.filter((p: ProjectV3) => p.status === 'new' || p.status === 'pending_approval');
+    console.log('📋 Загрузка проектов на утверждение:', pendingProjects.length, 'проектов');
     setProjects(pendingProjects);
+  };
+
+  useEffect(() => {
+    loadProjects();
+    
+    // Автоматически обновляем каждые 5 секунд
+    const interval = setInterval(loadProjects, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Расчёт финансов в реальном времени

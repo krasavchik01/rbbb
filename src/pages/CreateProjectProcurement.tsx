@@ -263,6 +263,12 @@ export default function CreateProjectProcurement() {
     const existingProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
     existingProjects.push(project);
     localStorage.setItem('rb_projects_v3', JSON.stringify(existingProjects));
+    console.log('💾 Проект сохранён в localStorage:', {
+      id: project.id,
+      name: project.name,
+      status: project.status,
+      totalProjects: existingProjects.length
+    });
 
     // Создаем уведомление для зам. директора
     const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountWithoutVAT);
