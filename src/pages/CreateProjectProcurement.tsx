@@ -531,13 +531,14 @@ export default function CreateProjectProcurement() {
 
           {/* Чекбокс консорциума */}
           <div className="md:col-span-2">
-            <div className="flex items-center space-x-2 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center space-x-2 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border-2 border-blue-400/50">
               <Checkbox 
                 id="isConsortium" 
                 checked={isConsortium}
                 onCheckedChange={(checked) => setIsConsortium(checked as boolean)}
+                className="border-blue-400"
               />
-              <Label htmlFor="isConsortium" className="text-sm font-medium cursor-pointer">
+              <Label htmlFor="isConsortium" className="text-sm font-bold cursor-pointer text-blue-300">
                 🤝 Проект консорциума (выполняют несколько наших компаний)
               </Label>
             </div>
@@ -580,10 +581,10 @@ export default function CreateProjectProcurement() {
 
               <div className="space-y-3">
                 {consortiumMembers.map((member, index) => (
-                  <Card key={index} className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
+                  <Card key={index} className="p-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-2 border-blue-400/30">
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
-                        <Label className="text-xs text-muted-foreground mb-1 block">Компания</Label>
+                        <Label className="text-xs text-blue-300 mb-1 block font-semibold">Компания</Label>
                         <Select 
                           value={member.companyId} 
                           onValueChange={(value) => updateConsortiumMember(index, 'companyId', value)}
@@ -602,7 +603,7 @@ export default function CreateProjectProcurement() {
                       </div>
                       
                       <div className="w-32">
-                        <Label className="text-xs text-muted-foreground mb-1 block">Доля %</Label>
+                        <Label className="text-xs text-blue-300 mb-1 block font-semibold">Доля %</Label>
                         <Input
                           type="number"
                           value={member.sharePercentage}
@@ -610,7 +611,7 @@ export default function CreateProjectProcurement() {
                           min="0"
                           max="100"
                           step="0.1"
-                          className="text-center font-bold"
+                          className="text-center font-bold text-lg bg-slate-800 border-blue-400"
                         />
                       </div>
 
@@ -628,9 +629,9 @@ export default function CreateProjectProcurement() {
 
                     {/* Расчет суммы для участника */}
                     {amountWithoutVAT && parseFloat(amountWithoutVAT) > 0 && (
-                      <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-700">
-                        <p className="text-sm text-muted-foreground">
-                          Сумма участника: <span className="font-bold text-foreground">
+                      <div className="mt-3 pt-3 border-t border-blue-400/30">
+                        <p className="text-sm text-blue-200">
+                          💰 Сумма участника: <span className="font-bold text-green-400 text-lg">
                             {((parseFloat(amountWithoutVAT) * member.sharePercentage) / 100).toLocaleString('ru-RU')} ₸
                           </span>
                         </p>
@@ -641,9 +642,9 @@ export default function CreateProjectProcurement() {
               </div>
 
               {!isShareValid() && (
-                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">
-                    ⚠️ Сумма долей должна равняться 100%. Текущая сумма: <strong>{getTotalShare().toFixed(1)}%</strong>
+                <div className="mt-3 p-4 bg-red-500/20 border-2 border-red-400 rounded-lg">
+                  <p className="text-sm text-red-300 font-semibold">
+                    ⚠️ Сумма долей должна равняться 100%. Текущая сумма: <strong className="text-red-400 text-lg">{getTotalShare().toFixed(1)}%</strong>
                   </p>
                 </div>
               )}
