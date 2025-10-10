@@ -6,54 +6,60 @@
 
 @layer base {
   :root {
-    /* Light Theme - Clean & Readable */
+    /* Light Theme - Ocean Colors Palette */
     --background: 0 0% 100%;
-    --foreground: 0 0% 5%;
+    --foreground: 0 0% 10%;
     
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 5%;
+    --card-foreground: 0 0% 10%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 5%;
+    --popover-foreground: 0 0% 10%;
     
-    --primary: 221 83% 53%;
+    /* Primary - Teal/Turquoise */
+    --primary: 180 50% 40%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 0 0% 98%;
-    --secondary-foreground: 0 0% 5%;
+    /* Secondary - Light Green */
+    --secondary: 140 30% 60%;
+    --secondary-foreground: 0 0% 10%;
     
-    --muted: 0 0% 98%;
-    --muted-foreground: 0 0% 40%;
+    /* Muted - Sage Green */
+    --muted: 80 20% 70%;
+    --muted-foreground: 0 0% 35%;
     
-    --accent: 221 83% 53%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent - Peach/Beige */
+    --accent: 20 50% 80%;
+    --accent-foreground: 0 0% 10%;
     
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 0 0% 93%;
+    --border: 0 0% 90%;
     --input: 0 0% 100%;
-    --ring: 221 83% 53%;
+    --ring: 180 50% 40%;
     
-    --success: 142 71% 45%;
+    /* Success - Teal Green */
+    --success: 160 50% 45%;
     --success-foreground: 0 0% 100%;
     
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    /* Warning - Sandy Beige */
+    --warning: 35 60% 70%;
+    --warning-foreground: 0 0% 20%;
     
     --radius: 0.5rem;
     
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 221 83% 53%;
+    --sidebar-foreground: 0 0% 15%;
+    --sidebar-primary: 180 50% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 98%;
-    --sidebar-accent-foreground: 0 0% 5%;
-    --sidebar-border: 0 0% 93%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-accent: 0 0% 97%;
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 180 50% 40%;
     
     --glass: 0 0% 100%;
-    --glass-border: 0 0% 93%;
+    --glass-border: 0 0% 88%;
   }
 
   .dark {
@@ -163,12 +169,12 @@
     border: 1px solid hsl(var(--glass-border) / 0.5);
   }
   
-  /* Light theme: clean white cards */
+  /* Light theme: clean white cards with visible borders */
   body:not(.dark) .glass {
     background: #ffffff;
     backdrop-filter: none;
-    border: 1px solid #e8e8e8;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 
   .glass-card {
@@ -178,27 +184,12 @@
     box-shadow: var(--shadow-glass);
   }
   
-  /* Light theme: clean white cards */
+  /* Light theme: clean white cards with visible borders */
   body:not(.dark) .glass-card {
     background: #ffffff;
     backdrop-filter: none;
-    border: 1px solid #e8e8e8;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  }
-  
-  /* Light theme: all cards white */
-  body:not(.dark) [class*="card"],
-  body:not(.dark) .stat-card {
-    background: #ffffff !important;
-    border: 1px solid #e8e8e8 !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-  }
-  
-  /* Remove gradients in light mode */
-  body:not(.dark) .bg-gradient-to-r,
-  body:not(.dark) .bg-gradient-to-br,
-  body:not(.dark) [class*="gradient"] {
-    background: #ffffff !important;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 
   /* Glow Effects */
