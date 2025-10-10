@@ -501,5 +501,3 @@ export default function ProjectApproval() {
     </div>
   );
 }
-
-export default ProjectApproval;
