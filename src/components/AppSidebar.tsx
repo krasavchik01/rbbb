@@ -36,6 +36,7 @@ import { RoleBasedAccess, RoleAccess } from "./RoleBasedAccess";
 import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS, UserRole } from "@/types/roles";
 import { getUnreadCount } from "@/lib/notifications";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface MenuItem {
   title: string;
@@ -278,7 +279,12 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* User Info & Logout */}
-        <div className="mt-auto p-4 border-t border-glass-border">
+        <div className="mt-auto p-4 border-t border-glass-border space-y-3">
+          {/* Theme Toggle */}
+          <div className="flex items-center justify-center">
+            <ThemeToggle />
+          </div>
+          
           <div className="flex items-center justify-between">
             {!collapsed && (
               <div className="flex-1 min-w-0">

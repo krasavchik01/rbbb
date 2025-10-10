@@ -10,6 +10,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { useState } from 'react';
 
 const navItems = [
@@ -77,6 +78,8 @@ export const MobileHeader = () => {
         </div>
 
         <div className="flex items-center space-x-2">
+          <ThemeToggle />
+          
           <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white">
             <Bell className="h-5 w-5" />
           </Button>
