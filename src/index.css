@@ -6,36 +6,36 @@
 
 @layer base {
   :root {
-    /* Light Theme - Notion Style */
+    /* Light Theme - Clean & Readable */
     --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
+    --foreground: 0 0% 5%;
     
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 0 0% 5%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover-foreground: 0 0% 5%;
     
-    --primary: 210 100% 50%;
+    --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 0 0% 98%;
+    --secondary-foreground: 0 0% 5%;
     
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 0 0% 98%;
+    --muted-foreground: 0 0% 40%;
     
-    --accent: 210 100% 95%;
-    --accent-foreground: 210 100% 50%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 0 0% 100%;
     
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 210 100% 50%;
+    --border: 0 0% 93%;
+    --input: 0 0% 100%;
+    --ring: 221 83% 53%;
     
-    --success: 142 76% 45%;
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
     
     --warning: 38 92% 50%;
@@ -43,17 +43,17 @@
     
     --radius: 0.5rem;
     
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 210 100% 50%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 96%;
-    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-accent: 0 0% 98%;
+    --sidebar-accent-foreground: 0 0% 5%;
     --sidebar-border: 0 0% 93%;
-    --sidebar-ring: 210 100% 50%;
+    --sidebar-ring: 221 83% 53%;
     
     --glass: 0 0% 100%;
-    --glass-border: 0 0% 90%;
+    --glass-border: 0 0% 93%;
   }
 
   .dark {
@@ -163,12 +163,12 @@
     border: 1px solid hsl(var(--glass-border) / 0.5);
   }
   
-  /* Light theme: clean cards like Notion */
+  /* Light theme: clean white cards */
   body:not(.dark) .glass {
     background: #ffffff;
     backdrop-filter: none;
-    border: 1px solid hsl(0 0% 90%);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e8e8e8;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   }
 
   .glass-card {
@@ -178,12 +178,27 @@
     box-shadow: var(--shadow-glass);
   }
   
-  /* Light theme: clean cards like Notion */
+  /* Light theme: clean white cards */
   body:not(.dark) .glass-card {
     background: #ffffff;
     backdrop-filter: none;
-    border: 1px solid hsl(0 0% 90%);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e8e8e8;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  
+  /* Light theme: all cards white */
+  body:not(.dark) [class*="card"],
+  body:not(.dark) .stat-card {
+    background: #ffffff !important;
+    border: 1px solid #e8e8e8 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  }
+  
+  /* Remove gradients in light mode */
+  body:not(.dark) .bg-gradient-to-r,
+  body:not(.dark) .bg-gradient-to-br,
+  body:not(.dark) [class*="gradient"] {
+    background: #ffffff !important;
   }
 
   /* Glow Effects */
