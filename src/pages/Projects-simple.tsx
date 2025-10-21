@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { TaskManager } from "@/components/tasks/TaskManager";
 import { Task, Project as ProjectType, ChecklistItem, PriorityLevel, TaskStatus } from "@/types/project";
 import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, CheckCircle, Circle, AlertCircle, XCircle, FileText, BarChart3 } from "lucide-react";
+import { useProjects } from "@/hooks/useSupabaseData";
+import { supabaseDataStore } from "@/lib/supabaseDataStore";
 
 // Простые типы
 interface SimpleProject {
@@ -192,9 +194,10 @@ const demoProjects: SimpleProject[] = [
 ];
 
 export default function Projects() {
+  const { projects: realProjects, loading } = useProjects();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredProjects, setFilteredProjects] = useState(demoProjects);
-  const [selectedProject, setSelectedProject] = useState<SimpleProject | null>(null);
+  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
+  const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const navigate = useNavigate();
   const [newProject, setNewProject] = useState({
     name: "",
@@ -204,6 +207,12 @@ export default function Projects() {
     budget: ""
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Загружаем реальные проекты при монтировании
+  useEffect(() => {
+    console.log('📦 Загружены проекты:', realProjects.length);
+    setFilteredProjects(realProjects);
+  }, [realProjects]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -281,20 +290,31 @@ export default function Projects() {
     };
   };
 
-  const ProjectCard = ({ project }: { project: SimpleProject }) => {
+  const ProjectCard = ({ project }: { project: any }) => {
+    const projectName = project.name || project.client?.name || 'Без названия';
+    const projectStatus = project.status || 'new';
+    const projectCompany = project.companyName || project.company || project.ourCompany || 'Не указана';
+    const projectCompletion = project.completionPercent || project.completion || 0;
+    const projectDeadline = project.contract?.serviceEndDate || project.deadline || new Date().toISOString();
+    const projectTeam = project.team?.length || 1;
+    
     const stats = getProjectStats(project);
     
     return (
-      <Card className="p-6 hover:shadow-lg transition-all duration-200 border glass-card">
+      <Card className="p-6 hover:shadow-lg transition-all duration-200 border glass-card cursor-pointer"
+            onClick={() => navigate(`/project-approval`)}>
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
-            <h3 className="font-semibold text-lg mb-2 line-clamp-2">{project.name}</h3>
-            <div className="flex items-center gap-2 mb-3">
-              <Badge variant="secondary" className={`text-white ${getStatusColor(project.status)}`}>
-                {project.status}
+            <h3 className="font-semibold text-lg mb-2 line-clamp-2">{projectName}</h3>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <Badge variant="secondary" className={`text-white ${getStatusColor(projectStatus)}`}>
+                {projectStatus === 'new' ? 'Новый' : projectStatus}
               </Badge>
-              <span className="text-sm text-muted-foreground">{project.company}</span>
+              <span className="text-sm text-muted-foreground">{projectCompany}</span>
             </div>
+            {project.client?.name && (
+              <p className="text-xs text-muted-foreground mb-2">Клиент: {project.client.name}</p>
+            )}
           </div>
         </div>
 
@@ -302,9 +322,9 @@ export default function Projects() {
           <div>
             <div className="flex justify-between text-sm mb-1">
               <span>Прогресс</span>
-              <span>{project.completion}%</span>
+              <span>{projectCompletion}%</span>
             </div>
-            <Progress value={project.completion} className="h-2" />
+            <Progress value={projectCompletion} className="h-2" />
           </div>
 
           {/* Task Stats */}
@@ -334,11 +354,11 @@ export default function Projects() {
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              <span>{project.team} участников</span>
+              <span>{projectTeam} участников</span>
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
-              <span>{new Date(project.deadline).toLocaleDateString('ru-RU')}</span>
+              <span>{new Date(projectDeadline).toLocaleDateString('ru-RU')}</span>
             </div>
           </div>
 
