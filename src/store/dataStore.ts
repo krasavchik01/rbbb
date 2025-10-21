@@ -350,149 +350,25 @@ class DataStore {
   }
 
   // Данные по умолчанию
+  // ВСЕ ДЕМО-ДАННЫЕ УДАЛЕНЫ - используем только реальные данные
   private getDefaultProjects(): Project[] {
-    return [
-      {
-        id: '1',
-        name: 'Аудит финансовой отчетности ООО "Технологии"',
-        status: 'В работе',
-        completion: 65,
-        team: ['1', '2', '3'],
-        deadline: '2024-03-01',
-        company: 'RB Partners IT Audit',
-        description: 'Комплексный аудит финансовой отчетности',
-        budget: 500000,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-15T00:00:00Z',
-      },
-      {
-        id: '2',
-        name: 'Налоговое консультирование ПАО "Строй"',
-        status: 'На проверке',
-        completion: 85,
-        team: ['4', '5'],
-        deadline: '2024-02-15',
-        company: 'Russell Bedford A+ Partners',
-        description: 'Консультация по налоговому планированию',
-        budget: 350000,
-        created_at: '2024-01-05T00:00:00Z',
-        updated_at: '2024-01-20T00:00:00Z',
-      },
-    ];
+    return [];
   }
 
   private getDefaultEmployees(): Employee[] {
-    return [
-      {
-        id: '1',
-        name: 'Анна Иванова',
-        email: 'anna.ivanova@rbpartners.com',
-        position: 'Руководитель проекта',
-        department: 'Аудит',
-        company: 'RB Partners IT Audit',
-        kpi: 95,
-        joinDate: '2020-03-15',
-        status: 'Активен',
-      },
-      {
-        id: '2',
-        name: 'Михаил Петров',
-        email: 'mikhail.petrov@rbpartners.com',
-        position: 'Партнёр',
-        department: 'Управление',
-        company: 'RB Partners',
-        kpi: 92,
-        joinDate: '2018-01-10',
-        status: 'Активен',
-      },
-      {
-        id: '3',
-        name: 'Елена Сидорова',
-        email: 'elena.sidorova@rbpartners.com',
-        position: 'Ассистент',
-        department: 'Аудит',
-        company: 'RB Partners IT Audit',
-        kpi: 88,
-        joinDate: '2021-06-01',
-        status: 'Активен',
-      },
-    ];
+    return [];
   }
 
   private getDefaultTimesheets(): Timesheet[] {
-    return [
-      {
-        id: '1',
-        employee_id: '1',
-        project_id: '1',
-        date: '2024-01-15',
-        hours: 8,
-        description: 'Анализ финансовых документов',
-        status: 'Утверждено',
-        created_at: '2024-01-15T18:00:00Z',
-      },
-      {
-        id: '2',
-        employee_id: '2',
-        project_id: '2',
-        date: '2024-01-16',
-        hours: 6,
-        description: 'Консультация с клиентом',
-        status: 'На утверждении',
-        created_at: '2024-01-16T18:00:00Z',
-      },
-    ];
+    return [];
   }
 
   private getDefaultBonuses(): Bonus[] {
-    return [
-      {
-        id: '1',
-        employee_id: '1',
-        amount: 50000,
-        type: 'Проект',
-        description: 'Успешное завершение проекта',
-        date: '2024-01-01',
-        status: 'Выплачен',
-        created_at: '2024-01-01T00:00:00Z',
-      },
-      {
-        id: '2',
-        employee_id: '2',
-        amount: 75000,
-        type: 'KPI',
-        description: 'Достижение целевых показателей',
-        date: '2024-01-15',
-        status: 'Одобрен',
-        created_at: '2024-01-15T00:00:00Z',
-      },
-    ];
+    return [];
   }
 
   private getDefaultVacations(): Vacation[] {
-    return [
-      {
-        id: '1',
-        employee_id: '1',
-        start_date: '2024-03-01',
-        end_date: '2024-03-14',
-        type: 'Оплачиваемый',
-        status: 'Одобрен',
-        days: 14,
-        reason: 'Ежегодный отпуск',
-        created_at: '2024-01-10T00:00:00Z',
-      },
-      {
-        id: '2',
-        employee_id: '3',
-        start_date: '2024-02-20',
-        end_date: '2024-02-22',
-        type: 'Больничный',
-        status: 'Ожидает',
-        days: 3,
-        created_at: '2024-02-18T00:00:00Z',
-      },
-    ];
+    return [];
   }
 
   // Шаблоны проектов (Методологии)
