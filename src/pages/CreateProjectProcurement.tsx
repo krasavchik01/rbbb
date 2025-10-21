@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getActiveCompanies } from "@/types/companies";
 import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo } from "@/types/project-v3";
 import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
+import { supabaseDataStore } from "@/lib/supabaseDataStore";
 
 interface ContactPerson {
   name: string;
@@ -259,31 +260,38 @@ export default function CreateProjectProcurement() {
       updated_at: new Date().toISOString(),
     };
 
-    // Сохраняем в localStorage (пока)
-    const existingProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
-    existingProjects.push(project);
-    localStorage.setItem('rb_projects_v3', JSON.stringify(existingProjects));
-    console.log('💾 Проект сохранён в localStorage:', {
-      id: project.id,
-      name: project.name,
-      status: project.status,
-      totalProjects: existingProjects.length
-    });
+    try {
+      // Сохраняем проект через новый dataStore (с Supabase интеграцией)
+      console.log('💾 Сохраняем проект через supabaseDataStore...');
+      await supabaseDataStore.createProject(project);
+      console.log('✅ Проект успешно сохранён:', {
+        id: project.id,
+        name: project.name,
+        status: project.status
+      });
 
-    // Создаем уведомление для зам. директора
-    const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountWithoutVAT);
-    notifyDeputyDirectorNewProject(
-      project.name,
-      clientName,
-      formattedAmount
-    );
+      // Создаем уведомление для зам. директора
+      const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountWithoutVAT);
+      notifyDeputyDirectorNewProject(
+        project.name,
+        clientName,
+        formattedAmount
+      );
 
-    toast({
-      title: "✅ Проект создан!",
-      description: `Проект "${project.name}" отправлен на утверждение. Зам. директор получил уведомление.`,
-    });
+      toast({
+        title: "✅ Проект создан!",
+        description: `Проект "${project.name}" отправлен на утверждение. Зам. директор получил уведомление.`,
+      });
 
-    navigate('/projects');
+      navigate('/projects');
+    } catch (error) {
+      console.error('❌ Ошибка при сохранении проекта:', error);
+      toast({
+        title: "❌ Ошибка",
+        description: "Не удалось сохранить проект. Попробуйте ещё раз.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

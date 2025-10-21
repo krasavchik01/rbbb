@@ -11,23 +11,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Calendar, Users, ArrowRight, Edit, Trash2, Eye, Download, Upload, FileSpreadsheet } from "lucide-react";
-import { useProjects } from "@/hooks/useDataStore";
-import { useEmployees } from "@/hooks/useDataStore";
-import { Project } from "@/store/dataStore";
+import { useProjects } from "@/hooks/useSupabaseData";
+import { useEmployees } from "@/hooks/useSupabaseData";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { exportProjectsToExcel, downloadImportTemplate, importProjectsFromExcel } from "@/lib/excelExport";
+import { exportProjectsToExcel, downloadImportTemplate, importProjectsFromExcel, saveImportedProjects } from "@/lib/excelExport";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Projects() {
-  const { projects, addProject, updateProject, deleteProject } = useProjects();
+  const { projects, createProject, updateProject, deleteProject } = useProjects();
   const { employees } = useEmployees();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const navigate = useNavigate();
 
@@ -35,7 +34,7 @@ export default function Projects() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    status: 'Черновик' as Project['status'],
+    status: 'Черновик',
     company: 'RB Partners IT Audit',
     deadline: '',
     budget: 0,
@@ -78,12 +77,12 @@ export default function Projects() {
   const handleCreate = () => {
     if (!formData.name.trim()) return;
     
-    addProject(formData);
+    createProject(formData);
     setIsCreateModalOpen(false);
     resetForm();
   };
 
-  const handleEdit = (project: Project) => {
+  const handleEdit = (project: any) => {
     setSelectedProject(project);
     setFormData({
       name: project.name,
@@ -107,7 +106,7 @@ export default function Projects() {
     resetForm();
   };
 
-  const handleDeleteClick = (project: Project) => {
+  const handleDeleteClick = (project: any) => {
     setSelectedProject(project);
     setIsDeleteDialogOpen(true);
   };
@@ -158,19 +157,23 @@ export default function Projects() {
     if (!file) return;
 
     try {
+      // Показываем прогресс
+      toast({
+        title: "⏳ Импорт...",
+        description: "Обрабатываем файл...",
+      });
+
       const importedProjects = await importProjectsFromExcel(file);
       
-      // Сохраняем в localStorage
-      const existingProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
-      const allProjects = [...existingProjects, ...importedProjects];
-      localStorage.setItem('rb_projects_v3', JSON.stringify(allProjects));
+      // Сохраняем через Supabase dataStore (с fallback на localStorage)
+      const result = await saveImportedProjects(importedProjects);
       
       toast({
         title: "✅ Импорт завершен",
-        description: `Импортировано проектов: ${importedProjects.length}`,
+        description: `Успешно: ${result.success}, Ошибок: ${result.failed}`,
       });
       
-      // Перезагружаем страницу чтобы обновить список
+      // Перезагружаем список проектов
       window.location.reload();
     } catch (error) {
       toast({

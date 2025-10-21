@@ -3,6 +3,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import { supabaseDataStore } from '@/lib/supabaseDataStore';
 
 // Интерфейс для проекта (упрощенный для Excel)
 export interface ProjectExcelRow {
@@ -229,6 +230,27 @@ export function importProjectsFromExcel(file: File): Promise<any[]> {
     reader.onerror = () => reject(new Error('Ошибка чтения файла'));
     reader.readAsBinaryString(file);
   });
+}
+
+/**
+ * Сохранить импортированные проекты в Supabase
+ */
+export async function saveImportedProjects(projects: any[]): Promise<{ success: number; failed: number }> {
+  let success = 0;
+  let failed = 0;
+
+  for (const project of projects) {
+    try {
+      await supabaseDataStore.createProject(project);
+      success++;
+      console.log('✅ Imported project:', project.name);
+    } catch (error) {
+      console.error('❌ Failed to import project:', project.name, error);
+      failed++;
+    }
+  }
+
+  return { success, failed };
 }
 
 // Вспомогательная функция для получения названия статуса
