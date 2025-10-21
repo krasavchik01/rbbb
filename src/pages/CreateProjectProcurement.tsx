@@ -49,6 +49,7 @@ export default function CreateProjectProcurement() {
   const [serviceStartDate, setServiceStartDate] = useState("");
   const [serviceEndDate, setServiceEndDate] = useState("");
   const [amountWithoutVAT, setAmountWithoutVAT] = useState("");
+  const [currency, setCurrency] = useState("KZT"); // KZT по умолчанию
   const [companyId, setCompanyId] = useState("");
   const [projectType, setProjectType] = useState<ProjectType | "">("");
   
@@ -219,6 +220,7 @@ export default function CreateProjectProcurement() {
         serviceStartDate: serviceStartDate,
         serviceEndDate: serviceEndDate,
         amountWithoutVAT: parseFloat(amountWithoutVAT),
+        currency: currency, // Валюта проекта
         contractScanUrl: contractFile ? URL.createObjectURL(contractFile) : undefined,
       } as ContractInfo,
       
@@ -538,7 +540,17 @@ export default function CreateProjectProcurement() {
               Сумма без НДС <Badge variant="destructive" className="ml-2 text-xs">Обязательно</Badge>
             </Label>
             <div className="flex items-center gap-2 mt-1">
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="KZT">₸ Тенге</SelectItem>
+                  <SelectItem value="USD">$ Доллар</SelectItem>
+                  <SelectItem value="EUR">€ Евро</SelectItem>
+                  <SelectItem value="RUB">₽ Рубль</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
                 id="amountWithoutVAT"
                 type="number"
@@ -547,9 +559,12 @@ export default function CreateProjectProcurement() {
                 placeholder="10000000"
                 min="0"
                 step="1000"
+                className="flex-1"
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">В тенге (₸)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Выберите валюту и укажите сумму
+            </p>
           </div>
 
           {/* Чекбокс консорциума */}
