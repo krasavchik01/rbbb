@@ -5,7 +5,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import Index from '@/pages/Index';
 import Dashboard from '@/pages/Dashboard';
-import Projects from '@/pages/Projects';
+import Projects from '@/pages/Projects-simple';
 import HR from '@/pages/HR';
 import Analytics from '@/pages/Analytics';
 import Settings from '@/pages/Settings';

@@ -52,10 +52,13 @@ export default function Projects() {
 
     // Фильтр по поиску
     if (searchQuery) {
-      filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.company.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter(p => {
+        const searchLower = searchQuery.toLowerCase();
+        const name = p.name?.toLowerCase() || '';
+        const company = p.company?.toLowerCase() || p.companyName?.toLowerCase() || '';
+        const clientName = p.client?.name?.toLowerCase() || '';
+        return name.includes(searchLower) || company.includes(searchLower) || clientName.includes(searchLower);
+      });
     }
 
     setFilteredProjects(filtered);
