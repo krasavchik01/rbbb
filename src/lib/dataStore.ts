@@ -365,44 +365,26 @@ class DataStore {
     return newBonus;
   }
 
-  // Инициализация демо-данных
-  async initDemoData() {
-    const employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
-    
-    if (employees.length === 0) {
-      // Создаем демо-сотрудников
-      await this.createEmployee({
-        name: 'Иванов Иван',
-        email: 'ivanov@rbpartners.com',
-        role: 'partner',
-        department: 'Аудит',
-        position: 'Партнер',
-      });
-
-      await this.createEmployee({
-        name: 'Петрова Мария',
-        email: 'petrova@rbpartners.com',
-        role: 'project_manager',
-        department: 'Консалтинг',
-        position: 'Руководитель проектов',
-      });
-
-      await this.createEmployee({
-        name: 'Сидоров Петр',
-        email: 'sidorov@rbpartners.com',
-        role: 'supervisor_1',
-        department: 'Аудит',
-        position: 'Супервайзер',
-      });
-
-      console.log('Демо-данные инициализированы');
-    }
+  // Очистка всех демо-данных
+  clearAllDemoData(): void {
+    const keysToKeep = ['rb_user_role', 'rb_theme'];
+    Object.keys(localStorage).forEach(key => {
+      if (!keysToKeep.includes(key)) {
+        localStorage.removeItem(key);
+      }
+    });
+    console.log('Все демо-данные удалены из localStorage');
   }
 }
 
 // Экспортируем единый экземпляр
 export const dataStore = new DataStore();
 
-// Инициализируем демо-данные при первом запуске
-dataStore.initDemoData();
+// АВТООЧИСТКА ДЕМО-ДАННЫХ ПРИ ЗАГРУЗКЕ
+// Проверяем, нужно ли очистить данные
+if (!localStorage.getItem('rb_data_cleared_v2')) {
+  dataStore.clearAllDemoData();
+  localStorage.setItem('rb_data_cleared_v2', 'true');
+  console.log('🧹 Демо-данные очищены автоматически');
+}
 

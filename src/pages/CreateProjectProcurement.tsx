@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getActiveCompanies } from "@/types/companies";
 import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo } from "@/types/project-v3";
-import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
+import { notifyProjectCreated } from "@/lib/projectNotifications";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 
 interface ContactPerson {

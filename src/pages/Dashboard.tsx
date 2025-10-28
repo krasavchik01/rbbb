@@ -1,577 +1,411 @@
-import { StatCard } from "@/components/StatCard";
-import { KPIIndicator } from "@/components/KPIIndicator";
-import { ProgressBar } from "@/components/ProgressBar";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProjects } from '@/hooks/useProjects';
+import { useEmployees } from '@/hooks/useSupabaseData';
+import { CheckInWidget } from '@/components/CheckInWidget';
 import { 
-  FolderOpen, 
-  Users, 
   TrendingUp, 
+  Users, 
+  Briefcase, 
   DollarSign, 
   Calendar,
-  Bell,
-  ArrowRight,
-  Star,
-  Trophy,
+  Clock,
+  Target,
   BarChart3,
   PieChart,
   Activity,
-  Target
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { RoleBasedAccess, RoleAccess } from "@/components/RoleBasedAccess";
-import { useAuth } from "@/contexts/AuthContext";
-import { PERMISSIONS } from "@/types/roles";
-import { ProjectFunnel } from "@/components/ProjectFunnel";
-import { useEffect, useState } from "react";
-import { 
-  LineChart, 
-  Line, 
-  AreaChart, 
-  Area, 
-  BarChart, 
-  Bar, 
-  PieChart as RechartsPieChart, 
-  Pie,
-  Cell, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  Legend,
-  RadialBarChart,
-  RadialBar
-} from 'recharts';
+  CheckCircle,
+  AlertTriangle,
+  Zap
+} from 'lucide-react';
+
+// Простые компоненты графиков без Recharts
+const SimpleBarChart = ({ data, title }: { data: Array<{name: string, value: number}>, title: string }) => {
+  const maxValue = Math.max(...data.map(d => d.value));
+  
+  return (
+    <div className="space-y-3">
+      <h4 className="font-semibold">{title}</h4>
+      {data.map((item, index) => (
+        <div key={index} className="space-y-1">
+          <div className="flex justify-between text-sm">
+            <span>{item.name}</span>
+            <span className="font-medium">{item.value}</span>
+          </div>
+          <div className="w-full bg-secondary rounded-full h-2">
+            <div 
+              className="bg-primary h-2 rounded-full transition-all duration-500"
+              style={{ width: `${(item.value / maxValue) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const SimplePieChart = ({ data, title }: { data: Array<{name: string, value: number, color: string}>, title: string }) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  
+  return (
+    <div className="space-y-3">
+      <h4 className="font-semibold">{title}</h4>
+      <div className="grid grid-cols-2 gap-2">
+        {data.map((item, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <div 
+              className="w-3 h-3 rounded-full" 
+              style={{ backgroundColor: item.color }}
+            />
+            <span className="text-sm">{item.name}</span>
+            <span className="text-sm font-medium">
+              {total > 0 ? Math.round((item.value / total) * 100) : 0}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const { user, checkPermission, hasRole } = useAuth();
-  const [projects, setProjects] = useState<any[]>([]);
+  const { user } = useAuth();
+  const { projects = [], loading: projectsLoading } = useProjects();
+  const { employees = [], loading: employeesLoading } = useEmployees();
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
 
-  // Загружаем проекты из localStorage
+  // Загружаем записи посещений
   useEffect(() => {
-    const loadedProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
-    setProjects(loadedProjects);
+    const records = JSON.parse(localStorage.getItem('attendanceRecords') || '[]');
+    setAttendanceRecords(records);
   }, []);
 
-  const topEmployees = [
-    { id: 1, name: "Анна Иванова", role: "Руководитель проекта", kpi: 95, avatar: "AI" },
-    { id: 2, name: "Михаил Петров", role: "Партнёр", kpi: 92, avatar: "МП" },
-    { id: 3, name: "Елена Сидорова", role: "Ассистент", kpi: 88, avatar: "ЕС" },
-    { id: 4, name: "Дмитрий Козлов", role: "Руководитель проекта", kpi: 85, avatar: "ДК" },
-    { id: 5, name: "Ольга Морозова", role: "Партнёр", kpi: 82, avatar: "ОМ" }
-  ];
+  // Безопасные вычисления
+  const safeNumber = (value: any): number => {
+    if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
+      return 0;
+    }
+    return Number(value);
+  };
 
-  const recentProjects = [
-    { name: "Аудит налогов ПАО Газпром", progress: 85, status: "progress" },
-    { name: "IT-аудит безопасности Сбербанк", progress: 95, status: "active" },
-    { name: "Due Diligence ВТБ", progress: 100, status: "completed" }
-  ];
+  // Статистика проектов
+  const projectStats = {
+    total: projects.length,
+    active: projects.filter((p: any) => p.status === 'active').length,
+    completed: projects.filter((p: any) => p.status === 'completed').length,
+    totalRevenue: projects.reduce((sum: number, p: any) => sum + safeNumber(p.budget), 0),
+    avgBudget: projects.length > 0 ? projects.reduce((sum: number, p: any) => sum + safeNumber(p.budget), 0) / projects.length : 0
+  };
 
-  const deadlines = [
-    { project: "Аудит налогов ПАО Газпром", date: "15 дек", urgent: true },
-    { project: "IT-аудит безопасности Сбербанк", date: "20 дек", urgent: false },
-    { project: "Аудит ФНО Альфа-Банк", date: "25 дек", urgent: false }
-  ];
+  // Статистика сотрудников
+  const employeeStats = {
+    total: employees.length,
+    byRole: employees.reduce((acc: any, emp: any) => {
+      acc[emp.role] = (acc[emp.role] || 0) + 1;
+      return acc;
+    }, {}),
+    attendanceToday: attendanceRecords.filter((r: any) => 
+      r.date === new Date().toDateString()
+    ).length
+  };
 
   // Данные для графиков
-  const revenueData = [
-    { month: 'Янв', revenue: 1800000, projects: 8 },
-    { month: 'Фев', revenue: 2100000, projects: 10 },
-    { month: 'Мар', revenue: 1950000, projects: 9 },
-    { month: 'Апр', revenue: 2400000, projects: 12 },
-    { month: 'Май', revenue: 2200000, projects: 11 },
-    { month: 'Июн', revenue: 2600000, projects: 13 }
-  ];
-
-  const kpiData = [
-    { name: 'Анна Иванова', kpi: 95, projects: 3 },
-    { name: 'Михаил Петров', kpi: 92, projects: 4 },
-    { name: 'Елена Сидорова', kpi: 88, projects: 2 },
-    { name: 'Дмитрий Козлов', kpi: 85, projects: 3 },
-    { name: 'Ольга Морозова', kpi: 82, projects: 2 }
-  ];
-
   const projectStatusData = [
-    { name: 'В работе', value: 8, color: '#3B82F6' },
-    { name: 'Завершены', value: 12, color: '#10B981' },
-    { name: 'На паузе', value: 3, color: '#F59E0B' },
-    { name: 'Просрочены', value: 2, color: '#EF4444' }
+    { name: 'Активные', value: projectStats.active, color: '#10b981' },
+    { name: 'Завершенные', value: projectStats.completed, color: '#3b82f6' },
+    { name: 'В планах', value: projectStats.total - projectStats.active - projectStats.completed, color: '#f59e0b' }
   ];
 
-  const departmentPerformance = [
-    { department: 'Аудиторы', performance: 92, employees: 15 },
-    { department: 'Налоговики', performance: 88, employees: 12 },
-    { department: 'ИТ', performance: 95, employees: 8 },
-    { department: 'HR', performance: 85, employees: 5 },
-    { department: 'Юридический', performance: 90, employees: 6 }
+  const roleDistributionData = Object.entries(employeeStats.byRole).map(([role, count]) => ({
+    name: role === 'partner' ? 'Партнеры' : 
+          role === 'project_manager' ? 'РП' :
+          role === 'manager' ? 'Менеджеры' :
+          role === 'tax_specialist' ? 'Налоговики' :
+          role === 'assistant' ? 'Ассистенты' :
+          role === 'admin' ? 'Админы' : role,
+    value: count as number
+  }));
+
+  const monthlyRevenueData = [
+    { name: 'Янв', value: 1500000 },
+    { name: 'Фев', value: 1800000 },
+    { name: 'Мар', value: 2200000 },
+    { name: 'Апр', value: 1900000 },
+    { name: 'Май', value: 2500000 },
+    { name: 'Июн', value: 2800000 }
   ];
 
-  const monthlyGoals = [
-    { goal: 'Проекты', current: 12, target: 15, color: '#3B82F6' },
-    { goal: 'Доход', current: 2400000, target: 3000000, color: '#10B981' },
-    { goal: 'KPI', current: 87, target: 90, color: '#F59E0B' },
-    { goal: 'Клиенты', current: 8, target: 10, color: '#8B5CF6' }
+  // KPI метрики
+  const kpiMetrics = [
+    {
+      title: 'Выполнение плана',
+      value: 87,
+      target: 100,
+      icon: Target,
+      color: 'text-success'
+    },
+    {
+      title: 'Средний бюджет проекта',
+      value: Math.round(projectStats.avgBudget / 1000),
+      target: 3000,
+      icon: DollarSign,
+      color: 'text-primary'
+    },
+    {
+      title: 'Активность команды',
+      value: Math.round((employeeStats.attendanceToday / employeeStats.total) * 100),
+      target: 90,
+      icon: Activity,
+      color: 'text-warning'
+    },
+    {
+      title: 'Завершенные проекты',
+      value: projectStats.completed,
+      target: 15,
+      icon: CheckCircle,
+      color: 'text-info'
+    }
   ];
+
+  if (projectsLoading || employeesLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="animate-slide-up">
-          <h1 className="text-4xl font-bold text-gradient text-glow">
-            🚀 Дашборд RB Partners
-          </h1>
-          <p className="text-muted-foreground mt-2 text-lg">Операционный центр группы компаний RB Partners Group</p>
+        <div>
+          <h1 className="text-3xl font-bold">📊 Дашборд</h1>
+          <p className="text-muted-foreground">Обзор деятельности компании</p>
         </div>
-        <div className="flex space-x-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-          <RoleBasedAccess 
-            permission={PERMISSIONS.VIEW_NOTIFICATIONS}
-            userRole={user?.role || 'employee'}
-          >
-            <Button
-              className="btn-enhanced btn-glass hover-glow"
-              onClick={() => navigate('/notifications')}
-            >
-              <Bell className="w-4 h-4 mr-2" />
-              🔔 Уведомления
-            </Button>
-          </RoleBasedAccess>
-          <RoleBasedAccess 
-            permission={PERMISSIONS.VIEW_CALENDAR}
-            userRole={user?.role || 'employee'}
-          >
-            <Button
-              className="btn-enhanced btn-gradient hover-glow"
-              onClick={() => navigate('/calendar')}
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              📅 Календарь
-            </Button>
-          </RoleBasedAccess>
+        <div className="flex items-center space-x-2">
+          <Badge variant="outline" className="flex items-center space-x-1">
+            <Activity className="h-3 w-3" />
+            <span>Обновлено: {new Date().toLocaleTimeString('ru-RU')}</span>
+          </Badge>
         </div>
       </div>
 
-      {/* Key Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card-enhanced hover-lift animate-bounce-in" style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center animate-float">
-              <FolderOpen className="w-6 h-6 text-white" />
+      {/* Основные метрики */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Общая выручка</p>
+              <p className="text-2xl font-bold">
+                {(projectStats.totalRevenue / 1000000).toFixed(1)}M ₸
+              </p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-gradient">12</div>
-              <div className="text-sm text-success flex items-center">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +8.5%
-              </div>
-            </div>
+            <DollarSign className="h-8 w-8 text-success" />
           </div>
-          <h3 className="text-lg font-semibold mb-1">Активные проекты</h3>
-          <p className="text-sm text-muted-foreground">В работе сейчас</p>
-        </div>
+          <div className="mt-2">
+            <Badge variant="outline" className="text-xs">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              +12% к прошлому месяцу
+            </Badge>
+          </div>
+        </Card>
 
-        <div className="card-enhanced hover-lift animate-bounce-in" style={{ animationDelay: '0.2s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 gradient-success rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '0.5s' }}>
-              <Users className="w-6 h-6 text-white" />
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Активные проекты</p>
+              <p className="text-2xl font-bold">{projectStats.active}</p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-gradient">45</div>
-              <div className="text-sm text-success flex items-center">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +12.3%
-              </div>
-            </div>
+            <Briefcase className="h-8 w-8 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold mb-1">Сотрудники</h3>
-          <p className="text-sm text-muted-foreground">В команде</p>
-        </div>
+          <div className="mt-2">
+            <Badge variant="outline" className="text-xs">
+              <Zap className="h-3 w-3 mr-1" />
+              В работе
+            </Badge>
+          </div>
+        </Card>
 
-        <div className="card-enhanced hover-lift animate-bounce-in" style={{ animationDelay: '0.3s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 gradient-warning rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '1s' }}>
-              <TrendingUp className="w-6 h-6 text-white" />
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Сотрудники</p>
+              <p className="text-2xl font-bold">{employeeStats.total}</p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-gradient">87%</div>
-              <div className="text-sm text-success flex items-center">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +3.2%
-              </div>
-            </div>
+            <Users className="h-8 w-8 text-info" />
           </div>
-          <h3 className="text-lg font-semibold mb-1">Средний KPI</h3>
-          <p className="text-sm text-muted-foreground">Эффективность</p>
-        </div>
+          <div className="mt-2">
+            <Badge variant="outline" className="text-xs">
+              <Clock className="h-3 w-3 mr-1" />
+              {employeeStats.attendanceToday} сегодня
+            </Badge>
+          </div>
+        </Card>
 
-        <div className="card-enhanced hover-lift animate-bounce-in" style={{ animationDelay: '0.4s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '1.5s' }}>
-              <DollarSign className="w-6 h-6 text-white" />
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Завершено</p>
+              <p className="text-2xl font-bold">{projectStats.completed}</p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-gradient">₽2.4M</div>
-              <div className="text-sm text-success flex items-center">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +15.8%
-              </div>
-            </div>
+            <CheckCircle className="h-8 w-8 text-success" />
           </div>
-          <h3 className="text-lg font-semibold mb-1">Доход за месяц</h3>
-          <p className="text-sm text-muted-foreground">Общая выручка</p>
-        </div>
+          <div className="mt-2">
+            <Badge variant="outline" className="text-xs">
+              <Calendar className="h-3 w-3 mr-1" />
+              За этот месяц
+            </Badge>
+          </div>
+        </Card>
       </div>
 
-      {/* Воронка проектов для CEO */}
-      {hasRole && hasRole('ceo') && (
-        <div className="grid grid-cols-1 gap-6 animate-slide-up">
-          <ProjectFunnel projects={projects} />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Top Employees */}
-        <div className="card-enhanced hover-lift lg:col-span-2 animate-slide-up">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 gradient-warning rounded-xl flex items-center justify-center animate-pulse-glow">
-                <Trophy className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gradient">🏆 ТОП-5 сотрудников</h3>
-                <p className="text-sm text-muted-foreground">По показателям KPI</p>
-              </div>
+      {/* KPI метрики */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiMetrics.map((metric, index) => (
+          <Card key={index} className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <metric.icon className={`h-5 w-5 ${metric.color}`} />
+              <span className="text-sm text-muted-foreground">KPI</span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="btn-enhanced text-primary hover:text-primary-glow"
-              onClick={() => navigate('/employees')}
-            >
-              Все сотрудники
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
+            <p className="text-lg font-semibold">{metric.value}</p>
+            <p className="text-sm text-muted-foreground mb-2">{metric.title}</p>
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span>Прогресс</span>
+                <span>{Math.round((metric.value / metric.target) * 100)}%</span>
+              </div>
+              <Progress 
+                value={(metric.value / metric.target) * 100} 
+                className="h-2"
+              />
+            </div>
+          </Card>
+        ))}
+      </div>
 
+      {/* Графики и аналитика */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Статус проектов */}
+        <Card className="p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <PieChart className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Статус проектов</h3>
+          </div>
+          <SimplePieChart data={projectStatusData} title="" />
+        </Card>
+
+        {/* Распределение по ролям */}
+        <Card className="p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Команда по ролям</h3>
+          </div>
+          <SimpleBarChart data={roleDistributionData} title="" />
+        </Card>
+
+        {/* Месячная выручка */}
+        <Card className="p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Выручка по месяцам</h3>
+          </div>
+          <SimpleBarChart data={monthlyRevenueData} title="" />
+        </Card>
+
+        {/* Посещаемость */}
+        <Card className="p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <Activity className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Посещаемость</h3>
+          </div>
           <div className="space-y-4">
-            {topEmployees.map((employee, index) => (
+            <div className="flex justify-between items-center">
+              <span className="text-sm">Сегодня в офисе</span>
+              <span className="font-semibold">
+                {attendanceRecords.filter((r: any) => 
+                  r.date === new Date().toDateString() && r.status === 'in_office'
+                ).length}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm">Удаленно</span>
+              <span className="font-semibold">
+                {attendanceRecords.filter((r: any) => 
+                  r.date === new Date().toDateString() && r.status === 'remote'
+                ).length}
+              </span>
+            </div>
+            <div className="w-full bg-secondary rounded-full h-2">
               <div 
-                key={employee.id} 
-                className="flex items-center space-x-4 p-4 rounded-xl hover:bg-secondary/30 transition-all duration-300 cursor-pointer hover-lift group"
-                onClick={() => navigate(`/employees/${employee.id}`, { state: { employee } })}
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="w-12 h-12 gradient-primary rounded-full flex items-center justify-center shadow-lg group-hover:shadow-primary/50 transition-all duration-300">
-                      <span className="text-sm font-bold text-white">{employee.avatar}</span>
-                    </div>
-                    {index < 3 && (
-                      <div className="absolute -top-1 -right-1 w-6 h-6 gradient-warning rounded-full flex items-center justify-center animate-pulse-glow">
-                        <Star className="w-3 h-3 text-white" />
-                      </div>
+                className="bg-primary h-2 rounded-full"
+                style={{ 
+                  width: `${employeeStats.total > 0 ? 
+                    (employeeStats.attendanceToday / employeeStats.total) * 100 : 0}%` 
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              {employeeStats.total > 0 ? 
+                Math.round((employeeStats.attendanceToday / employeeStats.total) * 100) : 0}% 
+              сотрудников сегодня
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Виджет отметки посещений */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <CheckInWidget />
+        </div>
+        
+        {/* Последние активности */}
+        <div className="lg:col-span-2">
+          <Card className="p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Clock className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Последние активности</h3>
+            </div>
+            <div className="space-y-3">
+              {attendanceRecords
+                .filter((r: any) => r.date === new Date().toDateString())
+                .slice(-5)
+                .map((record: any, index: number) => (
+                <div key={index} className="flex items-center space-x-3 p-3 bg-secondary/50 rounded-lg">
+                  <div className="flex-shrink-0">
+                    {record.checkOut ? (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 text-success" />
                     )}
                   </div>
-                  <div>
-                    <p className="font-semibold text-lg group-hover:text-primary transition-colors">{employee.name}</p>
-                    <p className="text-sm text-muted-foreground">{employee.role}</p>
-                  </div>
-                </div>
-                <div className="ml-auto">
-                  <div className="badge-primary px-3 py-1">
-                    {employee.kpi}% KPI
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Deadlines */}
-        <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.3s' }}>
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 gradient-warning rounded-xl flex items-center justify-center animate-pulse-glow">
-              <Bell className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gradient">⏰ Критичные дедлайны</h3>
-              <p className="text-sm text-muted-foreground">Ближайшие сроки</p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {deadlines.map((deadline, index) => (
-              <div 
-                key={index} 
-                className={`p-4 rounded-xl border transition-all duration-300 hover-lift ${
-                  deadline.urgent 
-                    ? 'border-destructive/30 bg-destructive/10 hover:bg-destructive/20'
-                    : 'border-glass-border bg-secondary/20 hover:bg-secondary/30'
-                }`}
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-sm group-hover:text-primary transition-colors">{deadline.project}</p>
-                    <p className={`text-xs flex items-center ${
-                      deadline.urgent ? 'text-destructive' : 'text-muted-foreground'
-                    }`}>
-                      <Calendar className="w-3 h-3 mr-1" />
-                      Дедлайн: {deadline.date}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      {employees.find((emp: any) => emp.id === record.employeeId)?.name || 'Сотрудник'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {new Date(record.checkIn).toLocaleTimeString('ru-RU')}
                     </p>
                   </div>
-                  {deadline.urgent && (
-                    <div className="w-3 h-3 bg-destructive rounded-full animate-pulse-glow" />
-                  )}
+                  <Badge variant="outline" className="text-xs">
+                    {record.status === 'in_office' ? 'В офисе' : 'Удаленно'}
+                  </Badge>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Projects */}
-      <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.4s' }}>
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center animate-float">
-              <FolderOpen className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gradient">📁 Прогресс проектов</h3>
-              <p className="text-sm text-muted-foreground">Текущее состояние активных проектов</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="btn-enhanced text-primary hover:text-primary-glow"
-            onClick={() => navigate('/projects')}
-          >
-            Все проекты
-            <ArrowRight className="w-4 h-4 ml-1" />
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {recentProjects.map((project, index) => (
-            <div 
-              key={index} 
-              className="p-5 rounded-xl border border-glass-border bg-secondary/20 hover:bg-secondary/30 transition-all duration-300 hover-lift group"
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <div className="mb-4">
-                <h4 className="font-semibold text-lg group-hover:text-primary transition-colors">{project.name}</h4>
-                <p className="text-sm text-muted-foreground flex items-center">
-                  <div className="w-2 h-2 bg-success rounded-full mr-2 animate-pulse-glow"></div>
-                  Активен
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">{project.progress}%</span>
-                  <span className="text-muted-foreground">Прогресс</span>
+              ))}
+              
+              {attendanceRecords.filter((r: any) => r.date === new Date().toDateString()).length === 0 && (
+                <div className="text-center py-4">
+                  <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Нет активностей за сегодня</p>
                 </div>
-                <div className="progress-enhanced h-3">
-                  <div 
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ 
-                      width: `${project.progress}%`,
-                      background: project.progress === 100 
-                        ? 'linear-gradient(90deg, #10B981, #059669)'
-                        : project.progress > 80 
-                        ? 'linear-gradient(90deg, #F59E0B, #D97706)'
-                        : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
-                    }}
-                  />
-                </div>
-              </div>
+              )}
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Analytics Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Revenue Trend Chart */}
-        <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.5s' }}>
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 gradient-success rounded-xl flex items-center justify-center animate-float">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gradient">📈 Динамика доходов</h3>
-              <p className="text-sm text-muted-foreground">За последние 6 месяцев</p>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => `₽${(value / 1000000).toFixed(1)}M`} />
-                <Tooltip 
-                  formatter={(value, name) => [
-                    name === 'revenue' ? `₽${(value as number).toLocaleString()}` : value,
-                    name === 'revenue' ? 'Доход' : 'Проекты'
-                  ]}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#10B981" 
-                  fill="url(#revenueGradient)" 
-                  strokeWidth={2}
-                />
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.05}/>
-                  </linearGradient>
-                </defs>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Project Status Distribution */}
-        <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.6s' }}>
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '0.5s' }}>
-              <PieChart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gradient">🥧 Статус проектов</h3>
-              <p className="text-sm text-muted-foreground">Распределение по статусам</p>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <RechartsPieChart>
-                <Pie
-                  data={projectStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={120}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {projectStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`${value} проектов`, 'Количество']} />
-                <Legend />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Department Performance & Monthly Goals */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Department Performance */}
-        <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.7s' }}>
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 gradient-warning rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '1s' }}>
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gradient">📊 Производительность отделов</h3>
-              <p className="text-sm text-muted-foreground">Средний KPI по отделам</p>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={departmentPerformance} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis type="number" domain={[0, 100]} />
-                <YAxis dataKey="department" type="category" width={80} />
-                <Tooltip 
-                  formatter={(value, name) => [
-                    `${value}%`,
-                    name === 'performance' ? 'KPI' : 'Сотрудники'
-                  ]}
-                />
-                <Bar dataKey="performance" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Monthly Goals Progress */}
-        <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.8s' }}>
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 gradient-warning rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '1.5s' }}>
-              <Target className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gradient">🎯 Цели месяца</h3>
-              <p className="text-sm text-muted-foreground">Прогресс по ключевым показателям</p>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {monthlyGoals.map((goal, index) => {
-              const percentage = Math.round((goal.current / goal.target) * 100);
-              return (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">{goal.goal}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {goal.goal === 'Доход' 
-                        ? `₽${(goal.current / 1000000).toFixed(1)}M / ₽${(goal.target / 1000000).toFixed(1)}M`
-                        : `${goal.current} / ${goal.target}`
-                      }
-                    </span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div 
-                      className="h-2 rounded-full transition-all duration-500"
-                      style={{ 
-                        width: `${Math.min(percentage, 100)}%`,
-                        backgroundColor: goal.color
-                      }}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {percentage}% выполнено
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Performance Chart */}
-      <div className="card-enhanced hover-lift animate-slide-up" style={{ animationDelay: '0.9s' }}>
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="w-12 h-12 gradient-warning rounded-xl flex items-center justify-center animate-float" style={{ animationDelay: '2s' }}>
-            <Activity className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-gradient">⚡ KPI сотрудников</h3>
-            <p className="text-sm text-muted-foreground">Топ-5 по показателям эффективности</p>
-          </div>
-        </div>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={kpiData}>
-              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-              <XAxis dataKey="name" />
-              <YAxis domain={[0, 100]} />
-              <Tooltip 
-                formatter={(value, name) => [
-                  `${value}%`,
-                  name === 'kpi' ? 'KPI' : 'Проекты'
-                ]}
-              />
-              <Bar dataKey="kpi" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          </Card>
         </div>
       </div>
     </div>

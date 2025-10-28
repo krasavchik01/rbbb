@@ -23,6 +23,11 @@ import SupabaseDiagnostics from '@/pages/SupabaseDiagnostics';
 import DatabaseTest from '@/pages/DatabaseTest';
 import TeamManagement from '@/pages/TeamManagement';
 import Tenders from '@/pages/Tenders';
+import Calendar from '@/pages/Calendar';
+import Tasks from '@/pages/Tasks';
+import Attendance from '@/pages/Attendance';
+import Notifications from '@/pages/Notifications';
+import SMTPSettings from '@/pages/SMTPSettings';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -116,6 +121,36 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Settings />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/calendar"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Calendar />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tasks"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Tasks />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/attendance"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Attendance />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -216,6 +251,26 @@ function App() {
                 <ProtectedRoute allowedRoles={['admin', 'ceo']}>
                   <Layout>
                     <DatabaseTest />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Notifications />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/smtp-settings"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+                  <Layout>
+                    <SMTPSettings />
                   </Layout>
                 </ProtectedRoute>
               }

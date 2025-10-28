@@ -131,7 +131,7 @@ class SupabaseDataStore {
     return this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
   }
 
-  async createEmployee(employee: Omit<Employee, 'id' | 'created_at' | 'updated_at'>): Promise<Employee> {
+  async createEmployee(employee: Omit<Employee, 'id' | 'created_at' | 'updated_at'> & { password?: string }): Promise<Employee> {
     const newEmployee: Employee = {
       ...employee,
       id: `emp_${Date.now()}`,
@@ -141,13 +141,55 @@ class SupabaseDataStore {
 
     if (this.isOnline) {
       try {
+        // 1. Создаем пользователя в Supabase Auth (если передан пароль)
+        if (employee.password) {
+          try {
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+              email: newEmployee.email,
+              password: employee.password,
+              options: {
+                data: {
+                  name: newEmployee.name,
+                  role: newEmployee.role,
+                }
+              }
+            });
+
+            if (authError) {
+              // Если пользователь уже существует - это не критично, продолжаем
+              if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
+                console.log('⚠️ User already exists in Auth, skipping auth creation');
+              } else {
+                console.error('❌ Error creating auth user:', authError);
+                console.error('❌ Auth error details:', JSON.stringify(authError, null, 2));
+                // НЕ выбрасываем ошибку, продолжаем создание сотрудника
+                console.log('⚠️ Continuing without auth user creation');
+              }
+            } else {
+              console.log('✅ Created auth user:', authData.user?.id);
+              console.log('✅ Auth user email confirmed:', authData.user?.email_confirmed_at);
+              console.log('✅ Auth user needs confirmation:', authData.user?.email_confirmed_at === null);
+            }
+          } catch (authErr) {
+            console.error('❌ Auth creation failed, continuing:', authErr);
+            // Продолжаем создание сотрудника даже если Auth не удался
+          }
+        }
+
+        // 2. Сначала удаляем старые записи с таким же email (избегаем дублирования)
+        await supabase
+          .from('employees')
+          .delete()
+          .eq('email', newEmployee.email);
+
+        // 3. Создаем новую запись в таблице employees
         const { data, error } = await supabase
           .from('employees')
           .insert([{
             name: newEmployee.name,
             email: newEmployee.email,
             role: newEmployee.role as any,
-            level: newEmployee.level as any,
+            level: '1' as any, // По умолчанию уровень 1
             whatsapp: newEmployee.phone || null,
           }])
           .select()
@@ -163,9 +205,13 @@ class SupabaseDataStore {
           this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
           
           return mapped;
+        } else if (error) {
+          console.error('❌ Error creating employee record:', error);
+          throw new Error(`Ошибка создания записи: ${error.message}`);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('❌ Error creating employee in Supabase:', err);
+        throw err;
       }
     }
 

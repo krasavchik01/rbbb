@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserRole, hasPermission } from '@/types/roles';
+import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   id: string;
@@ -149,12 +150,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    // Сначала проверяем демо-пользователей
     const userRecord = DEMO_USERS[email];
     
     if (userRecord && userRecord.password === password) {
       setUser(userRecord.user);
       localStorage.setItem('user', JSON.stringify(userRecord.user));
       return true;
+    }
+    
+    // Если не найден в демо-пользователях, проверяем сотрудников из базы данных
+    try {
+      // Получаем данные сотрудника из таблицы employees (берем первую запись если несколько)
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('email', email)
+        .order('created_at', { ascending: false }) // Берем самую новую запись
+        .limit(1)
+        .single();
+
+      if (employeeError) {
+        console.error('❌ Employee not found in database:', employeeError);
+        return false;
+      }
+
+      if (!employeeData) {
+        console.error('❌ No employee data found');
+        return false;
+      }
+
+      // Проверяем пароль (пока что просто проверяем что сотрудник существует)
+      // TODO: Добавить хеширование паролей в будущем
+      console.log('✅ Employee found:', employeeData.name);
+      
+      // Создаем объект пользователя из данных сотрудника
+      const user: User = {
+        id: employeeData.id,
+        name: employeeData.name,
+        email: employeeData.email,
+        role: employeeData.role as UserRole,
+        level: employeeData.level,
+        position: employeeData.position || '',
+        department: employeeData.department || '',
+        phone: employeeData.whatsapp || '',
+        avatar: employeeData.name ? employeeData.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'UN'
+      };
+
+      setUser(user);
+      localStorage.setItem('user', JSON.stringify(user));
+      return true;
+    } catch (error) {
+      console.error('❌ Database error:', error);
     }
     
     return false;

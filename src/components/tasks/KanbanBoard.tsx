@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskChecklist } from "./TaskChecklist";
 import { Task, TaskStatus, PriorityLevel, ChecklistItem, Project } from "@/types/project";
 import { useAuth } from "@/contexts/AuthContext";
+import { notifyTaskCompleted } from "@/lib/projectNotifications";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, 
   Calendar, 
@@ -306,7 +308,8 @@ export function KanbanBoard({
   onDeleteTask, 
   onAddTask 
 }: KanbanBoardProps) {
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
+  const { toast } = useToast();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -352,9 +355,29 @@ export function KanbanBoard({
 
     const taskId = active.id as string;
     const newStatus = over.id as TaskStatus;
+    const task = tasks.find(t => t.id === taskId);
 
     if (statusOrder.includes(newStatus)) {
       onUpdateTask(taskId, { status: newStatus });
+      
+      // Если задача перешла в статус "done" - отправляем уведомление PM
+      if (newStatus === 'done' && task && task.status !== 'done') {
+        // Находим PM проекта (обычно это project.pm_id или в команде)
+        const pmId = (project as any).pm_id || 'pm_1'; // TODO: получить из проекта
+        
+        notifyTaskCompleted({
+          taskName: task.title,
+          pmId: pmId,
+          completorName: user?.name || 'Сотрудник',
+          projectName: project.name || 'Проект',
+          projectId: project.id
+        });
+
+        toast({
+          title: "✅ Задача завершена",
+          description: `PM получил уведомление о завершении задачи "${task.title}"`,
+        });
+      }
     }
   };
 

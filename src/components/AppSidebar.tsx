@@ -16,7 +16,8 @@ import {
   Activity,
   FileText,
   LogOut,
-  Award
+  Award,
+  Mail
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -79,12 +80,6 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['deputy_director', 'ceo']
   },
   { 
-    title: "Сотрудники", 
-    url: "/employees", 
-    icon: Users,
-    permission: PERMISSIONS.VIEW_EMPLOYEES
-  },
-  { 
     title: "HR", 
     url: "/hr", 
     icon: UserCheck,
@@ -95,6 +90,13 @@ const menuItems: MenuItem[] = [
     title: "Тайм-щиты", 
     url: "/timesheets", 
     icon: Clock,
+    permission: PERMISSIONS.VIEW_TIMESHEETS,
+    excludeRoles: ['procurement']
+  },
+  { 
+    title: "Посещаемость", 
+    url: "/attendance", 
+    icon: Activity,
     permission: PERMISSIONS.VIEW_TIMESHEETS,
     excludeRoles: ['procurement']
   },
@@ -165,6 +167,12 @@ const menuItems: MenuItem[] = [
     title: "Тест БД", 
     url: "/database-test", 
     icon: Activity,
+    allowedRoles: ['admin', 'ceo']
+  },
+  { 
+    title: "SMTP Настройки", 
+    url: "/smtp-settings", 
+    icon: Mail,
     allowedRoles: ['admin', 'ceo']
   },
   { 

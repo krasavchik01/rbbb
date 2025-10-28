@@ -26,6 +26,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ProjectV3 } from "@/types/project-v3";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
 import { Contractor } from "@/types/project-v3";
+import { notifyProjectApproved, notifyProjectRejected, notifyPMAssigned, notifyTeamMemberAdded } from "@/lib/projectNotifications";
 
 export default function ProjectApproval() {
   const navigate = useNavigate();
@@ -223,9 +224,46 @@ export default function ProjectApproval() {
       localStorage.setItem('rb_projects_v3', JSON.stringify(allProjects));
     }
 
+    // Отправляем уведомления всем членам команды
+    updatedProject.team.forEach(member => {
+      const employee = demoEmployees.find(e => e.id === member.userId);
+      if (!employee) return;
+
+      // Если это партнёр - отправляем уведомление о назначении партнёром
+      if (member.role === 'partner') {
+        notifyProjectApproved({
+          projectName: selectedProject.name,
+          partnerId: member.userId,
+          partnerName: employee.name,
+          approverName: user?.name || 'Зам. директора'
+        });
+      } 
+      // Если это PM - отправляем уведомление о назначении PM
+      else if (member.role === 'project_manager') {
+        notifyPMAssigned({
+          projectName: selectedProject.name,
+          pmId: member.userId,
+          pmName: employee.name,
+          partnerName: user?.name || 'Партнёр',
+          projectId: selectedProject.id
+        });
+      }
+      // Остальным членам команды - общее уведомление
+      else {
+        notifyTeamMemberAdded({
+          projectName: selectedProject.name,
+          memberId: member.userId,
+          memberName: employee.name,
+          role: ROLE_LABELS[member.role as UserRole] || member.role,
+          assignerName: user?.name || 'Руководитель',
+          projectId: selectedProject.id
+        });
+      }
+    });
+
     toast({
       title: "Проект утверждён!",
-      description: `Проект "${selectedProject.name}" утверждён и назначена команда. Уведомления отправлены.`,
+      description: `Проект "${selectedProject.name}" утверждён и назначена команда. Уведомления отправлены всем ${updatedProject.team.length} участникам.`,
     });
 
     // Обновляем список
@@ -239,7 +277,8 @@ export default function ProjectApproval() {
   const handleReject = () => {
     if (!selectedProject) return;
 
-    // TODO: добавить причину отклонения
+    const reason = "Требуется дополнительная информация"; // TODO: добавить ввод причины
+    
     const allProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
     const index = allProjects.findIndex((p: ProjectV3) => p.id === selectedProject.id);
     if (index !== -1) {
@@ -247,9 +286,17 @@ export default function ProjectApproval() {
       localStorage.setItem('rb_projects_v3', JSON.stringify(allProjects));
     }
 
+    // Отправляем уведомление в отдел закупок
+    notifyProjectRejected({
+      projectName: selectedProject.name,
+      reason: reason,
+      procurementUserId: 'procurement_1', // ID отдела закупок
+      rejectorName: user?.name || 'Зам. директора'
+    });
+
     toast({
       title: "Проект отклонён",
-      description: "Проект возвращён отделу закупок",
+      description: "Проект возвращён отделу закупок. Уведомление отправлено.",
       variant: "destructive"
     });
 

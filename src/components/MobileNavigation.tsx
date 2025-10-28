@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FolderKanban, Users, BarChart3, Settings, Menu, Bell, LogOut } from 'lucide-react';
+import { Home, FolderKanban, Users, BarChart3, Settings, Menu, Bell, LogOut, Activity } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,23 +12,43 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NotificationBell } from '@/components/NotificationBell';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
-const navItems = [
+interface NavItem {
+  to: string;
+  icon: any;
+  label: string;
+  excludeRoles?: string[];
+}
+
+const allNavItems: NavItem[] = [
   { to: '/dashboard', icon: Home, label: 'Главная' },
   { to: '/projects', icon: FolderKanban, label: 'Проекты' },
-  { to: '/hr', icon: Users, label: 'HR' },
-  { to: '/analytics', icon: BarChart3, label: 'Аналитика' },
+  { to: '/hr', icon: Users, label: 'HR', excludeRoles: ['procurement'] },
+  { to: '/attendance', icon: Activity, label: 'Посещаемость', excludeRoles: ['procurement'] },
+  { to: '/analytics', icon: BarChart3, label: 'Аналитика', excludeRoles: ['procurement'] },
   { to: '/settings', icon: Settings, label: 'Настройки' },
 ];
 
 export const MobileNavigation = () => {
   const location = useLocation();
+  const { user } = useAuth();
+
+  // Фильтруем пункты меню по роли пользователя
+  const navItems = useMemo(() => {
+    return allNavItems.filter(item => {
+      if (!item.excludeRoles) return true;
+      return !item.excludeRoles.includes(user?.role || '');
+    });
+  }, [user?.role]);
+
+  // Берём первые 5 для нижнего меню
+  const bottomNavItems = navItems.slice(0, 5);
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 safe-area-bottom">
       <div className="flex justify-around items-center h-16">
-        {navItems.map((item) => {
+        {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.to;
           
@@ -109,20 +129,25 @@ export const MobileHeader = () => {
                 </div>
 
                 <div className="space-y-2">
-                  {navItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        onClick={() => setIsOpen(false)}
-                        className="flex items-center space-x-3 p-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-                      >
-                        <Icon className="h-5 w-5" />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  })}
+                  {allNavItems
+                    .filter(item => {
+                      if (!item.excludeRoles) return true;
+                      return !item.excludeRoles.includes(user?.role || '');
+                    })
+                    .map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          onClick={() => setIsOpen(false)}
+                          className="flex items-center space-x-3 p-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                        >
+                          <Icon className="h-5 w-5" />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
                 </div>
 
                 <Button

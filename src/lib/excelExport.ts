@@ -13,6 +13,7 @@ export interface ProjectExcelRow {
   'Договор №': string;
   'Дата договора': string;
   'Сумма (без НДС)': number;
+  'Валюта': string;
   'Наша компания': string;
   'Консорциум?': string;
   'Доли консорциума': string;
@@ -28,20 +29,21 @@ export interface ProjectExcelRow {
 export function exportProjectsToExcel(projects: any[], filename: string = 'projects.xlsx') {
   const excelData: ProjectExcelRow[] = projects.map((project, index) => ({
     '№': index + 1,
-    'Название проекта': project.name || '',
-    'Клиент': project.client?.name || '',
-    'Договор №': project.contract?.number || '',
-    'Дата договора': project.contract?.date || '',
-    'Сумма (без НДС)': project.contract?.amountWithoutVAT || 0,
-    'Наша компания': project.companyName || '',
+    'Название проекта': project.name || project.clientName || '',
+    'Клиент': project.client?.name || project.clientName || '',
+    'Договор №': project.contract?.number || project.contractNumber || '',
+    'Дата договора': project.contract?.date || project.contractDate || '',
+    'Сумма (без НДС)': project.contract?.amountWithoutVAT || project.amountWithoutVAT || project.amount || 0,
+    'Валюта': project.currency || 'KZT',
+    'Наша компания': project.companyName || project.ourCompany || '',
     'Консорциум?': project.isConsortium ? 'Да' : 'Нет',
     'Доли консорциума': project.isConsortium && project.consortiumMembers
       ? project.consortiumMembers.map((m: any) => `${m.companyName}: ${m.sharePercentage}%`).join('; ')
       : '',
     'Статус': getStatusLabel(project.status),
     'Прогресс %': project.completionPercent || 0,
-    'Дата создания': project.createdAt ? new Date(project.createdAt).toLocaleDateString('ru-RU') : '',
-    'Создал': project.createdByName || '',
+    'Дата создания': project.createdAt || project.created_at ? new Date(project.createdAt || project.created_at).toLocaleDateString('ru-RU') : '',
+    'Создал': project.createdByName || project.createdBy || '',
   }));
 
   // Создаем workbook
@@ -56,6 +58,7 @@ export function exportProjectsToExcel(projects: any[], filename: string = 'proje
     { wch: 15 }, // Договор №
     { wch: 12 }, // Дата договора
     { wch: 15 }, // Сумма
+    { wch: 8 },  // Валюта
     { wch: 25 }, // Наша компания
     { wch: 12 }, // Консорциум?
     { wch: 40 }, // Доли консорциума
@@ -85,6 +88,7 @@ export function downloadImportTemplate() {
       'Договор №': '123/2025',
       'Дата договора': '10.01.2025',
       'Сумма (без НДС)': 5000000,
+      'Валюта': 'KZT',
       'Наша компания': 'RB A+Partners',
       'Консорциум?': 'Нет',
       'Доли консорциума': '',
@@ -98,6 +102,7 @@ export function downloadImportTemplate() {
       'Договор №': '124/2025',
       'Дата договора': '11.01.2025',
       'Сумма (без НДС)': 10000000,
+      'Валюта': 'USD',
       'Наша компания': 'Консорциум',
       'Консорциум?': 'Да',
       'Доли консорциума': 'RB A+Partners: 60%; PARKERRUSSELL: 40%',
@@ -117,6 +122,7 @@ export function downloadImportTemplate() {
     { wch: 15 }, // Договор №
     { wch: 12 }, // Дата договора
     { wch: 15 }, // Сумма
+    { wch: 8 },  // Валюта
     { wch: 25 }, // Наша компания
     { wch: 12 }, // Консорциум?
     { wch: 40 }, // Доли консорциума
@@ -166,20 +172,30 @@ export function importProjectsFromExcel(file: File): Promise<any[]> {
           return {
             id: `proj_import_${Date.now()}_${index}`,
             name: row['Название проекта'],
+            clientName: row['Клиент'],
             type: 'audit' as const,
             
             isConsortium,
             companyId: isConsortium ? undefined : 'comp-rb-a',
             companyName: row['Наша компания'],
+            ourCompany: row['Наша компания'],
             consortiumMembers,
             
-            status: 'new' as const,
+            status: 'draft' as const,
             completionPercent: row['Прогресс %'] || 0,
+            
+            // Валюта
+            currency: row['Валюта'] || 'KZT',
+            amountWithoutVAT: row['Сумма (без НДС)'],
+            amount: row['Сумма (без НДС)'],
             
             client: {
               name: row['Клиент'],
               contacts: [],
             },
+            
+            contractNumber: row['Договор №'],
+            contractDate: row['Дата договора'],
             
             contract: {
               number: row['Договор №'],
