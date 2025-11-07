@@ -86,7 +86,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-subtle p-4">
-      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
+      <div className="w-full max-w-[1400px] mx-auto grid md:grid-cols-2 gap-6">
         {/* Форма входа */}
         <Card className="glass-card">
           <CardHeader className="text-center">

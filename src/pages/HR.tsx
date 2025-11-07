@@ -52,6 +52,11 @@ export default function HR() {
     company: "",
     role: "",
     phone: "",
+    department: "",
+    position: "",
+    category: "auditors", // auditors | other
+    subcategory: "",
+    customRole: "",
   });
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -64,22 +69,38 @@ export default function HR() {
     originalRole?: string;
     correctedRole?: string;
     canRetry?: boolean;
+    employeeId?: string;
+    editableCategory?: 'auditors' | 'other';
+    editableRole?: string; // for auditors
+    editableDepartment?: string; // for other
+    editableCustomRole?: string; // for other
+    editableSubcategory?: string; // shared as position
   }>>([]);
   const [showImportResults, setShowImportResults] = useState(false);
   const [retryingEmployee, setRetryingEmployee] = useState<string | null>(null);
 
-  // РОЛИ ДЛЯ АУДИТОРСКОЙ КОМПАНИИ (СООТВЕТСТВУЮЩИЕ ENUM)
+  // РОЛИ ДЛЯ АУДИТОРСКОЙ КОМПАНИИ (СООТВЕТСТВУЮТ PROJECT_ROLES)
   const roles = [
     { value: 'partner', label: 'Партнер' },
     { value: 'project_manager', label: 'Руководитель проекта' },
-    { value: 'manager', label: 'Супервайзер/Менеджер' },
-    { value: 'tax_specialist', label: 'Специалист по Налогам' },
-    { value: 'assistant', label: 'Ассистент' },
-    { value: 'designer', label: 'Дизайнер' },
-    { value: 'it_auditor', label: 'IT-аудитор' },
-    { value: 'it_admin', label: 'IT-админ' },
-    { value: 'admin', label: 'Админ' },
-    { value: 'employee', label: 'ГПХ/Сотрудник' }
+    { value: 'supervisor_3', label: 'Супервайзер 3' },
+    { value: 'supervisor_2', label: 'Супервайзер 2' },
+    { value: 'supervisor_1', label: 'Супервайзер 1' },
+    { value: 'tax_specialist_1', label: 'Налоговый специалист 1' },
+    { value: 'tax_specialist_2', label: 'Налоговый специалист 2' },
+    { value: 'assistant_3', label: 'Ассистент 3' },
+    { value: 'assistant_2', label: 'Ассистент 2' },
+    { value: 'assistant_1', label: 'Ассистент 1' },
+    { value: 'contractor', label: 'ГПХ (Подрядчик)' },
+    { value: 'hr', label: 'HR специалист' },
+    { value: 'accountant', label: 'Бухгалтер' },
+    { value: 'admin', label: 'Администратор' }
+  ];
+
+  // Категории сотрудников
+  const categories = [
+    { value: 'auditors', label: 'Аудиторы' },
+    { value: 'other', label: 'Другая' },
   ];
 
   // РОЛИ ДЛЯ РУКОВОДСТВА (ДОПОЛНИТЕЛЬНЫЕ)
@@ -103,29 +124,29 @@ export default function HR() {
     'Партнёр': 'partner',
     'Руководитель проекта': 'project_manager',
     'РП': 'project_manager',
-    'Супервайзер 3': 'manager',
-    'Супервайзер 2': 'manager',
-    'Супервайзер 1': 'manager',
-    'Супервайзер 3 уровня': 'manager',
-    'Супервайзер 2 уровня': 'manager',
-    'Супервайзер 1 уровня': 'manager',
-    'Специалист по Налогам 1': 'tax_specialist',
-    'Специалист по Налогам 2': 'tax_specialist',
-    'Налоговик 1': 'tax_specialist',
-    'Налоговик 2': 'tax_specialist',
-    'Налоговик 1 уровня': 'tax_specialist',
-    'Налоговик 2 уровня': 'tax_specialist',
-    'Ассистент 3': 'assistant',
-    'Ассистент 2': 'assistant',
-    'Ассистент 1': 'assistant',
-    'Ассистент 3 уровня': 'assistant',
-    'Ассистент 2 уровня': 'assistant',
-    'Ассистент 1 уровня': 'assistant',
-    'ГПХ': 'employee',
+    'Супервайзер 3': 'supervisor_3',
+    'Супервайзер 2': 'supervisor_2',
+    'Супервайзер 1': 'supervisor_1',
+    'Супервайзер 3 уровня': 'supervisor_3',
+    'Супервайзер 2 уровня': 'supervisor_2',
+    'Супервайзер 1 уровня': 'supervisor_1',
+    'Специалист по Налогам 1': 'tax_specialist_1',
+    'Специалист по Налогам 2': 'tax_specialist_2',
+    'Налоговик 1': 'tax_specialist_1',
+    'Налоговик 2': 'tax_specialist_2',
+    'Налоговик 1 уровня': 'tax_specialist_1',
+    'Налоговик 2 уровня': 'tax_specialist_2',
+    'Ассистент 3': 'assistant_3',
+    'Ассистент 2': 'assistant_2',
+    'Ассистент 1': 'assistant_1',
+    'Ассистент 3 уровня': 'assistant_3',
+    'Ассистент 2 уровня': 'assistant_2',
+    'Ассистент 1 уровня': 'assistant_1',
+    'ГПХ': 'contractor',
     // Дополнительные варианты
-    'Менеджер': 'manager',
+    'Менеджер': 'project_manager',
     'Админ': 'admin',
-    'Сотрудник': 'employee'
+    'Сотрудник': 'contractor'
   };
 
   // СПИСОК КОМПАНИЙ
@@ -164,8 +185,18 @@ export default function HR() {
       const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
       
       // Создаем сотрудника
+      const finalRole = newEmployee.category === 'auditors' 
+        ? newEmployee.role 
+        : (newEmployee.customRole || 'employee');
+
       await supabaseDataStore.createEmployee({
-        ...newEmployee,
+        name: newEmployee.name,
+        email: newEmployee.email,
+        role: finalRole,
+        department: newEmployee.category === 'auditors' ? 'Аудит' : (newEmployee.department || newEmployee.category),
+        position: newEmployee.subcategory || newEmployee.position || '',
+        phone: newEmployee.phone,
+        companyId: newEmployee.company,
         password: tempPassword
       });
       
@@ -234,7 +265,7 @@ export default function HR() {
       }
       
       setIsAddDialogOpen(false);
-      setNewEmployee({ name: "", email: "", company: "", role: "", phone: "" });
+      setNewEmployee({ name: "", email: "", company: "", role: "", phone: "", department: "", position: "", category: 'auditors', subcategory: "", customRole: "" });
       
     } catch (error: any) {
       console.error('Error adding employee:', error);
@@ -281,9 +312,10 @@ export default function HR() {
   const handleDownloadTemplate = () => {
     const template = [
       {
-        "Имя": "Иванов Иван Иванович",
+        "ФИО": "Иванов Иван Иванович",
+        "Имя": "Иванов Иван Иванович", // Альтернативное название
         "Email": "ivanov@company.kz",
-        "Роль": "employee",
+        "Роль": "Партнер", // Может быть на русском
         "Должность": "Специалист",
         "Отдел": "IT",
         "Телефон": "+7 777 123 4567"
@@ -321,41 +353,208 @@ export default function HR() {
         const data = XLSX.utils.sheet_to_json(ws);
 
         let successCount = 0;
-        const importedEmployees: Array<{name: string, email: string, tempPassword: string}> = [];
+        const importedEmployees: Array<{id: string, name: string, email: string, tempPassword: string}> = [];
         const results: Array<{name: string, email: string, status: 'success' | 'error', message: string}> = [];
         
         // Обрабатываем каждого сотрудника
         for (let i = 0; i < data.length; i++) {
           const row: any = data[i];
-          const employeeName = row['Имя'] || row['Name'] || `Сотрудник ${i + 1}`;
-          const employeeEmail = row['Email'] || '';
+          
+          // Ищем ФИО в разных вариантах названий колонок (с учетом регистра и пробелов)
+          // Получаем все ключи колонок и их значения
+          const allKeys = Object.keys(row);
+          const allValues = Object.values(row).map(v => v?.toString().trim() || '').filter(v => v.length > 0);
+          
+          // Приоритетный список названий колонок для ФИО
+          const namePriorityList = [
+            'фио', 'имя', 'name', 'fullname', 'full_name', 'фамилия имя отчество',
+            'фио сотрудника', 'имя сотрудника', 'полное имя', 'full name',
+            'фамилия', 'surname', 'lastname', 'last name',
+            'сотрудник', 'employee name', 'имя и фамилия'
+          ];
+          
+          // Ищем колонку по приоритету
+          let employeeName = '';
+          let foundKey = '';
+          
+          // 1. Ищем точное совпадение (с учетом регистра и пробелов)
+          for (const key of allKeys) {
+            const lowerKey = key.toLowerCase().trim();
+            if (namePriorityList.some(priority => lowerKey === priority || lowerKey.includes(priority))) {
+              const value = row[key]?.toString().trim();
+              if (value && value.length > 0 && value !== 'undefined' && value !== 'null') {
+                employeeName = value;
+                foundKey = key;
+                break;
+              }
+            }
+          }
+          
+          // 2. Если не нашли - ищем по частичному совпадению
+          if (!employeeName) {
+            for (const key of allKeys) {
+              const lowerKey = key.toLowerCase().trim();
+              if (lowerKey.includes('фио') || lowerKey.includes('имя') || lowerKey.includes('name')) {
+                if (!lowerKey.includes('email') && !lowerKey.includes('почта') && !lowerKey.includes('mail')) {
+                  const value = row[key]?.toString().trim();
+                  if (value && value.length > 0 && value !== 'undefined' && value !== 'null') {
+                    employeeName = value;
+                    foundKey = key;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          // 3. Если все еще не нашли - пробуем найти колонку с самым длинным текстовым значением (скорее всего это ФИО)
+          if (!employeeName && allValues.length > 0) {
+            // Ищем самое длинное значение, которое похоже на имя (содержит пробелы, буквы)
+            const longestValue = allValues
+              .filter(v => v.length > 3 && /[а-яА-Яa-zA-Z]/.test(v) && v.includes(' '))
+              .sort((a, b) => b.length - a.length)[0];
+            
+            if (longestValue) {
+              // Находим ключ для этого значения
+              for (const key of allKeys) {
+                if (row[key]?.toString().trim() === longestValue) {
+                  employeeName = longestValue;
+                  foundKey = key;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // 4. Если все еще не нашли - пробуем стандартные варианты
+          if (!employeeName) {
+            const standardKeys = ['ФИО', 'Имя', 'Name', 'Фамилия Имя Отчество', 'fullName', 'Full Name'];
+            for (const key of standardKeys) {
+              const value = row[key]?.toString().trim();
+              if (value && value.length > 0) {
+                employeeName = value;
+                foundKey = key;
+                break;
+              }
+            }
+          }
+          
+          // 5. Последний fallback - используем первую непустую текстовую колонку (кроме email)
+          if (!employeeName) {
+            for (const key of allKeys) {
+              const lowerKey = key.toLowerCase().trim();
+              if (!lowerKey.includes('email') && !lowerKey.includes('почта') && 
+                  !lowerKey.includes('mail') && !lowerKey.includes('телефон') && 
+                  !lowerKey.includes('phone') && !lowerKey.includes('роль') && 
+                  !lowerKey.includes('role') && !lowerKey.includes('отдел') && 
+                  !lowerKey.includes('department') && !lowerKey.includes('должность') && 
+                  !lowerKey.includes('position')) {
+                const value = row[key]?.toString().trim();
+                if (value && value.length > 2 && /[а-яА-Яa-zA-Z]/.test(value)) {
+                  employeeName = value;
+                  foundKey = key;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Если все еще пусто - используем fallback
+          if (!employeeName || employeeName === '') {
+            employeeName = `Сотрудник ${i + 1}`;
+          }
+          
+          // Ищем email
+          const emailKeys = Object.keys(row).filter(key => {
+            const lowerKey = key.toLowerCase().trim();
+            return lowerKey === 'email' || lowerKey.includes('email') || lowerKey === 'почта' || lowerKey === 'e-mail';
+          });
+          
+          let employeeEmail = '';
+          if (emailKeys.length > 0) {
+            employeeEmail = row[emailKeys[0]]?.toString().trim() || '';
+          }
+          if (!employeeEmail) {
+            employeeEmail = (row['Email'] || row['email'] || row['Email '] || '').toString().trim();
+          }
+          
+          console.log(`📋 Импорт строки ${i + 1}:`, {
+            доступныеКолонки: allKeys,
+            найденнаяКолонкаИмени: foundKey || 'не найдено',
+            найденныеКолонкиEmail: emailKeys,
+            найденноеИмя: employeeName,
+            найденныйEmail: employeeEmail,
+            всеЗначения: allValues,
+            всеДанные: row
+          });
+          
+          // Если имя не найдено - предупреждаем с подробной информацией
+          if (!employeeName || employeeName === `Сотрудник ${i + 1}` || employeeName.trim() === '') {
+            console.warn(`⚠️ Строка ${i + 1}: ФИО не найдено!`, {
+              доступныеКолонки: allKeys,
+              всеЗначения: allValues,
+              всеДанные: row
+            });
+          }
           
           try {
-            const russianRole = row['Роль'] || row['Role'] || 'employee';
-            const mappedRole = roleMapping[russianRole] || 'employee';
+            const russianRole = row['Роль'] || row['Role'] || row['role'] || 'employee';
+            let mappedRole = roleMapping[russianRole] || 'employee';
+            
+            // Если роль не определилась, но это не employee - используем employee как fallback
+            // Это предотвратит ошибки при создании
+            const validRoles = ['partner', 'project_manager', 'supervisor_3', 'supervisor_2', 'supervisor_1', 
+                               'tax_specialist_1', 'tax_specialist_2', 'assistant_3', 'assistant_2', 'assistant_1',
+                               'contractor', 'hr', 'accountant', 'admin', 'manager', 'employee', 'it_admin',
+                               'assistant', 'tax_specialist', 'designer', 'it_auditor', 'ceo', 'deputy_director'];
+            
+            if (!validRoles.includes(mappedRole)) {
+              console.warn(`⚠️ Роль "${mappedRole}" не найдена в ENUM, используем "employee"`);
+              mappedRole = 'employee';
+            }
+            
             const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
             
-            await supabaseDataStore.createEmployee({
-              name: row['Имя'] || row['Name'] || '',
-              email: row['Email'] || '',
+            // Проверяем что имя не пустое
+            if (!employeeName || employeeName.trim() === '' || employeeName === `Сотрудник ${i + 1}`) {
+              const availableColumns = Object.keys(row).join(', ');
+              throw new Error(`ФИО не найдено в строке ${i + 1}. Доступные колонки: ${availableColumns}. Проверьте названия колонок в Excel.`);
+            }
+            
+            const created = await supabaseDataStore.createEmployee({
+              name: employeeName.trim(), // Используем найденное имя (обязательно обрезаем пробелы)
+              email: employeeEmail.trim(),
               role: mappedRole,
-              position: row['Должность'] || row['Position'] || '',
-              department: row['Отдел'] || row['Department'] || '',
-              phone: row['Телефон'] || row['Phone'] || '',
-            }, tempPassword);
+              position: (row['Должность'] || row['Position'] || row['position'] || '').toString().trim(),
+              department: (row['Отдел'] || row['Department'] || row['department'] || '').toString().trim(),
+              phone: (row['Телефон'] || row['Phone'] || row['phone'] || '').toString().trim(),
+              password: tempPassword
+            });
             
             // Добавляем в массив для рассылки
             importedEmployees.push({
-              name: row['Имя'] || row['Name'] || '',
-              email: row['Email'] || '',
+              id: created.id,
+              name: employeeName,
+              email: employeeEmail,
               tempPassword: tempPassword
             });
             
+            // Если роль не определилась (осталась employee) - оставляем пустой для ручного выбора
+            const finalRole = mappedRole !== 'employee' && mappedRole !== 'contractor' ? mappedRole : undefined;
+            
             results.push({
-              name: employeeName,
-              email: employeeEmail,
+              name: employeeName.trim(), // Сохраняем обрезанное имя
+              email: employeeEmail.trim(),
               status: 'success',
-              message: 'Успешно добавлен'
+              message: 'Успешно добавлен',
+              originalRole: finalRole, // Только если определилась
+              correctedRole: mappedRole,
+              employeeId: created.id,
+              editableCategory: 'auditors',
+              editableRole: finalRole, // Если роль не определилась - undefined для ручного выбора
+              editableDepartment: (row['Отдел'] || row['Department'] || row['department'] || '').toString().trim(),
+              editableCustomRole: '',
+              editableSubcategory: (row['Должность'] || row['Position'] || row['position'] || '').toString().trim()
             });
             
             successCount++;
@@ -477,6 +676,34 @@ export default function HR() {
       });
     } finally {
       setRetryingEmployee(null);
+    }
+  };
+
+  // Обновление роли/категории для успешно импортированного сотрудника
+  const handleUpdateImported = async (res: any) => {
+    if (!res.employeeId) {
+      toast({ title: 'Ошибка', description: 'ID сотрудника не найден', variant: 'destructive' });
+      return;
+    }
+    
+    if (!res.editableRole && (res.editableCategory || 'auditors') === 'auditors') {
+      toast({ title: 'Ошибка', description: 'Необходимо выбрать роль', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      const isAuditor = (res.editableCategory || 'auditors') === 'auditors';
+      const updates: any = {
+        role: isAuditor ? (res.editableRole || 'employee') : (res.editableCustomRole || 'employee'),
+        department: isAuditor ? 'Аудит' : (res.editableDepartment || ''),
+        position: res.editableSubcategory || ''
+      };
+      await supabaseDataStore.updateEmployee(res.employeeId, updates);
+      setImportResults(prev => prev.map(r => r.email === res.email ? { ...r, ...res, message: 'Обновлено' } : r));
+      toast({ title: 'Обновлено', description: `${res.name}: роль и категория сохранены` });
+      await refresh(); // Обновляем список сотрудников
+    } catch (e: any) {
+      toast({ title: 'Ошибка обновления', description: e?.message || 'Не удалось обновить', variant: 'destructive' });
     }
   };
 
@@ -943,7 +1170,66 @@ export default function HR() {
                           {result.status === 'success' ? 'Успех' : 'Ошибка'}
                         </Badge>
                     </div>
-                    
+                      
+                      {/* Управление для успешных записей */}
+                      {result.status === 'success' && (
+                        <div className="space-y-3 mb-2">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                              <Label className="text-xs">Категория</Label>
+                              <Select
+                                value={result.editableCategory || 'auditors'}
+                                onValueChange={(v) => setImportResults(prev => prev.map(r => r.email === result.email ? { ...r, editableCategory: v as any } : r))}
+                              >
+                                <SelectTrigger className="h-8">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="auditors">Аудиторы</SelectItem>
+                                  <SelectItem value="other">Другая</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {(result.editableCategory || 'auditors') === 'auditors' ? (
+                              <div>
+                                <Label className="text-xs">Роль</Label>
+                                <Select
+                                  value={result.editableRole || ''}
+                                  onValueChange={(v) => setImportResults(prev => prev.map(r => r.email === result.email ? { ...r, editableRole: v } : r))}
+                                >
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue placeholder={result.editableRole ? undefined : "Выберите роль"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {roles.filter(r => ['partner','project_manager','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
+                                      <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <Label className="text-xs">Категория</Label>
+                                  <Input className="h-8" value={result.editableDepartment || ''} onChange={(e) => setImportResults(prev => prev.map(r => r.email === result.email ? { ...r, editableDepartment: e.target.value } : r))} placeholder="Отдел" />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Роль</Label>
+                                  <Input className="h-8" value={result.editableCustomRole || ''} onChange={(e) => setImportResults(prev => prev.map(r => r.email === result.email ? { ...r, editableCustomRole: e.target.value } : r))} placeholder="Роль" />
+                                </div>
+                              </>
+                            )}
+                            <div>
+                              <Label className="text-xs">Подкатегория</Label>
+                              <Input className="h-8" value={result.editableSubcategory || ''} onChange={(e) => setImportResults(prev => prev.map(r => r.email === result.email ? { ...r, editableSubcategory: e.target.value } : r))} placeholder="например, IT-аудит" />
+                            </div>
+                          </div>
+                          <div>
+                            <Button size="sm" variant="outline" onClick={() => handleUpdateImported(result)} disabled={!result.employeeId}>Сохранить изменения</Button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Детали для ошибок с возможностью исправления */}
                       {result.status === 'error' && (
                         <div className="space-y-3">
@@ -1066,23 +1352,83 @@ export default function HR() {
               </Select>
                 </div>
             <div>
-              <Label>Роль</Label>
+              <Label>Категория</Label>
               <Select
-                value={newEmployee.role}
-                onValueChange={(value) => setNewEmployee({ ...newEmployee, role: value })}
+                value={newEmployee.category}
+                onValueChange={(value) => setNewEmployee({ ...newEmployee, category: value, role: '', customRole: '', subcategory: '', department: '' })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Выберите роль" />
+                  <SelectValue placeholder="Выберите категорию" />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map(role => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
+                  {categories.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {newEmployee.category === 'auditors' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Роль (Аудиторы)</Label>
+                  <Select
+                    value={newEmployee.role}
+                    onValueChange={(value) => setNewEmployee({ ...newEmployee, role: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Партнёр, РП, Супервайзер, ..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.filter(r => ['partner','project_manager','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
+                        <SelectItem key={role.value} value={role.value}>
+                          {role.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div>
+                  <Label>Подкатегория (опционально)</Label>
+                  <Input
+                    placeholder="Например: Аудит, IT-аудит"
+                    value={newEmployee.subcategory}
+                    onChange={(e) => setNewEmployee({ ...newEmployee, subcategory: e.target.value })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Новая категория</Label>
+                    <Input
+                      placeholder="Например: Отдел продаж"
+                      value={newEmployee.department}
+                      onChange={(e) => setNewEmployee({ ...newEmployee, department: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Подкатегория</Label>
+                    <Input
+                      placeholder="Например: B2B"
+                      value={newEmployee.subcategory}
+                      onChange={(e) => setNewEmployee({ ...newEmployee, subcategory: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Роль (кастомная)</Label>
+                  <Input
+                    placeholder="Введите роль сотрудника"
+                    value={newEmployee.customRole}
+                    onChange={(e) => setNewEmployee({ ...newEmployee, customRole: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
             <div>
               <Label>Телефон</Label>
               <Input

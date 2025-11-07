@@ -18,8 +18,15 @@ export interface EmailTemplate {
   text: string;
 }
 
-// API endpoint
-const API_BASE = window.location.origin;
+// API endpoint (безопасно вычисляем в рантайме)
+const getAPIBase = (): string => {
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      return window.location.origin;
+    }
+  } catch {}
+  return '';
+};
 
 // Загрузка конфигурации SMTP из localStorage
 export const loadSMTPConfig = (): SMTPConfig | null => {
@@ -41,7 +48,7 @@ export const saveSMTPConfig = (config: SMTPConfig): void => {
 // Проверка подключения SMTP через API
 export const testSMTPConnection = async (config: SMTPConfig): Promise<{ success: boolean; message: string }> => {
   try {
-    const response = await fetch(`${API_BASE}/api/test-smtp`, {
+    const response = await fetch(`${getAPIBase()}/api/test-smtp`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -108,7 +115,7 @@ export const getWelcomeEmailTemplate = (employeeName: string, email: string, pas
             </div>
 
             <p>Для входа в систему перейдите по ссылке:</p>
-            <a href="${window.location.origin}" class="button">Войти в систему →</a>
+            <a href="${getAPIBase()}" class="button">Войти в систему →</a>
 
             <div class="footer">
               <p>Если у вас возникнут вопросы, обращайтесь к администратору.</p>
@@ -128,7 +135,7 @@ Email: ${email}
 
 Пожалуйста, смените пароль при первом входе.
 
-Ссылка для входа: ${window.location.origin}
+Ссылка для входа: ${getAPIBase()}
 
 С уважением,
 Команда RB Partners
@@ -162,9 +169,9 @@ export const sendEmail = async (
       from: smtpConfig.from
     });
 
-    console.log('📧 Sending to API:', `${API_BASE}/api/send-email`);
+    console.log('📧 Sending to API:', `${getAPIBase()}/api/send-email`);
     
-    const response = await fetch(`${API_BASE}/api/send-email`, {
+    const response = await fetch(`${getAPIBase()}/api/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

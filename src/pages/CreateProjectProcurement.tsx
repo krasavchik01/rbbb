@@ -12,9 +12,13 @@ import { ArrowLeft, Upload, Plus, Trash2, FileText, Building2, User, Calendar, D
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getActiveCompanies } from "@/types/companies";
-import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo } from "@/types/project-v3";
+import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo, ProjectStage, AdditionalService } from "@/types/project-v3";
 import { notifyProjectCreated } from "@/lib/projectNotifications";
+import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
+import { ProjectStagesEditor } from "@/components/projects/ProjectStagesEditor";
+import { AdditionalServicesSelector } from "@/components/projects/AdditionalServicesSelector";
 
 interface ContactPerson {
   name: string;
@@ -62,6 +66,26 @@ export default function CreateProjectProcurement() {
   
   // Файл договора
   const [contractFile, setContractFile] = useState<File | null>(null);
+  
+  // Новые поля: этапы, услуги, файлы
+  const [hasStages, setHasStages] = useState(false);
+  const [projectStages, setProjectStages] = useState<Array<{
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    description?: string;
+  }>>([]);
+  
+  const [hasAdditionalServices, setHasAdditionalServices] = useState(false);
+  const [additionalServices, setAdditionalServices] = useState<Array<{
+    id: string;
+    name: string;
+    description?: string;
+    cost?: number;
+  }>>([]);
+  
+  const [projectFiles, setProjectFiles] = useState<File[]>([]);
 
   const companies = getActiveCompanies();
 
@@ -228,6 +252,10 @@ export default function CreateProjectProcurement() {
       tasks: [],
       kpiRatings: [],
       
+      // Новые поля: этапы и услуги
+      stages: hasStages && projectStages.length > 0 ? projectStages : undefined,
+      additionalServices: hasAdditionalServices && additionalServices.length > 0 ? additionalServices : undefined,
+      
       finances: {
         amountWithoutVAT: parseFloat(amountWithoutVAT),
         preExpensePercent: 30,
@@ -265,20 +293,44 @@ export default function CreateProjectProcurement() {
     try {
       // Сохраняем проект через новый dataStore (с Supabase интеграцией)
       console.log('💾 Сохраняем проект через supabaseDataStore...');
-      await supabaseDataStore.createProject(project);
+      const savedProject = await supabaseDataStore.createProject(project);
       console.log('✅ Проект успешно сохранён:', {
         id: project.id,
         name: project.name,
         status: project.status
       });
 
-      // Создаем уведомление для зам. директора
-      const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountWithoutVAT);
-      notifyDeputyDirectorNewProject(
-        project.name,
-        clientName,
-        formattedAmount
-      );
+      // Загружаем файлы проекта (если есть)
+      if (projectFiles.length > 0) {
+        console.log('📎 Загружаем файлы проекта...');
+        for (const file of projectFiles) {
+          try {
+            await supabaseDataStore.uploadProjectFile(
+              project.id,
+              file,
+              file.name.toLowerCase().includes('договор') || file.name.toLowerCase().includes('contract') ? 'contract' : 'document',
+              user?.id || ""
+            );
+          } catch (fileError) {
+            console.warn('⚠️ Не удалось загрузить файл:', file.name, fileError);
+            // Не блокируем создание проекта из-за ошибки загрузки файла
+          }
+        }
+      }
+
+      // Создаем уведомление для зам. директора (без фатала при кеш-проблемах)
+      try {
+        const formattedAmount = new Intl.NumberFormat('ru-RU').format(parseFloat(amountWithoutVAT));
+        if (typeof notifyDeputyDirectorNewProject === 'function') {
+          notifyDeputyDirectorNewProject(
+            project.name,
+            clientName,
+            formattedAmount
+          );
+        }
+      } catch (e) {
+        console.warn('⚠️ Не удалось отправить уведомление зам. директору:', e);
+      }
 
       toast({
         title: "✅ Проект создан!",
@@ -400,7 +452,6 @@ export default function CreateProjectProcurement() {
                       onChange={(e) => updateContact(index, 'name', e.target.value)}
                       placeholder="Иванов Иван"
                       className="mt-1"
-                      size="sm"
                     />
                   </div>
                   <div>
@@ -410,7 +461,6 @@ export default function CreateProjectProcurement() {
                       onChange={(e) => updateContact(index, 'position', e.target.value)}
                       placeholder="Директор"
                       className="mt-1"
-                      size="sm"
                     />
                   </div>
                   <div>
@@ -420,7 +470,6 @@ export default function CreateProjectProcurement() {
                       onChange={(e) => updateContact(index, 'phone', e.target.value)}
                       placeholder="+7 (777) 123-45-67"
                       className="mt-1"
-                      size="sm"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -431,7 +480,6 @@ export default function CreateProjectProcurement() {
                         onChange={(e) => updateContact(index, 'email', e.target.value)}
                         placeholder="email@example.com"
                         className="mt-1"
-                        size="sm"
                       />
                     </div>
                     {contacts.length > 1 && (
@@ -731,12 +779,82 @@ export default function CreateProjectProcurement() {
         </div>
       </Card>
 
+      {/* Этапы проекта */}
+      <Card className="p-6" data-testid="project-stages-section">
+        <div className="flex items-center space-x-2 mb-4">
+          <Checkbox
+            id="hasStages"
+            data-testid="has-stages-checkbox"
+            checked={hasStages}
+            onCheckedChange={(checked) => setHasStages(checked as boolean)}
+          />
+          <Label htmlFor="hasStages" className="font-semibold cursor-pointer">
+            Этапы проекта
+          </Label>
+        </div>
+        {hasStages && (
+          <ProjectStagesEditor
+            stages={projectStages}
+            onChange={setProjectStages}
+          />
+        )}
+      </Card>
+
+      {/* Дополнительные услуги */}
+      <Card className="p-6" data-testid="additional-services-section">
+        <div className="flex items-center space-x-2 mb-4">
+          <Checkbox
+            id="hasAdditionalServices"
+            data-testid="has-additional-services-checkbox"
+            checked={hasAdditionalServices}
+            onCheckedChange={(checked) => setHasAdditionalServices(checked as boolean)}
+          />
+          <Label htmlFor="hasAdditionalServices" className="font-semibold cursor-pointer">
+            Дополнительные услуги
+          </Label>
+        </div>
+        {hasAdditionalServices && (
+          <AdditionalServicesSelector
+            services={additionalServices}
+            onChange={setAdditionalServices}
+          />
+        )}
+      </Card>
+
+      {/* Файлы проекта */}
+      <Card className="p-6" data-testid="project-files-section">
+        <h3 className="font-semibold mb-4">Файлы проекта</h3>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="projectFiles">Загрузить файлы (договор, сканы, документы)</Label>
+            <Input
+              id="projectFiles"
+              data-testid="project-files-input"
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+              onChange={(e) => {
+                if (e.target.files) {
+                  setProjectFiles(Array.from(e.target.files));
+                }
+              }}
+              className="mt-1"
+            />
+            {projectFiles.length > 0 && (
+              <div className="mt-2 text-sm text-muted-foreground" data-testid="files-count">
+                Выбрано файлов: {projectFiles.length}
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {/* Кнопки действий */}
       <div className="flex gap-4">
         <Button variant="outline" onClick={() => navigate('/projects')} className="flex-1">
           Отмена
         </Button>
-        <Button onClick={handleSubmit} className="flex-1" size="lg">
+        <Button onClick={handleSubmit} className="flex-1" size="lg" data-testid="submit-project-button">
           <FileText className="w-4 h-4 mr-2" />
           Отправить на утверждение
         </Button>

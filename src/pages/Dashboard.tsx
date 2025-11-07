@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,17 +92,73 @@ export default function Dashboard() {
     return Number(value);
   };
 
-  // Статистика проектов
-  const projectStats = {
-    total: projects.length,
-    active: projects.filter((p: any) => p.status === 'active').length,
-    completed: projects.filter((p: any) => p.status === 'completed').length,
-    totalRevenue: projects.reduce((sum: number, p: any) => sum + safeNumber(p.budget), 0),
-    avgBudget: projects.length > 0 ? projects.reduce((sum: number, p: any) => sum + safeNumber(p.budget), 0) / projects.length : 0
-  };
+  // Статистика проектов по реальным данным
+  const projectStats = useMemo(() => {
+    const total = projects.length;
+    
+    // Проекты ожидающие утверждения партнером
+    const pendingPartnerApproval = projects.filter((p: any) => {
+      const notesStatus = p.notes?.status;
+      return notesStatus === 'new' || notesStatus === 'pending_approval';
+    }).length;
+    
+    // Проекты ожидающие распределения команды
+    const awaitingTeam = projects.filter((p: any) => {
+      const notesStatus = p.notes?.status;
+      return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
+              (!p.team || p.team.length === 0);
+    }).length;
+    
+    // Активные проекты (в работе) - ИСКЛЮЧАЕМ проекты на утверждении
+    const active = projects.filter((p: any) => {
+      const notesStatus = p.notes?.status;
+      // Не считаем активными проекты на утверждении
+      if (notesStatus === 'new' || notesStatus === 'pending_approval') {
+        return false;
+      }
+      const status = p.status || p.notes?.status;
+      return status === 'in_progress' || status === 'active';
+    }).length;
+    
+    // Завершённые
+    const completed = projects.filter((p: any) => {
+      const status = p.status || p.notes?.status;
+      return status === 'completed' || status === 'closed';
+    }).length;
+    
+    // Общая сумма всех проектов
+    const totalRevenue = projects.reduce((sum: number, p: any) => {
+      const amount = p.notes?.finances?.amountWithoutVAT ||
+                     p.notes?.contract?.amountWithoutVAT ||
+                     p.notes?.amountWithoutVAT ||
+                     p.notes?.amount ||
+                     p.contract?.amountWithoutVAT ||
+                     p.amountWithoutVAT ||
+                     p.amount ||
+                     0;
+      return sum + safeNumber(amount);
+    }, 0);
+    
+    // Проекты по компаниям
+    const projectsByCompany = projects.reduce((acc: any, p: any) => {
+      const company = p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || 'Не указана';
+      acc[company] = (acc[company] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return {
+      total,
+      pendingPartnerApproval,
+      awaitingTeam,
+      active,
+      completed,
+      totalRevenue,
+      projectsByCompany
+    };
+  }, [projects]);
 
   // Статистика сотрудников
-  const employeeStats = {
+  const employeeStats = useMemo(() => ({
     total: employees.length,
     byRole: employees.reduce((acc: any, emp: any) => {
       acc[emp.role] = (acc[emp.role] || 0) + 1;
@@ -111,16 +167,29 @@ export default function Dashboard() {
     attendanceToday: attendanceRecords.filter((r: any) => 
       r.date === new Date().toDateString()
     ).length
-  };
+  }), [employees, attendanceRecords]);
 
-  // Данные для графиков
-  const projectStatusData = [
-    { name: 'Активные', value: projectStats.active, color: '#10b981' },
-    { name: 'Завершенные', value: projectStats.completed, color: '#3b82f6' },
-    { name: 'В планах', value: projectStats.total - projectStats.active - projectStats.completed, color: '#f59e0b' }
-  ];
+  // Обновить данные для графиков
+  const projectStatusData = useMemo(() => [
+    { name: 'Ожидают утверждения', value: projectStats.pendingPartnerApproval, color: '#f59e0b' },
+    { name: 'Ожидают команды', value: projectStats.awaitingTeam, color: '#fb923c' },
+    { name: 'В работе', value: projectStats.active, color: '#10b981' },
+    { name: 'Завершенные', value: projectStats.completed, color: '#3b82f6' }
+  ], [projectStats]);
 
-  const roleDistributionData = Object.entries(employeeStats.byRole).map(([role, count]) => ({
+  // Проекты по компаниям для графика
+  const companyDistributionData = useMemo(() => 
+    Object.entries(projectStats.projectsByCompany)
+      .sort(([,a]: any, [,b]: any) => b - a)
+      .slice(0, 5)
+      .map(([name, count]: [string, any]) => ({
+        name: name.length > 15 ? name.substring(0, 15) + '...' : name,
+        value: count
+      })),
+    [projectStats.projectsByCompany]
+  );
+
+  const roleDistributionData = useMemo(() => Object.entries(employeeStats.byRole).map(([role, count]) => ({
     name: role === 'partner' ? 'Партнеры' : 
           role === 'project_manager' ? 'РП' :
           role === 'manager' ? 'Менеджеры' :
@@ -128,16 +197,16 @@ export default function Dashboard() {
           role === 'assistant' ? 'Ассистенты' :
           role === 'admin' ? 'Админы' : role,
     value: count as number
-  }));
+  })), [employeeStats.byRole]);
 
-  const monthlyRevenueData = [
+  const monthlyRevenueData = useMemo(() => [
     { name: 'Янв', value: 1500000 },
     { name: 'Фев', value: 1800000 },
     { name: 'Мар', value: 2200000 },
     { name: 'Апр', value: 1900000 },
     { name: 'Май', value: 2500000 },
     { name: 'Июн', value: 2800000 }
-  ];
+  ], []);
 
   // KPI метрики
   const kpiMetrics = [
@@ -287,6 +356,20 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* График распределения по компаниям */}
+      {companyDistributionData.length > 0 && (
+        <Card className="p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Проекты по компаниям</h3>
+          </div>
+          <SimpleBarChart
+            data={companyDistributionData}
+            title=""
+          />
+        </Card>
+      )}
 
       {/* Графики и аналитика */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

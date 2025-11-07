@@ -6,60 +6,58 @@
 
 @layer base {
   :root {
-    /* Light Theme - Ocean Colors Palette */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 10%;
-    
+    /* Light Theme - Calm Login-like Palette (slate + cyan/teal) */
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    
+    --card-foreground: 222 47% 11%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    
-    /* Primary - Teal/Turquoise */
-    --primary: 180 50% 40%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary - soft cyan */
+    --primary: 199 89% 48%;
     --primary-foreground: 0 0% 100%;
-    
-    /* Secondary - Light Green */
-    --secondary: 140 30% 60%;
-    --secondary-foreground: 0 0% 10%;
-    
-    /* Muted - Sage Green */
-    --muted: 80 20% 70%;
-    --muted-foreground: 0 0% 35%;
-    
-    /* Accent - Peach/Beige */
-    --accent: 20 50% 80%;
-    --accent-foreground: 0 0% 10%;
-    
+
+    /* Secondary - subtle slate */
+    --secondary: 210 16% 92%;
+    --secondary-foreground: 222 47% 11%;
+
+    /* Muted - gentle gray */
+    --muted: 215 16% 92%;
+    --muted-foreground: 220 9% 35%;
+
+    /* Accent - very light cyan */
+    --accent: 190 80% 96%;
+    --accent-foreground: 222 47% 11%;
+
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    
-    --border: 0 0% 90%;
+
+    --border: 210 14% 89%;
     --input: 0 0% 100%;
-    --ring: 180 50% 40%;
-    
-    /* Success - Teal Green */
-    --success: 160 50% 45%;
+    --ring: 199 89% 48%;
+
+    /* Success/Warning tuned softer */
+    --success: 158 64% 42%;
     --success-foreground: 0 0% 100%;
-    
-    /* Warning - Sandy Beige */
-    --warning: 35 60% 70%;
-    --warning-foreground: 0 0% 20%;
-    
+    --warning: 38 92% 60%;
+    --warning-foreground: 24 27% 20%;
+
     --radius: 0.5rem;
-    
+
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 15%;
-    --sidebar-primary: 180 50% 40%;
+    --sidebar-foreground: 222 47% 15%;
+    --sidebar-primary: 199 89% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 97%;
-    --sidebar-accent-foreground: 0 0% 10%;
-    --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 180 50% 40%;
-    
+    --sidebar-accent: 210 16% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 210 14% 89%;
+    --sidebar-ring: 199 89% 48%;
+
     --glass: 0 0% 100%;
-    --glass-border: 0 0% 88%;
+    --glass-border: 210 14% 89%;
   }
 
   .dark {
@@ -77,24 +75,24 @@
     --popover: 220 25% 10%;
     --popover-foreground: 220 8% 95%;
 
-    /* Primary Sea Green Colors */
-    --primary: 180 85% 45%;
-    --primary-glow: 180 85% 55%;
+    /* Primary Cyan toned down */
+    --primary: 199 89% 48%;
+    --primary-glow: 199 89% 58%;
     --primary-foreground: 220 25% 8%;
 
-    /* Secondary Ocean Accents */
-    --secondary: 220 25% 14%;
+    /* Secondary Slate */
+    --secondary: 217 33% 17%;
     --secondary-foreground: 220 8% 95%;
-    --secondary-glow: 180 85% 25%;
+    --secondary-glow: 199 89% 28%;
 
     /* Success Green */
     --success: 142 76% 55%;
     --success-glow: 142 76% 65%;
     --success-foreground: 220 25% 8%;
 
-    /* Warning Teal */
-    --warning: 175 70% 60%;
-    --warning-glow: 175 70% 70%;
+    /* Warning Amber */
+    --warning: 38 92% 60%;
+    --warning-glow: 38 92% 70%;
     --warning-foreground: 220 25% 8%;
 
     /* Muted */
@@ -154,7 +152,7 @@
   }
   
   /* Notion-style clean white background for light theme */
-  body:not(.dark) {
+  :root:not(.dark) body {
     background: #ffffff;
   }
   
@@ -170,7 +168,7 @@
   }
   
   /* Light theme: clean white cards with visible borders */
-  body:not(.dark) .glass {
+  :root:not(.dark) .glass {
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid #e0e0e0;
@@ -185,7 +183,7 @@
   }
   
   /* Light theme: clean white cards with visible borders */
-  body:not(.dark) .glass-card {
+  :root:not(.dark) .glass-card {
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid #e0e0e0;
@@ -198,7 +196,7 @@
   }
   
   /* Light theme: subtle shadows instead of glow */
-  body:not(.dark) .glow-primary {
+  :root:not(.dark) .glow-primary {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
@@ -206,7 +204,7 @@
     box-shadow: 0 0 30px hsl(var(--success) / 0.4);
   }
   
-  body:not(.dark) .glow-success {
+  :root:not(.dark) .glow-success {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
@@ -214,7 +212,7 @@
     box-shadow: 0 0 30px hsl(var(--warning) / 0.4);
   }
   
-  body:not(.dark) .glow-warning {
+  :root:not(.dark) .glow-warning {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
@@ -513,6 +511,14 @@
   .table-enhanced {
     @apply w-full;
   }
+
+  /* Dark theme table readability fixes */
+  .dark table { background: transparent; }
+  .dark thead { background: hsl(var(--secondary)); }
+  .dark th { color: hsl(var(--foreground)); }
+  .dark td { background: transparent; color: hsl(var(--foreground)); }
+  .dark tbody tr { background: hsl(var(--card)); }
+  .dark tbody tr:hover { background: hsl(var(--secondary) / 0.2); }
 
   .table-enhanced th {
     @apply px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider;

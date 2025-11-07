@@ -80,6 +80,12 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['deputy_director', 'ceo']
   },
   { 
+    title: "МСУК-1 Compliance", 
+    url: "/msuk-compliance", 
+    icon: Shield,
+    allowedRoles: ['partner', 'deputy_director', 'ceo', 'admin']
+  },
+  { 
     title: "HR", 
     url: "/hr", 
     icon: UserCheck,
@@ -210,7 +216,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar className={collapsed ? "w-16" : "w-64"} collapsible="icon">
-      <SidebarContent className="glass-card border-r border-glass-border">
+      <SidebarContent className="bg-sidebar border-r border-sidebar-border">
         {/* Logo */}
         <div className="p-6 border-b border-glass-border">
           <div className="flex items-center space-x-3">

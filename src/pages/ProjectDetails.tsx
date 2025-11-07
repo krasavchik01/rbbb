@@ -1,12 +1,20 @@
-import { useMemo, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useMemo, useState, useEffect } from "react";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, ArrowLeft, CheckSquare, User } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar, Users, ArrowLeft, CheckSquare, User, File, Briefcase, FileText, Plus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useProjects } from "@/hooks/useSupabaseData";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
+import { ProjectAmendmentForm } from "@/components/projects/ProjectAmendmentForm";
+import { ProjectStage, AdditionalService, ProjectAmendment } from "@/types/project-v3";
 
 interface SimpleProject {
   id: string;
@@ -21,54 +29,93 @@ interface SimpleProject {
 export default function ProjectDetails() {
   const params = useParams();
   const location = useLocation();
-  const state = location.state as { project?: SimpleProject } | null;
+  const navigate = useNavigate();
+  const state = location.state as { project?: any } | null;
+  const { projects } = useProjects();
+  const { user } = useAuth();
+  
+  const [project, setProject] = useState<any>(null);
+  const [projectFiles, setProjectFiles] = useState<any[]>([]);
+  const [projectAmendments, setProjectAmendments] = useState<ProjectAmendment[]>([]);
+  const [isAmendmentDialogOpen, setIsAmendmentDialogOpen] = useState(false);
 
-  const project = useMemo<SimpleProject | null>(() => {
-    if (state?.project) return state.project;
-    // Fallback demo data when navigated by URL
-    if (params.id) {
-      return {
-        id: String(params.id),
-        name: "Демо проект",
-        status: "В работе",
-        completion: 60,
-        team: 3,
-        deadline: new Date().toISOString(),
-        company: "RB Partners IT Audit",
-      };
-    }
-    return null;
-  }, [params.id, state]);
+  // Загрузка проекта
+  useEffect(() => {
+    const loadProject = async () => {
+      if (state?.project) {
+        setProject(state.project);
+      } else if (params.id) {
+        // Загружаем из списка проектов
+        const foundProject = projects.find(p => p.id === params.id);
+        if (foundProject) {
+          setProject(foundProject);
+        } else {
+          // Пробуем загрузить напрямую из Supabase
+          const allProjects = await supabaseDataStore.getProjects();
+          const found = allProjects.find(p => p.id === params.id || p.notes?.id === params.id);
+          if (found) {
+            // Распаковываем notes если нужно
+            const projectData = found.notes && typeof found.notes === 'object' 
+              ? { ...found, ...found.notes, id: found.id }
+              : found;
+            setProject(projectData);
+          }
+        }
+      }
+    };
+    
+    loadProject();
+  }, [params.id, state, projects]);
 
-  const [steps, setSteps] = useState(
-    [
-      { id: "s1", title: "Инициация проекта", done: true },
-      { id: "s2", title: "Сбор требований / план работ", done: true },
-      { id: "s3", title: "Формирование команды и доступов", done: true },
-      { id: "s4", title: "Полевые процедуры / проверка", done: false },
-      { id: "s5", title: "Подготовка отчёта / QA", done: false },
-      { id: "s6", title: "Согласование с клиентом", done: false },
-      { id: "s7", title: "Закрытие проекта / архив", done: false },
-    ]
-  );
+  // Загрузка файлов и доп соглашений
+  useEffect(() => {
+    if (!project?.id) return;
+    
+    const loadProjectData = async () => {
+      try {
+        const projectId = project.id || project.notes?.id;
+        if (projectId) {
+          const [files, amendments] = await Promise.all([
+            supabaseDataStore.getProjectFiles(projectId),
+            supabaseDataStore.getProjectAmendments(projectId),
+          ]);
+          setProjectFiles(files);
+          setProjectAmendments(amendments);
+        }
+      } catch (error) {
+        console.error('Error loading project data:', error);
+      }
+    };
+    
+    loadProjectData();
+  }, [project]);
 
-  const [participants] = useState(
-    [
-      { id: "p1", name: "Анна Иванова", role: "Партнёр" },
-      { id: "p2", name: "Михаил Петров", role: "Руководитель проекта" },
-      { id: "p3", name: "Елена Сидорова", role: "Ассистент" },
-    ]
-  );
+  // Проверка прав для добавления доп соглашений
+  const canAddAmendment = user?.role === 'procurement' || user?.role === 'admin' || user?.role === 'ceo';
+
+  // Получаем этапы проекта из notes
+  const projectStages = useMemo<ProjectStage[]>(() => {
+    if (!project) return [];
+    const stages = project.stages || project.notes?.stages;
+    return Array.isArray(stages) ? stages : [];
+  }, [project]);
+
+  // Получаем дополнительные услуги из notes
+  const additionalServices = useMemo<AdditionalService[]>(() => {
+    if (!project) return [];
+    const services = project.additionalServices || project.notes?.additionalServices;
+    return Array.isArray(services) ? services : [];
+  }, [project]);
+
+  // Получаем команду проекта
+  const teamMembers = useMemo(() => {
+    if (!project) return [];
+    return project.team || project.notes?.team || [];
+  }, [project]);
 
   const completionPct = useMemo(() => {
-    const total = steps.length;
-    const done = steps.filter(s => s.done).length;
-    return Math.round((done / Math.max(total, 1)) * 100);
-  }, [steps]);
-
-  const toggleStep = (id: string) => {
-    setSteps(prev => prev.map(s => (s.id === id ? { ...s, done: !s.done } : s)));
-  };
+    return project?.completionPercent || project?.completion || 0;
+  }, [project]);
 
   if (!project) {
     return (
@@ -78,89 +125,255 @@ export default function ProjectDetails() {
     );
   }
 
+  const projectName = project.name || project.client?.name || 'Без названия';
+  const projectCompany = project.companyName || project.company || project.notes?.companyName || 'Не указана';
+  const projectStatus = project.status || project.notes?.status || 'new';
+  const projectDeadline = project.contract?.serviceEndDate || project.deadline || new Date().toISOString();
+
+  const handleAmendmentSuccess = async () => {
+    setIsAmendmentDialogOpen(false);
+    // Перезагружаем доп соглашения
+    const projectId = project.id || project.notes?.id;
+    if (projectId) {
+      const amendments = await supabaseDataStore.getProjectAmendments(projectId);
+      setProjectAmendments(amendments);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{project.name}</h1>
-          <p className="text-muted-foreground">Компания: {project.company}</p>
+          <h1 className="text-3xl font-bold">{projectName}</h1>
+          <p className="text-muted-foreground">Компания: {projectCompany}</p>
         </div>
-        <Button variant="outline" className="btn-glass" onClick={() => history.back()}>
+        <Button variant="outline" onClick={() => navigate(-1)}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Назад
         </Button>
       </div>
 
-      <Card className="p-6 glass-card space-y-6">
+      <Card className="p-6 space-y-6">
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{project.status}</Badge>
+          <Badge variant="secondary">{projectStatus}</Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Users className="w-4 h-4" /> Команда
             </div>
-            <div className="text-lg font-semibold">{project.team} участников</div>
+            <div className="text-lg font-semibold">{teamMembers.length} участников</div>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="w-4 h-4" /> Дедлайн
             </div>
             <div className="text-lg font-semibold">
-              {new Date(project.deadline).toLocaleDateString('ru-RU')}
+              {new Date(projectDeadline).toLocaleDateString('ru-RU')}
             </div>
           </div>
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">Прогресс</div>
             <Progress value={completionPct} className="h-2" />
-            <div className="text-sm">{completionPct}% (по чек-листу)</div>
+            <div className="text-sm">{completionPct}%</div>
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6 glass-card lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <CheckSquare className="w-5 h-5 text-primary" />
-              <h3 className="text-lg font-semibold">Чек‑лист проекта</h3>
-            </div>
-            <Badge variant="secondary">Завершено: {completionPct}%</Badge>
-          </div>
-          <div className="space-y-3">
-            {steps.map(step => (
-              <div key={step.id} className="flex items-start justify-between p-3 rounded-lg border border-glass-border bg-secondary/20">
-                <div className="flex items-start gap-3">
-                  <Checkbox checked={step.done} onCheckedChange={() => toggleStep(step.id)} />
-                  <div>
-                    <p className="text-sm font-medium {step.done ? 'line-through text-muted-foreground' : ''}">{step.title}</p>
-                  </div>
-                </div>
-                {step.done && <Badge className="bg-success/20 text-success">Готово</Badge>}
-              </div>
-            ))}
-          </div>
-        </Card>
+      <Tabs defaultValue="overview" className="space-y-4" data-testid="project-tabs">
+        <TabsList>
+          <TabsTrigger value="overview" data-testid="tab-overview">Обзор</TabsTrigger>
+          <TabsTrigger value="files" data-testid="tab-files">Файлы</TabsTrigger>
+          <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>
+          <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>
+          <TabsTrigger value="amendments" data-testid="tab-amendments">Доп соглашения</TabsTrigger>
+        </TabsList>
 
-        <Card className="p-6 glass-card">
-          <div className="flex items-center gap-2 mb-4">
-            <User className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-semibold">Участники</h3>
-          </div>
-          <div className="space-y-3">
-            {participants.map(p => (
-              <div key={p.id} className="flex items-center gap-3 p-3 rounded bg-secondary/20">
-                <Avatar className="w-8 h-8">
-                  <AvatarFallback>{p.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{p.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{p.role}</p>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="p-6 lg:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-semibold">Команда проекта</h3>
+              </div>
+              <div className="space-y-3">
+                {teamMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Команда не назначена</p>
+                ) : (
+                  teamMembers.map((member: any) => (
+                    <div key={member.userId || member.id} className="flex items-center gap-3 p-3 rounded bg-secondary/20">
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback>
+                          {(member.userName || member.name || 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{member.userName || member.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{member.role}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckSquare className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-semibold">Информация</h3>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Статус:</span>
+                  <p className="font-medium">{projectStatus}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Прогресс:</span>
+                  <p className="font-medium">{completionPct}%</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Дедлайн:</span>
+                  <p className="font-medium">{new Date(projectDeadline).toLocaleDateString('ru-RU')}</p>
                 </div>
               </div>
-            ))}
+            </Card>
           </div>
-        </Card>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="files" className="space-y-4">
+          <ProjectFileManager
+            projectId={project.id || project.notes?.id}
+            uploadedBy={user?.id || ""}
+            onFilesChange={setProjectFiles}
+          />
+        </TabsContent>
+
+        <TabsContent value="stages" className="space-y-4">
+          <Card className="p-6" data-testid="stages-tab-content">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Этапы проекта
+            </h3>
+            {projectStages.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Этапы не добавлены</p>
+            ) : (
+              <div className="space-y-4">
+                {projectStages.map((stage, index) => (
+                  <div key={stage.id || index} className="p-4 border rounded-lg" data-testid="project-stage">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">{stage.name}</h4>
+                      <Badge variant="outline">
+                        {new Date(stage.startDate).toLocaleDateString('ru-RU')} - {new Date(stage.endDate).toLocaleDateString('ru-RU')}
+                      </Badge>
+                    </div>
+                    {stage.description && (
+                      <p className="text-sm text-muted-foreground">{stage.description}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="services" className="space-y-4">
+          <Card className="p-6" data-testid="services-tab-content">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <Briefcase className="w-5 h-5" />
+              Дополнительные услуги
+            </h3>
+            {additionalServices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Дополнительные услуги не добавлены</p>
+            ) : (
+              <div className="space-y-3">
+                {additionalServices.map((service, index) => (
+                  <div key={service.id || index} className="p-4 border rounded-lg" data-testid="additional-service">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">{service.name}</h4>
+                        {service.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
+                        )}
+                      </div>
+                      {service.cost && (
+                        <Badge variant="secondary">
+                          {new Intl.NumberFormat('ru-RU').format(service.cost)} ₸
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="amendments" className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Дополнительные соглашения
+            </h3>
+            {canAddAmendment && (
+              <Button onClick={() => setIsAmendmentDialogOpen(true)} size="sm" data-testid="add-amendment-button">
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить доп соглашение
+              </Button>
+            )}
+          </div>
+          
+          {projectAmendments.length === 0 ? (
+            <Card className="p-6">
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Доп соглашения не добавлены
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {projectAmendments.map((amendment) => (
+                <Card key={amendment.id} className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline">№ {amendment.number}</Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(amendment.date).toLocaleDateString('ru-RU')}
+                        </span>
+                      </div>
+                      <p className="text-sm">{amendment.description}</p>
+                      {amendment.fileUrl && (
+                        <a
+                          href={amendment.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline mt-2 inline-block"
+                        >
+                          <File className="w-4 h-4 inline mr-1" />
+                          Открыть файл
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Диалог добавления доп соглашения */}
+      <Dialog open={isAmendmentDialogOpen} onOpenChange={setIsAmendmentDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Добавить доп соглашение</DialogTitle>
+          </DialogHeader>
+          <ProjectAmendmentForm
+            projectId={project.id || project.notes?.id}
+            createdBy={user?.id || ""}
+            onSuccess={handleAmendmentSuccess}
+            onCancel={() => setIsAmendmentDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

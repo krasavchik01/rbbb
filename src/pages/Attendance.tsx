@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ export default function Attendance() {
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterEmployee, setFilterEmployee] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Загружаем записи посещений
   useEffect(() => {
@@ -43,21 +44,42 @@ export default function Attendance() {
     setAttendanceRecords(enrichedRecords);
   }, [employees]);
 
-  // Фильтрация записей
-  const filteredRecords = attendanceRecords.filter(record => {
-    const matchesDate = record.date === new Date(filterDate).toDateString();
-    const matchesEmployee = filterEmployee === 'all' || record.employeeId === filterEmployee;
-    const matchesSearch = record.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return matchesDate && matchesEmployee && matchesSearch;
-  });
+  // Дебаунс поиска
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 250);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-  // Статистика
+  // Фильтрация записей (мемоизация)
+  const filteredRecords = useMemo(() => {
+    const dateStr = new Date(filterDate).toDateString();
+    const s = debouncedSearch.toLowerCase();
+    return attendanceRecords.filter(record => {
+      const matchesDate = record.date === dateStr;
+      const matchesEmployee = filterEmployee === 'all' || record.employeeId === filterEmployee;
+      const matchesSearch = record.employeeName.toLowerCase().includes(s);
+      return matchesDate && matchesEmployee && matchesSearch;
+    });
+  }, [attendanceRecords, filterDate, filterEmployee, debouncedSearch]);
+
+  // Статистика (уникальные сотрудники за сегодня)
+  const today = new Date().toDateString();
+  const todayEmployees = new Set(attendanceRecords.filter(r => r.date === today).map(r => r.employeeId));
+  const inOfficeEmployees = new Set(
+    attendanceRecords.filter(r => r.date === today && r.status === 'in_office').map(r => r.employeeId)
+  );
+  const remoteEmployees = new Set(
+    attendanceRecords.filter(r => r.date === today && r.status === 'remote').map(r => r.employeeId)
+  );
+  const checkedOutEmployees = new Set(
+    attendanceRecords.filter(r => r.date === today && r.checkOut).map(r => r.employeeId)
+  );
+
   const todayStats = {
-    total: attendanceRecords.filter(r => r.date === new Date().toDateString()).length,
-    inOffice: attendanceRecords.filter(r => r.date === new Date().toDateString() && r.status === 'in_office').length,
-    remote: attendanceRecords.filter(r => r.date === new Date().toDateString() && r.status === 'remote').length,
-    checkedOut: attendanceRecords.filter(r => r.date === new Date().toDateString() && r.checkOut).length
+    total: todayEmployees.size,
+    inOffice: inOfficeEmployees.size,
+    remote: remoteEmployees.size,
+    checkedOut: checkedOutEmployees.size,
   };
 
   // Вычисляем время работы

@@ -190,10 +190,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         name: employeeData.name,
         email: employeeData.email,
         role: employeeData.role as UserRole,
-        level: employeeData.level,
+        companyId: employeeData.company_id || undefined,
         position: employeeData.position || '',
         department: employeeData.department || '',
-        phone: employeeData.whatsapp || '',
         avatar: employeeData.name ? employeeData.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'UN'
       };
 

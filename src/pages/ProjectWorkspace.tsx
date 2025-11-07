@@ -25,12 +25,19 @@ import { ProjectData, ElementData } from "@/types/methodology";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
+import { MethodologySelector, SelectedProcedure } from "@/components/projects/MethodologySelector";
+import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology";
+import { useEmployees } from "@/hooks/useSupabaseData";
+import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { notifyTaskAssigned } from "@/lib/projectNotifications";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { templates } = useTemplates();
   const { projects } = useProjects();
+  const { employees } = useEmployees();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -38,6 +45,10 @@ export default function ProjectWorkspace() {
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
   const [project, setProject] = useState<any>(null);
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
+  const [isPlanningMode, setIsPlanningMode] = useState(false);
+  
+  // Проверка роли партнёра
+  const isPartner = user?.role === 'partner';
   
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
   const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } = 
@@ -64,6 +75,18 @@ export default function ProjectWorkspace() {
         const foundTemplate = templates.find(t => t.id === data.templateId);
         if (foundTemplate) {
           setTemplate(foundTemplate);
+        } else {
+          // Если шаблон не найден, но проект аудиторский - используем методологию Russell Bedford
+          const projectType = foundProject.type || foundProject.notes?.type;
+          if (projectType === 'audit') {
+            setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
+          }
+        }
+      } else {
+        // Если данных нет, но проект есть - проверяем тип
+        const projectType = foundProject.type || foundProject.notes?.type;
+        if (projectType === 'audit') {
+          setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
         }
       }
     });
@@ -130,6 +153,149 @@ export default function ProjectWorkspace() {
       completedBy: !isCompleted ? user?.id : undefined
     });
   };
+
+  // Функция сохранения выбранных процедур методологии
+  const handleSaveMethodologySelection = async (procedures: SelectedProcedure[]) => {
+    if (!project || !template) return;
+
+    try {
+      // Создаём структуру методологии
+      const methodology = {
+        templateId: RUSSELL_BEDFORD_AUDIT_METHODOLOGY.id,
+        selectedProcedures: procedures,
+        stages: RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages
+          .filter(stage => procedures.some(p => p.stageId === stage.id))
+          .map(stage => ({
+            stageId: stage.id,
+            stageName: stage.name,
+            status: 'pending' as const,
+            elements: stage.elements
+              .filter(el => procedures.some(p => p.elementId === el.id && p.stageId === stage.id))
+              .map(el => {
+                const procedure = procedures.find(p => p.elementId === el.id && p.stageId === stage.id);
+                return {
+                  elementId: el.id,
+                  elementType: el.type,
+                  title: el.title,
+                  completed: false,
+                  completedAt: null,
+                  completedBy: null,
+                  responsibleRole: procedure?.responsibleRole,
+                  responsibleUserId: procedure?.responsibleUserId
+                };
+              })
+          }))
+      };
+
+      // Обновляем или создаём projectData
+      const updatedProjectData: ProjectData = projectData || {
+        projectId: project.id || id || '',
+        templateId: RUSSELL_BEDFORD_AUDIT_METHODOLOGY.id,
+        templateVersion: 1,
+        passportData: {},
+        stagesData: {},
+        completionStatus: {
+          totalElements: 0,
+          completedElements: 0,
+          percentage: 0
+        },
+        history: []
+      };
+
+      updatedProjectData.methodology = methodology;
+
+      // Инициализируем stagesData для выбранных процедур
+      methodology.stages.forEach(stage => {
+        if (!updatedProjectData.stagesData[stage.stageId]) {
+          updatedProjectData.stagesData[stage.stageId] = {};
+        }
+        stage.elements.forEach(element => {
+          if (!updatedProjectData.stagesData[stage.stageId][element.elementId]) {
+            updatedProjectData.stagesData[stage.stageId][element.elementId] = {
+              elementId: element.elementId,
+              completed: false
+            };
+          }
+        });
+      });
+
+      // Пересчитываем прогресс
+      const totalElements = methodology.stages.reduce((sum, stage) => sum + stage.elements.length, 0);
+      updatedProjectData.completionStatus = {
+        totalElements,
+        completedElements: 0,
+        percentage: 0
+      };
+
+      setProjectData(updatedProjectData);
+      saveProjectDataLocal(updatedProjectData);
+
+      // Обновляем проект в Supabase
+      const projectId = project.id || (project as any).notes?.id;
+      if (projectId) {
+        await supabaseDataStore.updateProject(projectId, {
+          ...project,
+          notes: {
+            ...project.notes,
+            methodology: methodology
+          }
+        });
+      }
+
+      // Отправляем уведомления назначенным ответственным
+      procedures.forEach(procedure => {
+        if (procedure.responsibleUserId) {
+          const employee = employees.find((e: any) => e.id === procedure.responsibleUserId);
+          if (employee) {
+            const element = RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages
+              .flatMap(s => s.elements)
+              .find(e => e.id === procedure.elementId);
+            
+            notifyTaskAssigned({
+              taskName: element?.title || 'Процедура',
+              assigneeId: procedure.responsibleUserId,
+              projectName: project.name || project.client?.name || 'Проект',
+              deadline: project.contract?.serviceEndDate || project.deadline || 'Не указан',
+              creatorName: user?.name || 'Партнёр',
+              projectId: project.id || id || ''
+            });
+          }
+        }
+      });
+
+      toast({
+        title: "✅ Планирование сохранено",
+        description: `Выбрано ${procedures.length} процедур. Уведомления отправлены назначенным ответственным.`,
+      });
+
+      setIsPlanningMode(false);
+    } catch (error) {
+      console.error('Ошибка сохранения планирования:', error);
+      toast({
+        title: "❌ Ошибка",
+        description: "Не удалось сохранить планирование",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Отображаем только выбранные этапы и процедуры
+  const displayStages = template ? (projectData?.methodology ? 
+    template.stages
+      .filter(stage => 
+        projectData.methodology.stages.some((ms: any) => ms.stageId === stage.id)
+      )
+      .map(stage => {
+        const methodologyStage = projectData.methodology.stages.find((ms: any) => ms.stageId === stage.id);
+        return {
+          ...stage,
+          elements: stage.elements.filter(el =>
+            methodologyStage?.elements.some((me: any) => me.elementId === el.id)
+          )
+        };
+      })
+    : template.stages
+  ) : [];
 
   const renderElementInput = (stageId: string, element: ProcedureElement) => {
     const elementData = projectData?.stagesData[stageId]?.[element.id];
@@ -333,7 +499,7 @@ export default function ProjectWorkspace() {
     }
   };
 
-  if (!project || !template || !projectData) {
+  if (!project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -343,9 +509,26 @@ export default function ProjectWorkspace() {
     );
   }
 
-  const currentStage = template.stages[currentStageIndex];
+  // Если нет template, но проект аудиторский - используем методологию
+  const activeTemplate = template || (project.type === 'audit' || project.notes?.type === 'audit' ? RUSSELL_BEDFORD_AUDIT_METHODOLOGY : null);
+  
+  if (!activeTemplate) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-lg">Шаблон проекта не найден</div>
+          <Button onClick={() => navigate('/projects')} className="mt-4">
+            Вернуться к проектам
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Используем displayStages для навигации
+  const currentStage = displayStages[currentStageIndex] || displayStages[0];
   const stageProgress = currentStage ? 
-    (Object.values(projectData.stagesData[currentStage.id] || {}).filter(e => e.completed).length / currentStage.elements.length) * 100 
+    (Object.values((projectData?.stagesData[currentStage.id] || {})).filter((e: any) => e.completed).length / currentStage.elements.length) * 100 
     : 0;
 
   return (
@@ -357,8 +540,8 @@ export default function ProjectWorkspace() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{project.name}</h1>
-            <p className="text-sm text-muted-foreground">{template.name}</p>
+            <h1 className="text-2xl font-bold">{project.name || project.client?.name || 'Проект'}</h1>
+            <p className="text-sm text-muted-foreground">{activeTemplate?.name || 'Проект'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -385,47 +568,158 @@ export default function ProjectWorkspace() {
       </div>
 
       {/* Общий прогресс */}
-      <Card className="p-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Общий прогресс</span>
-            <span className="text-sm text-muted-foreground">
-              {projectData.completionStatus.completedElements} из {projectData.completionStatus.totalElements} выполнено
-            </span>
+      {projectData && (
+        <Card className="p-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Общий прогресс</span>
+              <span className="text-sm text-muted-foreground">
+                {projectData.completionStatus.completedElements} из {projectData.completionStatus.totalElements} выполнено
+              </span>
+            </div>
+            <Progress value={projectData.completionStatus.percentage} className="h-3" />
           </div>
-          <Progress value={projectData.completionStatus.percentage} className="h-3" />
-        </div>
-      </Card>
+        </Card>
+      )}
 
-      {/* Навигация по этапам */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {template.stages.map((stage, index) => {
-          const stageData = projectData.stagesData[stage.id] || {};
-          const completedCount = Object.values(stageData).filter(e => e.completed).length;
-          const totalCount = stage.elements.length;
-          const isCompleted = completedCount === totalCount;
-          const isCurrent = index === currentStageIndex;
+      {/* Вкладки для партнёра (Планирование) и обычных пользователей (Рабочие процедуры) */}
+      <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "procedures"} className="w-full">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2">
+          {isPartner && (
+            <TabsTrigger value="planning">
+              📋 Планирование
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="procedures">
+            ✅ Рабочие процедуры
+          </TabsTrigger>
+        </TabsList>
 
-          return (
-            <Button
-              key={stage.id}
-              variant={isCurrent ? "default" : "outline"}
-              className={`flex-shrink-0 ${isCompleted ? 'bg-green-500 hover:bg-green-600' : ''}`}
-              onClick={() => setCurrentStageIndex(index)}
-            >
-              <span className="mr-2">{index + 1}.</span>
-              {stage.name}
-              <Badge variant="secondary" className="ml-2">
-                {completedCount}/{totalCount}
-              </Badge>
-              {isCompleted && <CheckCircle2 className="w-4 h-4 ml-2" />}
-            </Button>
-          );
-        })}
-      </div>
+        {/* Вкладка планирования для партнёра */}
+        {isPartner && (
+          <TabsContent value="planning" className="space-y-4 mt-4">
+            <Card className="p-6">
+              {projectData?.methodology ? (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">Выбранные процедуры</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Планирование выполнено. Выбрано {projectData.methodology.selectedProcedures.length} процедур
+                      </p>
+                    </div>
+                    <Button variant="outline" onClick={() => setIsPlanningMode(true)}>
+                      Изменить планирование
+                    </Button>
+                  </div>
+                  
+                  {/* Отображение выбранных процедур по этапам */}
+                  <div className="space-y-4">
+                    {projectData.methodology.stages.map((stage: any) => {
+                      const stageTemplate = RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages.find(s => s.id === stage.stageId);
+                      return (
+                        <Card key={stage.stageId} className="p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Badge 
+                              style={{ backgroundColor: stageTemplate?.color || '#3b82f6' }}
+                              className="text-white"
+                            >
+                              Этап {stageTemplate?.order || 0}
+                            </Badge>
+                            <h4 className="font-semibold">{stage.stageName}</h4>
+                          </div>
+                          <div className="space-y-2 pl-6">
+                            {stage.elements.map((element: any) => {
+                              const responsible = employees.find((e: any) => e.id === element.responsibleUserId);
+                              const roleLabel = element.responsibleRole === 'assistant' ? 'Ассистент' :
+                                               element.responsibleRole === 'senior_auditor' ? 'Старший аудитор' :
+                                               element.responsibleRole === 'manager' ? 'Менеджер' :
+                                               element.responsibleRole === 'partner' ? 'Партнёр' : element.responsibleRole;
+                              return (
+                                <div key={element.elementId} className="flex items-center justify-between p-2 bg-secondary/50 rounded">
+                                  <span className="text-sm">{element.title}</span>
+                                  <Badge variant="outline">
+                                    {responsible?.name || roleLabel}
+                                  </Badge>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">
+                    Планирование ещё не выполнено. Выберите необходимые процедуры и распределите их по ответственным.
+                  </p>
+                  <Button onClick={() => setIsPlanningMode(true)}>
+                    Начать планирование
+                  </Button>
+                </div>
+              )}
+            </Card>
 
-      {/* Текущий этап */}
-      {currentStage && (
+            {/* Диалог выбора методологии */}
+            {isPlanningMode && (
+              <Dialog open={isPlanningMode} onOpenChange={setIsPlanningMode}>
+                <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Выбор процедур и распределение ответственности</DialogTitle>
+                    <DialogDescription>
+                      Выберите необходимые процедуры для проекта и назначьте ответственных (Ассистент, Старший аудитор, Менеджер, Партнёр)
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <MethodologySelector
+                    template={RUSSELL_BEDFORD_AUDIT_METHODOLOGY}
+                    projectId={project?.id || id || ''}
+                    employees={employees}
+                    onSave={handleSaveMethodologySelection}
+                    onCancel={() => setIsPlanningMode(false)}
+                    initialSelection={projectData?.methodology?.selectedProcedures || []}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
+          </TabsContent>
+        )}
+
+        {/* Вкладка рабочих процедур */}
+        <TabsContent value="procedures" className="space-y-4 mt-4">
+          {/* Навигация по этапам */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {displayStages.map((stage, index) => {
+              const stageData = projectData?.stagesData[stage.id] || {};
+              const completedCount = Object.values(stageData).filter(e => e.completed).length;
+              const totalCount = stage.elements.length;
+              const isCompleted = completedCount === totalCount && totalCount > 0;
+              const isCurrent = index === currentStageIndex;
+
+              return (
+                <Button
+                  key={stage.id}
+                  variant={isCurrent ? "default" : "outline"}
+                  className={`flex-shrink-0 ${isCompleted ? 'bg-green-500 hover:bg-green-600' : ''}`}
+                  onClick={() => setCurrentStageIndex(index)}
+                >
+                  <span className="mr-2">{index + 1}.</span>
+                  {stage.name}
+                  <Badge variant="secondary" className="ml-2">
+                    {completedCount}/{totalCount}
+                  </Badge>
+                  {isCompleted && <CheckCircle2 className="w-4 h-4 ml-2" />}
+                </Button>
+              );
+            })}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Текущий этап - только если не вкладка планирования */}
+      {!isPartner && currentStage && (
         <Card className="p-6">
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
@@ -443,11 +737,23 @@ export default function ProjectWorkspace() {
           </div>
 
           <div className="space-y-6">
-            {currentStage.elements.map((element) => (
-              <div key={element.id}>
-                {renderElementInput(currentStage.id, element)}
-              </div>
-            ))}
+            {currentStage.elements.map((element) => {
+              // Показываем информацию о назначенном ответственном
+              const elementData = projectData?.stagesData[currentStage.id]?.[element.id];
+              const responsible = elementData?.responsibleUserId ? 
+                employees.find((e: any) => e.id === elementData.responsibleUserId) : null;
+              
+              return (
+                <div key={element.id}>
+                  {responsible && (
+                    <div className="mb-2 text-xs text-muted-foreground">
+                      Ответственный: <strong>{responsible.name}</strong>
+                    </div>
+                  )}
+                  {renderElementInput(currentStage.id, element)}
+                </div>
+              );
+            })}
           </div>
 
           {/* Навигация между этапами */}
@@ -461,8 +767,70 @@ export default function ProjectWorkspace() {
               Предыдущий этап
             </Button>
             <Button
-              onClick={() => setCurrentStageIndex(Math.min(template.stages.length - 1, currentStageIndex + 1))}
-              disabled={currentStageIndex === template.stages.length - 1}
+              onClick={() => setCurrentStageIndex(Math.min(displayStages.length - 1, currentStageIndex + 1))}
+              disabled={currentStageIndex === displayStages.length - 1}
+              className="flex-1"
+            >
+              Следующий этап
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Текущий этап для партнёра в режиме просмотра процедур */}
+      {isPartner && currentStage && (
+        <Card className="p-6">
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-2xl font-bold" style={{ color: currentStage.color }}>
+                Этап {currentStageIndex + 1}: {currentStage.name}
+              </h2>
+              <Badge variant="outline" className="text-sm">
+                {Math.round(stageProgress)}% завершено
+              </Badge>
+            </div>
+            {currentStage.description && (
+              <p className="text-muted-foreground">{currentStage.description}</p>
+            )}
+            <Progress value={stageProgress} className="h-2 mt-3" />
+          </div>
+
+          <div className="space-y-6">
+            {currentStage.elements.map((element) => {
+              const elementData = projectData?.stagesData[currentStage.id]?.[element.id];
+              const methodologyElement = projectData?.methodology?.stages
+                .find((s: any) => s.stageId === currentStage.id)
+                ?.elements.find((e: any) => e.elementId === element.id);
+              const responsible = methodologyElement?.responsibleUserId ? 
+                employees.find((e: any) => e.id === methodologyElement.responsibleUserId) : null;
+              
+              return (
+                <div key={element.id}>
+                  {responsible && (
+                    <div className="mb-2 text-xs text-muted-foreground">
+                      Ответственный: <strong>{responsible.name}</strong>
+                    </div>
+                  )}
+                  {renderElementInput(currentStage.id, element)}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Навигация между этапами */}
+          <div className="flex gap-4 mt-6 pt-6 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentStageIndex(Math.max(0, currentStageIndex - 1))}
+              disabled={currentStageIndex === 0}
+              className="flex-1"
+            >
+              Предыдущий этап
+            </Button>
+            <Button
+              onClick={() => setCurrentStageIndex(Math.min(displayStages.length - 1, currentStageIndex + 1))}
+              disabled={currentStageIndex === displayStages.length - 1}
               className="flex-1"
             >
               Следующий этап
@@ -473,17 +841,19 @@ export default function ProjectWorkspace() {
       )}
 
       {/* Информация о паспорте */}
-      <Card className="p-6">
-        <h3 className="font-semibold mb-4">Информация о проекте</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {template.customFields.map(field => (
-            <div key={field.id}>
-              <Label className="text-sm text-muted-foreground">{field.label}</Label>
-              <p className="font-medium">{projectData.passportData[field.name] || '-'}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {activeTemplate && projectData && (
+        <Card className="p-6">
+          <h3 className="font-semibold mb-4">Информация о проекте</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeTemplate.customFields.map(field => (
+              <div key={field.id}>
+                <Label className="text-sm text-muted-foreground">{field.label}</Label>
+                <p className="font-medium">{projectData.passportData[field.name] || '-'}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

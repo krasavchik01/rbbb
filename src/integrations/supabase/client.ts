@@ -8,9 +8,30 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+const safeStorage: Storage = {
+  getItem: (key: string) => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  },
+  setItem: (key: string, value: string) => {
+    try { localStorage.setItem(key, value); } catch {}
+  },
+  removeItem: (key: string) => {
+    try { localStorage.removeItem(key); } catch {}
+  },
+  clear: () => {
+    try { localStorage.clear(); } catch {}
+  },
+  key: (index: number) => {
+    try { return localStorage.key(index); } catch { return null; }
+  },
+  get length() {
+    try { return localStorage.length; } catch { return 0; }
+  }
+} as Storage;
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: safeStorage,
     persistSession: true,
     autoRefreshToken: true,
   }

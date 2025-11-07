@@ -24,14 +24,17 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectV3 } from "@/types/project-v3";
+import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
 import { Contractor } from "@/types/project-v3";
 import { notifyProjectApproved, notifyProjectRejected, notifyPMAssigned, notifyTeamMemberAdded } from "@/lib/projectNotifications";
+import { useEmployees } from "@/hooks/useSupabaseData";
 
 export default function ProjectApproval() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { employees: realEmployees = [], loading: employeesLoading } = useEmployees();
 
   const [projects, setProjects] = useState<ProjectV3[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
@@ -46,48 +49,74 @@ export default function ProjectApproval() {
     partner: true // Партнер обязателен
   });
   
+  // Настройки видимости финансовой информации
+  const [showFinancialInfo, setShowFinancialInfo] = useState(false);
+  const [financialVisibleTo, setFinancialVisibleTo] = useState<string[]>([]);
+  
   // Новый ГПХ
   const [newContractorName, setNewContractorName] = useState("");
   const [newContractorAmount, setNewContractorAmount] = useState("");
 
-  // Демо-сотрудники с занятостью
-  const demoEmployees = [
-    { id: 'emp-1', name: 'Иванов И.И.', role: 'partner', activeProjects: 2, loadPercent: 85, location: 'office' },
-    { id: 'emp-2', name: 'Петров П.П.', role: 'partner', activeProjects: 1, loadPercent: 60, location: 'project' },
-    { id: 'emp-3', name: 'Сидоров С.С.', role: 'project_manager', activeProjects: 3, loadPercent: 95, location: 'office' },
-    { id: 'emp-4', name: 'Козлова К.К.', role: 'project_manager', activeProjects: 1, loadPercent: 45, location: 'office' },
-    { id: 'emp-5', name: 'Новикова Н.Н.', role: 'supervisor_3', activeProjects: 2, loadPercent: 70, location: 'project' },
-    { id: 'emp-6', name: 'Волков В.В.', role: 'supervisor_3', activeProjects: 1, loadPercent: 40, location: 'office' },
-    { id: 'emp-7', name: 'Морозова М.М.', role: 'supervisor_2', activeProjects: 1, loadPercent: 55, location: 'office' },
-    { id: 'emp-8', name: 'Лебедев Л.Л.', role: 'supervisor_2', activeProjects: 2, loadPercent: 80, location: 'office' },
-    { id: 'emp-9', name: 'Орлова О.О.', role: 'supervisor_1', activeProjects: 0, loadPercent: 0, location: 'office' },
-    { id: 'emp-10', name: 'Зайцев З.З.', role: 'supervisor_1', activeProjects: 1, loadPercent: 50, location: 'office' },
-    { id: 'emp-11', name: 'Соколова С.С.', role: 'tax_specialist_1', activeProjects: 3, loadPercent: 90, location: 'project' },
-    { id: 'emp-12', name: 'Медведев М.М.', role: 'tax_specialist_1', activeProjects: 1, loadPercent: 35, location: 'office' },
-    { id: 'emp-13', name: 'Кузнецов К.К.', role: 'tax_specialist_2', activeProjects: 2, loadPercent: 65, location: 'office' },
-    { id: 'emp-14', name: 'Белова Б.Б.', role: 'tax_specialist_2', activeProjects: 1, loadPercent: 40, location: 'office' },
-    { id: 'emp-15', name: 'Смирнова С.С.', role: 'assistant_3', activeProjects: 2, loadPercent: 75, location: 'office' },
-    { id: 'emp-16', name: 'Попов П.П.', role: 'assistant_3', activeProjects: 1, loadPercent: 30, location: 'office' },
-    { id: 'emp-17', name: 'Васильева В.В.', role: 'assistant_2', activeProjects: 1, loadPercent: 45, location: 'office' },
-    { id: 'emp-18', name: 'Николаев Н.Н.', role: 'assistant_2', activeProjects: 0, loadPercent: 0, location: 'office' },
-    { id: 'emp-19', name: 'Павлова П.П.', role: 'assistant_1', activeProjects: 1, loadPercent: 55, location: 'project' },
-    { id: 'emp-20', name: 'Федоров Ф.Ф.', role: 'assistant_1', activeProjects: 0, loadPercent: 0, location: 'office' },
-  ];
+  // Маппинг ролей сотрудников из Supabase на роли проектов
+  const mapEmployeeRoleToProjectRole = (employeeRole: string): string | null => {
+    const roleMap: Record<string, string> = {
+      'partner': 'partner',
+      'project_manager': 'project_manager',
+      'supervisor_3': 'supervisor_3',
+      'supervisor_2': 'supervisor_2',
+      'supervisor_1': 'supervisor_1',
+      'tax_specialist_1': 'tax_specialist_1',
+      'tax_specialist_2': 'tax_specialist_2',
+      'assistant_3': 'assistant_3',
+      'assistant_2': 'assistant_2',
+      'assistant_1': 'assistant_1',
+    };
+    return roleMap[employeeRole] || null;
+  };
+
+  // Преобразуем реальных сотрудников в формат для назначения
+  const availableEmployees = realEmployees.map(emp => ({
+    id: emp.id,
+    name: emp.name || emp.email || 'Без имени',
+    role: mapEmployeeRoleToProjectRole(emp.role) || emp.role,
+    activeProjects: 0, // Можно добавить подсчет активных проектов позже
+    loadPercent: 0, // Можно добавить расчет загрузки позже
+    location: 'office' as const
+  })).filter(emp => emp.role); // Фильтруем только тех, у кого есть подходящая роль
+
+  // Логирование для отладки выпадающего списка партнеров
+  useEffect(() => {
+    console.log('🔍 [ProjectApproval] Отладка списка партнеров:');
+    console.log('  - realEmployees:', realEmployees.length, 'сотрудников');
+    console.log('  - realEmployees с ролью partner:', realEmployees.filter(e => e.role === 'partner').map(e => ({ id: e.id, name: e.name, role: e.role })));
+    console.log('  - availableEmployees:', availableEmployees.length, 'сотрудников');
+    console.log('  - availableEmployees с ролью partner:', availableEmployees.filter(e => e.role === 'partner').map(e => ({ id: e.id, name: e.name, role: e.role })));
+  }, [realEmployees, availableEmployees]);
 
   // Загрузка проектов
-  const loadProjects = () => {
-    const savedProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
-    const pendingProjects = savedProjects.filter((p: ProjectV3) => p.status === 'new' || p.status === 'pending_approval');
-    console.log('📋 Загрузка проектов на утверждение:', pendingProjects.length, 'проектов');
-    setProjects(pendingProjects);
+  const loadProjects = async () => {
+    // Только Supabase
+    const supaProjects = await supabaseDataStore.getProjects();
+    // Фильтруем проекты на утверждении (new или pending_approval в notes.status)
+    const pending = (supaProjects as any[])
+      .filter(p => {
+        const notesStatus = p?.notes?.status;
+        return notesStatus === 'new' || notesStatus === 'pending_approval';
+      })
+      .map(p => {
+        // Если есть notes объект - используем его как основной проект
+        if (p.notes && typeof p.notes === 'object') {
+          return { ...p, ...p.notes, id: p.id }; // Объединяем данные
+        }
+        return p;
+      }) as ProjectV3[];
+    console.log('📋 Загрузка проектов на утверждение из Supabase:', pending.length);
+    setProjects(pending);
   };
 
   useEffect(() => {
     loadProjects();
-    
-    // Автоматически обновляем каждые 5 секунд
     const interval = setInterval(loadProjects, 5000);
-    
     return () => clearInterval(interval);
   }, []);
 
@@ -169,7 +198,7 @@ export default function ProjectApproval() {
     setContractors(contractors.filter(c => c.id !== id));
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedProject) return;
 
     // Проверяем что назначен хотя бы партнер
@@ -184,94 +213,136 @@ export default function ProjectApproval() {
 
     setIsApproving(true);
 
-    // Обновляем проект
-    const updatedProject: ProjectV3 = {
-      ...selectedProject,
-      status: 'approved',
-      team: PROJECT_ROLES
+    try {
+      // Получаем имена сотрудников из списка
+      const getEmployeeName = (employeeId: string): string => {
+        const employee = availableEmployees.find(e => e.id === employeeId);
+        return employee?.name || `Сотрудник ${employeeId}`;
+      };
+
+      // Формируем команду проекта
+      const projectTeam = PROJECT_ROLES
         .filter(role => teamMembers[role.role])
         .map(role => ({
           userId: teamMembers[role.role],
-          userName: `Сотрудник ${teamMembers[role.role]}`, // TODO: получить из списка сотрудников
+          userName: getEmployeeName(teamMembers[role.role]),
           role: role.role,
           bonusPercent: role.bonusPercent,
           assignedAt: new Date().toISOString(),
           assignedBy: user?.id || "",
-        })),
-      finances: {
-        ...selectedProject.finances,
-        contractors: contractors,
-        totalContractorsAmount: finances?.totalContractorsAmount || 0,
-        bonusBase: finances?.bonusBase || 0,
-        totalBonusAmount: finances?.totalBonusAmount || 0,
-        teamBonuses: {},
-        totalPaidBonuses: 0,
-        totalCosts: finances?.totalCosts || 0,
-        grossProfit: finances?.grossProfit || 0,
-        profitMargin: finances?.profitMargin || 0,
-      },
-      approvedBy: user?.id,
-      approvedByName: user?.name,
-      approvedAt: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+        }));
 
-    // Сохраняем
-    const allProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
-    const index = allProjects.findIndex((p: ProjectV3) => p.id === selectedProject.id);
-    if (index !== -1) {
-      allProjects[index] = updatedProject;
-      localStorage.setItem('rb_projects_v3', JSON.stringify(allProjects));
+      // Обновляем проект
+      const updatedProject: ProjectV3 = {
+        ...selectedProject,
+        status: 'approved',
+        team: projectTeam,
+        finances: {
+          ...selectedProject.finances,
+          contractors: contractors,
+          totalContractorsAmount: finances?.totalContractorsAmount || 0,
+          bonusBase: finances?.bonusBase || 0,
+          totalBonusAmount: finances?.totalBonusAmount || 0,
+          teamBonuses: {},
+          totalPaidBonuses: 0,
+          totalCosts: finances?.totalCosts || 0,
+          grossProfit: finances?.grossProfit || 0,
+          profitMargin: finances?.profitMargin || 0,
+        },
+        // Сохраняем настройки видимости финансовой информации
+        financialVisibility: showFinancialInfo ? {
+          enabled: true,
+          visibleTo: financialVisibleTo,
+        } : undefined,
+        approvedBy: user?.id,
+        approvedByName: user?.name || 'Зам. директора',
+        approvedAt: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Сохраняем в Supabase
+      const supabaseId = selectedProject.id || (selectedProject as any).supabaseId;
+      if (supabaseId) {
+        const saved = await supabaseDataStore.updateProject(supabaseId, updatedProject);
+        if (!saved) {
+          throw new Error('Не удалось сохранить проект в Supabase');
+        }
+        console.log('✅ Project approved and saved to Supabase:', supabaseId);
+      } else {
+        console.warn('⚠️ Project ID not found, cannot save to Supabase');
+      }
+
+      // Отправляем уведомления всем членам команды параллельно
+      const approverName = user?.name || 'Зам. директора';
+      const notificationPromises = updatedProject.team.map(member => {
+        const employee = availableEmployees.find(e => e.id === member.userId);
+        if (!employee) {
+          console.warn(`⚠️ [ProjectApproval] Сотрудник ${member.userId} не найден для уведомления`);
+          return null;
+        }
+
+        // Определяем тип уведомления по роли
+        if (member.role === 'partner') {
+          return notifyProjectApproved({
+            projectName: selectedProject.name,
+            partnerId: member.userId,
+            partnerName: employee.name,
+            approverName: approverName
+          });
+        } else if (member.role === 'project_manager') {
+          return notifyPMAssigned({
+            projectName: selectedProject.name,
+            pmId: member.userId,
+            pmName: employee.name,
+            partnerName: approverName,
+            projectId: selectedProject.id
+          });
+        } else {
+          return notifyTeamMemberAdded({
+            projectName: selectedProject.name,
+            memberId: member.userId,
+            memberName: employee.name,
+            role: ROLE_LABELS[member.role as UserRole] || member.role,
+            assignerName: approverName,
+            projectId: selectedProject.id
+          });
+        }
+      });
+
+      // Отправляем все уведомления параллельно
+      try {
+        await Promise.all(notificationPromises.filter(Boolean));
+        console.log(`✅ [ProjectApproval] Уведомления отправлены всем ${updatedProject.team.length} участникам проекта`);
+      } catch (error) {
+        console.error('❌ [ProjectApproval] Ошибка при отправке уведомлений:', error);
+        // Не блокируем процесс утверждения, если уведомления не отправились
+      }
+
+      toast({
+        title: "Проект утверждён!",
+        description: `Проект "${selectedProject.name}" утверждён и назначена команда. Уведомления отправлены всем ${updatedProject.team.length} участникам.`,
+      });
+
+      // Обновляем список
+      setProjects(projects.filter(p => p.id !== selectedProject.id));
+      setSelectedProject(null);
+      setTeamMembers({});
+      setContractors([]);
+      setShowFinancialInfo(false);
+      setFinancialVisibleTo([]);
+      
+      // Перезагружаем проекты
+      await loadProjects();
+    } catch (error: any) {
+      console.error('❌ Error approving project:', error);
+      toast({
+        title: "Ошибка",
+        description: error?.message || "Не удалось утвердить проект",
+        variant: "destructive"
+      });
+    } finally {
+      setIsApproving(false);
     }
-
-    // Отправляем уведомления всем членам команды
-    updatedProject.team.forEach(member => {
-      const employee = demoEmployees.find(e => e.id === member.userId);
-      if (!employee) return;
-
-      // Если это партнёр - отправляем уведомление о назначении партнёром
-      if (member.role === 'partner') {
-        notifyProjectApproved({
-          projectName: selectedProject.name,
-          partnerId: member.userId,
-          partnerName: employee.name,
-          approverName: user?.name || 'Зам. директора'
-        });
-      } 
-      // Если это PM - отправляем уведомление о назначении PM
-      else if (member.role === 'project_manager') {
-        notifyPMAssigned({
-          projectName: selectedProject.name,
-          pmId: member.userId,
-          pmName: employee.name,
-          partnerName: user?.name || 'Партнёр',
-          projectId: selectedProject.id
-        });
-      }
-      // Остальным членам команды - общее уведомление
-      else {
-        notifyTeamMemberAdded({
-          projectName: selectedProject.name,
-          memberId: member.userId,
-          memberName: employee.name,
-          role: ROLE_LABELS[member.role as UserRole] || member.role,
-          assignerName: user?.name || 'Руководитель',
-          projectId: selectedProject.id
-        });
-      }
-    });
-
-    toast({
-      title: "Проект утверждён!",
-      description: `Проект "${selectedProject.name}" утверждён и назначена команда. Уведомления отправлены всем ${updatedProject.team.length} участникам.`,
-    });
-
-    // Обновляем список
-    setProjects(projects.filter(p => p.id !== selectedProject.id));
-    setSelectedProject(null);
-    setTeamMembers({});
-    setContractors([]);
-    setIsApproving(false);
   };
 
   const handleReject = () => {
@@ -413,7 +484,7 @@ export default function ProjectApproval() {
 
             <div className="space-y-6">
               {/* Информация о проекте */}
-              <Card className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-500">
+              <Card className="p-4 bg-secondary/20 dark:bg-secondary/30 border-l-4 border-primary">
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <Label className="text-xs">Клиент</Label>
@@ -445,7 +516,7 @@ export default function ProjectApproval() {
 
                 <div className="space-y-3">
                   {PROJECT_ROLES.map(projectRole => {
-                    const availableEmployees = demoEmployees.filter(emp => emp.role === projectRole.role);
+                    const employeesForRole = availableEmployees.filter(emp => emp.role === projectRole.role);
                     const isRoleSelected = selectedRoles[projectRole.role];
                     
                     return (
@@ -480,44 +551,59 @@ export default function ProjectApproval() {
                         {/* Выпадающий список сотрудников */}
                         {isRoleSelected && (
                           <div className="ml-7 space-y-2">
-                            <Select 
-                              value={teamMembers[projectRole.role] || ""} 
-                              onValueChange={(value) => setTeamMembers({...teamMembers, [projectRole.role]: value})}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Выберите сотрудника" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableEmployees.map(emp => (
-                                  <SelectItem key={emp.id} value={emp.id}>
-                                    <div className="flex items-center justify-between w-full gap-4">
-                                      <span>{emp.name}</span>
-                                      <div className="flex items-center gap-2 text-xs">
-                                        <Badge 
-                                          variant="outline" 
-                                          className={
-                                            emp.loadPercent >= 80 ? 'bg-red-100 text-red-700' :
-                                            emp.loadPercent >= 50 ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-green-100 text-green-700'
-                                          }
-                                        >
-                                          Загрузка: {emp.loadPercent}%
-                                        </Badge>
-                                        <Badge variant="outline">
-                                          Проектов: {emp.activeProjects}
-                                        </Badge>
-                                        <Badge 
-                                          variant="outline"
-                                          className={emp.location === 'office' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}
-                                        >
-                                          {emp.location === 'office' ? '🏢 В офисе' : '📍 На проекте'}
-                                        </Badge>
+                            {employeesForRole.length > 0 ? (
+                              <Select 
+                                value={teamMembers[projectRole.role] || ""} 
+                                onValueChange={(value) => setTeamMembers({...teamMembers, [projectRole.role]: value})}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Выберите сотрудника" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {employeesForRole.map(emp => (
+                                    <SelectItem key={emp.id} value={emp.id}>
+                                      <div className="flex items-center justify-between w-full gap-4">
+                                        <span>{emp.name}</span>
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <Badge 
+                                            variant="outline" 
+                                            className={
+                                              emp.loadPercent >= 80 
+                                                ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200' 
+                                                : emp.loadPercent >= 50 
+                                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-200' 
+                                                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200'
+                                            }
+                                          >
+                                            Загрузка: {emp.loadPercent}%
+                                          </Badge>
+                                          <Badge variant="outline">
+                                            Проектов: {emp.activeProjects}
+                                          </Badge>
+                                          <Badge 
+                                            variant="outline"
+                                            className={emp.location === 'office' 
+                                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' 
+                                              : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-200'}
+                                          >
+                                            {emp.location === 'office' ? '🏢 В офисе' : '📍 На проекте'}
+                                          </Badge>
+                                        </div>
                                       </div>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="text-sm text-yellow-600 dark:text-yellow-400 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                                ⚠️ Нет доступных {projectRole.label.toLowerCase()} в базе. Проверьте настройки сотрудников.
+                                {projectRole.role === 'partner' && (
+                                  <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                                    Партнер обязателен для утверждения проекта.
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -525,6 +611,98 @@ export default function ProjectApproval() {
                   })}
                 </div>
               </div>
+
+              {/* Настройки видимости финансовой информации */}
+              <Card className="p-4 border-l-4 border-blue-500">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="showFinancialInfo"
+                      checked={showFinancialInfo}
+                      onChange={(e) => {
+                        setShowFinancialInfo(e.target.checked);
+                        if (!e.target.checked) {
+                          setFinancialVisibleTo([]);
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="showFinancialInfo" className="font-semibold cursor-pointer text-base">
+                      Показывать финансовую информацию команде
+                    </Label>
+                  </div>
+
+                  {showFinancialInfo && (
+                    <div className="ml-7 space-y-3">
+                      <Label className="text-sm text-muted-foreground">
+                        Выберите кому показывать сумму проекта:
+                      </Label>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {PROJECT_ROLES
+                          .filter(role => teamMembers[role.role])
+                          .map(role => {
+                            const memberId = teamMembers[role.role];
+                            const employee = availableEmployees.find(e => e.id === memberId);
+                            const memberName = employee?.name || `Сотрудник ${memberId}`;
+                            
+                            return (
+                              <div key={role.role} className="flex items-center gap-3 p-2 rounded hover:bg-secondary/50">
+                                <input
+                                  type="checkbox"
+                                  id={`financial-visible-${role.role}`}
+                                  checked={financialVisibleTo.includes(memberId)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setFinancialVisibleTo([...financialVisibleTo, memberId]);
+                                    } else {
+                                      setFinancialVisibleTo(financialVisibleTo.filter(id => id !== memberId));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-gray-300"
+                                />
+                                <Label htmlFor={`financial-visible-${role.role}`} className="text-sm cursor-pointer flex-1">
+                                  <span className="font-medium">{memberName}</span>
+                                  <span className="text-muted-foreground ml-2">({ROLE_LABELS[role.role as UserRole] || role.label})</span>
+                                </Label>
+                              </div>
+                            );
+                          })}
+                        {PROJECT_ROLES.filter(role => teamMembers[role.role]).length === 0 && (
+                          <div className="text-sm text-muted-foreground p-2">
+                            Сначала назначьте команду проекта
+                          </div>
+                        )}
+                      </div>
+                      {PROJECT_ROLES.filter(role => teamMembers[role.role]).length > 0 && (
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const allMemberIds = PROJECT_ROLES
+                                .filter(role => teamMembers[role.role])
+                                .map(role => teamMembers[role.role]);
+                              setFinancialVisibleTo(allMemberIds);
+                            }}
+                          >
+                            Выбрать всех
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFinancialVisibleTo([])}
+                          >
+                            Снять все
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </Card>
 
               {/* ГПХ убран - зам. директор не управляет финансами */}
 

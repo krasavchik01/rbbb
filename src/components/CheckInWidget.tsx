@@ -140,8 +140,8 @@ export function CheckInWidget() {
     }
   };
 
-  // Показываем только для сотрудников (не для CEO)
-  if (!user || user.role === 'ceo') {
+  // Показываем только для сотрудников (не для CEO и замдиректора)
+  if (!user || user.role === 'ceo' || user.role === 'deputy_director') {
     return null;
   }
 

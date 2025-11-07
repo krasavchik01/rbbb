@@ -121,6 +121,32 @@ export interface ProjectData {
   
   // История изменений
   history: ChangeRecord[];
+  
+  // Методология (выбранные процедуры партнёром)
+  methodology?: {
+    templateId: string;
+    selectedProcedures: Array<{
+      stageId: string;
+      elementId: string;
+      responsibleRole: 'assistant' | 'senior_auditor' | 'manager' | 'partner';
+      responsibleUserId?: string;
+    }>;
+    stages: Array<{
+      stageId: string;
+      stageName: string;
+      status: 'pending' | 'in_progress' | 'completed';
+      elements: Array<{
+        elementId: string;
+        elementType: string;
+        title: string;
+        completed: boolean;
+        completedAt: string | null;
+        completedBy: string | null;
+        responsibleRole?: string;
+        responsibleUserId?: string;
+      }>;
+    }>;
+  };
 }
 
 // Данные элемента процедуры

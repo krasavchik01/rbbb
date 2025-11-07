@@ -9,9 +9,13 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, adminOnly, allowedRoles }: ProtectedRouteProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (!isAuthenticated) {
+  if (isLoading) {
+    return <div>Загрузка...</div>;
+  }
+
+  if (!user) {
     return <Navigate to="/" replace />;
   }
 
@@ -23,5 +27,5 @@ export function ProtectedRoute({ children, adminOnly, allowedRoles }: ProtectedR
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <>{children}</>;
+  return <React.Fragment>{children}</React.Fragment>;
 }

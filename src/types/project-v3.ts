@@ -186,6 +186,54 @@ export interface FinanceChangeLog {
   reason?: string;
 }
 
+// Файл проекта
+export interface ProjectFile {
+  id: string;
+  projectId: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  storagePath: string; // путь в Supabase Storage
+  uploadedBy: string;
+  uploadedAt: string;
+  category?: 'contract' | 'scan' | 'document' | 'screenshot' | 'other';
+}
+
+// Этап проекта
+export interface ProjectStage {
+  id: string;
+  name: string; // "Аудит за 6 месяцев"
+  startDate: string;
+  endDate: string;
+  description?: string;
+}
+
+// Дополнительная услуга
+export interface AdditionalService {
+  id: string;
+  name: string; // "Обучение", "Семинар", "Консультация"
+  description?: string;
+  cost?: number;
+}
+
+// Доп соглашение
+export interface ProjectAmendment {
+  id: string;
+  projectId: string;
+  number: string; // номер доп соглашения
+  date: string;
+  description: string;
+  fileUrl?: string; // файл доп соглашения
+  createdBy: string;
+  createdAt: string;
+}
+
+// Настройки видимости финансовой информации
+export interface FinancialVisibility {
+  enabled: boolean;                            // Показывать ли сумму вообще
+  visibleTo: string[];                         // userId тех, кому показывать
+}
+
 // Полная структура проекта v3
 export interface ProjectV3 {
   // Основная информация
@@ -214,6 +262,15 @@ export interface ProjectV3 {
   // Финансы
   finances: ProjectFinances;
   financeChangeLogs: FinanceChangeLog[];
+  
+  // Настройки видимости финансовой информации
+  financialVisibility?: FinancialVisibility;    // Кому показывать финансовую информацию
+  
+  // Новые поля: файлы, этапы, услуги, доп соглашения
+  files?: ProjectFile[];                       // Файлы проекта (хранятся в отдельной таблице)
+  stages?: ProjectStage[];                     // Этапы проекта (хранятся в JSONB notes)
+  additionalServices?: AdditionalService[];   // Дополнительные услуги (хранятся в JSONB notes)
+  amendments?: ProjectAmendment[];             // Доп соглашения (хранятся в отдельной таблице)
   
   // Метаданные
   createdBy: string;

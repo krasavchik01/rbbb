@@ -1,34 +1,37 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
-import Index from '@/pages/Index';
-import Dashboard from '@/pages/Dashboard';
-import Projects from '@/pages/Projects-simple';
-import HR from '@/pages/HR';
-import Analytics from '@/pages/Analytics';
-import Settings from '@/pages/Settings';
-import Employees from '@/pages/Employees';
-import Timesheets from '@/pages/Timesheets';
-import Bonuses from '@/pages/Bonuses';
-import UserManagement from '@/pages/UserManagement';
-import TemplateEditor from '@/pages/TemplateEditor';
-import TemplateConstructor from '@/pages/TemplateConstructor';
-import CreateProjectFromTemplate from '@/pages/CreateProjectFromTemplate';
-import CreateProjectProcurement from '@/pages/CreateProjectProcurement';
-import ProjectApproval from '@/pages/ProjectApproval';
-import ProjectWorkspace from '@/pages/ProjectWorkspace';
-import SupabaseDiagnostics from '@/pages/SupabaseDiagnostics';
-import DatabaseTest from '@/pages/DatabaseTest';
-import TeamManagement from '@/pages/TeamManagement';
-import Tenders from '@/pages/Tenders';
-import Calendar from '@/pages/Calendar';
-import Tasks from '@/pages/Tasks';
-import Attendance from '@/pages/Attendance';
-import Notifications from '@/pages/Notifications';
-import SMTPSettings from '@/pages/SMTPSettings';
-import NotFound from '@/pages/NotFound';
+import { SidebarProvider } from '@/components/ui/sidebar';
+const Index = lazy(() => import('@/pages/Index'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Projects = lazy(() => import('@/pages/Projects-simple'));
+const HR = lazy(() => import('@/pages/HR'));
+const Analytics = lazy(() => import('@/pages/Analytics'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const Employees = lazy(() => import('@/pages/Employees'));
+const Timesheets = lazy(() => import('@/pages/Timesheets'));
+const Bonuses = lazy(() => import('@/pages/Bonuses'));
+const UserManagement = lazy(() => import('@/pages/UserManagement'));
+const TemplateEditor = lazy(() => import('@/pages/TemplateEditor'));
+const TemplateConstructor = lazy(() => import('@/pages/TemplateConstructor'));
+const CreateProjectFromTemplate = lazy(() => import('@/pages/CreateProjectFromTemplate'));
+const CreateProjectProcurement = lazy(() => import('@/pages/CreateProjectProcurement'));
+const ProjectApproval = lazy(() => import('@/pages/ProjectApproval'));
+const ProjectWorkspace = lazy(() => import('@/pages/ProjectWorkspace'));
+const SupabaseDiagnostics = lazy(() => import('@/pages/SupabaseDiagnostics'));
+const DatabaseTest = lazy(() => import('@/pages/DatabaseTest'));
+const TeamManagement = lazy(() => import('@/pages/TeamManagement'));
+const Tenders = lazy(() => import('@/pages/Tenders'));
+const Calendar = lazy(() => import('@/pages/Calendar'));
+const Tasks = lazy(() => import('@/pages/Tasks'));
+const Attendance = lazy(() => import('@/pages/Attendance'));
+const Notifications = lazy(() => import('@/pages/Notifications'));
+const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
+const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
+const NotFound = lazy(() => import('@/pages/NotFound'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,7 +46,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
+        <SidebarProvider>
+          <Suspense fallback={<div style={{padding:16}}>Загрузка...</div>}>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route
               path="/dashboard"
@@ -275,11 +280,23 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/msuk-compliance"
+              element={
+                <ProtectedRoute allowedRoles={['partner', 'deputy_director', 'ceo', 'admin']}>
+                  <Layout>
+                    <MSUKCompliance />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
             <Route path="/404" element={<NotFound />} />
             <Route path="*" element={<Navigate to="/404" replace />} />
-          </Routes>
-          <Toaster />
-        </BrowserRouter>
+            </Routes>
+            <Toaster />
+          </Suspense>
+        </SidebarProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }
