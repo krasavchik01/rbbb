@@ -17,7 +17,7 @@ interface Profile {
   user_id: string;
   display_name: string;
   email: string;
-  role: 'partner' | 'project_manager' | 'assistant' | 'tax_specialist' | 'designer' | 'it_auditor' | 'admin' | 'manager' | 'employee' | 'it_admin';
+  role: 'partner' | 'manager_1' | 'manager_2' | 'manager_3' | 'assistant' | 'tax_specialist' | 'designer' | 'it_auditor' | 'admin' | 'manager' | 'employee' | 'it_admin';
   department: string | null;
   phone: string | null;
   is_active: boolean;
@@ -29,7 +29,9 @@ const ROLES = [
   { value: 'admin', label: 'Администратор' },
   { value: 'partner', label: 'Партнёр' },
   { value: 'manager', label: 'Менеджер' },
-  { value: 'project_manager', label: 'Проект-менеджер' },
+  { value: 'manager_1', label: 'Менеджер 1' },
+  { value: 'manager_2', label: 'Менеджер 2' },
+  { value: 'manager_3', label: 'Менеджер 3' },
   { value: 'tax_specialist', label: 'Налоговый специалист' },
   { value: 'it_auditor', label: 'IT Аудитор' },
   { value: 'assistant', label: 'Ассистент' },
@@ -247,7 +249,9 @@ export default function UserManagement() {
       case 'partner':
         return 'default';
       case 'manager':
-      case 'project_manager':
+      case 'manager_1':
+      case 'manager_2':
+      case 'manager_3':
         return 'secondary';
       default:
         return 'outline';

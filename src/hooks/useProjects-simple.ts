@@ -21,7 +21,7 @@ export function useProjects() {
 
   const demoEmployees: Employee[] = [
     { id: '1', name: 'Иван Петров', email: 'ivan@rb.ru', role: 'partner', level: '3', created_at: '2024-01-01', updated_at: '2024-01-01' },
-    { id: '2', name: 'Мария Сидорова', email: 'maria@rb.ru', role: 'project_manager', level: '2', created_at: '2024-01-01', updated_at: '2024-01-01' },
+    { id: '2', name: 'Мария Сидорова', email: 'maria@rb.ru', role: 'manager_1', level: '2', created_at: '2024-01-01', updated_at: '2024-01-01' },
     { id: '3', name: 'Алексей Козлов', email: 'alex@rb.ru', role: 'assistant', level: '1', created_at: '2024-01-01', updated_at: '2024-01-01' },
     { id: '4', name: 'Елена Новикова', email: 'elena@rb.ru', role: 'tax_specialist', level: '2', created_at: '2024-01-01', updated_at: '2024-01-01' },
     { id: '5', name: 'Дмитрий Волков', email: 'dmitry@rb.ru', role: 'it_auditor', level: '2', created_at: '2024-01-01', updated_at: '2024-01-01' }

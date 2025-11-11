@@ -160,7 +160,7 @@ export const PERMISSIONS = {
   VIEW_PROFIT: ['ceo', 'admin'],
   
   // KPI
-  RATE_TEAM: ['project_manager', 'partner'],
+  RATE_TEAM: ['manager_1', 'manager_2', 'manager_3', 'partner'],
   RATE_MANAGER: ['partner'],
   VIEW_ALL_KPI: ['ceo', 'deputy_director', 'admin'],
   
@@ -171,7 +171,7 @@ export const PERMISSIONS = {
   
   // Документы
   UPLOAD_CONTRACT: ['procurement', 'admin'],
-  VIEW_CONTRACT: ['partner', 'project_manager', 'supervisor_3', 'supervisor_2', 'supervisor_1', 'tax_specialist_1', 'tax_specialist_2', 'assistant_3', 'assistant_2', 'assistant_1'],
+  VIEW_CONTRACT: ['partner', 'manager_1', 'manager_2', 'manager_3', 'supervisor_3', 'supervisor_2', 'supervisor_1', 'tax_specialist_1', 'tax_specialist_2', 'assistant_3', 'assistant_2', 'assistant_1'],
 };
 
 // Проверка разрешения

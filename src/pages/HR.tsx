@@ -1395,7 +1395,7 @@ export default function HR() {
                       <SelectValue placeholder="Партнёр, РП, Супервайзер, ..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {roles.filter(r => ['partner','project_manager','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
+                      {roles.filter(r => ['partner','manager_1','manager_2','manager_3','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
                         <SelectItem key={role.value} value={role.value}>
                           {role.label}
                         </SelectItem>

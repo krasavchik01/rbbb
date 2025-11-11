@@ -52,7 +52,7 @@ export function MethodologySelector({
     const roleMap: Record<string, string[]> = {
       assistant: ['assistant_1', 'assistant_2', 'assistant_3', 'assistant'],
       senior_auditor: ['supervisor_1', 'supervisor_2', 'supervisor_3', 'supervisor'],
-      manager: ['project_manager', 'manager', 'pm'],
+      manager: ['manager_1', 'manager_2', 'manager_3', 'manager', 'pm'],
       partner: ['partner']
     };
     
