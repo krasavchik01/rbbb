@@ -17,7 +17,9 @@ export function RoleBasedAccess({ children, allowedRoles, userRole, fallback = n
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'ceo': ['*'], // Полный доступ
   'partner': ['analytics', 'projects', 'employees', 'hr', 'dashboard'],
-  'project_manager': ['projects', 'employees', 'timesheets', 'dashboard'],
+  'manager_1': ['projects', 'employees', 'timesheets', 'dashboard'],
+  'manager_2': ['projects', 'employees', 'timesheets', 'dashboard'],
+  'manager_3': ['projects', 'employees', 'timesheets', 'dashboard'],
   'hr': ['employees', 'hr', 'analytics', 'dashboard'],
   'employee': ['dashboard', 'timesheets'],
   'it': ['projects', 'employees', 'dashboard'],

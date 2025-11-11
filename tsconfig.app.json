@@ -15,11 +15,17 @@
     "jsx": "react-jsx",
 
     /* Linting */
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitAny": false,
-    "noFallthroughCasesInSwitch": false,
+    "strict": false, // Постепенно включаем - сначала отдельные правила
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true, // Включаем для лучшей типизации
+    "noFallthroughCasesInSwitch": true,
+    "strictNullChecks": true, // Включаем для безопасности
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": false, // Оставляем false для React компонентов
+    "noImplicitThis": true,
+    "alwaysStrict": true,
 
     "baseUrl": ".",
     "paths": {

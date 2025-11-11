@@ -9,7 +9,9 @@ export type UserRole =
   | 'company_director'       // Директор компании (для HR, информационно)
   | 'procurement'            // Отдел закупок
   | 'partner'                // Партнер (руководитель проекта)
-  | 'project_manager'        // Руководитель проекта
+  | 'manager_1'             // Менеджер 1
+  | 'manager_2'             // Менеджер 2
+  | 'manager_3'             // Менеджер 3
   | 'supervisor_3'           // Супервайзер 3
   | 'supervisor_2'           // Супервайзер 2
   | 'supervisor_1'           // Супервайзер 1
@@ -30,7 +32,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   company_director: 'Директор компании',
   procurement: 'Отдел закупок',
   partner: 'Партнер',
-  project_manager: 'Руководитель проекта',
+  manager_1: 'Менеджер 1',
+  manager_2: 'Менеджер 2',
+  manager_3: 'Менеджер 3',
   supervisor_3: 'Супервайзер 3',
   supervisor_2: 'Супервайзер 2',
   supervisor_1: 'Супервайзер 1',
@@ -61,10 +65,22 @@ export const PROJECT_ROLES: ProjectRole[] = [
     description: 'Руководитель проекта, отвечает за планирование и результат'
   },
   {
-    role: 'project_manager',
-    label: 'Руководитель проекта',
-    bonusPercent: 24,
-    description: 'Координирует работу команды'
+    role: 'manager_1',
+    label: 'Менеджер 1',
+    bonusPercent: 10,
+    description: 'Старший менеджер проекта'
+  },
+  {
+    role: 'manager_2',
+    label: 'Менеджер 2',
+    bonusPercent: 8,
+    description: 'Средний менеджер проекта'
+  },
+  {
+    role: 'manager_3',
+    label: 'Менеджер 3',
+    bonusPercent: 6,
+    description: 'Младший менеджер проекта'
   },
   {
     role: 'supervisor_3',

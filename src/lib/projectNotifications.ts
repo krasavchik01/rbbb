@@ -2,7 +2,7 @@
  * Система уведомлений для полного жизненного цикла проекта
  */
 
-import { addNotification } from './notifications';
+import { addNotification, getNotifications } from './notifications';
 
 // ====================
 // ЭТАП 1: Создание проекта
@@ -42,13 +42,28 @@ export const notifyProjectApproved = (params: {
   partnerName: string;
   approverName: string;
 }) => {
-  return addNotification({
+  console.log(`📬 [notifyProjectApproved] Создание уведомления для партнера:`, {
+    partnerId: params.partnerId,
+    partnerName: params.partnerName,
+    projectName: params.projectName,
+    approverName: params.approverName
+  });
+  
+  const notification = addNotification({
     userId: params.partnerId,
-    title: '✅ Проект утверждён - назначьте PM',
+    title: '✅ Проект утверждён - назначьте менеджера',
     message: `${params.approverName} утвердил проект "${params.projectName}". Назначьте менеджера проекта.`,
     type: 'success',
     actionUrl: '/projects',
   });
+  
+  console.log(`✅ [notifyProjectApproved] Уведомление создано:`, notification);
+  
+  // Проверяем, что уведомление сохранилось
+  const savedNotifications = getNotifications(params.partnerId);
+  console.log(`📋 [notifyProjectApproved] Все уведомления партнера (${params.partnerId}):`, savedNotifications.length);
+  
+  return notification;
 };
 
 /**

@@ -191,7 +191,7 @@ export default function Dashboard() {
 
   const roleDistributionData = useMemo(() => Object.entries(employeeStats.byRole).map(([role, count]) => ({
     name: role === 'partner' ? 'Партнеры' : 
-          role === 'project_manager' ? 'РП' :
+          role === 'manager_1' || role === 'manager_2' || role === 'manager_3' ? 'Менеджеры' :
           role === 'manager' ? 'Менеджеры' :
           role === 'tax_specialist' ? 'Налоговики' :
           role === 'assistant' ? 'Ассистенты' :

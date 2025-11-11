@@ -82,7 +82,9 @@ export default function HR() {
   // РОЛИ ДЛЯ АУДИТОРСКОЙ КОМПАНИИ (СООТВЕТСТВУЮТ PROJECT_ROLES)
   const roles = [
     { value: 'partner', label: 'Партнер' },
-    { value: 'project_manager', label: 'Руководитель проекта' },
+    { value: 'manager_1', label: 'Менеджер 1' },
+    { value: 'manager_2', label: 'Менеджер 2' },
+    { value: 'manager_3', label: 'Менеджер 3' },
     { value: 'supervisor_3', label: 'Супервайзер 3' },
     { value: 'supervisor_2', label: 'Супервайзер 2' },
     { value: 'supervisor_1', label: 'Супервайзер 1' },
@@ -106,7 +108,7 @@ export default function HR() {
   // РОЛИ ДЛЯ РУКОВОДСТВА (ДОПОЛНИТЕЛЬНЫЕ)
   const leadershipRoles = [
     { value: 'partner', label: 'Генеральный директор' },
-    { value: 'project_manager', label: 'Заместитель директора' }
+    { value: 'deputy_director', label: 'Заместитель директора' }
   ];
 
   // МАППИНГ РУССКИХ НАЗВАНИЙ НА СУЩЕСТВУЮЩИЕ ENUM ЗНАЧЕНИЯ
@@ -115,15 +117,18 @@ export default function HR() {
     'Генеральный директор': 'partner',
     'Генеральный Директор': 'partner',
     'Ген. директор': 'partner',
-    'Заместитель директора': 'project_manager',
-    'Заместитель Директора': 'project_manager',
-    'Зам. директора': 'project_manager',
-    'Зам. Директора': 'project_manager',
+    'Заместитель директора': 'deputy_director',
+    'Заместитель Директора': 'deputy_director',
+    'Зам. директора': 'deputy_director',
+    'Зам. Директора': 'deputy_director',
     // Основные роли
     'Партнер': 'partner',
     'Партнёр': 'partner',
-    'Руководитель проекта': 'project_manager',
-    'РП': 'project_manager',
+    'Менеджер 1': 'manager_1',
+    'Менеджер 2': 'manager_2',
+    'Менеджер 3': 'manager_3',
+    'Руководитель проекта': 'manager_1',
+    'РП': 'manager_1',
     'Супервайзер 3': 'supervisor_3',
     'Супервайзер 2': 'supervisor_2',
     'Супервайзер 1': 'supervisor_1',
@@ -144,7 +149,7 @@ export default function HR() {
     'Ассистент 1 уровня': 'assistant_1',
     'ГПХ': 'contractor',
     // Дополнительные варианты
-    'Менеджер': 'project_manager',
+    'Менеджер': 'manager_1',
     'Админ': 'admin',
     'Сотрудник': 'contractor'
   };
@@ -193,6 +198,8 @@ export default function HR() {
         name: newEmployee.name,
         email: newEmployee.email,
         role: finalRole,
+        level: '1', // По умолчанию уровень 1
+        whatsapp: newEmployee.phone || '',
         department: newEmployee.category === 'auditors' ? 'Аудит' : (newEmployee.department || newEmployee.category),
         position: newEmployee.subcategory || newEmployee.position || '',
         phone: newEmployee.phone,
@@ -503,7 +510,7 @@ export default function HR() {
             
             // Если роль не определилась, но это не employee - используем employee как fallback
             // Это предотвратит ошибки при создании
-            const validRoles = ['partner', 'project_manager', 'supervisor_3', 'supervisor_2', 'supervisor_1', 
+            const validRoles = ['partner', 'manager_1', 'manager_2', 'manager_3', 'supervisor_3', 'supervisor_2', 'supervisor_1', 
                                'tax_specialist_1', 'tax_specialist_2', 'assistant_3', 'assistant_2', 'assistant_1',
                                'contractor', 'hr', 'accountant', 'admin', 'manager', 'employee', 'it_admin',
                                'assistant', 'tax_specialist', 'designer', 'it_auditor', 'ceo', 'deputy_director'];
@@ -525,6 +532,8 @@ export default function HR() {
               name: employeeName.trim(), // Используем найденное имя (обязательно обрезаем пробелы)
               email: employeeEmail.trim(),
               role: mappedRole,
+              level: '1', // По умолчанию уровень 1
+              whatsapp: (row['Телефон'] || row['Phone'] || row['phone'] || '').toString().trim(),
               position: (row['Должность'] || row['Position'] || row['position'] || '').toString().trim(),
               department: (row['Отдел'] || row['Department'] || row['department'] || '').toString().trim(),
               phone: (row['Телефон'] || row['Phone'] || row['phone'] || '').toString().trim(),
@@ -542,10 +551,10 @@ export default function HR() {
             // Если роль не определилась (осталась employee) - оставляем пустой для ручного выбора
             const finalRole = mappedRole !== 'employee' && mappedRole !== 'contractor' ? mappedRole : undefined;
             
-            results.push({
+            const result: typeof importResults[0] = {
               name: employeeName.trim(), // Сохраняем обрезанное имя
               email: employeeEmail.trim(),
-              status: 'success',
+              status: 'success' as const,
               message: 'Успешно добавлен',
               originalRole: finalRole, // Только если определилась
               correctedRole: mappedRole,
@@ -555,7 +564,8 @@ export default function HR() {
               editableDepartment: (row['Отдел'] || row['Department'] || row['department'] || '').toString().trim(),
               editableCustomRole: '',
               editableSubcategory: (row['Должность'] || row['Position'] || row['position'] || '').toString().trim()
-            });
+            };
+            results.push(result);
             
             successCount++;
           } catch (err: any) {
@@ -643,10 +653,13 @@ export default function HR() {
         name: employee.name,
         email: employee.email,
         role: correctedRole,
+        level: '1', // По умолчанию уровень 1
+        whatsapp: (employee as any).phone || '',
         position: '',
         department: '',
         phone: '',
-      }, tempPassword);
+        password: tempPassword
+      });
 
       // Отправляем email
       try {
@@ -829,7 +842,7 @@ export default function HR() {
                 {user?.role === 'ceo' ? 'CEO' : 
                  user?.role === 'deputy_director' ? 'Зам. директора' :
                  user?.role === 'partner' ? 'Партнёр' :
-                 user?.role === 'project_manager' ? 'PM' :
+                 user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3' ? 'Менеджер' :
                  user?.role === 'procurement' ? 'Закупки' :
                  user?.role === 'admin' ? 'Админ' : 'Пользователь'}
               </p>
@@ -1201,7 +1214,7 @@ export default function HR() {
                                     <SelectValue placeholder={result.editableRole ? undefined : "Выберите роль"} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {roles.filter(r => ['partner','project_manager','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
+                                    {roles.filter(r => ['partner','manager_1','manager_2','manager_3','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
                                       <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                                     ))}
                                   </SelectContent>

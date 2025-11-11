@@ -85,9 +85,9 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
       id: 'manager_1',
       email: 'manager@rbpartners.com',
       name: 'Петров П.П.',
-      role: 'project_manager',
+      role: 'manager_1',
       department: 'Проекты',
-      position: 'Руководитель проекта',
+      position: 'Менеджер 1',
     },
   },
   

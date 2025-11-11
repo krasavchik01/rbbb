@@ -61,7 +61,9 @@ export default function ProjectApproval() {
   const mapEmployeeRoleToProjectRole = (employeeRole: string): string | null => {
     const roleMap: Record<string, string> = {
       'partner': 'partner',
-      'project_manager': 'project_manager',
+      'manager_1': 'manager_1',
+      'manager_2': 'manager_2',
+      'manager_3': 'manager_3',
       'supervisor_3': 'supervisor_3',
       'supervisor_2': 'supervisor_2',
       'supervisor_1': 'supervisor_1',
@@ -283,13 +285,20 @@ export default function ProjectApproval() {
 
         // Определяем тип уведомления по роли
         if (member.role === 'partner') {
-          return notifyProjectApproved({
+          console.log(`📬 [ProjectApproval] Отправка уведомления партнеру:`, {
+            partnerId: member.userId,
+            partnerName: employee.name,
+            projectName: selectedProject.name
+          });
+          const notification = notifyProjectApproved({
             projectName: selectedProject.name,
             partnerId: member.userId,
             partnerName: employee.name,
             approverName: approverName
           });
-        } else if (member.role === 'project_manager') {
+          console.log(`✅ [ProjectApproval] Уведомление партнеру создано:`, notification);
+          return notification;
+        } else if (member.role === 'manager_1' || member.role === 'manager_2' || member.role === 'manager_3') {
           return notifyPMAssigned({
             projectName: selectedProject.name,
             pmId: member.userId,
