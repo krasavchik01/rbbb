@@ -217,3 +217,4 @@ UI: Shadcn/UI + Tailwind
 - Для рефакторинга: Sequential Thinking → Context7 (если нужно) → Реализация → Playwright
 - Для простых задач: Sequential Thinking → Реализация → Playwright
 
+
