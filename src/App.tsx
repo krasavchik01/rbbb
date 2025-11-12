@@ -32,6 +32,7 @@ const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
+const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -166,6 +167,16 @@ function App() {
                 <ProtectedRoute adminOnly>
                   <Layout>
                     <UserManagement />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/role-management"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout>
+                    <RoleManagement />
                   </Layout>
                 </ProtectedRoute>
               }

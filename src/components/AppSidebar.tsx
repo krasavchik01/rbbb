@@ -49,9 +49,9 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-  { 
-    title: "Дашборд", 
-    url: "/", 
+  {
+    title: "Дашборд",
+    url: "/dashboard",
     icon: LayoutDashboard,
     permission: PERMISSIONS.VIEW_DASHBOARD
   },
@@ -218,17 +218,17 @@ export function AppSidebar() {
     <Sidebar className={collapsed ? "w-16" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-sidebar border-r border-sidebar-border">
         {/* Logo */}
-        <div className="p-6 border-b border-glass-border">
+        <div className="p-4 md:p-6 border-b border-glass-border">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center">
-              <span className="text-lg font-bold text-primary-foreground">RB</span>
+              <span className="text-base md:text-lg font-bold text-primary-foreground">RB</span>
             </div>
             {!collapsed && (
-              <div>
-                <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              <div className="min-w-0">
+                <h1 className="text-base md:text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
                   RB Partners Suite
                 </h1>
-                <p className="text-xs text-muted-foreground">Group Management Platform</p>
+                <p className="text-xs text-muted-foreground truncate">Group Management Platform</p>
               </div>
             )}
           </div>
@@ -257,29 +257,29 @@ export function AppSidebar() {
                         to={item.url}
                         end
                         className={({ isActive }) =>
-                          `flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-300 ${
+                          `flex items-center space-x-2 md:space-x-3 px-2 md:px-3 py-2 rounded-lg transition-all duration-300 ${
                             isActive
                               ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
                               : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                           }`
                         }
                       >
-                        <div className="relative">
-                          <item.icon className="w-5 h-5" />
+                        <div className="relative flex-shrink-0">
+                          <item.icon className="w-4 h-4 md:w-5 md:h-5" />
                           {item.url === "/notifications" && unreadCount > 0 && (
-                            <Badge 
-                              variant="destructive" 
-                              className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
+                            <Badge
+                              variant="destructive"
+                              className="absolute -top-1 -right-1 md:-top-2 md:-right-2 h-4 w-4 md:h-5 md:w-5 flex items-center justify-center p-0 text-[10px] md:text-xs font-bold animate-pulse"
                             >
                               {unreadCount > 9 ? '9+' : unreadCount}
                             </Badge>
                           )}
                         </div>
                         {!collapsed && (
-                          <span className="font-medium flex-1">{item.title}</span>
+                          <span className="text-sm md:text-base font-medium flex-1 truncate">{item.title}</span>
                         )}
                         {!collapsed && item.url === "/notifications" && unreadCount > 0 && (
-                          <Badge variant="destructive" className="ml-auto">
+                          <Badge variant="destructive" className="ml-auto text-xs">
                             {unreadCount}
                           </Badge>
                         )}
@@ -293,20 +293,20 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* User Info & Logout */}
-        <div className="mt-auto p-4 border-t border-glass-border">
-          <div className="flex items-center justify-between">
+        <div className="mt-auto p-3 md:p-4 border-t border-glass-border">
+          <div className="flex items-center justify-between gap-2">
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                <p className="text-xs md:text-sm font-medium text-foreground truncate">{user.name}</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
             )}
             <button
               onClick={logout}
-              className="flex items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all duration-300"
+              className="flex items-center justify-center p-1.5 md:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all duration-300 flex-shrink-0"
               title="Выйти"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4 md:w-5 md:h-5" />
             </button>
           </div>
         </div>
