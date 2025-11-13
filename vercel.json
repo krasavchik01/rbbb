@@ -8,11 +8,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "functions": {
-    "api/**/*.mjs": {
-      "runtime": "nodejs20.x@latest",
-      "includeFiles": "api/**"
-    }
-  }
+  ]
 }
