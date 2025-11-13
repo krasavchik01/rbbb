@@ -260,19 +260,27 @@ export function MethodologySelector({
                                   <div className="flex items-center gap-3 flex-wrap">
                                     <Label className="text-sm font-medium">Сотрудник:</Label>
                                     <Select
-                                      value={assignment?.userId || ''}
-                                      onValueChange={(userId) => updateResponsible(key, assignment.role as any, userId)}
+                                      value={assignment?.userId || 'unassigned'}
+                                      onValueChange={(userId) => {
+                                        // Если выбрано "unassigned", убираем userId
+                                        const finalUserId = userId === 'unassigned' ? undefined : userId;
+                                        updateResponsible(key, assignment.role as any, finalUserId);
+                                      }}
                                     >
                                       <SelectTrigger className="w-[250px]">
                                         <SelectValue placeholder="Выберите сотрудника" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="">Не назначен</SelectItem>
-                                        {roleEmployees.map(emp => (
-                                          <SelectItem key={emp.id} value={emp.id}>
-                                            {emp.name} ({getRoleLabel(assignment.role)})
-                                          </SelectItem>
-                                        ))}
+                                        <SelectItem value="unassigned">Не назначен</SelectItem>
+                                        {roleEmployees.map(emp => {
+                                          // Убеждаемся что id не пустой
+                                          const empId = emp.id || emp.employeeId || `emp-${Math.random()}`;
+                                          return (
+                                            <SelectItem key={empId} value={empId}>
+                                              {emp.name || 'Без имени'} ({getRoleLabel(assignment.role)})
+                                            </SelectItem>
+                                          );
+                                        })}
                                       </SelectContent>
                                     </Select>
                                   </div>

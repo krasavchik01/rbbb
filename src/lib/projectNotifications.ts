@@ -51,8 +51,8 @@ export const notifyProjectApproved = (params: {
   
   const notification = addNotification({
     userId: params.partnerId,
-    title: '✅ Проект утверждён - назначьте менеджера',
-    message: `${params.approverName} утвердил проект "${params.projectName}". Назначьте менеджера проекта.`,
+    title: '✅ Проект утверждён - распределите задачи',
+    message: `${params.approverName} утвердил проект "${params.projectName}". Команда назначена. Откройте проект для распределения задач на основе процедур.`,
     type: 'success',
     actionUrl: '/projects',
   });
@@ -101,7 +101,7 @@ export const notifyPMAssigned = (params: {
   return addNotification({
     userId: params.pmId,
     title: '🎯 Вы назначены менеджером проекта',
-    message: `${params.partnerName} назначил вас PM на проект "${params.projectName}". Соберите команду!`,
+    message: `${params.partnerName} назначил вас PM на проект "${params.projectName}". Партнер распределит задачи на основе процедур, после чего вы получите уведомления о назначенных задачах.`,
     type: 'success',
     actionUrl: `/project/${params.projectId}`,
   });

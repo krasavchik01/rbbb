@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: 'html',
   
   use: {
-    baseURL: 'http://localhost:5173', // Vite dev server
+    baseURL: 'http://localhost:8080', // Используем порт 8080
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -30,9 +30,10 @@ export default defineConfig({
   ],
 
   webServer: process.env.SKIP_WEBSERVER ? undefined : {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: 'npm run dev -- --port 8080 --host',
+    url: 'http://localhost:8080',
     reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
   },
 });
 

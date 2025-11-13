@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,10 @@ import {
   Circle,
   ChevronRight,
   Save,
-  AlertCircle
+  AlertCircle,
+  Users,
+  Calendar,
+  DollarSign
 } from "lucide-react";
 import { useTemplates, useProjects } from "@/hooks/useDataStore";
 import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
@@ -32,15 +35,23 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { notifyTaskAssigned, notifyProjectClosed, notifyBonusesApproved } from "@/lib/projectNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { calculateProjectFinances } from "@/types/project-v3";
+import { TaskManager } from "@/components/tasks/TaskManager";
+import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
+import { Task, ChecklistItem } from "@/types/project";
+import { useMemo } from "react";
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { templates } = useTemplates();
-  const { projects } = useProjects();
+  const { projects, tasks: allTasks } = useProjects();
   const { employees } = useEmployees();
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Получаем проект из state (если передан при навигации)
+  const projectFromState = (location.state as any)?.project;
 
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
@@ -59,43 +70,134 @@ export default function ProjectWorkspace() {
   const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } = 
     useProjectDataSync(id || '');
 
+  // Фильтруем задачи для текущего проекта (всегда вызывается, до условных вычислений)
+  const projectTasks = useMemo(() => {
+    if (!id || !allTasks) return [];
+    return allTasks.filter((task: any) => 
+      task.project_id === id || 
+      task.project_id === project?.id ||
+      task.project_id === project?.notes?.id
+    );
+  }, [id, allTasks, project]);
+
+  // Группируем задачи по сотрудникам (всегда вызывается, до условных вычислений)
+  const tasksByEmployee = useMemo(() => {
+    const grouped: Record<string, Task[]> = {};
+    
+    projectTasks.forEach((task: any) => {
+      const assignees = task.assignees || [];
+      if (assignees.length === 0) {
+        // Задачи без назначенных
+        if (!grouped['unassigned']) {
+          grouped['unassigned'] = [];
+        }
+        grouped['unassigned'].push(task);
+      } else {
+        assignees.forEach((assigneeId: string) => {
+          if (!grouped[assigneeId]) {
+            grouped[assigneeId] = [];
+          }
+          grouped[assigneeId].push(task);
+        });
+      }
+    });
+    
+    return grouped;
+  }, [projectTasks]);
+
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
     if (!id) return;
 
-    const foundProject = projects.find(p => p.id === id);
-    if (!foundProject) {
-      navigate('/projects');
-      return;
-    }
-
-    setProject(foundProject);
-
-    // Загружаем данные с автоматической синхронизацией
-    loadProjectData().then(data => {
-      if (data) {
-        setProjectData(data);
-
-        // Находим шаблон
-        const foundTemplate = templates.find(t => t.id === data.templateId);
-        if (foundTemplate) {
-          setTemplate(foundTemplate);
-        } else {
-          // Если шаблон не найден, но проект аудиторский - используем методологию Russell Bedford
-          const projectType = foundProject.type || foundProject.notes?.type;
-          if (projectType === 'audit') {
+    // ПРИОРИТЕТ 1: Используем проект из state (если передан при навигации)
+    if (projectFromState) {
+      const stateProjectId = projectFromState.id || projectFromState.notes?.id;
+      if (stateProjectId === id || stateProjectId?.includes(id)) {
+        console.log('✅ [ProjectWorkspace] Используем проект из state:', projectFromState.name || projectFromState.id);
+        setProject(projectFromState);
+        
+        // Загружаем данные проекта
+        loadProjectData().then(data => {
+          if (data) {
+            setProjectData(data);
+            const foundTemplate = templates.find(t => t.id === data.templateId);
+            if (foundTemplate) {
+              setTemplate(foundTemplate);
+            }
+          }
+          // Проверяем тип проекта для автоматического выбора шаблона
+          const projectType = projectFromState.type || projectFromState.notes?.type;
+          if (projectType === 'audit' || projectFromState.name?.toLowerCase().includes('аудит')) {
             setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
           }
+        });
+        return;
+      }
+    }
+
+    // ПРИОРИТЕТ 2: Ищем проект в списке проектов
+    const foundProject = projects.find(p => {
+      const projectId = p.id || p.notes?.id || '';
+      const notesId = p.notes?.id || '';
+      return (
+        projectId === id ||
+        notesId === id ||
+        (typeof projectId === 'string' && projectId.includes(id)) ||
+        (typeof notesId === 'string' && notesId.includes(id))
+      );
+    });
+    
+    // Если проект найден и еще не установлен, устанавливаем его
+    if (foundProject) {
+      // Если проект уже установлен и это тот же проект, не обновляем
+      if (project?.id === foundProject.id || project?.notes?.id === foundProject.notes?.id) {
+        return;
+      }
+
+      console.log('✅ [ProjectWorkspace] Проект найден в списке:', foundProject.name || foundProject.id);
+      setProject(foundProject);
+
+      // Загружаем данные с автоматической синхронизацией
+      loadProjectData().then(data => {
+        if (data) {
+          setProjectData(data);
+          const foundTemplate = templates.find(t => t.id === data.templateId);
+          if (foundTemplate) {
+            setTemplate(foundTemplate);
+          }
         }
-      } else {
-        // Если данных нет, но проект есть - проверяем тип
+        // Проверяем тип проекта
         const projectType = foundProject.type || foundProject.notes?.type;
-        if (projectType === 'audit') {
+        if (projectType === 'audit' || foundProject.name?.toLowerCase().includes('аудит')) {
           setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
         }
-      }
-    });
-  }, [id, projects, templates, loadProjectData]);
+      });
+    } else if (projects.length > 0) {
+      // Проекты загружены, но нужный проект не найден - пробуем загрузить напрямую из Supabase
+      console.warn('⚠️ [ProjectWorkspace] Проект не найден в списке, пробуем загрузить напрямую:', id);
+      supabaseDataStore.getProjects().then(allProjects => {
+        const directProject = allProjects.find(p => {
+          const projectId = p.id || p.notes?.id || '';
+          return projectId === id || (typeof projectId === 'string' && projectId.includes(id));
+        });
+        if (directProject) {
+          console.log('✅ [ProjectWorkspace] Проект найден напрямую из Supabase:', directProject.name || directProject.id);
+          setProject(directProject);
+          loadProjectData().then(data => {
+            if (data) setProjectData(data);
+            const projectType = directProject.type || directProject.notes?.type;
+            if (projectType === 'audit' || directProject.name?.toLowerCase().includes('аудит')) {
+              setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
+            }
+          });
+        } else {
+          console.error('❌ [ProjectWorkspace] Проект не найден, перенаправление...');
+          setTimeout(() => navigate('/projects'), 1000);
+        }
+      });
+    }
+    // Если projects.length === 0, просто ждем следующего рендера (проекты еще загружаются)
+  }, [id, projects, templates, loadProjectData, projectFromState, project]);
 
   const saveProjectDataLocal = (data: ProjectData) => {
     setProjectData(data);
@@ -284,23 +386,7 @@ export default function ProjectWorkspace() {
     }
   };
 
-  // Отображаем только выбранные этапы и процедуры
-  const displayStages = template ? (projectData?.methodology ? 
-    template.stages
-      .filter(stage => 
-        projectData.methodology.stages.some((ms: any) => ms.stageId === stage.id)
-      )
-      .map(stage => {
-        const methodologyStage = projectData.methodology.stages.find((ms: any) => ms.stageId === stage.id);
-        return {
-          ...stage,
-          elements: stage.elements.filter(el =>
-            methodologyStage?.elements.some((me: any) => me.elementId === el.id)
-          )
-        };
-      })
-    : template.stages
-  ) : [];
+  // displayStages определяется ниже после activeTemplate
 
   const renderElementInput = (stageId: string, element: ProcedureElement) => {
     const elementData = projectData?.stagesData[stageId]?.[element.id];
@@ -514,23 +600,38 @@ export default function ProjectWorkspace() {
     );
   }
 
-  // Если нет template, но проект аудиторский - используем методологию
-  const activeTemplate = template || (project.type === 'audit' || project.notes?.type === 'audit' ? RUSSELL_BEDFORD_AUDIT_METHODOLOGY : null);
+  // Автоматически определяем шаблон: если проект аудиторский - используем методологию Russell Bedford
+  const activeTemplate = template || (project?.type === 'audit' || project?.notes?.type === 'audit' || 
+    project?.contract?.subject?.toLowerCase().includes('аудит') || 
+    project?.name?.toLowerCase().includes('аудит') ? RUSSELL_BEDFORD_AUDIT_METHODOLOGY : null);
   
-  if (!activeTemplate) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-lg">Шаблон проекта не найден</div>
-          <Button onClick={() => navigate('/projects')} className="mt-4">
-            Вернуться к проектам
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // Если шаблон все еще не найден, но есть проект - показываем карточку без шаблона
+  // (можно работать с задачами и файлами)
 
-  // Используем displayStages для навигации
+  // Используем displayStages для навигации (только если есть шаблон)
+  const displayStages = activeTemplate ? (projectData?.methodology ? 
+    activeTemplate.stages
+      .filter(stage => 
+        projectData.methodology.stages.some((ms: any) => ms.stageId === stage.id)
+      )
+      .map(stage => {
+        const stageData = projectData.methodology.stages.find((ms: any) => ms.stageId === stage.id);
+        const procedures = projectData.methodology.selectedProcedures || [];
+        return {
+          ...stage,
+          elements: stage.elements
+            .filter(el => procedures.some((p: any) => p.elementId === el.id && p.stageId === stage.id))
+            .map(el => {
+              const procedure = procedures.find((p: any) => p.elementId === el.id && p.stageId === stage.id);
+              return {
+                ...el,
+                responsibleRole: procedure?.responsibleRole,
+                responsibleUserId: procedure?.responsibleUserId
+              };
+            })
+        };
+      }) : activeTemplate.stages) : [];
+
   const currentStage = displayStages[currentStageIndex] || displayStages[0];
   const stageProgress = currentStage ? 
     (Object.values((projectData?.stagesData[currentStage.id] || {})).filter((e: any) => e.completed).length / currentStage.elements.length) * 100 
@@ -546,7 +647,10 @@ export default function ProjectWorkspace() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">{project.name || project.client?.name || 'Проект'}</h1>
-            <p className="text-sm text-muted-foreground">{activeTemplate?.name || 'Проект'}</p>
+            <p className="text-sm text-muted-foreground">
+              {activeTemplate?.name || project.contract?.subject || 'Проект'}
+              {projectTasks.length > 0 && ` • ${projectTasks.length} задач`}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -566,37 +670,193 @@ export default function ProjectWorkspace() {
               💾 Только локально
             </Badge>
           )}
-          <Badge className="bg-gradient-to-r from-blue-500 to-blue-700 text-lg px-4 py-2">
-            {projectData.completionStatus.percentage}% выполнено
-          </Badge>
+          {projectData && projectData.completionStatus && (
+            <Badge className="bg-gradient-to-r from-blue-500 to-blue-700 text-lg px-4 py-2">
+              {projectData.completionStatus.percentage || 0}% выполнено
+            </Badge>
+          )}
         </div>
       </div>
 
-      {/* Общий прогресс */}
-      {projectData && (
+      {/* Общий прогресс (только если есть шаблон) */}
+      {projectData && projectData.completionStatus && activeTemplate && (
         <Card className="p-6">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Общий прогресс</span>
               <span className="text-sm text-muted-foreground">
-                {projectData.completionStatus.completedElements} из {projectData.completionStatus.totalElements} выполнено
+                {projectData.completionStatus.completedElements || 0} из {projectData.completionStatus.totalElements || 0} выполнено
               </span>
             </div>
-            <Progress value={projectData.completionStatus.percentage} className="h-3" />
+            <Progress value={projectData.completionStatus.percentage || 0} className="h-3" />
+          </div>
+        </Card>
+      )}
+      
+      {/* Статистика задач (если нет шаблона, но есть задачи) */}
+      {!activeTemplate && projectTasks.length > 0 && (
+        <Card className="p-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Задачи проекта</span>
+              <span className="text-sm text-muted-foreground">
+                {projectTasks.filter((t: any) => t.status === 'done').length} из {projectTasks.length} выполнено
+              </span>
+            </div>
+            <Progress 
+              value={projectTasks.length > 0 ? 
+                (projectTasks.filter((t: any) => t.status === 'done').length / projectTasks.length) * 100 : 0} 
+              className="h-3" 
+            />
           </div>
         </Card>
       )}
 
-      {/* Вкладки для партнёра (Планирование) и обычных пользователей (Рабочие процедуры) */}
-      <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "procedures"} className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2">
+      {/* Информационная панель для партнера */}
+      {isPartner && project && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Команда проекта */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Команда проекта</h3>
+            </div>
+            <div className="space-y-2">
+              {(project.team || project.notes?.team || []).map((member: any, index: number) => {
+                const employee = employees.find((e: any) => e.id === (member.userId || member.id || member.employeeId));
+                const roleLabel = member.role === 'partner' ? 'Партнер' :
+                                 member.role === 'manager_1' ? 'Менеджер 1' :
+                                 member.role === 'manager_2' ? 'Менеджер 2' :
+                                 member.role === 'manager_3' ? 'Менеджер 3' :
+                                 member.role || 'Участник';
+                return (
+                  <div key={index} className="flex items-center justify-between p-2 bg-secondary/50 rounded">
+                    <span className="text-sm font-medium">{employee?.name || member.userName || 'Неизвестный'}</span>
+                    <Badge variant="outline" className="text-xs">{roleLabel}</Badge>
+                  </div>
+                );
+              })}
+              {(!project.team || project.team.length === 0) && (
+                <p className="text-sm text-muted-foreground">Команда не назначена</p>
+              )}
+            </div>
+          </Card>
+
+          {/* Сроки и статус */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Сроки и статус</h3>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Дедлайн:</span>
+                <p className="font-medium">
+                  {project.contract?.serviceEndDate || project.deadline || project.contract?.date 
+                    ? new Date(project.contract?.serviceEndDate || project.deadline || project.contract?.date).toLocaleDateString('ru-RU')
+                    : 'Не указан'}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Статус:</span>
+                <p className="font-medium">
+                  {project.status === 'approved' ? 'Утвержден' :
+                   project.status === 'in_progress' ? 'В работе' :
+                   project.status === 'completed' ? 'Завершен' :
+                   project.notes?.status === 'approved' ? 'Утвержден' :
+                   project.notes?.status === 'in_progress' ? 'В работе' :
+                   project.notes?.status === 'completed' ? 'Завершен' :
+                   'Неизвестно'}
+                </p>
+              </div>
+              {project.approvedAt && (
+                <div>
+                  <span className="text-muted-foreground">Утвержден:</span>
+                  <p className="font-medium text-xs">
+                    {new Date(project.approvedAt).toLocaleDateString('ru-RU')}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Финансовая информация (если разрешено) */}
+          {(project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || '')) || 
+           !project.financialVisibility || 
+           (project.finances && isPartner) ? (
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">Финансы</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                {project.finances?.amountWithoutVAT && (
+                  <div>
+                    <span className="text-muted-foreground">Сумма без НДС:</span>
+                    <p className="font-medium">
+                      {Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU')} ₸
+                    </p>
+                  </div>
+                )}
+                {project.finances?.bonusBase && (
+                  <div>
+                    <span className="text-muted-foreground">База бонусов:</span>
+                    <p className="font-medium">
+                      {Number(project.finances.bonusBase).toLocaleString('ru-RU')} ₸
+                    </p>
+                  </div>
+                )}
+                {project.finances?.totalBonusAmount && (
+                  <div>
+                    <span className="text-muted-foreground">Общая сумма бонусов:</span>
+                    <p className="font-medium text-green-600">
+                      {Number(project.finances.totalBonusAmount).toLocaleString('ru-RU')} ₸
+                    </p>
+                  </div>
+                )}
+                {project.finances?.grossProfit && (
+                  <div>
+                    <span className="text-muted-foreground">Валовая прибыль:</span>
+                    <p className="font-medium text-blue-600">
+                      {Number(project.finances.grossProfit).toLocaleString('ru-RU')} ₸
+                    </p>
+                  </div>
+                )}
+                {(!project.finances || Object.keys(project.finances).length === 0) && (
+                  <p className="text-muted-foreground">Финансовая информация не доступна</p>
+                )}
+              </div>
+            </Card>
+          ) : (
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign className="w-5 h-5 text-muted-foreground" />
+                <h3 className="font-semibold text-muted-foreground">Финансы</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">Финансовая информация скрыта</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Вкладки: Планирование (для партнера), Задачи, Рабочие процедуры, Файлы */}
+      <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "tasks"} className="w-full">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-4 gap-2">
           {isPartner && (
             <TabsTrigger value="planning">
               📋 Планирование
             </TabsTrigger>
           )}
-          <TabsTrigger value="procedures">
-            ✅ Рабочие процедуры
+          <TabsTrigger value="tasks">
+            ✅ Задачи
+          </TabsTrigger>
+          {activeTemplate && (
+            <TabsTrigger value="procedures">
+              🔧 Рабочие процедуры
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="files">
+            📁 Файлы
           </TabsTrigger>
         </TabsList>
 
@@ -692,8 +952,123 @@ export default function ProjectWorkspace() {
           </TabsContent>
         )}
 
-        {/* Вкладка рабочих процедур */}
-        <TabsContent value="procedures" className="space-y-4 mt-4">
+        {/* Вкладка задач */}
+        <TabsContent value="tasks" className="space-y-4 mt-4">
+          <Card className="p-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Задачи проекта</h3>
+              <p className="text-sm text-muted-foreground">
+                Все задачи проекта, сгруппированные по ответственным сотрудникам
+              </p>
+            </div>
+            
+            {projectTasks.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">Задач пока нет</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Задачи по сотрудникам */}
+                {Object.entries(tasksByEmployee).map(([employeeId, tasks]) => {
+                  const employee = employeeId === 'unassigned' ? null : employees.find((e: any) => e.id === employeeId);
+                  const employeeName = employee ? employee.name : 'Не назначены';
+                  
+                  return (
+                    <Card key={employeeId} className="p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Users className="w-5 h-5 text-primary" />
+                        <h4 className="font-semibold">{employeeName}</h4>
+                        <Badge variant="outline">{tasks.length} задач</Badge>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {tasks.map((task: any) => {
+                          const completedChecklist = (task.checklist || []).filter((item: ChecklistItem) => item.done).length;
+                          const totalChecklist = (task.checklist || []).length;
+                          const checklistProgress = totalChecklist > 0 ? (completedChecklist / totalChecklist) * 100 : 0;
+                          
+                          return (
+                            <Card key={task.id} className="p-4 border-l-4 border-l-primary">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h5 className="font-medium">{task.title}</h5>
+                                    <Badge variant={
+                                      task.priority === 'high' ? 'destructive' :
+                                      task.priority === 'med' ? 'default' : 'secondary'
+                                    }>
+                                      {task.priority === 'high' ? 'Высокий' :
+                                       task.priority === 'med' ? 'Средний' : 'Низкий'}
+                                    </Badge>
+                                    <Badge variant={
+                                      task.status === 'done' ? 'default' :
+                                      task.status === 'in_progress' ? 'secondary' : 'outline'
+                                    }>
+                                      {task.status === 'done' ? 'Выполнено' :
+                                       task.status === 'in_progress' ? 'В работе' : 'К выполнению'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  {task.description && (
+                                    <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
+                                  )}
+                                  
+                                  {/* Чек-лист */}
+                                  {task.checklist && task.checklist.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                        <span>Чек-лист: {completedChecklist}/{totalChecklist}</span>
+                                        <span>{Math.round(checklistProgress)}%</span>
+                                      </div>
+                                      <Progress value={checklistProgress} className="h-1" />
+                                      <div className="space-y-1">
+                                        {task.checklist.map((item: ChecklistItem, idx: number) => (
+                                          <div key={idx} className="flex items-center gap-2 text-sm">
+                                            {item.done ? (
+                                              <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                            ) : (
+                                              <Circle className="w-4 h-4 text-muted-foreground" />
+                                            )}
+                                            <span className={item.done ? 'line-through text-muted-foreground' : ''}>
+                                              {item.item}
+                                            </span>
+                                            {item.required && (
+                                              <Badge variant="outline" className="text-xs">Обязательно</Badge>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Время */}
+                                  {(task.estimate_h || task.spent_h) && (
+                                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                                      {task.estimate_h && (
+                                        <span>Оценка: {task.estimate_h}ч</span>
+                                      )}
+                                      {task.spent_h > 0 && (
+                                        <span>Потрачено: {task.spent_h}ч</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* Вкладка рабочих процедур (только если есть шаблон) */}
+        {activeTemplate && (
+          <TabsContent value="procedures" className="space-y-4 mt-4">
           {/* Навигация по этапам */}
           <div className="flex gap-2 overflow-x-auto pb-2">
             {displayStages.map((stage, index) => {
@@ -720,6 +1095,18 @@ export default function ProjectWorkspace() {
               );
             })}
           </div>
+        </TabsContent>
+        )}
+
+        {/* Вкладка файлов */}
+        <TabsContent value="files" className="space-y-4 mt-4">
+          <ProjectFileManager
+            projectId={project?.id || id || ''}
+            uploadedBy={user?.id || ''}
+            onFilesChange={(files) => {
+              // Можно обновить состояние если нужно
+            }}
+          />
         </TabsContent>
       </Tabs>
 

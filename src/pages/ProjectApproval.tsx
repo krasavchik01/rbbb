@@ -28,6 +28,7 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
 import { Contractor } from "@/types/project-v3";
 import { notifyProjectApproved, notifyProjectRejected, notifyPMAssigned, notifyTeamMemberAdded } from "@/lib/projectNotifications";
+import { getNotifications } from "@/lib/notifications";
 import { useEmployees } from "@/hooks/useSupabaseData";
 
 export default function ProjectApproval() {
@@ -306,7 +307,15 @@ export default function ProjectApproval() {
 
       // Отправляем уведомления всем членам команды параллельно
       const approverName = user?.name || 'Зам. директора';
-      const notificationPromises = updatedProject.team.map(member => {
+      console.log(`📬 [ProjectApproval] Начинаем отправку уведомлений для команды из ${updatedProject.team.length} участников:`, updatedProject.team);
+      
+      const notificationPromises = updatedProject.team.map((member, index) => {
+        console.log(`📬 [ProjectApproval] Обработка участника ${index + 1}/${updatedProject.team.length}:`, {
+          userId: member.userId,
+          role: member.role,
+          userName: member.userName
+        });
+        
         const employee = availableEmployees.find(e => e.id === member.userId);
         if (!employee) {
           console.warn(`⚠️ [ProjectApproval] Сотрудник ${member.userId} не найден для уведомления`);
@@ -329,15 +338,44 @@ export default function ProjectApproval() {
           console.log(`✅ [ProjectApproval] Уведомление партнеру создано:`, notification);
           return notification;
         } else if (member.role === 'manager_1' || member.role === 'manager_2' || member.role === 'manager_3') {
-          return notifyPMAssigned({
+          console.log(`📬 [ProjectApproval] Отправка уведомления PM:`, {
+            pmId: member.userId,
+            pmName: employee.name,
+            projectName: selectedProject.name
+          });
+          const notification = notifyPMAssigned({
             projectName: selectedProject.name,
             pmId: member.userId,
             pmName: employee.name,
             partnerName: approverName,
             projectId: selectedProject.id
           });
+          console.log(`✅ [ProjectApproval] Уведомление PM создано:`, notification);
+          
+          // Дополнительное уведомление менеджеру о необходимости распределить задачи
+          const partnerMember = updatedProject.team.find(m => m.role === 'partner');
+          if (partnerMember) {
+            const partnerEmployee = availableEmployees.find(e => e.id === partnerMember.userId);
+            const distributeNotification = notifyTeamMemberAdded({
+              projectName: selectedProject.name,
+              memberId: member.userId,
+              memberName: employee.name,
+              role: 'Менеджер проекта',
+              assignerName: partnerEmployee?.name || 'Партнер',
+              projectId: selectedProject.id
+            });
+            console.log(`✅ [ProjectApproval] Дополнительное уведомление менеджеру о распределении задач:`, distributeNotification);
+          }
+          
+          return notification;
         } else {
-          return notifyTeamMemberAdded({
+          console.log(`📬 [ProjectApproval] Отправка уведомления члену команды:`, {
+            memberId: member.userId,
+            memberName: employee.name,
+            role: member.role,
+            projectName: selectedProject.name
+          });
+          const notification = notifyTeamMemberAdded({
             projectName: selectedProject.name,
             memberId: member.userId,
             memberName: employee.name,
@@ -345,13 +383,21 @@ export default function ProjectApproval() {
             assignerName: approverName,
             projectId: selectedProject.id
           });
+          console.log(`✅ [ProjectApproval] Уведомление члену команды создано:`, notification);
+          return notification;
         }
       });
 
       // Отправляем все уведомления параллельно
       try {
-        await Promise.all(notificationPromises.filter(Boolean));
-        console.log(`✅ [ProjectApproval] Уведомления отправлены всем ${updatedProject.team.length} участникам проекта`);
+        const results = await Promise.all(notificationPromises.filter(Boolean));
+        console.log(`✅ [ProjectApproval] Уведомления отправлены всем ${updatedProject.team.length} участникам проекта. Результаты:`, results);
+        
+        // Проверяем, что уведомления действительно сохранились
+        updatedProject.team.forEach(member => {
+          const savedNotifications = getNotifications(member.userId);
+          console.log(`📋 [ProjectApproval] Уведомления для ${member.userName} (${member.userId}):`, savedNotifications.length, 'шт.');
+        });
       } catch (error) {
         console.error('❌ [ProjectApproval] Ошибка при отправке уведомлений:', error);
         // Не блокируем процесс утверждения, если уведомления не отправились

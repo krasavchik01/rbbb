@@ -727,6 +727,21 @@ export default function Projects() {
       return true;
     });
     
+    // ФИЛЬТРАЦИЯ ПО РОЛИ: Партнер видит только свои проекты
+    if (user && user.role === 'partner') {
+      filtered = filtered.filter(project => {
+        // Проверяем, есть ли партнер в команде проекта
+        const team = project.team || project.notes?.team || [];
+        const isPartnerInTeam = team.some((member: any) => {
+          const memberId = member.userId || member.id || member.employeeId;
+          const memberRole = member.role || member.role_on_project;
+          return memberId === user.id && memberRole === 'partner';
+        });
+        return isPartnerInTeam;
+      });
+      console.log(`🔍 [Projects] Фильтрация для партнера ${user.id}: показано ${filtered.length} из ${uniqueProjects.length} проектов`);
+    }
+    
     // 1. Поиск по тексту (существующий)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -1058,74 +1073,82 @@ export default function Projects() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Проекты</h1>
-          <p className="text-muted-foreground">Управление проектами и задачами</p>
+          <p className="text-muted-foreground">
+            {user?.role === 'partner' ? 'Мои проекты' : 
+             user?.role === 'procurement' ? 'Управление проектами' :
+             'Проекты'}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportProjects}>
-            <Download className="w-4 h-4 mr-2" />
-            Экспорт в Excel
-          </Button>
-          <Button variant="outline" onClick={handleDownloadTemplate}>
-            <FileDown className="w-4 h-4 mr-2" />
-            Шаблон
-          </Button>
-          <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Upload className="w-4 h-4 mr-2" />
-                Импорт из Excel
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Импорт проектов из Excel</DialogTitle>
-                <DialogDescription>
-                  Выберите файл Excel для импорта проектов. Формат должен соответствовать шаблону.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="import-file">Файл Excel</Label>
-                  <Input
-                    id="import-file"
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        handleImportFile(file);
-                      }
-                    }}
-                    disabled={isImporting}
-                  />
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  <p>• Поддерживаются форматы .xlsx и .xls</p>
-                  <p>• Используйте шаблон для правильного формата</p>
-                  <p>• Обязательные поля: Наименование (или Клиент), Номер договора (или Договор №)</p>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsImportDialogOpen(false)} disabled={isImporting}>
-                  Отмена
+        {/* Кнопки управления - только для CEO, deputy_director и procurement */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'procurement') && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExportProjects}>
+              <Download className="w-4 h-4 mr-2" />
+              Экспорт в Excel
+            </Button>
+            <Button variant="outline" onClick={handleDownloadTemplate}>
+              <FileDown className="w-4 h-4 mr-2" />
+              Шаблон
+            </Button>
+            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Импорт из Excel
                 </Button>
-                {isImporting && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-                    Импорт...
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>Импорт проектов из Excel</DialogTitle>
+                  <DialogDescription>
+                    Выберите файл Excel для импорта проектов. Формат должен соответствовать шаблону.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="import-file">Файл Excel</Label>
+                    <Input
+                      id="import-file"
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleImportFile(file);
+                        }
+                      }}
+                      disabled={isImporting}
+                    />
                   </div>
-                )}
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="btn-gradient">
-                <Plus className="w-4 h-4 mr-2" />
-                Создать проект
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+                  <div className="text-sm text-muted-foreground">
+                    <p>• Поддерживаются форматы .xlsx и .xls</p>
+                    <p>• Используйте шаблон для правильного формата</p>
+                    <p>• Обязательные поля: Наименование (или Клиент), Номер договора (или Договор №)</p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsImportDialogOpen(false)} disabled={isImporting}>
+                    Отмена
+                  </Button>
+                  {isImporting && (
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                      Импорт...
+                    </div>
+                  )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            {/* Кнопка создания проекта - только для procurement */}
+            {user?.role === 'procurement' && (
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="btn-gradient">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Создать проект
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Создать новый проект</DialogTitle>
             </DialogHeader>
@@ -1226,8 +1249,10 @@ export default function Projects() {
               </Button>
             </div>
           </DialogContent>
-          </Dialog>
-        </div>
+              </Dialog>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Современная панель фильтров */}
@@ -1766,12 +1791,21 @@ export default function Projects() {
                           </td>
                         )}
                         <td className="px-3 py-3">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded flex items-center justify-center text-xs">
+                          <div 
+                            className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors group"
+                            onClick={() => {
+                              const projectId = project.id || project.notes?.id;
+                              if (projectId) {
+                                navigate(`/project/${projectId}`, { state: { project } });
+                              }
+                            }}
+                            title="Открыть карточку проекта"
+                          >
+                            <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
                               📄
                             </div>
-                            <div>
-                              <div className="font-medium text-sm">{project.name}</div>
+                            <div className="flex-1">
+                              <div className="font-medium text-sm group-hover:underline">{project.name}</div>
                               <div className="text-xs text-muted-foreground">#{project.id}</div>
                             </div>
                           </div>

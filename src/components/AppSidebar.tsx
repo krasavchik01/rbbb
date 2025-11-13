@@ -180,8 +180,8 @@ const menuItems: MenuItem[] = [
   { 
     title: "Настройки", 
     url: "/settings", 
-    icon: Settings
-    // Нет ограничений - доступно всем
+    icon: Settings,
+    excludeRoles: ['ceo', 'deputy_director'] // Директорам не нужны настройки
   },
 ];
 

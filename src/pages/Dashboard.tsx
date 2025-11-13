@@ -102,25 +102,71 @@ export default function Dashboard() {
     return Number(value);
   };
 
-  // Статистика проектов по реальным данным
+  // Фильтрация проектов по роли пользователя
+  const userProjects = useMemo(() => {
+    if (!user) return [];
+    
+    // CEO и deputy_director видят все проекты
+    if (user.role === 'ceo' || user.role === 'deputy_director') {
+      return projects;
+    }
+    
+    // Партнер видит только свои проекты
+    if (user.role === 'partner') {
+      return projects.filter((p: any) => {
+        const team = p.team || p.notes?.team || [];
+        return team.some((member: any) => {
+          const memberId = member.userId || member.id || member.employeeId;
+          const memberRole = member.role || member.role_on_project;
+          return memberId === user.id && memberRole === 'partner';
+        });
+      });
+    }
+    
+    // Менеджеры видят проекты где они в команде
+    if (user.role === 'manager_1' || user.role === 'manager_2' || user.role === 'manager_3') {
+      return projects.filter((p: any) => {
+        const team = p.team || p.notes?.team || [];
+        return team.some((member: any) => {
+          const memberId = member.userId || member.id || member.employeeId;
+          return memberId === user.id;
+        });
+      });
+    }
+    
+    // Остальные сотрудники видят проекты где они в команде
+    return projects.filter((p: any) => {
+      const team = p.team || p.notes?.team || [];
+      return team.some((member: any) => {
+        const memberId = member.userId || member.id || member.employeeId;
+        return memberId === user.id;
+      });
+    });
+  }, [projects, user]);
+
+  // Статистика проектов по реальным данным (только для пользователя)
   const projectStats = useMemo(() => {
-    const total = projects.length;
+    const total = userProjects.length;
     
-    // Проекты ожидающие утверждения партнером
-    const pendingPartnerApproval = projects.filter((p: any) => {
-      const notesStatus = p.notes?.status;
-      return notesStatus === 'new' || notesStatus === 'pending_approval';
-    }).length;
+    // Проекты ожидающие утверждения партнером (только для CEO/deputy)
+    const pendingPartnerApproval = (user?.role === 'ceo' || user?.role === 'deputy_director') 
+      ? projects.filter((p: any) => {
+          const notesStatus = p.notes?.status;
+          return notesStatus === 'new' || notesStatus === 'pending_approval';
+        }).length
+      : 0;
     
-    // Проекты ожидающие распределения команды
-    const awaitingTeam = projects.filter((p: any) => {
-      const notesStatus = p.notes?.status;
-      return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
-              (!p.team || p.team.length === 0);
-    }).length;
+    // Проекты ожидающие распределения команды (только для CEO/deputy)
+    const awaitingTeam = (user?.role === 'ceo' || user?.role === 'deputy_director')
+      ? projects.filter((p: any) => {
+          const notesStatus = p.notes?.status;
+          return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
+                  (!p.team || p.team.length === 0);
+        }).length
+      : 0;
     
     // Активные проекты (в работе) - ИСКЛЮЧАЕМ проекты на утверждении
-    const active = projects.filter((p: any) => {
+    const active = userProjects.filter((p: any) => {
       const notesStatus = p.notes?.status;
       // Не считаем активными проекты на утверждении
       if (notesStatus === 'new' || notesStatus === 'pending_approval') {
@@ -131,13 +177,13 @@ export default function Dashboard() {
     }).length;
     
     // Завершённые
-    const completed = projects.filter((p: any) => {
+    const completed = userProjects.filter((p: any) => {
       const status = p.status || p.notes?.status;
       return status === 'completed' || status === 'closed';
     }).length;
     
-    // Общая сумма всех проектов
-    const totalRevenue = projects.reduce((sum: number, p: any) => {
+    // Общая сумма проектов пользователя
+    const totalRevenue = userProjects.reduce((sum: number, p: any) => {
       const amount = p.notes?.finances?.amountWithoutVAT ||
                      p.notes?.contract?.amountWithoutVAT ||
                      p.notes?.amountWithoutVAT ||
@@ -149,8 +195,8 @@ export default function Dashboard() {
       return sum + safeNumber(amount);
     }, 0);
     
-    // Проекты по компаниям
-    const projectsByCompany = projects.reduce((acc: any, p: any) => {
+    // Проекты по компаниям (только для пользователя)
+    const projectsByCompany = userProjects.reduce((acc: any, p: any) => {
       const company = p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || 'Не указана';
       acc[company] = (acc[company] || 0) + 1;
       return acc;
@@ -169,49 +215,76 @@ export default function Dashboard() {
       avgBudget,
       projectsByCompany
     };
-  }, [projects]);
+  }, [userProjects, projects, user]);
 
-  // Статистика сотрудников
-  const employeeStats = useMemo(() => ({
-    total: employees.length,
-    byRole: employees.reduce((acc: any, emp: any) => {
-      acc[emp.role] = (acc[emp.role] || 0) + 1;
-      return acc;
-    }, {}),
-    attendanceToday: attendanceRecords.filter((r: any) => 
-      r.date === new Date().toDateString()
-    ).length
-  }), [employees, attendanceRecords]);
+  // Статистика сотрудников (только для CEO/deputy)
+  const employeeStats = useMemo(() => {
+    if (user?.role !== 'ceo' && user?.role !== 'deputy_director') {
+      return {
+        total: 0,
+        byRole: {},
+        attendanceToday: 0
+      };
+    }
+    
+    return {
+      total: employees.length,
+      byRole: employees.reduce((acc: any, emp: any) => {
+        acc[emp.role] = (acc[emp.role] || 0) + 1;
+        return acc;
+      }, {}),
+      attendanceToday: attendanceRecords.filter((r: any) => 
+        r.date === new Date().toDateString()
+      ).length
+    };
+  }, [employees, attendanceRecords, user]);
 
-  // Обновить данные для графиков
-  const projectStatusData = useMemo(() => [
-    { name: 'Ожидают утверждения', value: projectStats.pendingPartnerApproval, color: '#f59e0b' },
-    { name: 'Ожидают команды', value: projectStats.awaitingTeam, color: '#fb923c' },
-    { name: 'В работе', value: projectStats.active, color: '#10b981' },
-    { name: 'Завершенные', value: projectStats.completed, color: '#3b82f6' }
-  ], [projectStats]);
+  // Обновить данные для графиков (скрываем "Ожидают утверждения" и "Ожидают команды" для не-директоров)
+  const projectStatusData = useMemo(() => {
+    const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
+    const data = [
+      { name: 'В работе', value: (projectStats.active || 0), color: '#10b981' },
+      { name: 'Завершенные', value: (projectStats.completed || 0), color: '#3b82f6' }
+    ];
+    
+    if (isDirector) {
+      data.unshift(
+        { name: 'Ожидают утверждения', value: (projectStats.pendingPartnerApproval || 0), color: '#f59e0b' },
+        { name: 'Ожидают команды', value: (projectStats.awaitingTeam || 0), color: '#fb923c' }
+      );
+    }
+    
+    return data;
+  }, [projectStats, user]);
 
   // Проекты по компаниям для графика
-  const companyDistributionData = useMemo(() => 
-    Object.entries(projectStats.projectsByCompany)
-      .sort(([,a]: any, [,b]: any) => b - a)
+  const companyDistributionData = useMemo(() => {
+    if (!projectStats.projectsByCompany || Object.keys(projectStats.projectsByCompany).length === 0) {
+      return [];
+    }
+    return Object.entries(projectStats.projectsByCompany)
+      .sort(([,a]: any, [,b]: any) => (b as number) - (a as number))
       .slice(0, 5)
       .map(([name, count]: [string, any]) => ({
         name: name.length > 15 ? name.substring(0, 15) + '...' : name,
-        value: count
-      })),
-    [projectStats.projectsByCompany]
-  );
+        value: (count as number) || 0
+      }));
+  }, [projectStats.projectsByCompany]);
 
-  const roleDistributionData = useMemo(() => Object.entries(employeeStats.byRole).map(([role, count]) => ({
-    name: role === 'partner' ? 'Партнеры' : 
-          role === 'manager_1' || role === 'manager_2' || role === 'manager_3' ? 'Менеджеры' :
-          role === 'manager' ? 'Менеджеры' :
-          role === 'tax_specialist' ? 'Налоговики' :
-          role === 'assistant' ? 'Ассистенты' :
-          role === 'admin' ? 'Админы' : role,
-    value: count as number
-  })), [employeeStats.byRole]);
+  const roleDistributionData = useMemo(() => {
+    if (!employeeStats.byRole || Object.keys(employeeStats.byRole).length === 0) {
+      return [];
+    }
+    return Object.entries(employeeStats.byRole).map(([role, count]) => ({
+      name: role === 'partner' ? 'Партнеры' : 
+            role === 'manager_1' || role === 'manager_2' || role === 'manager_3' ? 'Менеджеры' :
+            role === 'manager' ? 'Менеджеры' :
+            role === 'tax_specialist' ? 'Налоговики' :
+            role === 'assistant' ? 'Ассистенты' :
+            role === 'admin' ? 'Админы' : role,
+      value: (count as number) || 0
+    }));
+  }, [employeeStats.byRole]);
 
   const monthlyRevenueData = useMemo(() => [
     { name: 'Янв', value: 1500000 },
@@ -268,7 +341,13 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">📊 Дашборд</h1>
-          <p className="text-muted-foreground">Обзор деятельности компании</p>
+          <p className="text-muted-foreground">
+            {user?.role === 'ceo' || user?.role === 'deputy_director' 
+              ? 'Обзор деятельности компании' 
+              : user?.role === 'partner'
+              ? 'Мои проекты'
+              : 'Моя деятельность'}
+          </p>
         </div>
         <div className="flex items-center space-x-2">
           <Badge variant="outline" className="flex items-center space-x-1">
@@ -279,24 +358,27 @@ export default function Dashboard() {
       </div>
 
       {/* Основные метрики */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Общая выручка</p>
-              <p className="text-2xl font-bold">
-                {safeNumber(projectStats.totalRevenue) > 0 ? (safeNumber(projectStats.totalRevenue) / 1000000).toFixed(1) : '0.0'}M ₸
-              </p>
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${(user?.role === 'ceo' || user?.role === 'deputy_director') ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+        {/* Общая выручка - только для директоров */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director') && (
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Общая выручка</p>
+                <p className="text-2xl font-bold">
+                  {safeNumber(projectStats.totalRevenue) > 0 ? (safeNumber(projectStats.totalRevenue) / 1000000).toFixed(1) : '0.0'}M ₸
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-success" />
             </div>
-            <DollarSign className="h-8 w-8 text-success" />
-          </div>
-          <div className="mt-2">
-            <Badge variant="outline" className="text-xs">
-              <TrendingUp className="h-3 w-3 mr-1" />
-              +12% к прошлому месяцу
-            </Badge>
-          </div>
-        </Card>
+            <div className="mt-2">
+              <Badge variant="outline" className="text-xs">
+                <TrendingUp className="h-3 w-3 mr-1" />
+                +12% к прошлому месяцу
+              </Badge>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
@@ -314,21 +396,24 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Сотрудники</p>
-              <p className="text-2xl font-bold">{employeeStats.total}</p>
+        {/* Статистика сотрудников - только для директоров */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director') && (
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Сотрудники</p>
+                <p className="text-2xl font-bold">{employeeStats.total}</p>
+              </div>
+              <Users className="h-8 w-8 text-info" />
             </div>
-            <Users className="h-8 w-8 text-info" />
-          </div>
-          <div className="mt-2">
-            <Badge variant="outline" className="text-xs">
-              <Clock className="h-3 w-3 mr-1" />
-              {employeeStats.attendanceToday} сегодня
-            </Badge>
-          </div>
-        </Card>
+            <div className="mt-2">
+              <Badge variant="outline" className="text-xs">
+                <Clock className="h-3 w-3 mr-1" />
+                {employeeStats.attendanceToday} сегодня
+              </Badge>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
@@ -371,12 +456,16 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* График распределения по компаниям */}
+      {/* График распределения по компаниям - только если есть данные */}
       {companyDistributionData.length > 0 && (
         <Card className="p-6">
           <div className="flex items-center space-x-2 mb-4">
             <BarChart3 className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Проекты по компаниям</h3>
+            <h3 className="text-lg font-semibold">
+              {user?.role === 'ceo' || user?.role === 'deputy_director' 
+                ? 'Проекты по компаниям' 
+                : 'Мои проекты по компаниям'}
+            </h3>
           </div>
           <SimpleBarChart
             data={companyDistributionData}
@@ -396,63 +485,69 @@ export default function Dashboard() {
           <SimplePieChart data={projectStatusData} title="" />
         </Card>
 
-        {/* Распределение по ролям */}
-        <Card className="p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Команда по ролям</h3>
-          </div>
-          <SimpleBarChart data={roleDistributionData} title="" />
-        </Card>
+        {/* Распределение по ролям - только для директоров */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director') && (
+          <Card className="p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Команда по ролям</h3>
+            </div>
+            <SimpleBarChart data={roleDistributionData} title="" />
+          </Card>
+        )}
 
-        {/* Месячная выручка */}
-        <Card className="p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Выручка по месяцам</h3>
-          </div>
-          <SimpleBarChart data={monthlyRevenueData} title="" />
-        </Card>
+        {/* Месячная выручка - только для директоров */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director') && (
+          <Card className="p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Выручка по месяцам</h3>
+            </div>
+            <SimpleBarChart data={monthlyRevenueData} title="" />
+          </Card>
+        )}
 
-        {/* Посещаемость */}
-        <Card className="p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <Activity className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Посещаемость</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Сегодня в офисе</span>
-              <span className="font-semibold">
-                {attendanceRecords.filter((r: any) => 
-                  r.date === new Date().toDateString() && r.status === 'in_office'
-                ).length}
-              </span>
+        {/* Посещаемость - только для директоров */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director') && (
+          <Card className="p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Activity className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Посещаемость</h3>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Удаленно</span>
-              <span className="font-semibold">
-                {attendanceRecords.filter((r: any) => 
-                  r.date === new Date().toDateString() && r.status === 'remote'
-                ).length}
-              </span>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Сегодня в офисе</span>
+                <span className="font-semibold">
+                  {attendanceRecords.filter((r: any) => 
+                    r.date === new Date().toDateString() && r.status === 'in_office'
+                  ).length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Удаленно</span>
+                <span className="font-semibold">
+                  {attendanceRecords.filter((r: any) => 
+                    r.date === new Date().toDateString() && r.status === 'remote'
+                  ).length}
+                </span>
+              </div>
+              <div className="w-full bg-secondary rounded-full h-2">
+                <div 
+                  className="bg-primary h-2 rounded-full"
+                  style={{ 
+                    width: `${employeeStats.total > 0 ? 
+                      (employeeStats.attendanceToday / employeeStats.total) * 100 : 0}%` 
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                {employeeStats.total > 0 ? 
+                  Math.round((employeeStats.attendanceToday / employeeStats.total) * 100) : 0}% 
+                сотрудников сегодня
+              </p>
             </div>
-            <div className="w-full bg-secondary rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full"
-                style={{ 
-                  width: `${employeeStats.total > 0 ? 
-                    (employeeStats.attendanceToday / employeeStats.total) * 100 : 0}%` 
-                }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              {employeeStats.total > 0 ? 
-                Math.round((employeeStats.attendanceToday / employeeStats.total) * 100) : 0}% 
-              сотрудников сегодня
-            </p>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
 
       {/* Виджет отметки посещений */}
