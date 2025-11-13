@@ -52,14 +52,14 @@ const menuItems: MenuItem[] = [
   { 
     title: "Дашборд", 
     url: "/", 
-    icon: LayoutDashboard,
-    permission: PERMISSIONS.VIEW_DASHBOARD
+    icon: LayoutDashboard
+    // Нет ограничений - доступно всем
   },
   { 
     title: "Проекты", 
     url: "/projects", 
-    icon: FolderOpen,
-    permission: PERMISSIONS.VIEW_PROJECTS
+    icon: FolderOpen
+    // Нет ограничений - доступно всем
   },
   { 
     title: "Создать проект (Закупки)", 
@@ -89,84 +89,80 @@ const menuItems: MenuItem[] = [
     title: "HR", 
     url: "/hr", 
     icon: UserCheck,
-    permission: PERMISSIONS.VIEW_HR,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Тайм-щиты", 
     url: "/timesheets", 
     icon: Clock,
-    permission: PERMISSIONS.VIEW_TIMESHEETS,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Посещаемость", 
     url: "/attendance", 
     icon: Activity,
-    permission: PERMISSIONS.VIEW_TIMESHEETS,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Бонусы", 
     url: "/bonuses", 
     icon: Gift,
-    permission: PERMISSIONS.VIEW_BONUSES,
+    permission: 'VIEW_BONUSES', // Ключ разрешения, а не массив
     excludeRoles: ['procurement']
   },
   { 
     title: "Аналитика", 
     url: "/analytics", 
     icon: TrendingUp,
-    permission: PERMISSIONS.VIEW_ANALYTICS,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Календарь", 
     url: "/calendar", 
     icon: Calendar,
-    permission: PERMISSIONS.VIEW_CALENDAR,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Задачи", 
     url: "/tasks", 
     icon: CheckSquare,
-    permission: PERMISSIONS.VIEW_PROJECTS,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Уведомления", 
     url: "/notifications", 
     icon: Bell,
-    permission: PERMISSIONS.VIEW_NOTIFICATIONS,
     excludeRoles: ['procurement']
+    // Нет ограничений по разрешениям
   },
   { 
     title: "Управление", 
     url: "/user-management", 
     icon: UserCog,
-    permission: PERMISSIONS.VIEW_USER_MANAGEMENT,
     allowedRoles: ['admin', 'partner']
   },
   { 
     title: "Роли", 
     url: "/role-management", 
     icon: Key,
-    permission: PERMISSIONS.MANAGE_ROLES,
     allowedRoles: ['admin']
   },
   { 
     title: "Шаблоны", 
     url: "/template-editor", 
     icon: FileText,
-    permission: PERMISSIONS.MANAGE_ROLES,
     allowedRoles: ['admin', 'partner']
   },
   { 
     title: "Диагностика", 
     url: "/diagnostics", 
     icon: Activity,
-    permission: PERMISSIONS.MANAGE_ROLES,
     allowedRoles: ['admin']
   },
   { 
@@ -184,13 +180,13 @@ const menuItems: MenuItem[] = [
   { 
     title: "Настройки", 
     url: "/settings", 
-    icon: Settings,
-    permission: PERMISSIONS.VIEW_SETTINGS
+    icon: Settings
+    // Нет ограничений - доступно всем
   },
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const { user, checkPermission, hasAnyRole, logout } = useAuth();
   const collapsed = state === "collapsed";
   const [unreadCount, setUnreadCount] = useState(0);
@@ -218,17 +214,17 @@ export function AppSidebar() {
     <Sidebar className={collapsed ? "w-16" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-sidebar border-r border-sidebar-border">
         {/* Logo */}
-        <div className="p-6 border-b border-glass-border">
+        <div className="p-4 md:p-6 border-b border-glass-border">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center">
-              <span className="text-lg font-bold text-primary-foreground">RB</span>
+            <div className="w-8 h-8 md:w-8 md:h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-base md:text-lg font-bold text-primary-foreground">RB</span>
             </div>
             {!collapsed && (
-              <div>
-                <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base md:text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
                   RB Partners Suite
                 </h1>
-                <p className="text-xs text-muted-foreground">Group Management Platform</p>
+                <p className="text-xs text-muted-foreground hidden md:block">Group Management Platform</p>
               </div>
             )}
           </div>
@@ -242,7 +238,17 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-2">
               {menuItems.map((item) => {
                 // Проверяем разрешения
-                const hasPermission = item.permission ? checkPermission(item.permission) : true;
+                // item.permission может быть строкой (ключ разрешения) или массивом (старый формат)
+                let hasPermission = true;
+                if (item.permission) {
+                  if (typeof item.permission === 'string') {
+                    hasPermission = checkPermission(item.permission);
+                  } else if (Array.isArray(item.permission)) {
+                    // Старый формат - массив ролей, проверяем вручную
+                    const permissionArray = item.permission as string[];
+                    hasPermission = permissionArray.includes(user.role);
+                  }
+                }
                 const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
                 const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
 
@@ -256,16 +262,23 @@ export function AppSidebar() {
                       <NavLink
                         to={item.url}
                         end
+                        onClick={() => {
+                          // Закрываем сайдбар на мобильных после клика
+                          const isMobile = window.innerWidth < 768;
+                          if (isMobile) {
+                            setOpenMobile(false);
+                          }
+                        }}
                         className={({ isActive }) =>
-                          `flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-300 ${
+                          `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-300 touch-manipulation min-h-[44px] md:min-h-0 ${
                             isActive
                               ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
-                              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70"
                           }`
                         }
                       >
-                        <div className="relative">
-                          <item.icon className="w-5 h-5" />
+                        <div className="relative flex-shrink-0">
+                          <item.icon className="w-5 h-5 md:w-5 md:h-5" />
                           {item.url === "/notifications" && unreadCount > 0 && (
                             <Badge 
                               variant="destructive" 
@@ -276,10 +289,10 @@ export function AppSidebar() {
                           )}
                         </div>
                         {!collapsed && (
-                          <span className="font-medium flex-1">{item.title}</span>
+                          <span className="font-medium flex-1 text-sm md:text-base">{item.title}</span>
                         )}
                         {!collapsed && item.url === "/notifications" && unreadCount > 0 && (
-                          <Badge variant="destructive" className="ml-auto">
+                          <Badge variant="destructive" className="ml-auto text-xs">
                             {unreadCount}
                           </Badge>
                         )}
@@ -294,16 +307,16 @@ export function AppSidebar() {
 
         {/* User Info & Logout */}
         <div className="mt-auto p-4 border-t border-glass-border">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             {!collapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                <p className="text-xs text-muted-foreground truncate hidden md:block">{user.email}</p>
               </div>
             )}
             <button
               onClick={logout}
-              className="flex items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all duration-300"
+              className="flex items-center justify-center p-2 md:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70 transition-all duration-300 touch-manipulation min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
               title="Выйти"
             >
               <LogOut className="w-5 h-5" />

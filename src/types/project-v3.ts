@@ -293,7 +293,7 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
   const totalContractorsAmount = contractors.reduce((sum, c) => sum + c.amount, 0);
   
   const bonusBase = amountWithoutVAT - totalContractorsAmount - preExpenseAmount;
-  const bonusPercent = project.finances?.bonusPercent || 50; // По умолчанию 50%
+  const bonusPercent = project.finances?.bonusPercent || 10; // По умолчанию 10%
   const totalBonusAmount = bonusBase * (bonusPercent / 100);
   
   // Рассчитываем бонусы команды

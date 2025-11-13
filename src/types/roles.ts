@@ -144,8 +144,9 @@ export const PERMISSIONS = {
   VIEW_ALL_COMPANIES: ['ceo', 'admin'],
   VIEW_COMPANY_DATA: ['ceo', 'deputy_director', 'company_director', 'admin'],
   VIEW_FINANCIAL_DATA: ['ceo', 'admin'],
-  VIEW_OWN_BONUS: ['partner'],
-  VIEW_ALL_BONUSES: ['ceo'],
+  // Бонусы скрыты для всех кроме CEO и заместителя директора
+  VIEW_BONUSES: ['ceo', 'deputy_director'], // Алиас для совместимости
+  VIEW_ALL_BONUSES: ['ceo', 'deputy_director'],
   
   // Проекты
   CREATE_PROJECT: ['procurement', 'admin'],

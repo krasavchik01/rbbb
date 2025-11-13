@@ -25,48 +25,58 @@ import {
 
 // Простые компоненты графиков без Recharts
 const SimpleBarChart = ({ data, title }: { data: Array<{name: string, value: number}>, title: string }) => {
-  const maxValue = Math.max(...data.map(d => d.value));
+  const safeValue = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
+  const maxValue = Math.max(...data.map(d => safeValue(d.value)), 1);
   
   return (
     <div className="space-y-3">
       <h4 className="font-semibold">{title}</h4>
-      {data.map((item, index) => (
-        <div key={index} className="space-y-1">
-          <div className="flex justify-between text-sm">
-            <span>{item.name}</span>
-            <span className="font-medium">{item.value}</span>
+      {data.map((item, index) => {
+        const value = safeValue(item.value);
+        const width = maxValue > 0 ? (value / maxValue) * 100 : 0;
+        return (
+          <div key={index} className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span>{item.name}</span>
+              <span className="font-medium">{value}</span>
+            </div>
+            <div className="w-full bg-secondary rounded-full h-2">
+              <div 
+                className="bg-primary h-2 rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(0, Math.min(100, width))}%` }}
+              />
+            </div>
           </div>
-          <div className="w-full bg-secondary rounded-full h-2">
-            <div 
-              className="bg-primary h-2 rounded-full transition-all duration-500"
-              style={{ width: `${(item.value / maxValue) * 100}%` }}
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
 
 const SimplePieChart = ({ data, title }: { data: Array<{name: string, value: number, color: string}>, title: string }) => {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const safeValue = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
+  const total = data.reduce((sum, item) => sum + safeValue(item.value), 0);
   
   return (
     <div className="space-y-3">
       <h4 className="font-semibold">{title}</h4>
       <div className="grid grid-cols-2 gap-2">
-        {data.map((item, index) => (
-          <div key={index} className="flex items-center space-x-2">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: item.color }}
-            />
-            <span className="text-sm">{item.name}</span>
-            <span className="text-sm font-medium">
-              {total > 0 ? Math.round((item.value / total) * 100) : 0}%
-            </span>
-          </div>
-        ))}
+        {data.map((item, index) => {
+          const value = safeValue(item.value);
+          const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+          return (
+            <div key={index} className="flex items-center space-x-2">
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="text-sm">{item.name}</span>
+              <span className="text-sm font-medium">
+                {percent}%
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -146,6 +156,9 @@ export default function Dashboard() {
       return acc;
     }, {});
     
+    // Средний бюджет проекта
+    const avgBudget = total > 0 ? totalRevenue / total : 0;
+    
     return {
       total,
       pendingPartnerApproval,
@@ -153,6 +166,7 @@ export default function Dashboard() {
       active,
       completed,
       totalRevenue,
+      avgBudget,
       projectsByCompany
     };
   }, [projects]);
@@ -219,21 +233,21 @@ export default function Dashboard() {
     },
     {
       title: 'Средний бюджет проекта',
-      value: Math.round(projectStats.avgBudget / 1000),
+      value: safeNumber(projectStats.avgBudget || 0) > 0 ? Math.round(safeNumber(projectStats.avgBudget) / 1000) : 0,
       target: 3000,
       icon: DollarSign,
       color: 'text-primary'
     },
     {
       title: 'Активность команды',
-      value: Math.round((employeeStats.attendanceToday / employeeStats.total) * 100),
+      value: employeeStats.total > 0 ? Math.round((employeeStats.attendanceToday / employeeStats.total) * 100) : 0,
       target: 90,
       icon: Activity,
       color: 'text-warning'
     },
     {
       title: 'Завершенные проекты',
-      value: projectStats.completed,
+      value: safeNumber(projectStats.completed),
       target: 15,
       icon: CheckCircle,
       color: 'text-info'
@@ -271,7 +285,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-muted-foreground">Общая выручка</p>
               <p className="text-2xl font-bold">
-                {(projectStats.totalRevenue / 1000000).toFixed(1)}M ₸
+                {safeNumber(projectStats.totalRevenue) > 0 ? (safeNumber(projectStats.totalRevenue) / 1000000).toFixed(1) : '0.0'}M ₸
               </p>
             </div>
             <DollarSign className="h-8 w-8 text-success" />
@@ -341,15 +355,15 @@ export default function Dashboard() {
               <metric.icon className={`h-5 w-5 ${metric.color}`} />
               <span className="text-sm text-muted-foreground">KPI</span>
             </div>
-            <p className="text-lg font-semibold">{metric.value}</p>
+            <p className="text-lg font-semibold">{safeNumber(metric.value)}</p>
             <p className="text-sm text-muted-foreground mb-2">{metric.title}</p>
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
                 <span>Прогресс</span>
-                <span>{Math.round((metric.value / metric.target) * 100)}%</span>
+                <span>{metric.target > 0 ? Math.round((safeNumber(metric.value) / metric.target) * 100) : 0}%</span>
               </div>
               <Progress 
-                value={(metric.value / metric.target) * 100} 
+                value={metric.target > 0 ? (safeNumber(metric.value) / metric.target) * 100 : 0} 
                 className="h-2"
               />
             </div>

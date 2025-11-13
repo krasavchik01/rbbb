@@ -42,14 +42,57 @@ const Index = () => {
     }
   };
 
-  // Демо-аккаунты для быстрого входа
-  const demoAccounts = [
-    { email: "ceo@rbpartners.com", password: "ceo", role: "CEO", icon: "👔" },
-    { email: "deputy@mak.kz", password: "deputy", role: "Зам. директора", icon: "🏢" },
-    { email: "procurement@rbpartners.com", password: "procurement", role: "Отдел закупок", icon: "📦" },
-    { email: "partner@rbpartners.com", password: "partner", role: "Партнер", icon: "🤝" },
-    { email: "admin", password: "admin", role: "Админ", icon: "🔑" },
+  // Демо-аккаунты для быстрого входа - полный список для тестирования цикла проекта
+  type DemoAccount = {
+    email: string;
+    password: string;
+    role: string;
+    icon: string;
+    category: string;
+  };
+
+  const demoAccounts: DemoAccount[] = [
+    // Руководство
+    { email: "ceo@rbpartners.com", password: "ceo", role: "CEO", icon: "👔", category: "Руководство" },
+    { email: "deputy@mak.kz", password: "deputy", role: "Зам. директора", icon: "🏢", category: "Руководство" },
+    
+    // Отдел закупок
+    { email: "procurement@rbpartners.com", password: "procurement", role: "Отдел закупок", icon: "📦", category: "Отдел закупок" },
+    
+    // Партнеры
+    { email: "partner@rbpartners.com", password: "partner", role: "Партнер", icon: "🤝", category: "Партнеры" },
+    
+    // Менеджеры проектов
+    { email: "manager@rbpartners.com", password: "manager", role: "Менеджер 1", icon: "👨‍💼", category: "Менеджеры" },
+    { email: "manager2@rbpartners.com", password: "manager2", role: "Менеджер 2", icon: "👨‍💼", category: "Менеджеры" },
+    { email: "manager3@rbpartners.com", password: "manager3", role: "Менеджер 3", icon: "👨‍💼", category: "Менеджеры" },
+    
+    // Супервайзеры
+    { email: "supervisor1@rbpartners.com", password: "supervisor1", role: "Супервайзер 1", icon: "👨‍🔬", category: "Супервайзеры" },
+    { email: "supervisor2@rbpartners.com", password: "supervisor2", role: "Супервайзер 2", icon: "👨‍🔬", category: "Супервайзеры" },
+    { email: "supervisor@rbpartners.com", password: "supervisor", role: "Супервайзер 3", icon: "👨‍🔬", category: "Супервайзеры" },
+    
+    // Ассистенты
+    { email: "assistant1@rbpartners.com", password: "assistant1", role: "Ассистент 1", icon: "👨‍💻", category: "Ассистенты" },
+    { email: "assistant2@rbpartners.com", password: "assistant2", role: "Ассистент 2", icon: "👨‍💻", category: "Ассистенты" },
+    { email: "assistant@rbpartners.com", password: "assistant", role: "Ассистент 3", icon: "👨‍💻", category: "Ассистенты" },
+    
+    // Специалисты
+    { email: "tax@rbpartners.com", password: "tax", role: "Налоговик", icon: "📊", category: "Специалисты" },
+    
+    // Администраторы
+    { email: "admin", password: "admin", role: "Админ", icon: "🔑", category: "Администраторы" },
   ];
+  
+  // Группируем по категориям для лучшей организации
+  const groupedAccounts = demoAccounts.reduce((acc, account) => {
+    const category = account.category;
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(account);
+    return acc;
+  }, {} as Record<string, DemoAccount[]>);
 
   const quickLogin = async (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail);
@@ -164,33 +207,40 @@ const Index = () => {
               Выберите роль для входа в систему (демо)
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {demoAccounts.map((account) => (
-              <Button
-                key={account.email}
-                variant="outline"
-                className="w-full justify-start text-left h-auto py-3 bg-slate-800/30 border-slate-700 hover:bg-blue-900/20 hover:border-blue-500/50 transition-all"
-                onClick={() => quickLogin(account.email, account.password)}
-                disabled={isLoading}
-              >
-                <div className="flex items-center gap-3 w-full">
-                  <span className="text-2xl">{account.icon}</span>
-                  <div className="flex-1">
-                    <div className="font-semibold text-white">{account.role}</div>
-                    <div className="text-xs text-slate-400">
-                      {account.email.length > 25 ? account.email.substring(0, 25) + '...' : account.email}
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-500 font-mono bg-slate-800/50 px-2 py-1 rounded">
-                    {account.password}
-                  </div>
+          <CardContent className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+            {Object.entries(groupedAccounts).map(([category, accounts]) => (
+              <div key={category} className="space-y-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+                  {category}
                 </div>
-              </Button>
+                {accounts.map((account) => (
+                  <Button
+                    key={account.email}
+                    variant="outline"
+                    className="w-full justify-start text-left h-auto py-2.5 bg-slate-800/30 border-slate-700 hover:bg-blue-900/20 hover:border-blue-500/50 transition-all"
+                    onClick={() => quickLogin(account.email, account.password)}
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <span className="text-xl flex-shrink-0">{account.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-white text-sm truncate">{account.role}</div>
+                        <div className="text-xs text-slate-400 truncate">
+                          {account.email.length > 30 ? account.email.substring(0, 30) + '...' : account.email}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono bg-slate-800/50 px-2 py-1 rounded flex-shrink-0">
+                        {account.password}
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
             ))}
 
-            <div className="pt-4 border-t border-slate-700">
+            <div className="pt-4 border-t border-slate-700 sticky bottom-0 bg-slate-900/95 backdrop-blur-sm">
               <p className="text-xs text-slate-400 text-center">
-                💡 Полный список учетных данных в файле <code className="bg-slate-800/50 px-2 py-1 rounded text-blue-400">DEMO_USERS.md</code>
+                💡 Полный список учетных данных в файле <code className="bg-slate-800/50 px-2 py-1 rounded text-blue-400">PROJECT_CYCLE_GUIDE.md</code>
               </p>
             </div>
           </CardContent>

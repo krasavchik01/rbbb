@@ -561,3 +561,60 @@
     @apply badge-enhanced bg-destructive/20 text-destructive border border-destructive/30;
   }
 }
+
+/* Mobile Optimizations */
+@layer utilities {
+  /* Touch-friendly targets - минимум 44x44px для мобильных */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Улучшенная кликабельность на мобильных */
+  @media (max-width: 768px) {
+    button,
+    a,
+    [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Увеличенные отступы для кликабельных элементов */
+    .mobile-padding {
+      padding: 12px 16px;
+    }
+
+    /* Улучшенная читаемость текста на мобильных */
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Убираем hover эффекты на touch устройствах */
+    @media (hover: none) {
+      *:hover {
+        background-color: inherit !important;
+      }
+    }
+  }
+
+  /* Плавная прокрутка */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Предотвращение zoom при двойном тапе на iOS */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  @media (max-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}

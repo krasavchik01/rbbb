@@ -67,32 +67,62 @@ export default function ProjectApproval() {
       'supervisor_3': 'supervisor_3',
       'supervisor_2': 'supervisor_2',
       'supervisor_1': 'supervisor_1',
+      'tax_specialist': 'tax_specialist_1', // Маппим tax_specialist на tax_specialist_1
       'tax_specialist_1': 'tax_specialist_1',
       'tax_specialist_2': 'tax_specialist_2',
       'assistant_3': 'assistant_3',
       'assistant_2': 'assistant_2',
       'assistant_1': 'assistant_1',
     };
+    // Если роль уже в списке PROJECT_ROLES, возвращаем её как есть
+    const projectRoleNames = PROJECT_ROLES.map(r => r.role);
+    if (projectRoleNames.includes(employeeRole as any)) {
+      return employeeRole;
+    }
     return roleMap[employeeRole] || null;
   };
 
   // Преобразуем реальных сотрудников в формат для назначения
-  const availableEmployees = realEmployees.map(emp => ({
-    id: emp.id,
-    name: emp.name || emp.email || 'Без имени',
-    role: mapEmployeeRoleToProjectRole(emp.role) || emp.role,
-    activeProjects: 0, // Можно добавить подсчет активных проектов позже
-    loadPercent: 0, // Можно добавить расчет загрузки позже
-    location: 'office' as const
-  })).filter(emp => emp.role); // Фильтруем только тех, у кого есть подходящая роль
+  const availableEmployees = realEmployees.map(emp => {
+    const mappedRole = mapEmployeeRoleToProjectRole(emp.role);
+    // Если роль не замаплена, но она есть в PROJECT_ROLES, используем её
+    const projectRoleNames = PROJECT_ROLES.map(r => r.role);
+    const finalRole = mappedRole || (projectRoleNames.includes(emp.role as any) ? emp.role : null);
+    
+    return {
+      id: emp.id,
+      name: emp.name || emp.email || 'Без имени',
+      role: finalRole || emp.role, // Используем исходную роль если нет маппинга
+      activeProjects: 0,
+      loadPercent: 0,
+      location: 'office' as const,
+      originalRole: emp.role // Сохраняем исходную роль для отладки
+    };
+  }).filter(emp => {
+    // Фильтруем только тех, у кого роль есть в PROJECT_ROLES
+    const projectRoleNames = PROJECT_ROLES.map(r => r.role);
+    return projectRoleNames.includes(emp.role as any);
+  });
 
-  // Логирование для отладки выпадающего списка партнеров
+  // Логирование для отладки
   useEffect(() => {
-    console.log('🔍 [ProjectApproval] Отладка списка партнеров:');
+    console.log('🔍 [ProjectApproval] Отладка сотрудников:');
     console.log('  - realEmployees:', realEmployees.length, 'сотрудников');
-    console.log('  - realEmployees с ролью partner:', realEmployees.filter(e => e.role === 'partner').map(e => ({ id: e.id, name: e.name, role: e.role })));
+    console.log('  - realEmployees список:', realEmployees.map(e => ({ id: e.id, name: e.name, role: e.role })));
     console.log('  - availableEmployees:', availableEmployees.length, 'сотрудников');
-    console.log('  - availableEmployees с ролью partner:', availableEmployees.filter(e => e.role === 'partner').map(e => ({ id: e.id, name: e.name, role: e.role })));
+    console.log('  - availableEmployees список:', availableEmployees.map(e => ({ id: e.id, name: e.name, role: e.role, originalRole: (e as any).originalRole })));
+    console.log('  - PROJECT_ROLES:', PROJECT_ROLES.map(r => r.role));
+    
+    // Проверяем каждую роль из PROJECT_ROLES
+    PROJECT_ROLES.forEach(projectRole => {
+      const employeesForRole = availableEmployees.filter(emp => emp.role === projectRole.role);
+      console.log(`  - ${projectRole.label} (${projectRole.role}):`, employeesForRole.length, 'сотрудников');
+      if (employeesForRole.length === 0) {
+        console.warn(`    ⚠️ Нет сотрудников с ролью ${projectRole.role}`);
+        const withOriginalRole = realEmployees.filter(e => e.role === projectRole.role);
+        console.log(`    - С исходной ролью ${projectRole.role}:`, withOriginalRole.length);
+      }
+    });
   }, [realEmployees, availableEmployees]);
 
   // Загрузка проектов
@@ -132,7 +162,7 @@ export default function ProjectApproval() {
     
     const totalContractorsAmount = contractors.reduce((sum, c) => sum + c.amount, 0);
     const bonusBase = amountWithoutVAT - totalContractorsAmount - preExpenseAmount;
-    const bonusPercent = 50;
+    const bonusPercent = 10; // База бонусов = 10%
     const totalBonusAmount = bonusBase * (bonusPercent / 100);
 
     // Рассчитываем бонусы по ролям

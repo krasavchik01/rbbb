@@ -29,8 +29,9 @@ import { MethodologySelector, SelectedProcedure } from "@/components/projects/Me
 import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology";
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
-import { notifyTaskAssigned } from "@/lib/projectNotifications";
+import { notifyTaskAssigned, notifyProjectClosed, notifyBonusesApproved } from "@/lib/projectNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { calculateProjectFinances } from "@/types/project-v3";
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -46,9 +47,13 @@ export default function ProjectWorkspace() {
   const [project, setProject] = useState<any>(null);
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [isPlanningMode, setIsPlanningMode] = useState(false);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   
   // Проверка роли партнёра
   const isPartner = user?.role === 'partner';
+  const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
+  const canCompleteProject = isPartner || isPM;
+  const isCompleted = project?.status === 'completed' || project?.notes?.status === 'completed';
   
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
   const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } = 
@@ -854,6 +859,152 @@ export default function ProjectWorkspace() {
           </div>
         </Card>
       )}
+
+      {/* Кнопка завершения проекта */}
+      {canCompleteProject && !isCompleted && (
+        <Card className="p-6 border-green-200 bg-green-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold mb-2">Завершить проект</h3>
+              <p className="text-sm text-muted-foreground">
+                После завершения проекта автоматически рассчитаются и начислятся бонусы всем членам команды.
+              </p>
+            </div>
+            <Button 
+              onClick={() => setShowCompleteDialog(true)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Завершить проект
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Статус завершенного проекта */}
+      {isCompleted && (
+        <Card className="p-6 border-green-200 bg-green-50">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-6 h-6 text-green-600" />
+            <div>
+              <h3 className="font-semibold text-green-900">Проект завершен</h3>
+              <p className="text-sm text-green-700">
+                Бонусы автоматически рассчитаны и начислены команде. Проверьте раздел "Бонусы".
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Диалог подтверждения завершения */}
+      <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Завершить проект?</DialogTitle>
+            <DialogDescription>
+              После завершения проекта:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Статус проекта изменится на "Завершен"</li>
+                <li>Автоматически рассчитаются бонусы для всех членов команды</li>
+                <li>Уведомления будут отправлены всем участникам</li>
+                <li>Бонусы будут отображаться в разделе "Бонусы"</li>
+              </ul>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>
+              Отмена
+            </Button>
+            <Button 
+              onClick={async () => {
+                if (!project || !user) return;
+                
+                try {
+                  // Обновляем статус проекта
+                  const updatedProject = {
+                    ...project,
+                    status: 'completed',
+                    notes: {
+                      ...project.notes,
+                      status: 'completed',
+                      completedAt: new Date().toISOString()
+                    }
+                  };
+
+                  // Сохраняем в Supabase
+                  await supabaseDataStore.updateProject(project.id, updatedProject);
+
+                  // Рассчитываем финансы и бонусы
+                  const finances = calculateProjectFinances(updatedProject);
+                  
+                  // Обновляем финансы проекта
+                  const projectWithFinances = {
+                    ...updatedProject,
+                    finances: {
+                      ...updatedProject.finances,
+                      ...finances
+                    }
+                  };
+
+                  await supabaseDataStore.updateProject(project.id, projectWithFinances);
+
+                  // Получаем команду проекта
+                  const team = updatedProject.team || [];
+                  const teamIds = team.map((m: any) => m.userId);
+                  const partner = team.find((m: any) => m.role === 'partner');
+                  const pm = team.find((m: any) => m.role === 'manager_1' || m.role === 'manager_2' || m.role === 'manager_3');
+
+                  // Отправляем уведомления о завершении проекта
+                  notifyProjectClosed({
+                    projectName: updatedProject.name || updatedProject.title || 'Проект',
+                    partnerId: partner?.userId || user.id,
+                    pmId: pm?.userId || user.id,
+                    teamIds: teamIds,
+                    totalAmount: finances.totalBonusAmount.toLocaleString('ru-RU'),
+                    currency: '₸',
+                    projectId: project.id
+                  });
+
+                  // Отправляем уведомления о бонусах
+                  if (Object.keys(finances.teamBonuses).length > 0) {
+                    notifyBonusesApproved({
+                      projectName: updatedProject.name || updatedProject.title || 'Проект',
+                      teamIds: teamIds,
+                      ceoName: 'Система',
+                      projectId: project.id
+                    });
+                  }
+
+                  toast({
+                    title: 'Проект завершен!',
+                    description: 'Бонусы автоматически рассчитаны и начислены команде.',
+                  });
+
+                  setShowCompleteDialog(false);
+                  
+                  // Обновляем проект в локальном состоянии
+                  setProject(projectWithFinances);
+                  
+                  // Перезагружаем страницу через 2 секунды
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 2000);
+                } catch (error: any) {
+                  console.error('Ошибка при завершении проекта:', error);
+                  toast({
+                    title: 'Ошибка',
+                    description: error.message || 'Не удалось завершить проект',
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Да, завершить проект
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -91,29 +91,29 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
     },
   },
   
-  // Супервайзер
+  // Супервайзер 3
   'supervisor@rbpartners.com': {
     password: 'supervisor',
     user: {
-      id: 'supervisor_1',
+      id: 'supervisor_3',
       email: 'supervisor@rbpartners.com',
       name: 'Сидоров С.С.',
       role: 'supervisor_3',
       department: 'Аудит',
-      position: 'Супервайзер',
+      position: 'Супервайзер 3',
     },
   },
   
-  // Ассистент
+  // Ассистент 3
   'assistant@rbpartners.com': {
     password: 'assistant',
     user: {
-      id: 'assistant_1',
+      id: 'assistant_3',
       email: 'assistant@rbpartners.com',
       name: 'Ассистент Кузнецов',
       role: 'assistant_3',
       department: 'Аудит',
-      position: 'Ассистент',
+      position: 'Ассистент 3',
     },
   },
   
@@ -127,6 +127,99 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
       role: 'admin',
       department: 'IT',
       position: 'Системный администратор',
+    },
+  },
+  
+  // Дополнительные роли для полного цикла проекта
+  
+  // Менеджер проекта 2
+  'manager2@rbpartners.com': {
+    password: 'manager2',
+    user: {
+      id: 'manager_2',
+      email: 'manager2@rbpartners.com',
+      name: 'Менеджер 2 Смирнов',
+      role: 'manager_2',
+      department: 'Проекты',
+      position: 'Менеджер 2',
+    },
+  },
+  
+  // Менеджер проекта 3
+  'manager3@rbpartners.com': {
+    password: 'manager3',
+    user: {
+      id: 'manager_3',
+      email: 'manager3@rbpartners.com',
+      name: 'Менеджер 3 Козлов',
+      role: 'manager_3',
+      department: 'Проекты',
+      position: 'Менеджер 3',
+    },
+  },
+  
+  // Супервайзер 1
+  'supervisor1@rbpartners.com': {
+    password: 'supervisor1',
+    user: {
+      id: 'supervisor_1',
+      email: 'supervisor1@rbpartners.com',
+      name: 'Супервайзер 1 Волков',
+      role: 'supervisor_1',
+      department: 'Аудит',
+      position: 'Супервайзер 1',
+    },
+  },
+  
+  // Супервайзер 2
+  'supervisor2@rbpartners.com': {
+    password: 'supervisor2',
+    user: {
+      id: 'supervisor_2',
+      email: 'supervisor2@rbpartners.com',
+      name: 'Супервайзер 2 Новиков',
+      role: 'supervisor_2',
+      department: 'Аудит',
+      position: 'Супервайзер 2',
+    },
+  },
+  
+  // Ассистент 1
+  'assistant1@rbpartners.com': {
+    password: 'assistant1',
+    user: {
+      id: 'assistant_1',
+      email: 'assistant1@rbpartners.com',
+      name: 'Ассистент 1 Лебедев',
+      role: 'assistant_1',
+      department: 'Аудит',
+      position: 'Ассистент 1',
+    },
+  },
+  
+  // Ассистент 2
+  'assistant2@rbpartners.com': {
+    password: 'assistant2',
+    user: {
+      id: 'assistant_2',
+      email: 'assistant2@rbpartners.com',
+      name: 'Ассистент 2 Соколов',
+      role: 'assistant_2',
+      department: 'Аудит',
+      position: 'Ассистент 2',
+    },
+  },
+  
+  // Налоговик
+  'tax@rbpartners.com': {
+    password: 'tax',
+    user: {
+      id: 'tax_1',
+      email: 'tax@rbpartners.com',
+      name: 'Налоговик Орлов',
+      role: 'tax_specialist',
+      department: 'Налоги',
+      position: 'Налоговый специалист',
     },
   },
 };
@@ -213,7 +306,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkPermission = (permission: string): boolean => {
     if (!user) return false;
-    return hasPermission(user.role, permission);
+    try {
+      return hasPermission(user.role, permission as any);
+    } catch (e) {
+      console.error('Error checking permission:', permission, e);
+      return false;
+    }
   };
 
   const hasRole = (role: UserRole): boolean => {
