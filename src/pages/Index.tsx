@@ -116,7 +116,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4">
-      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-20" />
+      {/* Grid pattern removed - file doesn't exist */}
       
       <div className="w-full max-w-[1400px] mx-auto grid md:grid-cols-2 gap-6 relative z-10">
         {/* Форма входа */}
