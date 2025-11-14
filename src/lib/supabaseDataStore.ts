@@ -863,6 +863,290 @@ class SupabaseDataStore {
       throw error;
     }
   }
+
+  // === WORK PAPERS (Рабочие документы) ===
+  
+  /**
+   * Получает все рабочие документы проекта
+   */
+  async getWorkPapers(projectId: string): Promise<any[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('work_papers')
+        .select(`
+          *,
+          template:work_paper_templates(*),
+          assigned_user:assigned_to(id, name, email),
+          reviewer:reviewer_id(id, name, email)
+        `)
+        .eq('project_id', projectId)
+        .order('code', { ascending: true });
+
+      if (error) {
+        // Если таблица не существует (404), возвращаем пустой массив
+        // Supabase может возвращать ошибку в разных форматах
+        const errorObj = error as any;
+        const isTableNotFound = 
+          errorObj.code === 'PGRST116' || 
+          errorObj.status === 404 || 
+          errorObj.statusCode === 404 ||
+          errorObj.message?.includes('relation') || 
+          errorObj.message?.includes('does not exist') ||
+          errorObj.message?.includes('relation "public.work_papers" does not exist') ||
+          errorObj.details?.includes('relation') ||
+          errorObj.hint?.includes('relation');
+        
+        if (isTableNotFound) {
+          console.log('ℹ️ Work papers table does not exist yet. Migration may not be applied.');
+          return [];
+        }
+        // Если это не ошибка отсутствия таблицы, пробрасываем дальше
+        throw error;
+      }
+      return data || [];
+    } catch (error: any) {
+      // Обрабатываем ошибки 404 (таблица не существует)
+      // Проверяем все возможные форматы ошибки
+      const isTableNotFound = 
+        error?.code === 'PGRST116' || 
+        error?.status === 404 || 
+        error?.statusCode === 404 ||
+        error?.message?.includes('relation') || 
+        error?.message?.includes('does not exist') ||
+        error?.message?.includes('relation "public.work_papers" does not exist') ||
+        error?.details?.includes('relation') ||
+        error?.hint?.includes('relation') ||
+        (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
+      
+      if (isTableNotFound) {
+        console.log('ℹ️ Work papers table does not exist yet. Migration may not be applied.');
+        return [];
+      }
+      // Только если это не ошибка отсутствия таблицы, выводим как ошибку
+      console.error('❌ Error getting work papers:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Получает рабочий документ по ID
+   */
+  async getWorkPaper(workPaperId: string): Promise<any | null> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('work_papers')
+        .select(`
+          *,
+          template:work_paper_templates(*),
+          assigned_user:assigned_to(id, name, email),
+          reviewer:reviewer_id(id, name, email)
+        `)
+        .eq('id', workPaperId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116' || error.status === 404 || error.message?.includes('relation')) {
+          console.log('ℹ️ Work papers table does not exist yet.');
+          return null;
+        }
+        throw error;
+      }
+      return data;
+    } catch (error: any) {
+      if (error?.code === 'PGRST116' || error?.status === 404 || error?.message?.includes('relation')) {
+        console.log('ℹ️ Work papers table does not exist yet.');
+        return null;
+      }
+      console.error('❌ Error getting work paper:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Обновляет рабочий документ
+   */
+  async updateWorkPaper(
+    workPaperId: string,
+    updates: {
+      data?: Record<string, any>;
+      status?: string;
+      review_history?: any[];
+      started_at?: string;
+      completed_at?: string;
+      assigned_to?: string;
+    }
+  ): Promise<any | null> {
+    try {
+      const updatePayload: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (updates.data !== undefined) {
+        updatePayload.data = updates.data;
+      }
+      if (updates.status !== undefined) {
+        updatePayload.status = updates.status;
+      }
+      if (updates.review_history !== undefined) {
+        updatePayload.review_history = updates.review_history;
+      }
+      if (updates.started_at !== undefined) {
+        updatePayload.started_at = updates.started_at;
+      }
+      if (updates.completed_at !== undefined) {
+        updatePayload.completed_at = updates.completed_at;
+      }
+      if (updates.assigned_to !== undefined) {
+        updatePayload.assigned_to = updates.assigned_to;
+      }
+
+      const { data, error } = await (supabase as any)
+        .from('work_papers')
+        .update(updatePayload)
+        .eq('id', workPaperId)
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116' || error.status === 404 || error.message?.includes('relation')) {
+          console.log('ℹ️ Work papers table does not exist yet.');
+          return null;
+        }
+        throw error;
+      }
+      return data;
+    } catch (error: any) {
+      if (error?.code === 'PGRST116' || error?.status === 404 || error?.message?.includes('relation')) {
+        console.log('ℹ️ Work papers table does not exist yet.');
+        return null;
+      }
+      console.error('❌ Error updating work paper:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Создает рабочие документы из шаблона методологии для проекта
+   */
+  async createWorkPapersFromTemplate(
+    projectId: string,
+    methodologyId: string,
+    teamMembers: Array<{ userId: string; role: string }>
+  ): Promise<number> {
+    try {
+      // Проверяем, существует ли таблица work_papers
+      // Если нет, возвращаем 0 (миграция не применена)
+      const testQuery = await (supabase as any)
+        .from('work_papers')
+        .select('id')
+        .limit(1);
+      
+      if (testQuery.error) {
+        if (testQuery.error.code === 'PGRST116' || testQuery.error.status === 404 || testQuery.error.message?.includes('relation')) {
+          console.log('ℹ️ Work papers table does not exist yet. Migration needs to be applied.');
+          return 0;
+        }
+      }
+
+      // Вызываем SQL функцию для автоматического создания документов
+      const { data, error } = await supabase.rpc('create_work_papers_from_template', {
+        p_project_id: projectId,
+        p_methodology_id: methodologyId
+      });
+
+      if (error) {
+        if (error.code === 'PGRST116' || error.status === 404 || error.message?.includes('function') || error.message?.includes('does not exist')) {
+          console.log('ℹ️ create_work_papers_from_template function does not exist yet. Migration needs to be applied.');
+          return 0;
+        }
+        throw error;
+      }
+
+      const createdCount = data || 0;
+
+      // Назначаем исполнителей на основе ролей команды
+      if (createdCount > 0 && teamMembers.length > 0) {
+        const workPapers = await this.getWorkPapers(projectId);
+        
+        for (const wp of workPapers) {
+          if (wp.template?.default_assignee_role) {
+            // Ищем подходящего члена команды по роли
+            const teamMember = teamMembers.find(tm => {
+              const role = tm.role.toLowerCase();
+              const defaultRole = wp.template.default_assignee_role.toLowerCase();
+              
+              // Маппинг ролей
+              if (defaultRole === 'assistant') {
+                return role.includes('assistant');
+              } else if (defaultRole === 'supervisor') {
+                return role.includes('supervisor') || role.includes('senior');
+              } else if (defaultRole === 'manager') {
+                return role.includes('manager') || role === 'pm';
+              } else if (defaultRole === 'partner') {
+                return role === 'partner';
+              } else if (defaultRole === 'tax') {
+                return role.includes('tax');
+              }
+              return false;
+            });
+
+            if (teamMember) {
+              await this.updateWorkPaper(wp.id, {
+                assigned_to: teamMember.userId
+              });
+            }
+          }
+        }
+      }
+
+      return createdCount;
+    } catch (error) {
+      console.error('❌ Error creating work papers from template:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Получает методологии
+   */
+  async getMethodologies(): Promise<any[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('methodologies')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('❌ Error getting methodologies:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Получает шаблоны методологии
+   */
+  async getMethodologyTemplates(methodologyId: string): Promise<any[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('work_paper_templates')
+        .select(`
+          *,
+          section:methodology_sections(*)
+        `)
+        .eq('section.methodology_id', methodologyId)
+        .order('section.order_index', { ascending: true })
+        .order('order_index', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('❌ Error getting methodology templates:', error);
+      return [];
+    }
+  }
 }
 
 // Экспорт singleton

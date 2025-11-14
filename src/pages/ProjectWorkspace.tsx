@@ -37,7 +37,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { calculateProjectFinances } from "@/types/project-v3";
 import { TaskManager } from "@/components/tasks/TaskManager";
 import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
+import { TemplateManager } from "@/components/projects/TemplateManager";
+import { WorkPaperTree } from "@/components/projects/WorkPaperTree";
+import { WorkPaperViewer } from "@/components/projects/WorkPaperViewer";
 import { Task, ChecklistItem } from "@/types/project";
+import { WorkPaper, WorkPaperTemplate } from "@/types/workPapers";
 import { useMemo } from "react";
 
 export default function ProjectWorkspace() {
@@ -59,6 +63,11 @@ export default function ProjectWorkspace() {
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [isPlanningMode, setIsPlanningMode] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  
+  // Рабочие документы
+  const [workPapers, setWorkPapers] = useState<WorkPaper[]>([]);
+  const [selectedWorkPaper, setSelectedWorkPaper] = useState<WorkPaper | null>(null);
+  const [workPaperSearchQuery, setWorkPaperSearchQuery] = useState('');
   
   // Проверка роли партнёра
   const isPartner = user?.role === 'partner';
@@ -105,14 +114,47 @@ export default function ProjectWorkspace() {
     return grouped;
   }, [projectTasks]);
 
+  // Загрузка рабочих документов проекта
+  useEffect(() => {
+    if (!id) return;
+    
+    const loadWorkPapers = async () => {
+      try {
+        const papers = await supabaseDataStore.getWorkPapers(id);
+        setWorkPapers(papers);
+        
+        // Если есть выбранный документ, обновляем его
+        if (selectedWorkPaper) {
+          const updated = papers.find(wp => wp.id === selectedWorkPaper.id);
+          if (updated) {
+            setSelectedWorkPaper(updated);
+          }
+        }
+      } catch (error) {
+        // Ошибка уже обработана в getWorkPapers, просто устанавливаем пустой массив
+        setWorkPapers([]);
+      }
+    };
+    
+    loadWorkPapers();
+  }, [id]); // Убрали selectedWorkPaper?.id из зависимостей, чтобы избежать бесконечного цикла
+
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
     if (!id) return;
+    
+    // Если проект уже установлен и это тот же проект, не перезагружаем
+    if (project) {
+      const currentProjectId = project.id || project.notes?.id || '';
+      if (currentProjectId === id || (typeof currentProjectId === 'string' && currentProjectId.includes(id))) {
+        return;
+      }
+    }
 
     // ПРИОРИТЕТ 1: Используем проект из state (если передан при навигации)
     if (projectFromState) {
-      const stateProjectId = projectFromState.id || projectFromState.notes?.id;
-      if (stateProjectId === id || stateProjectId?.includes(id)) {
+      const stateProjectId = projectFromState.id || projectFromState.notes?.id || '';
+      if (stateProjectId === id || (typeof stateProjectId === 'string' && stateProjectId.includes(id))) {
         console.log('✅ [ProjectWorkspace] Используем проект из state:', projectFromState.name || projectFromState.id);
         setProject(projectFromState);
         
@@ -839,9 +881,9 @@ export default function ProjectWorkspace() {
         </div>
       )}
 
-      {/* Вкладки: Планирование (для партнера), Задачи, Рабочие процедуры, Файлы */}
+      {/* Вкладки: Планирование (для партнера), Задачи, Рабочие процедуры, Шаблоны, Файлы */}
       <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "tasks"} className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-4 gap-2">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-5 gap-2">
           {isPartner && (
             <TabsTrigger value="planning">
               📋 Планирование
@@ -855,6 +897,9 @@ export default function ProjectWorkspace() {
               🔧 Рабочие процедуры
             </TabsTrigger>
           )}
+          <TabsTrigger value="templates">
+            📄 Шаблоны
+          </TabsTrigger>
           <TabsTrigger value="files">
             📁 Файлы
           </TabsTrigger>
@@ -1096,6 +1141,82 @@ export default function ProjectWorkspace() {
             })}
           </div>
         </TabsContent>
+        )}
+
+        {/* Вкладка шаблонов */}
+        <TabsContent value="templates" className="space-y-4 mt-4">
+          <TemplateManager
+            projectId={project?.id || id || ''}
+            stageId={currentStage?.id}
+            elementId={undefined}
+            onTemplateSelect={(template) => {
+              toast({
+                title: "Шаблон выбран",
+                description: `Шаблон "${template.name}" готов к использованию`,
+              });
+            }}
+          />
+        </TabsContent>
+
+        {/* Вкладка рабочих документов */}
+        {workPapers.length > 0 && (
+          <TabsContent value="workpapers" className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Дерево документов */}
+              <div className="lg:col-span-1">
+                <WorkPaperTree
+                  workPapers={workPapers}
+                  selectedWorkPaperId={selectedWorkPaper?.id}
+                  onSelectWorkPaper={(wp) => {
+                    setSelectedWorkPaper(wp);
+                  }}
+                  searchQuery={workPaperSearchQuery}
+                  onSearchChange={setWorkPaperSearchQuery}
+                />
+              </div>
+              
+              {/* Просмотр документа */}
+              <div className="lg:col-span-2">
+                {selectedWorkPaper ? (
+                  <WorkPaperViewer
+                    workPaper={selectedWorkPaper}
+                    template={selectedWorkPaper.template as WorkPaperTemplate}
+                    onStatusChange={(status) => {
+                      // Обновляем статус в списке
+                      setWorkPapers(prev => 
+                        prev.map(wp => 
+                          wp.id === selectedWorkPaper.id 
+                            ? { ...wp, status }
+                            : wp
+                        )
+                      );
+                      setSelectedWorkPaper(prev => prev ? { ...prev, status } : null);
+                    }}
+                    onSave={(data) => {
+                      // Обновляем данные в списке
+                      setWorkPapers(prev => 
+                        prev.map(wp => 
+                          wp.id === selectedWorkPaper.id 
+                            ? { ...wp, data }
+                            : wp
+                        )
+                      );
+                      setSelectedWorkPaper(prev => prev ? { ...prev, data } : null);
+                    }}
+                    readOnly={false}
+                    showReviewActions={true}
+                  />
+                ) : (
+                  <Card className="p-8 text-center">
+                    <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">
+                      Выберите документ из списка для просмотра и редактирования
+                    </p>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </TabsContent>
         )}
 
         {/* Вкладка файлов */}

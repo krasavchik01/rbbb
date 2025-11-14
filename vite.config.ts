@@ -16,4 +16,11 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['pdfmake/build/pdfmake', 'pdfmake/build/vfs_fonts'],
+    exclude: ['pdfmake'],
+  },
+  ssr: {
+    noExternal: ['pdfmake'],
+  },
 });

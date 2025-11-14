@@ -75,6 +75,32 @@ export function MethodologySelector({
     });
   };
 
+  const getDefaultRoleForElement = (element: ProcedureElement): 'assistant' | 'senior_auditor' | 'manager' | 'partner' => {
+    // Используем defaultRole из элемента методологии, если указан
+    if (element.defaultRole) {
+      const role = element.defaultRole as 'assistant' | 'senior_auditor' | 'manager' | 'partner';
+      if (['assistant', 'senior_auditor', 'manager', 'partner'].includes(role)) {
+        return role;
+      }
+    }
+    
+    // Используем requiredRole для signature элементов
+    if (element.type === 'signature' && element.requiredRole === 'partner') {
+      return 'partner';
+    }
+    
+    // Логика по умолчанию на основе типа элемента
+    switch (element.type) {
+      case 'file':
+        return 'assistant';
+      case 'question':
+      case 'procedure':
+        return 'senior_auditor';
+      default:
+        return 'assistant';
+    }
+  };
+
   const toggleProcedure = (stageId: string, element: ProcedureElement) => {
     const key = `${stageId}-${element.id}`;
     setSelectedProcedures(prev => {
@@ -85,7 +111,7 @@ export function MethodologySelector({
         next.delete(key);
         assignmentsNext.delete(key);
       } else {
-        // При выборе процедуры автоматически назначаем роль по умолчанию
+        // При выборе процедуры автоматически назначаем роль по умолчанию из элемента
         const defaultRole = getDefaultRoleForElement(element);
         next.set(key, {
           stageId,
@@ -98,20 +124,6 @@ export function MethodologySelector({
       setAssignments(assignmentsNext);
       return next;
     });
-  };
-
-  const getDefaultRoleForElement = (element: ProcedureElement): 'assistant' | 'senior_auditor' | 'manager' | 'partner' => {
-    // Логика определения роли по типу элемента
-    if (element.type === 'signature' && element.requiredRole === 'partner') {
-      return 'partner';
-    }
-    if (element.type === 'procedure' && (element.title.toLowerCase().includes('координация') || element.title.toLowerCase().includes('планирование'))) {
-      return 'manager';
-    }
-    if (element.type === 'procedure' && (element.title.toLowerCase().includes('анализ') || element.title.toLowerCase().includes('оценка'))) {
-      return 'senior_auditor';
-    }
-    return 'assistant'; // По умолчанию
   };
 
   const updateResponsible = (key: string, role: 'assistant' | 'senior_auditor' | 'manager' | 'partner', userId?: string) => {

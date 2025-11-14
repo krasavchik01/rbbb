@@ -46,6 +46,10 @@ export interface ProcedureElement {
     maxFileSize?: number;    // В MB
     allowedFileTypes?: string[];
   };
+  
+  // Привязка к шаблонам
+  templateIds?: string[]; // ID шаблонов из auditTemplates.ts
+  defaultRole?: string;   // Роль по умолчанию для этого элемента
 }
 
 // Этап проекта с процедурами

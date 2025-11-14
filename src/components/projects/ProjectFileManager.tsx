@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { supabase } from "@/integrations/supabase/client";
 import { ProjectFile } from "@/types/project-v3";
 
 interface ProjectFileManagerProps {
@@ -163,15 +164,48 @@ export function ProjectFileManager({
   };
 
   // Скачивание файла
-  const handleDownloadFile = (file: ProjectFile) => {
-    // Используем публичный URL из Storage
-    const url = (file as any).publicUrl || file.storagePath;
-    if (url) {
-      window.open(url, '_blank');
-    } else {
+  const handleDownloadFile = async (file: ProjectFile) => {
+    try {
+      // Используем публичный URL из Storage
+      let url = (file as any).publicUrl;
+      
+      // Если публичного URL нет, получаем signed URL из Supabase Storage
+      if (!url && file.storagePath) {
+        try {
+          const { data, error } = await supabase.storage
+            .from('project-files')
+            .createSignedUrl(file.storagePath, 3600); // URL действителен 1 час
+          
+          if (error) throw error;
+          url = data.signedUrl;
+        } catch (error) {
+          console.error('Ошибка получения signed URL:', error);
+          // Пробуем использовать storagePath напрямую
+          url = file.storagePath;
+        }
+      }
+      
+      if (url) {
+        // Создаем временную ссылку для скачивания
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.fileName;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        toast({
+          title: "Ошибка",
+          description: "URL файла не найден",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error('Ошибка скачивания файла:', error);
       toast({
         title: "Ошибка",
-        description: "URL файла не найден",
+        description: error?.message || "Не удалось скачать файл",
         variant: "destructive",
       });
     }

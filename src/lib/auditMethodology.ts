@@ -79,7 +79,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Проверка независимости всех участников команды и фирмы',
           description: 'Проверьте всех участников команды на отсутствие конфликтов интересов',
           required: true,
-          order: 2
+          order: 2,
+          templateIds: ['tpl-004', 'tpl-005'],
+          defaultRole: 'manager'
         },
         {
           id: 'el-1-3',
@@ -95,7 +97,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Оценка компетенций и ресурсов для задания',
           description: 'Оцените наличие необходимых компетенций и ресурсов для выполнения задания',
           required: true,
-          order: 4
+          order: 4,
+          templateIds: ['tpl-006', 'tpl-007'],
+          defaultRole: 'partner'
         },
         {
           id: 'el-1-5',
@@ -103,6 +107,8 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Письмо-обязательство',
           required: true,
           order: 5,
+          templateIds: ['tpl-008'],
+          defaultRole: 'partner',
           config: {
             allowedFileTypes: ['.pdf', '.docx'],
             maxFileSize: 10
@@ -138,7 +144,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Сбор информации о бизнесе, целях, стратегиях и внешней среде',
           description: 'Проведите анализ отрасли, рынка и специфики бизнеса клиента',
           required: true,
-          order: 2
+          order: 2,
+          templateIds: ['tpl-002', 'tpl-018', 'tpl-019'],
+          defaultRole: 'senior_auditor'
         },
         {
           id: 'el-2-3',
@@ -146,7 +154,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Предварительная оценка существенности',
           question: 'Какой уровень существенности установлен для данного аудита?',
           required: true,
-          order: 3
+          order: 3,
+          templateIds: ['tpl-021'],
+          defaultRole: 'manager'
         },
         {
           id: 'el-2-4',
@@ -154,7 +164,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Планирование состава команды и распределение задач',
           description: 'Определите состав команды, распределите задачи и установите сроки',
           required: true,
-          order: 4
+          order: 4,
+          templateIds: ['tpl-009', 'tpl-016', 'tpl-017', 'tpl-024'],
+          defaultRole: 'manager'
         },
         {
           id: 'el-2-5',
@@ -186,7 +198,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Анализ внешних и внутренних факторов',
           description: 'Проанализируйте отрасль, регуляторные условия, цели и стратегии клиента',
           required: true,
-          order: 2
+          order: 2,
+          templateIds: ['tpl-020'],
+          defaultRole: 'manager'
         },
         {
           id: 'el-3-3',
@@ -194,7 +208,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Риски мошенничества и связанных сторон',
           question: 'Выявлены ли риски мошенничества или связанных сторон?',
           required: true,
-          order: 3
+          order: 3,
+          templateIds: ['tpl-022'],
+          defaultRole: 'manager'
         },
         {
           id: 'el-3-4',
@@ -202,7 +218,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Разработка мер реагирования на риски',
           description: 'Разработайте стратегию аудита с мерами реагирования на выявленные риски',
           required: true,
-          order: 4
+          order: 4,
+          templateIds: ['tpl-023'],
+          defaultRole: 'manager'
         },
         {
           id: 'el-3-5',
@@ -242,7 +260,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Описание ключевых компонентов контроля',
           description: 'Опишите контрольную среду, процессы оценки рисков, информационные системы',
           required: true,
-          order: 2
+          order: 2,
+          templateIds: ['tpl-014'],
+          defaultRole: 'senior_auditor'
         },
         {
           id: 'el-4-3',
@@ -306,7 +326,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Тесты деталей',
           description: 'Проведите внешние подтверждения, выборочные проверки, пересчёты и инспекции',
           required: true,
-          order: 3
+          order: 3,
+          templateIds: ['tpl-026', 'tpl-027', 'tpl-028', 'tpl-030', 'tpl-032', 'tpl-033', 'tpl-036'],
+          defaultRole: 'senior_auditor'
         },
         {
           id: 'el-5-4',
@@ -314,7 +336,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Тестирование бухгалтерских оценок',
           question: 'Проверены ли бухгалтерские оценки, раскрытия информации и специальные области?',
           required: true,
-          order: 4
+          order: 4,
+          templateIds: ['tpl-035', 'tpl-036'],
+          defaultRole: 'senior_auditor'
         },
         {
           id: 'el-5-5',
@@ -330,6 +354,8 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Рабочие файлы с доказательствами',
           required: true,
           order: 6,
+          templateIds: ['tpl-028-ppe', 'tpl-031', 'tpl-037', 'tpl-039', 'tpl-041', 'tpl-042'],
+          defaultRole: 'assistant',
           config: {
             multipleFiles: true,
             allowedFileTypes: ['.pdf', '.xlsx', '.docx'],
@@ -358,7 +384,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Обзор аудиторской документации',
           description: 'Проведите финальный обзор документации на предмет полноты и точности',
           required: true,
-          order: 2
+          order: 2,
+          templateIds: ['tpl-040', 'tpl-015'],
+          defaultRole: 'partner'
         },
         {
           id: 'el-6-3',
@@ -374,7 +402,9 @@ export const RUSSELL_BEDFORD_AUDIT_METHODOLOGY: ProjectTemplate = {
           title: 'Получение письменных представлений от руководства',
           description: 'Получите письменные представления от руководства клиента',
           required: true,
-          order: 4
+          order: 4,
+          templateIds: ['tpl-011'],
+          defaultRole: 'partner'
         },
         {
           id: 'el-6-5',

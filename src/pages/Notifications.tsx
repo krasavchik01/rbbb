@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Bell, Check, Trash2, Search, ExternalLink } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProjects } from "@/hooks/useSupabaseData";
+import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { 
   getNotifications, 
   markAsRead, 
@@ -17,6 +19,7 @@ import {
 export default function Notifications() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { projects } = useProjects();
   const [query, setQuery] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -54,7 +57,7 @@ export default function Notifications() {
     loadNotifications();
   };
 
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = async (notification: Notification) => {
     // Отмечаем как прочитанное
     if (!notification.read) {
       markAsRead(notification.id);
@@ -62,7 +65,36 @@ export default function Notifications() {
     
     // Переходим по ссылке если есть
     if (notification.actionUrl) {
-      navigate(notification.actionUrl);
+      // Если это ссылка на проект, загружаем проект и передаем в state
+      const projectMatch = notification.actionUrl.match(/^\/project\/([^\/]+)/);
+      if (projectMatch) {
+        const projectId = projectMatch[1];
+        
+        // Ищем проект в списке проектов
+        let project = projects.find(p => {
+          const pId = p.id || p.notes?.id || '';
+          return pId === projectId || (typeof pId === 'string' && pId.includes(projectId));
+        });
+        
+        // Если не нашли, загружаем напрямую из Supabase
+        if (!project) {
+          try {
+            const allProjects = await supabaseDataStore.getProjects();
+            project = allProjects.find(p => {
+              const pId = p.id || p.notes?.id || '';
+              return pId === projectId || (typeof pId === 'string' && pId.includes(projectId));
+            });
+          } catch (error) {
+            console.error('Ошибка загрузки проекта:', error);
+          }
+        }
+        
+        // Переходим с проектом в state
+        navigate(notification.actionUrl, { state: project ? { project } : undefined });
+      } else {
+        // Для других ссылок просто переходим
+        navigate(notification.actionUrl);
+      }
     }
   };
 

@@ -13,6 +13,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- PDFMake через CDN для поддержки кириллицы -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/pdfmake.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/vfs_fonts.min.js" defer></script>
+    
     <script type="module" src="/src/main.tsx"></script>
     <script>
       // Минимальное отключение Service Worker
