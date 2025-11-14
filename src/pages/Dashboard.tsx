@@ -20,7 +20,8 @@ import {
   Activity,
   CheckCircle,
   AlertTriangle,
-  Zap
+  Zap,
+  XCircle
 } from 'lucide-react';
 
 // Простые компоненты графиков без Recharts
