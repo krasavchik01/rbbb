@@ -19,15 +19,16 @@ interface NavItem {
   icon: any;
   label: string;
   excludeRoles?: string[];
+  allowedRoles?: string[];
 }
 
 const allNavItems: NavItem[] = [
   { to: '/dashboard', icon: Home, label: 'Главная' },
   { to: '/projects', icon: FolderKanban, label: 'Проекты' },
-  { to: '/hr', icon: Users, label: 'HR', excludeRoles: ['procurement'] },
-  { to: '/attendance', icon: Activity, label: 'Посещаемость', excludeRoles: ['procurement'] },
+  { to: '/hr', icon: Users, label: 'HR', allowedRoles: ['hr'] },
+  { to: '/attendance', icon: Activity, label: 'Посещаемость', allowedRoles: ['ceo', 'deputy_director'] },
   { to: '/analytics', icon: BarChart3, label: 'Аналитика', excludeRoles: ['procurement'] },
-  { to: '/settings', icon: Settings, label: 'Настройки' },
+  { to: '/settings', icon: Settings, label: 'Настройки', excludeRoles: ['ceo', 'deputy_director'] },
 ];
 
 export const MobileNavigation = () => {
@@ -37,8 +38,16 @@ export const MobileNavigation = () => {
   // Фильтруем пункты меню по роли пользователя
   const navItems = useMemo(() => {
     return allNavItems.filter(item => {
-      if (!item.excludeRoles) return true;
-      return !item.excludeRoles.includes(user?.role || '');
+      // Если указаны allowedRoles - проверяем вхождение
+      if (item.allowedRoles) {
+        return item.allowedRoles.includes(user?.role || '');
+      }
+      // Если указаны excludeRoles - проверяем исключение
+      if (item.excludeRoles) {
+        return !item.excludeRoles.includes(user?.role || '');
+      }
+      // Если ничего не указано - показываем всем
+      return true;
     });
   }, [user?.role]);
 
@@ -131,8 +140,16 @@ export const MobileHeader = () => {
                 <div className="space-y-2">
                   {allNavItems
                     .filter(item => {
-                      if (!item.excludeRoles) return true;
-                      return !item.excludeRoles.includes(user?.role || '');
+                      // Если указаны allowedRoles - проверяем вхождение
+                      if (item.allowedRoles) {
+                        return item.allowedRoles.includes(user?.role || '');
+                      }
+                      // Если указаны excludeRoles - проверяем исключение
+                      if (item.excludeRoles) {
+                        return !item.excludeRoles.includes(user?.role || '');
+                      }
+                      // Если ничего не указано - показываем всем
+                      return true;
                     })
                     .map((item) => {
                       const Icon = item.icon;

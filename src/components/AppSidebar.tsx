@@ -91,12 +91,12 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['partner', 'deputy_director', 'ceo', 'admin']
   },
   
-  // HR и команда - для всех кроме procurement
+  // HR - только для HR специалиста
   { 
     title: "HR", 
     url: "/hr", 
     icon: UserCheck,
-    excludeRoles: ['procurement']
+    allowedRoles: ['hr']
   },
   
   // Работа и время - для всех кроме procurement и директоров
@@ -106,11 +106,12 @@ const menuItems: MenuItem[] = [
     icon: Clock,
     excludeRoles: ['procurement', 'ceo', 'deputy_director']
   },
+  // Посещаемость - только для директоров
   { 
     title: "Посещаемость", 
     url: "/attendance", 
     icon: Activity,
-    excludeRoles: ['procurement', 'ceo', 'deputy_director']
+    allowedRoles: ['ceo', 'deputy_director']
   },
   
   // Бонусы - для всех кроме procurement
@@ -171,7 +172,7 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['admin', 'partner']
   },
   
-  // Технические - только для админов и CEO
+  // Технические - только для админов
   { 
     title: "Диагностика", 
     url: "/diagnostics", 
@@ -182,13 +183,13 @@ const menuItems: MenuItem[] = [
     title: "Тест БД", 
     url: "/database-test", 
     icon: Activity,
-    allowedRoles: ['admin', 'ceo']
+    allowedRoles: ['admin']
   },
   { 
     title: "SMTP Настройки", 
     url: "/smtp-settings", 
     icon: Mail,
-    allowedRoles: ['admin', 'ceo']
+    allowedRoles: ['admin']
   },
   
   // Настройки - для всех кроме директоров

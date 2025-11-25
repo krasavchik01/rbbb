@@ -73,7 +73,7 @@ function App() {
             <Route
               path="/hr"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['hr']}>
                   <Layout>
                     <HR />
                   </Layout>
@@ -153,7 +153,7 @@ function App() {
             <Route
               path="/attendance"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['ceo', 'deputy_director']}>
                   <Layout>
                     <Attendance />
                   </Layout>
@@ -243,7 +243,7 @@ function App() {
             <Route
               path="/diagnostics"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['admin']}>
                   <Layout>
                     <SupabaseDiagnostics />
                   </Layout>
@@ -253,7 +253,7 @@ function App() {
             <Route
               path="/database-test"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+                <ProtectedRoute allowedRoles={['admin']}>
                   <Layout>
                     <DatabaseTest />
                   </Layout>
@@ -273,7 +273,7 @@ function App() {
             <Route
               path="/smtp-settings"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+                <ProtectedRoute allowedRoles={['admin']}>
                   <Layout>
                     <SMTPSettings />
                   </Layout>
