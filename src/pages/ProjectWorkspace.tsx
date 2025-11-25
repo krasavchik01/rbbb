@@ -72,8 +72,11 @@ export default function ProjectWorkspace() {
   // Проверка роли партнёра
   const isPartner = user?.role === 'partner';
   const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
+  const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
   const canCompleteProject = isPartner || isPM;
   const isCompleted = project?.status === 'completed' || project?.notes?.status === 'completed';
+  // Директор/зам видят только общую информацию, без деталей методологии
+  const showFullDetails = !isDirector;
   
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
   const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } = 
@@ -754,6 +757,67 @@ export default function ProjectWorkspace() {
         </Card>
       )}
 
+      {/* Информационная панель для директора/зама - только общая информация */}
+      {isDirector && project && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Команда проекта */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Команда</h3>
+            </div>
+            <div className="space-y-2">
+              <p className="text-2xl font-bold">{(project.team || project.notes?.team || []).length}</p>
+              <p className="text-xs text-muted-foreground">участников</p>
+            </div>
+          </Card>
+
+          {/* Статус */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Статус</h3>
+            </div>
+            <Badge variant="outline" className="text-sm">
+              {project.status === 'approved' ? 'Утвержден' :
+               project.status === 'in_progress' ? 'В работе' :
+               project.status === 'completed' ? 'Завершен' :
+               project.notes?.status === 'approved' ? 'Утвержден' :
+               project.notes?.status === 'in_progress' ? 'В работе' :
+               project.notes?.status === 'completed' ? 'Завершен' :
+               'Неизвестно'}
+            </Badge>
+          </Card>
+
+          {/* Прогресс */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Прогресс</h3>
+            </div>
+            <div className="space-y-2">
+              <p className="text-2xl font-bold">{project.completionPercent || project.completion || 0}%</p>
+              <Progress value={project.completionPercent || project.completion || 0} className="h-2" />
+            </div>
+          </Card>
+
+          {/* Дедлайн */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Дедлайн</h3>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                {project.contract?.serviceEndDate || project.deadline || project.contract?.date 
+                  ? new Date(project.contract?.serviceEndDate || project.deadline || project.contract?.date).toLocaleDateString('ru-RU')
+                  : 'Не указан'}
+              </p>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Информационная панель для партнера */}
       {isPartner && project && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -892,14 +956,16 @@ export default function ProjectWorkspace() {
           <TabsTrigger value="tasks">
             ✅ Задачи
           </TabsTrigger>
-          {activeTemplate && (
+          {activeTemplate && showFullDetails && (
             <TabsTrigger value="procedures">
               🔧 Рабочие процедуры
             </TabsTrigger>
           )}
-          <TabsTrigger value="templates">
-            📄 Шаблоны
-          </TabsTrigger>
+          {showFullDetails && (
+            <TabsTrigger value="templates">
+              📄 Шаблоны
+            </TabsTrigger>
+          )}
           <TabsTrigger value="files">
             📁 Файлы
           </TabsTrigger>
@@ -1111,8 +1177,8 @@ export default function ProjectWorkspace() {
           </Card>
         </TabsContent>
 
-        {/* Вкладка рабочих процедур (только если есть шаблон) */}
-        {activeTemplate && (
+        {/* Вкладка рабочих процедур (только если есть шаблон и не директор) */}
+        {activeTemplate && showFullDetails && (
           <TabsContent value="procedures" className="space-y-4 mt-4">
           {/* Навигация по этапам */}
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -1143,20 +1209,22 @@ export default function ProjectWorkspace() {
         </TabsContent>
         )}
 
-        {/* Вкладка шаблонов */}
-        <TabsContent value="templates" className="space-y-4 mt-4">
-          <TemplateManager
-            projectId={project?.id || id || ''}
-            stageId={currentStage?.id}
-            elementId={undefined}
-            onTemplateSelect={(template) => {
-              toast({
-                title: "Шаблон выбран",
-                description: `Шаблон "${template.name}" готов к использованию`,
-              });
-            }}
-          />
-        </TabsContent>
+        {/* Вкладка шаблонов (только если не директор) */}
+        {showFullDetails && (
+          <TabsContent value="templates" className="space-y-4 mt-4">
+            <TemplateManager
+              projectId={project?.id || id || ''}
+              stageId={currentStage?.id}
+              elementId={undefined}
+              onTemplateSelect={(template) => {
+                toast({
+                  title: "Шаблон выбран",
+                  description: `Шаблон "${template.name}" готов к использованию`,
+                });
+              }}
+            />
+          </TabsContent>
+        )}
 
         {/* Вкладка рабочих документов */}
         {workPapers.length > 0 && (
@@ -1231,8 +1299,8 @@ export default function ProjectWorkspace() {
         </TabsContent>
       </Tabs>
 
-      {/* Текущий этап - только если не вкладка планирования */}
-      {!isPartner && currentStage && (
+      {/* Текущий этап - только если не вкладка планирования и не директор */}
+      {!isPartner && !isDirector && currentStage && showFullDetails && (
         <Card className="p-6">
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">

@@ -49,20 +49,21 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
+  // Основные разделы - для всех
   { 
     title: "Дашборд", 
     url: "/", 
     icon: LayoutDashboard
-    // Нет ограничений - доступно всем
   },
   { 
     title: "Проекты", 
     url: "/projects", 
     icon: FolderOpen
-    // Нет ограничений - доступно всем
   },
+  
+  // Закупки - только для procurement
   { 
-    title: "Создать проект (Закупки)", 
+    title: "Создать проект", 
     url: "/create-project-procurement", 
     icon: FileText,
     allowedRoles: ['procurement']
@@ -73,74 +74,84 @@ const menuItems: MenuItem[] = [
     icon: Award,
     allowedRoles: ['procurement']
   },
+  
+  // Управление проектами - для директоров
   { 
     title: "Утверждение проектов", 
     url: "/project-approval", 
     icon: CheckSquare,
     allowedRoles: ['deputy_director', 'ceo']
   },
+  
+  // Compliance - для партнеров и директоров
   { 
     title: "МСУК-1 Compliance", 
     url: "/msuk-compliance", 
     icon: Shield,
     allowedRoles: ['partner', 'deputy_director', 'ceo', 'admin']
   },
+  
+  // HR и команда - для всех кроме procurement
   { 
     title: "HR", 
     url: "/hr", 
     icon: UserCheck,
     excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
   },
+  
+  // Работа и время - для всех кроме procurement и директоров
   { 
     title: "Тайм-щиты", 
     url: "/timesheets", 
     icon: Clock,
-    excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
+    excludeRoles: ['procurement', 'ceo', 'deputy_director']
   },
   { 
     title: "Посещаемость", 
     url: "/attendance", 
     icon: Activity,
-    excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
+    excludeRoles: ['procurement', 'ceo', 'deputy_director']
   },
+  
+  // Бонусы - для всех кроме procurement
   { 
     title: "Бонусы", 
     url: "/bonuses", 
     icon: Gift,
-    permission: 'VIEW_BONUSES', // Ключ разрешения, а не массив
+    permission: 'VIEW_BONUSES',
     excludeRoles: ['procurement']
   },
+  
+  // Аналитика - для партнеров, менеджеров и директоров
   { 
     title: "Аналитика", 
     url: "/analytics", 
     icon: TrendingUp,
-    excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
+    allowedRoles: ['partner', 'manager_1', 'manager_2', 'manager_3', 'deputy_director', 'ceo', 'admin']
   },
+  
+  // Планирование - для всех кроме procurement
   { 
     title: "Календарь", 
     url: "/calendar", 
     icon: Calendar,
     excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
   },
   { 
     title: "Задачи", 
     url: "/tasks", 
     icon: CheckSquare,
     excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
   },
+  
+  // Уведомления - для всех
   { 
     title: "Уведомления", 
     url: "/notifications", 
-    icon: Bell,
-    excludeRoles: ['procurement']
-    // Нет ограничений по разрешениям
+    icon: Bell
   },
+  
+  // Администрирование - только для админов и партнеров
   { 
     title: "Управление", 
     url: "/user-management", 
@@ -159,6 +170,8 @@ const menuItems: MenuItem[] = [
     icon: FileText,
     allowedRoles: ['admin', 'partner']
   },
+  
+  // Технические - только для админов и CEO
   { 
     title: "Диагностика", 
     url: "/diagnostics", 
@@ -177,11 +190,13 @@ const menuItems: MenuItem[] = [
     icon: Mail,
     allowedRoles: ['admin', 'ceo']
   },
+  
+  // Настройки - для всех кроме директоров
   { 
     title: "Настройки", 
     url: "/settings", 
     icon: Settings,
-    excludeRoles: ['ceo', 'deputy_director'] // Директорам не нужны настройки
+    excludeRoles: ['ceo', 'deputy_director']
   },
 ];
 
@@ -230,13 +245,16 @@ export function AppSidebar() {
           </div>
         </div>
 
+        {/* Основные разделы */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
-            Навигация
+            Основное
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-2">
-              {menuItems.map((item) => {
+              {menuItems.filter(item => 
+                ['Дашборд', 'Проекты', 'Уведомления'].includes(item.title)
+              ).map((item) => {
                 // Проверяем разрешения
                 // item.permission может быть строкой (ключ разрешения) или массивом (старый формат)
                 let hasPermission = true;
@@ -304,6 +322,157 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Работа */}
+        {menuItems.some(item => {
+          const hasPermission = !item.permission || checkPermission(item.permission);
+          const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
+          const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
+          return hasPermission && hasRoleAccess && !isExcluded && 
+                 ['Создать проект', 'Тендеры', 'Утверждение проектов', 'МСУК-1 Compliance', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title);
+        }) && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
+              Работа
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-2">
+                {menuItems.filter(item => 
+                  ['Создать проект', 'Тендеры', 'Утверждение проектов', 'МСУК-1 Compliance', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title)
+                ).map((item) => {
+                  let hasPermission = true;
+                  if (item.permission) {
+                    if (typeof item.permission === 'string') {
+                      hasPermission = checkPermission(item.permission);
+                    } else if (Array.isArray(item.permission)) {
+                      const permissionArray = item.permission as string[];
+                      hasPermission = permissionArray.includes(user.role);
+                    }
+                  }
+                  const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
+                  const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
+
+                  if (!hasPermission || !hasRoleAccess || isExcluded) {
+                    return null;
+                  }
+
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end
+                          onClick={() => {
+                            const isMobile = window.innerWidth < 768;
+                            if (isMobile) {
+                              setOpenMobile(false);
+                            }
+                          }}
+                          className={({ isActive }) =>
+                            `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-300 touch-manipulation min-h-[44px] md:min-h-0 ${
+                              isActive
+                                ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
+                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70"
+                            }`
+                          }
+                        >
+                          <div className="relative flex-shrink-0">
+                            <item.icon className="w-5 h-5 md:w-5 md:h-5" />
+                            {item.url === "/notifications" && unreadCount > 0 && (
+                              <Badge 
+                                variant="destructive" 
+                                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
+                              >
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                              </Badge>
+                            )}
+                          </div>
+                          {!collapsed && (
+                            <span className="font-medium flex-1 text-sm md:text-base">{item.title}</span>
+                          )}
+                          {!collapsed && item.url === "/notifications" && unreadCount > 0 && (
+                            <Badge variant="destructive" className="ml-auto text-xs">
+                              {unreadCount}
+                            </Badge>
+                          )}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Администрирование */}
+        {menuItems.some(item => {
+          const hasPermission = !item.permission || checkPermission(item.permission);
+          const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
+          const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
+          return hasPermission && hasRoleAccess && !isExcluded && 
+                 ['Управление', 'Роли', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title);
+        }) && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
+              Администрирование
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-2">
+                {menuItems.filter(item => 
+                  ['Управление', 'Роли', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title)
+                ).map((item) => {
+                  let hasPermission = true;
+                  if (item.permission) {
+                    if (typeof item.permission === 'string') {
+                      hasPermission = checkPermission(item.permission);
+                    } else if (Array.isArray(item.permission)) {
+                      const permissionArray = item.permission as string[];
+                      hasPermission = permissionArray.includes(user.role);
+                    }
+                  }
+                  const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
+                  const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
+
+                  if (!hasPermission || !hasRoleAccess || isExcluded) {
+                    return null;
+                  }
+
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end
+                          onClick={() => {
+                            const isMobile = window.innerWidth < 768;
+                            if (isMobile) {
+                              setOpenMobile(false);
+                            }
+                          }}
+                          className={({ isActive }) =>
+                            `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-300 touch-manipulation min-h-[44px] md:min-h-0 ${
+                              isActive
+                                ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
+                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70"
+                            }`
+                          }
+                        >
+                          <div className="relative flex-shrink-0">
+                            <item.icon className="w-5 h-5 md:w-5 md:h-5" />
+                          </div>
+                          {!collapsed && (
+                            <span className="font-medium flex-1 text-sm md:text-base">{item.title}</span>
+                          )}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* User Info & Logout */}
         <div className="mt-auto p-4 border-t border-glass-border">

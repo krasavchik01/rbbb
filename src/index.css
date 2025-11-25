@@ -369,6 +369,20 @@
     }
   }
 
+  /* Shimmer анимация для графиков */
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
+
   /* Enhanced Glass Effects */
   .glass-enhanced {
     background: linear-gradient(135deg, 
