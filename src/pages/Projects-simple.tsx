@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate, saveImportedProjects } from "@/lib/excelExport";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
+import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates";
 
 // Простые типы
 interface SimpleProject {
@@ -641,23 +643,61 @@ export default function Projects() {
 
     try {
       const projectId = projectForTeamDistribution.id || projectForTeamDistribution.notes?.id;
+      const projectName = projectForTeamDistribution.name || projectForTeamDistribution.client?.name || 'Проект';
       
+      // Формируем команду с ролями для уведомлений
+      const teamWithRoles = selectedTeamMembers.map((memberId: string) => {
+        const employee = employees.find((e: any) => e.id === memberId);
+        return {
+          userId: memberId,
+          role: employee?.role || 'employee',
+          name: employee?.name || 'Сотрудник'
+        };
+      });
+
       // Обновляем проект с командой через Supabase
       const updatedNotes = {
         ...projectForTeamDistribution.notes,
-        team: selectedTeamMembers,
+        team: teamWithRoles,
         status: 'team_assembled', // Меняем статус на "команда собрана"
       };
 
       await supabaseDataStore.updateProject(projectId, {
         ...projectForTeamDistribution,
         notes: updatedNotes,
-        team: selectedTeamMembers,
+        team: teamWithRoles,
+      });
+
+      // Отправляем уведомления всем участникам команды
+      const deputyDirectorName = user?.name || 'Заместитель директора';
+      const teamIds = teamWithRoles.map((m: any) => m.userId);
+      
+      // Уведомляем всех участников команды
+      notifyTeamAssembled({
+        projectName,
+        teamIds,
+        projectId,
+        pmName: deputyDirectorName
+      });
+
+      // Дополнительно уведомляем каждого участника индивидуально
+      teamWithRoles.forEach((member: any) => {
+        const employee = employees.find((e: any) => e.id === member.userId);
+        if (employee) {
+          notifyTeamMemberAdded({
+            projectName,
+            memberId: member.userId,
+            memberName: employee.name,
+            role: employee.role || 'Сотрудник',
+            assignerName: deputyDirectorName,
+            projectId
+          });
+        }
       });
 
       toast({
         title: "✅ Команда распределена",
-        description: `Команда из ${selectedTeamMembers.length} участников назначена на проект`,
+        description: `Команда из ${selectedTeamMembers.length} участников назначена на проект. Уведомления отправлены.`,
       });
 
       setProjectForTeamDistribution(null);
@@ -740,6 +780,19 @@ export default function Projects() {
         return isPartnerInTeam;
       });
       console.log(`🔍 [Projects] Фильтрация для партнера ${user.id}: показано ${filtered.length} из ${uniqueProjects.length} проектов`);
+    }
+    
+    // ФИЛЬТРАЦИЯ ПО РОЛИ: Менеджеры видят только проекты где они в команде
+    if (user && (user.role === 'manager_1' || user.role === 'manager_2' || user.role === 'manager_3')) {
+      filtered = filtered.filter(project => {
+        const team = project.team || project.notes?.team || [];
+        const isManagerInTeam = team.some((member: any) => {
+          const memberId = member.userId || member.id || member.employeeId;
+          return memberId === user.id;
+        });
+        return isManagerInTeam;
+      });
+      console.log(`🔍 [Projects] Фильтрация для менеджера ${user.id}: показано ${filtered.length} из ${uniqueProjects.length} проектов`);
     }
     
     // 1. Поиск по тексту (существующий)
@@ -853,6 +906,32 @@ export default function Projects() {
       checklistProgress: Math.round(checklistProgress * 100)
     };
   };
+
+  // Функция расчета заполнения документов
+  const getDocumentCompletion = useCallback((project: any) => {
+    // Всего шаблонов
+    const totalTemplates = ALL_AUDIT_TEMPLATES.length;
+    
+    // Проверяем заполненные документы в projectData или notes
+    const projectData = project.projectData || project.notes?.projectData;
+    const completedDocuments = projectData?.completedDocuments || project.notes?.completedDocuments || [];
+    
+    // Если есть данные о заполнении
+    if (Array.isArray(completedDocuments) && completedDocuments.length > 0) {
+      return {
+        completed: completedDocuments.length,
+        total: totalTemplates,
+        percentage: Math.round((completedDocuments.length / totalTemplates) * 100)
+      };
+    }
+    
+    // Если нет данных - возвращаем 0
+    return {
+      completed: 0,
+      total: totalTemplates,
+      percentage: 0
+    };
+  }, []);
 
   const ProjectCard = ({ project }: { project: any }) => {
     const projectId = project.id || project.notes?.id;
@@ -1767,6 +1846,7 @@ export default function Projects() {
                     <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📈 Прогресс</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">✅ Задачи</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📝 Чек-лист</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📄 Документы</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">👥 Команда</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📅 Дедлайн</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">⚡ Действия</th>
@@ -1935,9 +2015,34 @@ export default function Projects() {
                         </td>
                         
                         <td className="px-3 py-3">
+                          {(() => {
+                            const docCompletion = getDocumentCompletion(project);
+                            return (
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-1 text-xs">
+                                  <span className="font-medium">{docCompletion.completed}/{docCompletion.total}</span>
+                                  <span className="text-muted-foreground">({docCompletion.percentage}%)</span>
+                                </div>
+                                <Progress value={docCompletion.percentage} className="h-1.5 w-16" />
+                                <div className="flex flex-wrap gap-0.5 mt-1">
+                                  {Array.from({ length: Math.min(docCompletion.total, 10) }).map((_, i) => (
+                                    <span key={i} className="text-[8px]">
+                                      {i < docCompletion.completed ? '✅' : '⭕'}
+                                    </span>
+                                  ))}
+                                  {docCompletion.total > 10 && (
+                                    <span className="text-[8px] text-muted-foreground">+{docCompletion.total - 10}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        
+                        <td className="px-3 py-3">
                           <div className="flex items-center space-x-1 text-xs">
                             <span>👥</span>
-                            <span>{project.team}</span>
+                            <span>{project.team?.length || project.team || 0}</span>
                           </div>
                         </td>
                         
@@ -2110,7 +2215,7 @@ export default function Projects() {
       {/* Диалог распределения команды - только для зам. директора */}
       {user?.role === 'deputy_director' && projectForTeamDistribution && (
         <Dialog open={!!projectForTeamDistribution} onOpenChange={() => setProjectForTeamDistribution(null)}>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[700px]">
             <DialogHeader>
               <DialogTitle>Распределить команду</DialogTitle>
               <DialogDescription>
@@ -2148,6 +2253,21 @@ export default function Projects() {
               <div className="text-sm text-muted-foreground">
                 Выбрано: {selectedTeamMembers.length} участников
               </div>
+
+              {/* Информация о следующих шагах */}
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <ArrowRight className="w-4 h-4" />
+                  Следующие шаги после распределения команды:
+                </h4>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Партнёр получит уведомление о назначенной команде</li>
+                  <li>Партнёр должен выбрать методологию и распределить задачи</li>
+                  <li>Автоматически создадутся задачи на основе методологии</li>
+                  <li>Команда начнёт заполнять документы по этапам проекта</li>
+                  <li>Менеджер проекта будет отслеживать прогресс выполнения</li>
+                </ol>
+              </div>
             </div>
             
             <DialogFooter>
@@ -2155,7 +2275,7 @@ export default function Projects() {
                 Отмена
               </Button>
               <Button onClick={handleSaveTeamDistribution}>
-                Сохранить команду
+                Сохранить команду и отправить уведомления
               </Button>
             </DialogFooter>
           </DialogContent>

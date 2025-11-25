@@ -218,3 +218,6 @@ UI: Shadcn/UI + Tailwind
 - Для простых задач: Sequential Thinking → Реализация → Playwright
 
 
+
+
+
