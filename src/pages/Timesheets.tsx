@@ -316,7 +316,7 @@ export default function Timesheets() {
           </div>
         </Card>
       </div>
-
+      
       {/* Кнопка добавления (только для тех, кто может заполнять) */}
       {canFillTimesheets && (
         <div className="flex justify-end">

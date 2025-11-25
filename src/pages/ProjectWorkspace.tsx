@@ -13,6 +13,7 @@ import {
   Check, 
   Upload,
   FileText,
+  CheckCircle,
   CheckCircle2,
   Circle,
   ChevronRight,
@@ -36,6 +37,7 @@ import { notifyTaskAssigned, notifyProjectClosed, notifyBonusesApproved } from "
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { calculateProjectFinances } from "@/types/project-v3";
 import { TaskManager } from "@/components/tasks/TaskManager";
+import { TaskDistribution } from "@/components/tasks/TaskDistribution";
 import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 import { TemplateManager } from "@/components/projects/TemplateManager";
 import { WorkPaperTree } from "@/components/projects/WorkPaperTree";
@@ -945,9 +947,9 @@ export default function ProjectWorkspace() {
         </div>
       )}
 
-      {/* Вкладки: Планирование (для партнера), Задачи, Рабочие процедуры, Шаблоны, Файлы */}
+      {/* Вкладки: Планирование (для партнера), Задачи, Распределение задач, Рабочие процедуры, Шаблоны, Файлы */}
       <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "tasks"} className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-5 gap-2">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-6 gap-2">
           {isPartner && (
             <TabsTrigger value="planning">
               📋 Планирование
@@ -956,6 +958,11 @@ export default function ProjectWorkspace() {
           <TabsTrigger value="tasks">
             ✅ Задачи
           </TabsTrigger>
+          {(isPM || isPartner) && (
+            <TabsTrigger value="task-distribution">
+              👥 Распределение задач
+            </TabsTrigger>
+          )}
           {activeTemplate && showFullDetails && (
             <TabsTrigger value="procedures">
               🔧 Рабочие процедуры
@@ -1207,6 +1214,21 @@ export default function ProjectWorkspace() {
             })}
           </div>
         </TabsContent>
+        )}
+
+        {/* Вкладка распределения задач (для менеджеров и партнеров) */}
+        {(isPM || isPartner) && (
+          <TabsContent value="task-distribution" className="space-y-4 mt-4">
+            <TaskDistribution
+              projectId={project?.id || id || ''}
+              teamMembers={project?.team || project?.notes?.team || []}
+              workPapers={workPapers}
+              onUpdate={() => {
+                // Обновляем список work papers
+                loadWorkPapers();
+              }}
+            />
+          </TabsContent>
         )}
 
         {/* Вкладка шаблонов (только если не директор) */}

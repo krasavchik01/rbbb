@@ -100,7 +100,7 @@ export default function Calendar() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <div>
+      <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <CalendarIcon className="w-8 h-8" />
             Календарь
@@ -130,7 +130,7 @@ export default function Calendar() {
           </Button>
         </div>
       </div>
-
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Календарь */}
         <div className="lg:col-span-2">
@@ -252,7 +252,7 @@ export default function Calendar() {
                 </span>
               </div>
             </div>
-          </Card>
+      </Card>
         </div>
       </div>
     </div>

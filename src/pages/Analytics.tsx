@@ -248,7 +248,7 @@ export default function Analytics() {
           </div>
         </Card>
       </div>
-
+      
       <Tabs defaultValue="projects" className="space-y-4">
         <TabsList>
           <TabsTrigger value="projects">Проекты</TabsTrigger>
@@ -297,7 +297,7 @@ export default function Analytics() {
 
         {canViewBonuses && (
           <TabsContent value="bonuses" className="space-y-4">
-            <Card className="p-6">
+      <Card className="p-6">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold">Общая сумма бонусов</h3>
                 <p className="text-3xl font-bold text-primary mt-2">
@@ -340,7 +340,7 @@ export default function Analytics() {
                 </div>
                 <CheckCircle className="w-8 h-8 text-blue-500" />
               </div>
-            </Card>
+      </Card>
           </div>
         </TabsContent>
       </Tabs>

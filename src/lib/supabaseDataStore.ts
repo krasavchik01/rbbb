@@ -871,20 +871,18 @@ class SupabaseDataStore {
    */
   async getWorkPapers(projectId: string): Promise<any[]> {
     try {
-      const { data, error } = await (supabase as any)
+      // Сначала получаем work_papers
+      const { data: workPapers, error } = await (supabase as any)
         .from('work_papers')
         .select(`
           *,
-          template:work_paper_templates(*),
-          assigned_user:assigned_to(id, name, email),
-          reviewer:reviewer_id(id, name, email)
+          template:work_paper_templates(*)
         `)
         .eq('project_id', projectId)
         .order('code', { ascending: true });
 
       if (error) {
         // Если таблица не существует (404), возвращаем пустой массив
-        // Supabase может возвращать ошибку в разных форматах
         const errorObj = error as any;
         const isTableNotFound = 
           errorObj.code === 'PGRST116' || 
@@ -900,10 +898,45 @@ class SupabaseDataStore {
           console.log('ℹ️ Work papers table does not exist yet. Migration may not be applied.');
           return [];
         }
-        // Если это не ошибка отсутствия таблицы, пробрасываем дальше
         throw error;
       }
-      return data || [];
+
+      if (!workPapers || workPapers.length === 0) {
+        return [];
+      }
+
+      // Получаем уникальные user_id для загрузки профилей
+      const userIds = new Set<string>();
+      workPapers.forEach((wp: any) => {
+        if (wp.assigned_to) userIds.add(wp.assigned_to);
+        if (wp.reviewer_id) userIds.add(wp.reviewer_id);
+      });
+
+      // Загружаем профили
+      const profilesMap = new Map<string, any>();
+      if (userIds.size > 0) {
+        const { data: profiles } = await (supabase as any)
+          .from('profiles')
+          .select('user_id, display_name, email')
+          .in('user_id', Array.from(userIds));
+        
+        if (profiles) {
+          profiles.forEach((p: any) => {
+            profilesMap.set(p.user_id, {
+              id: p.user_id,
+              name: p.display_name,
+              email: p.email
+            });
+          });
+        }
+      }
+
+      // Объединяем данные
+      return workPapers.map((wp: any) => ({
+        ...wp,
+        assigned_user: wp.assigned_to ? profilesMap.get(wp.assigned_to) : null,
+        reviewer: wp.reviewer_id ? profilesMap.get(wp.reviewer_id) : null
+      }));
     } catch (error: any) {
       // Обрабатываем ошибки 404 (таблица не существует)
       // Проверяем все возможные форматы ошибки
@@ -933,13 +966,11 @@ class SupabaseDataStore {
    */
   async getWorkPaper(workPaperId: string): Promise<any | null> {
     try {
-      const { data, error } = await (supabase as any)
+      const { data: workPaper, error } = await (supabase as any)
         .from('work_papers')
         .select(`
           *,
-          template:work_paper_templates(*),
-          assigned_user:assigned_to(id, name, email),
-          reviewer:reviewer_id(id, name, email)
+          template:work_paper_templates(*)
         `)
         .eq('id', workPaperId)
         .single();
@@ -951,7 +982,37 @@ class SupabaseDataStore {
         }
         throw error;
       }
-      return data;
+
+      if (!workPaper) return null;
+
+      // Загружаем профили для assigned_to и reviewer_id
+      const userIds = new Set<string>();
+      if (workPaper.assigned_to) userIds.add(workPaper.assigned_to);
+      if (workPaper.reviewer_id) userIds.add(workPaper.reviewer_id);
+
+      const profilesMap = new Map<string, any>();
+      if (userIds.size > 0) {
+        const { data: profiles } = await (supabase as any)
+          .from('profiles')
+          .select('user_id, display_name, email')
+          .in('user_id', Array.from(userIds));
+        
+        if (profiles) {
+          profiles.forEach((p: any) => {
+            profilesMap.set(p.user_id, {
+              id: p.user_id,
+              name: p.display_name,
+              email: p.email
+            });
+          });
+        }
+      }
+
+      return {
+        ...workPaper,
+        assigned_user: workPaper.assigned_to ? profilesMap.get(workPaper.assigned_to) : null,
+        reviewer: workPaper.reviewer_id ? profilesMap.get(workPaper.reviewer_id) : null
+      };
     } catch (error: any) {
       if (error?.code === 'PGRST116' || error?.status === 404 || error?.message?.includes('relation')) {
         console.log('ℹ️ Work papers table does not exist yet.');

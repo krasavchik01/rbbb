@@ -58,7 +58,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <div>
+        <div>
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Shield className="w-8 h-8" />
           Настройки
@@ -238,7 +238,7 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="security" className="space-y-4">
-          <Card className="p-6">
+      <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Shield className="w-5 h-5" />
               Безопасность
@@ -276,10 +276,10 @@ export default function Settings() {
                 <p className="text-sm text-muted-foreground">
                   <CheckCircle className="w-4 h-4 inline mr-2" />
                   Рекомендуется использовать пароль длиной не менее 8 символов
-                </p>
+        </p>
               </div>
             </div>
-          </Card>
+      </Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -202,7 +202,7 @@ export default function Bonuses() {
           </div>
         </Card>
       </div>
-
+      
       <Tabs defaultValue="list" className="space-y-4">
         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
           <TabsList>
@@ -313,7 +313,7 @@ export default function Bonuses() {
                       </div>
                     ))}
                   </div>
-                </Card>
+      </Card>
               ))}
             </div>
           )}

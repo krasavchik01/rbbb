@@ -208,7 +208,7 @@ export default function Tasks() {
           </div>
         </Card>
       </div>
-
+      
       {/* Фильтры */}
       <Card className="p-4">
         <div className="flex flex-col md:flex-row gap-4">
