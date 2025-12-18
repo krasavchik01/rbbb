@@ -32,6 +32,7 @@ const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
 const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
+const TeamEvaluation = lazy(() => import('@/pages/TeamEvaluation'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
@@ -300,6 +301,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <ServiceMemos />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/team-evaluation"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <TeamEvaluation />
                   </Layout>
                 </ProtectedRoute>
               }

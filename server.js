@@ -20,6 +20,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // In-memory storage for demonstration (replace with database in production)
 let serviceMemos = [];
 let evaluations = [];
+let teamEvaluations = [];
 
 // Helper function to parse auth user from request
 // In production, this would validate JWT token from Authorization header
@@ -245,6 +246,156 @@ app.delete('/api/service-memos/:id', (req, res) => {
   }
 
   serviceMemos = serviceMemos.filter(m => m.id !== req.params.id);
+  res.json({ success: true });
+});
+
+// ========== TEAM EVALUATION API ==========
+
+// GET project evaluations (visible to management and evaluators)
+app.get('/api/project-evaluations/:projectId', (req, res) => {
+  const user = getUserFromRequest(req);
+  const projectId = req.params.projectId;
+
+  let filtered = teamEvaluations.filter(e => e.projectId === projectId);
+
+  // Filter based on user role and visibility
+  filtered = filtered.map(eval => {
+    // Only show full details to management (ceo, admin, deputy_director) or the evaluator themselves
+    const isManagement = ['ceo', 'admin', 'deputy_director'].includes(user.role);
+    const isEvaluator = eval.evaluatorId === user.id;
+
+    if (isManagement || isEvaluator) {
+      return eval; // Full visibility
+    } else if (eval.type === 'manager_by_team' && eval.evaluatorId !== user.id) {
+      // Team members can only see their own anonymous evaluation
+      return null;
+    } else {
+      return eval;
+    }
+  }).filter(Boolean);
+
+  res.json(filtered);
+});
+
+// GET single evaluation
+app.get('/api/project-evaluations/:projectId/:evaluationId', (req, res) => {
+  const { projectId, evaluationId } = req.params;
+  const evaluation = teamEvaluations.find(e => e.id === evaluationId && e.projectId === projectId);
+
+  if (!evaluation) {
+    return res.status(404).json({ error: 'Evaluation not found' });
+  }
+
+  res.json(evaluation);
+});
+
+// CREATE evaluation
+app.post('/api/project-evaluations', (req, res) => {
+  const user = getUserFromRequest(req);
+  const { projectId, evaluatedPersonId, type, rating, comment, teamMembers } = req.body;
+
+  if (!projectId || !evaluatedPersonId || !type || !rating) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Validate rating between 1-5
+  if (rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+  }
+
+  // Validate evaluation type
+  const validTypes = ['partner_by_manager', 'manager_by_team', 'team_by_manager'];
+  if (!validTypes.includes(type)) {
+    return res.status(400).json({ error: 'Invalid evaluation type' });
+  }
+
+  // Check permissions based on type
+  let canEvaluate = false;
+  if (type === 'partner_by_manager' && user.role === 'manager_1') {
+    canEvaluate = true; // Manager evaluates partner
+  } else if (type === 'manager_by_team' && !['admin', 'ceo', 'deputy_director'].includes(user.role)) {
+    canEvaluate = true; // Team members evaluate manager
+  } else if (type === 'team_by_manager' && ['manager_1', 'manager_2', 'manager_3'].includes(user.role)) {
+    canEvaluate = true; // Manager evaluates team
+  } else if (user.role === 'admin' || user.role === 'ceo') {
+    canEvaluate = true; // Admin/CEO can evaluate anyone
+  }
+
+  if (!canEvaluate) {
+    return res.status(403).json({ error: 'You do not have permission to create this evaluation' });
+  }
+
+  const newEvaluation = {
+    id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    projectId,
+    evaluatedPersonId,
+    evaluatorId: user.id,
+    evaluatorName: user.name,
+    evaluatorRole: user.role,
+    type,
+    rating,
+    comment: comment || '',
+    teamMembers: type === 'team_by_manager' ? teamMembers : [],
+    isAnonymous: type === 'manager_by_team',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  teamEvaluations.push(newEvaluation);
+  res.status(201).json(newEvaluation);
+});
+
+// UPDATE evaluation
+app.put('/api/project-evaluations/:id', (req, res) => {
+  const user = getUserFromRequest(req);
+  const evaluationId = req.params.id;
+  const { rating, comment } = req.body;
+
+  const evaluation = teamEvaluations.find(e => e.id === evaluationId);
+
+  if (!evaluation) {
+    return res.status(404).json({ error: 'Evaluation not found' });
+  }
+
+  // Only the creator can update
+  if (evaluation.evaluatorId !== user.id && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  if (rating && (rating < 1 || rating > 5)) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+  }
+
+  const updated = {
+    ...evaluation,
+    rating: rating ?? evaluation.rating,
+    comment: comment ?? evaluation.comment,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const index = teamEvaluations.findIndex(e => e.id === evaluationId);
+  teamEvaluations[index] = updated;
+
+  res.json(updated);
+});
+
+// DELETE evaluation
+app.delete('/api/project-evaluations/:id', (req, res) => {
+  const user = getUserFromRequest(req);
+  const evaluationId = req.params.id;
+
+  const evaluation = teamEvaluations.find(e => e.id === evaluationId);
+
+  if (!evaluation) {
+    return res.status(404).json({ error: 'Evaluation not found' });
+  }
+
+  // Only the creator or admin can delete
+  if (evaluation.evaluatorId !== user.id && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  teamEvaluations = teamEvaluations.filter(e => e.id !== evaluationId);
   res.json({ success: true });
 });
 

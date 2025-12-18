@@ -159,7 +159,14 @@ const menuItems: MenuItem[] = [
     url: "/service-memos",
     icon: ClipboardList
   },
-  
+
+  // Оценка команды - для всех
+  {
+    title: "Оценка команды",
+    url: "/team-evaluation",
+    icon: Award
+  },
+
   // Администрирование - только для админов и партнеров
   {
     title: "Управление",
