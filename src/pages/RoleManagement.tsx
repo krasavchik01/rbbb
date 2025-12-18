@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoleBasedAccess, RoleAccess } from "@/components/RoleBasedAccess";
 import { useAuth } from "@/contexts/AuthContext";
-import { PERMISSIONS, UserRole, ROLES, getAllRoles } from "@/types/roles";
+import { PERMISSIONS, UserRole, ROLE_LABELS } from "@/types/roles";
 import { 
   Shield, 
   Users, 
@@ -25,14 +25,17 @@ import {
 
 export default function RoleManagement() {
   const { user, checkPermission } = useAuth();
-  const [selectedRole, setSelectedRole] = useState<UserRole>('employee');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const allRoles = getAllRoles();
-  const currentRole = ROLES[selectedRole];
+  const allRoles = Object.entries(ROLE_LABELS).map(([key, value]) => ({
+    id: key as UserRole,
+    name: value,
+    description: `Role: ${value}`,
+  }));
 
-  const filteredRoles = allRoles.filter(role => 
+  const filteredRoles = allRoles.filter(role =>
     role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     role.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -72,9 +75,9 @@ export default function RoleManagement() {
             Настройка ролей и разрешений пользователей
           </p>
         </div>
-        <RoleBasedAccess 
-          permission={PERMISSIONS.MANAGE_ROLES}
-          userRole={user?.role || 'employee'}
+        <RoleBasedAccess
+          permission={PERMISSIONS.MANAGE_USERS}
+          userRole={user?.role || 'admin'}
         >
           <Button onClick={handleCreateRole} className="btn-gradient">
             <Plus className="w-4 h-4 mr-2" />

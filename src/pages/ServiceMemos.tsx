@@ -122,21 +122,49 @@ export default function ServiceMemos() {
 
   useEffect(() => {
     loadMemos();
-  }, []);
+  }, [activeTab]);
 
-  const loadMemos = () => {
-    const saved = localStorage.getItem('serviceMemos_v2');
-    if (saved) {
-      setMemos(JSON.parse(saved));
+  const getHeaders = () => {
+    return {
+      'Content-Type': 'application/json',
+      'x-user-id': user?.id || 'unknown',
+      'x-user-name': user?.name || 'Unknown',
+      'x-user-role': user?.role || 'member',
+    };
+  };
+
+  const loadMemos = async () => {
+    try {
+      const response = await fetch(`/api/service-memos?filter=${activeTab}`, {
+        headers: getHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMemos(data);
+      } else {
+        // Fallback to localStorage
+        const saved = localStorage.getItem('serviceMemos_v2');
+        if (saved) {
+          setMemos(JSON.parse(saved));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load memos:', error);
+      // Fallback to localStorage
+      const saved = localStorage.getItem('serviceMemos_v2');
+      if (saved) {
+        setMemos(JSON.parse(saved));
+      }
     }
   };
 
   const saveMemos = (updatedMemos: ServiceMemo[]) => {
+    // Also save to localStorage as backup
     localStorage.setItem('serviceMemos_v2', JSON.stringify(updatedMemos));
     setMemos(updatedMemos);
   };
 
-  const createMemo = () => {
+  const createMemo = async () => {
     if (!formData.title.trim() || !formData.description.trim()) {
       toast({
         title: 'Ошибка',
@@ -146,108 +174,88 @@ export default function ServiceMemos() {
       return;
     }
 
-    // Получаем шаблон workflow или используем кастомный
-    const workflowTemplate = formData.customWorkflow.length > 0
-      ? formData.customWorkflow
-      : WORKFLOW_TEMPLATES[formData.category] || WORKFLOW_TEMPLATES.other;
+    try {
+      const response = await fetch('/api/service-memos', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          priority: formData.priority,
+          category: formData.category,
+          customWorkflow: formData.customWorkflow.length > 0 ? formData.customWorkflow : undefined,
+        }),
+      });
 
-    // Создаем этапы утверждения
-    const workflow: ApprovalStage[] = workflowTemplate.map((dept, index) => ({
-      stage: index,
-      department: dept,
-      departmentLabel: DEPARTMENT_LABELS[dept],
-      status: index === 0 ? 'approved' : 'pending', // Первый этап (инициатор) сразу approved
-      approver: index === 0 ? user?.id : undefined,
-      approverName: index === 0 ? user?.name : undefined,
-      approvedAt: index === 0 ? new Date().toISOString() : undefined,
-    }));
+      if (!response.ok) {
+        throw new Error('Failed to create memo');
+      }
 
-    const newMemo: ServiceMemo = {
-      id: `memo-${Date.now()}`,
-      title: formData.title,
-      description: formData.description,
-      createdBy: user?.id || '',
-      createdByName: user?.name || 'Неизвестный',
-      priority: formData.priority,
-      category: formData.category,
-      workflow,
-      currentStage: 1, // Начинаем со второго этапа (после инициатора)
-      overallStatus: 'in_progress',
-      attachments: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      const newMemo = await response.json();
+      saveMemos([newMemo, ...memos]);
 
-    saveMemos([newMemo, ...memos]);
+      toast({
+        title: 'Служебная записка создана',
+        description: `Записка "${formData.title}" отправлена на утверждение`,
+      });
 
-    toast({
-      title: 'Служебная записка создана',
-      description: `Записка "${formData.title}" отправлена на утверждение`,
-    });
-
-    setFormData({
-      title: '',
-      description: '',
-      priority: 'medium',
-      category: 'request',
-      customWorkflow: [],
-    });
-    setDialogOpen(false);
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'medium',
+        category: 'request',
+        customWorkflow: [],
+      });
+      setDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to create memo:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось создать служебную записку',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const approveMemo = (memoId: string) => {
-    const memo = memos.find(m => m.id === memoId);
-    if (!memo) return;
+  const approveMemo = async (memoId: string) => {
+    try {
+      const response = await fetch(`/api/service-memos/${memoId}/approve`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          comments: approvalComments || undefined,
+        }),
+      });
 
-    const currentStageData = memo.workflow[memo.currentStage];
-    if (!currentStageData) return;
+      if (!response.ok) {
+        throw new Error('Failed to approve memo');
+      }
 
-    // Обновляем текущий этап
-    const updatedWorkflow = [...memo.workflow];
-    updatedWorkflow[memo.currentStage] = {
-      ...currentStageData,
-      status: 'approved',
-      approver: user?.id,
-      approverName: user?.name,
-      approvedAt: new Date().toISOString(),
-      comments: approvalComments || undefined,
-    };
+      const updatedMemo = await response.json();
+      const updatedMemos = memos.map(m => m.id === memoId ? updatedMemo : m);
+      saveMemos(updatedMemos);
 
-    // Проверяем, есть ли еще этапы
-    const isLastStage = memo.currentStage === memo.workflow.length - 1;
-    const newStatus: 'in_progress' | 'completed' = isLastStage ? 'completed' : 'in_progress';
-    const newStage = isLastStage ? memo.currentStage : memo.currentStage + 1;
+      const isLastStage = updatedMemo.currentStage === updatedMemo.workflow.length - 1;
+      toast({
+        title: 'Записка утверждена',
+        description: isLastStage
+          ? 'Служебная записка полностью утверждена'
+          : `Записка передана на этап: ${updatedMemo.workflow[updatedMemo.currentStage]?.departmentLabel}`,
+      });
 
-    const updatedMemos = memos.map(m =>
-      m.id === memoId
-        ? {
-            ...m,
-            workflow: updatedWorkflow,
-            currentStage: newStage,
-            overallStatus: newStatus,
-            updatedAt: new Date().toISOString(),
-            completedAt: isLastStage ? new Date().toISOString() : m.completedAt,
-          }
-        : m
-    );
-
-    saveMemos(updatedMemos);
-
-    toast({
-      title: 'Записка утверждена',
-      description: isLastStage
-        ? 'Служебная записка полностью утверждена'
-        : `Записка передана на этап: ${memo.workflow[newStage]?.departmentLabel}`,
-    });
-
-    setApprovalComments('');
-    setDetailsDialogOpen(false);
+      setApprovalComments('');
+      setDetailsDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to approve memo:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось утвердить служебную записку',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const rejectMemo = (memoId: string) => {
-    const memo = memos.find(m => m.id === memoId);
-    if (!memo) return;
-
+  const rejectMemo = async (memoId: string) => {
     if (!approvalComments.trim()) {
       toast({
         title: 'Ошибка',
@@ -257,50 +265,69 @@ export default function ServiceMemos() {
       return;
     }
 
-    const currentStageData = memo.workflow[memo.currentStage];
-    const updatedWorkflow = [...memo.workflow];
-    updatedWorkflow[memo.currentStage] = {
-      ...currentStageData,
-      status: 'rejected',
-      approver: user?.id,
-      approverName: user?.name,
-      approvedAt: new Date().toISOString(),
-      comments: approvalComments,
-    };
+    try {
+      const response = await fetch(`/api/service-memos/${memoId}/reject`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          comments: approvalComments,
+        }),
+      });
 
-    const updatedMemos = memos.map(m =>
-      m.id === memoId
-        ? {
-            ...m,
-            workflow: updatedWorkflow,
-            overallStatus: 'rejected' as const,
-            updatedAt: new Date().toISOString(),
-          }
-        : m
-    );
+      if (!response.ok) {
+        throw new Error('Failed to reject memo');
+      }
 
-    saveMemos(updatedMemos);
+      const updatedMemo = await response.json();
+      const updatedMemos = memos.map(m => m.id === memoId ? updatedMemo : m);
+      saveMemos(updatedMemos);
 
-    toast({
-      title: 'Записка отклонена',
-      description: 'Служебная записка отклонена',
-      variant: 'destructive',
-    });
+      toast({
+        title: 'Записка отклонена',
+        description: 'Служебная записка отклонена',
+        variant: 'destructive',
+      });
 
-    setApprovalComments('');
-    setDetailsDialogOpen(false);
+      setApprovalComments('');
+      setDetailsDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to reject memo:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось отклонить служебную записку',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const deleteMemo = (memoId: string) => {
+  const deleteMemo = async (memoId: string) => {
     if (!confirm('Удалить служебную записку?')) return;
 
-    const updated = memos.filter(m => m.id !== memoId);
-    saveMemos(updated);
+    try {
+      const response = await fetch(`/api/service-memos/${memoId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
 
-    toast({
-      title: 'Записка удалена',
-      description: 'Служебная записка удалена из системы',
-    });
+      if (!response.ok) {
+        throw new Error('Failed to delete memo');
+      }
+
+      const updated = memos.filter(m => m.id !== memoId);
+      saveMemos(updated);
+
+      toast({
+        title: 'Записка удалена',
+        description: 'Служебная записка удалена из системы',
+      });
+    } catch (error) {
+      console.error('Failed to delete memo:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось удалить служебную записку',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Проверка, может ли текущий пользователь утверждать данную записку
