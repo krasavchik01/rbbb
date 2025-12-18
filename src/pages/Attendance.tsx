@@ -3,10 +3,16 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployees } from '@/hooks/useSupabaseData';
-import { Calendar, Clock, MapPin, Users, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Settings, Building2, Briefcase, Home, Plane, Heart, Navigation } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+// Расширенные статусы посещаемости
+type AttendanceStatus = 'in_office' | 'on_project' | 'remote' | 'vacation' | 'sick_leave' | 'day_off';
 
 interface AttendanceRecord {
   id: string;
@@ -15,18 +21,52 @@ interface AttendanceRecord {
   checkIn: string;
   checkOut?: string;
   location: string;
-  status: 'in_office' | 'remote' | 'client';
+  status: AttendanceStatus;
   date: string;
+  coordinates?: { lat: number; lng: number };
 }
+
+// Настройки геолокации офиса
+interface OfficeLocation {
+  name: string;
+  lat: number;
+  lng: number;
+  radius: number; // метры
+}
+
+const STATUS_LABELS: Record<AttendanceStatus, { label: string; icon: React.ReactNode; color: string }> = {
+  in_office: { label: 'В офисе', icon: <Building2 className="w-4 h-4" />, color: 'bg-green-500' },
+  on_project: { label: 'На проекте', icon: <Briefcase className="w-4 h-4" />, color: 'bg-blue-500' },
+  remote: { label: 'Удалённо', icon: <Home className="w-4 h-4" />, color: 'bg-purple-500' },
+  vacation: { label: 'В отпуске', icon: <Plane className="w-4 h-4" />, color: 'bg-orange-500' },
+  sick_leave: { label: 'На больничном', icon: <Heart className="w-4 h-4" />, color: 'bg-red-500' },
+  day_off: { label: 'Выходной', icon: <Calendar className="w-4 h-4" />, color: 'bg-gray-500' },
+};
 
 export default function Attendance() {
   const { user } = useAuth();
   const { employees = [] } = useEmployees();
+  const { toast } = useToast();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterEmployee, setFilterEmployee] = useState('all');
+  const [filterStatus, setFilterStatus] = useState<AttendanceStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Настройки геолокации офиса
+  const [officeSettingsOpen, setOfficeSettingsOpen] = useState(false);
+  const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>(() => {
+    const saved = localStorage.getItem('officeLocations');
+    return saved ? JSON.parse(saved) : [
+      { name: 'Главный офис', lat: 43.238949, lng: 76.945465, radius: 100 },
+    ];
+  });
+  const [newOfficeName, setNewOfficeName] = useState('');
+  const [newOfficeLat, setNewOfficeLat] = useState('');
+  const [newOfficeLng, setNewOfficeLng] = useState('');
+  const [newOfficeRadius, setNewOfficeRadius] = useState('100');
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   // Загружаем записи посещений
   useEffect(() => {
@@ -57,29 +97,78 @@ export default function Attendance() {
     return attendanceRecords.filter(record => {
       const matchesDate = record.date === dateStr;
       const matchesEmployee = filterEmployee === 'all' || record.employeeId === filterEmployee;
+      const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
       const matchesSearch = record.employeeName.toLowerCase().includes(s);
-      return matchesDate && matchesEmployee && matchesSearch;
+      return matchesDate && matchesEmployee && matchesStatus && matchesSearch;
     });
-  }, [attendanceRecords, filterDate, filterEmployee, debouncedSearch]);
+  }, [attendanceRecords, filterDate, filterEmployee, filterStatus, debouncedSearch]);
 
   // Статистика (уникальные сотрудники за сегодня)
   const today = new Date().toDateString();
-  const todayEmployees = new Set(attendanceRecords.filter(r => r.date === today).map(r => r.employeeId));
-  const inOfficeEmployees = new Set(
-    attendanceRecords.filter(r => r.date === today && r.status === 'in_office').map(r => r.employeeId)
-  );
-  const remoteEmployees = new Set(
-    attendanceRecords.filter(r => r.date === today && r.status === 'remote').map(r => r.employeeId)
-  );
-  const checkedOutEmployees = new Set(
-    attendanceRecords.filter(r => r.date === today && r.checkOut).map(r => r.employeeId)
-  );
+  const todayRecords = attendanceRecords.filter(r => r.date === today);
+  const todayEmployees = new Set(todayRecords.map(r => r.employeeId));
 
   const todayStats = {
     total: todayEmployees.size,
-    inOffice: inOfficeEmployees.size,
-    remote: remoteEmployees.size,
-    checkedOut: checkedOutEmployees.size,
+    inOffice: new Set(todayRecords.filter(r => r.status === 'in_office').map(r => r.employeeId)).size,
+    onProject: new Set(todayRecords.filter(r => r.status === 'on_project').map(r => r.employeeId)).size,
+    remote: new Set(todayRecords.filter(r => r.status === 'remote').map(r => r.employeeId)).size,
+    vacation: new Set(todayRecords.filter(r => r.status === 'vacation').map(r => r.employeeId)).size,
+    sickLeave: new Set(todayRecords.filter(r => r.status === 'sick_leave').map(r => r.employeeId)).size,
+  };
+
+  // Функции для работы с геолокацией
+  const getCurrentLocation = () => {
+    setGettingLocation(true);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setNewOfficeLat(position.coords.latitude.toFixed(6));
+          setNewOfficeLng(position.coords.longitude.toFixed(6));
+          setGettingLocation(false);
+          toast({ title: 'Координаты получены', description: 'Текущее местоположение установлено' });
+        },
+        (error) => {
+          setGettingLocation(false);
+          toast({ title: 'Ошибка', description: 'Не удалось получить геолокацию: ' + error.message, variant: 'destructive' });
+        }
+      );
+    } else {
+      setGettingLocation(false);
+      toast({ title: 'Ошибка', description: 'Геолокация не поддерживается браузером', variant: 'destructive' });
+    }
+  };
+
+  const addOfficeLocation = () => {
+    if (!newOfficeName || !newOfficeLat || !newOfficeLng) {
+      toast({ title: 'Ошибка', description: 'Заполните все поля', variant: 'destructive' });
+      return;
+    }
+
+    const newLocation: OfficeLocation = {
+      name: newOfficeName,
+      lat: parseFloat(newOfficeLat),
+      lng: parseFloat(newOfficeLng),
+      radius: parseInt(newOfficeRadius) || 100,
+    };
+
+    const updated = [...officeLocations, newLocation];
+    setOfficeLocations(updated);
+    localStorage.setItem('officeLocations', JSON.stringify(updated));
+
+    setNewOfficeName('');
+    setNewOfficeLat('');
+    setNewOfficeLng('');
+    setNewOfficeRadius('100');
+
+    toast({ title: 'Офис добавлен', description: `Локация "${newOfficeName}" добавлена` });
+  };
+
+  const removeOfficeLocation = (index: number) => {
+    const updated = officeLocations.filter((_, i) => i !== index);
+    setOfficeLocations(updated);
+    localStorage.setItem('officeLocations', JSON.stringify(updated));
+    toast({ title: 'Офис удалён', description: 'Локация удалена из списка' });
   };
 
   // Вычисляем время работы
@@ -96,6 +185,8 @@ export default function Attendance() {
   };
 
   const isHR = user?.role === 'admin' || user?.role === 'ceo';
+  const isAdmin = user?.role === 'admin';
+  const isCEO = user?.role === 'ceo';
 
   return (
     <div className="space-y-6">
@@ -105,50 +196,218 @@ export default function Attendance() {
           <h1 className="text-3xl font-bold">📊 Посещаемость</h1>
           <p className="text-muted-foreground">Учет рабочего времени сотрудников</p>
         </div>
+        {isAdmin && (
+          <Dialog open={officeSettingsOpen} onOpenChange={setOfficeSettingsOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Settings className="w-4 h-4 mr-2" />
+                Настройки офисов
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Настройки геолокации офисов
+                </DialogTitle>
+                <DialogDescription>
+                  Настройте локации офисов для автоматического определения присутствия сотрудников
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Существующие офисы */}
+              <div className="space-y-3">
+                <Label>Существующие офисы:</Label>
+                {officeLocations.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Нет настроенных офисов</p>
+                ) : (
+                  <div className="space-y-2">
+                    {officeLocations.map((office, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">{office.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {office.lat}, {office.lng} (радиус: {office.radius}м)
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeOfficeLocation(index)}
+                          className="text-destructive"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Добавить новый офис */}
+              <div className="space-y-3 pt-4 border-t">
+                <Label>Добавить новый офис:</Label>
+                <Input
+                  placeholder="Название офиса"
+                  value={newOfficeName}
+                  onChange={(e) => setNewOfficeName(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Широта (lat)"
+                    value={newOfficeLat}
+                    onChange={(e) => setNewOfficeLat(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Долгота (lng)"
+                    value={newOfficeLng}
+                    onChange={(e) => setNewOfficeLng(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Радиус (м)"
+                    value={newOfficeRadius}
+                    onChange={(e) => setNewOfficeRadius(e.target.value)}
+                    className="w-32"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={getCurrentLocation}
+                    disabled={gettingLocation}
+                    className="flex-1"
+                  >
+                    <Navigation className="w-4 h-4 mr-2" />
+                    {gettingLocation ? 'Получение...' : 'Моё местоположение'}
+                  </Button>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOfficeSettingsOpen(false)}>
+                  Закрыть
+                </Button>
+                <Button onClick={addOfficeLocation}>
+                  Добавить офис
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
-      {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Статистика - расширенная */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="p-4">
           <div className="flex items-center space-x-2">
             <Users className="w-5 h-5 text-primary" />
             <div>
               <p className="text-2xl font-bold">{todayStats.total}</p>
-              <p className="text-sm text-muted-foreground">Всего сегодня</p>
+              <p className="text-xs text-muted-foreground">Всего</p>
             </div>
           </div>
         </Card>
-        
+
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <CheckCircle className="w-5 h-5 text-success" />
+            <Building2 className="w-5 h-5 text-green-500" />
             <div>
               <p className="text-2xl font-bold">{todayStats.inOffice}</p>
-              <p className="text-sm text-muted-foreground">В офисе</p>
+              <p className="text-xs text-muted-foreground">В офисе</p>
             </div>
           </div>
         </Card>
-        
+
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <MapPin className="w-5 h-5 text-warning" />
+            <Briefcase className="w-5 h-5 text-blue-500" />
+            <div>
+              <p className="text-2xl font-bold">{todayStats.onProject}</p>
+              <p className="text-xs text-muted-foreground">На проекте</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center space-x-2">
+            <Home className="w-5 h-5 text-purple-500" />
             <div>
               <p className="text-2xl font-bold">{todayStats.remote}</p>
-              <p className="text-sm text-muted-foreground">Удаленно</p>
+              <p className="text-xs text-muted-foreground">Удалённо</p>
             </div>
           </div>
         </Card>
-        
+
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <XCircle className="w-5 h-5 text-info" />
+            <Plane className="w-5 h-5 text-orange-500" />
             <div>
-              <p className="text-2xl font-bold">{todayStats.checkedOut}</p>
-              <p className="text-sm text-muted-foreground">Завершили работу</p>
+              <p className="text-2xl font-bold">{todayStats.vacation}</p>
+              <p className="text-xs text-muted-foreground">В отпуске</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center space-x-2">
+            <Heart className="w-5 h-5 text-red-500" />
+            <div>
+              <p className="text-2xl font-bold">{todayStats.sickLeave}</p>
+              <p className="text-xs text-muted-foreground">Больничный</p>
             </div>
           </div>
         </Card>
       </div>
+
+      {/* Карта офисных локаций - для CEO (только просмотр) */}
+      {isCEO && officeLocations.length > 0 && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-semibold">Офисные точки</h3>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              Только для просмотра
+            </Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {officeLocations.map((office, index) => (
+              <Card key={index} className="p-4 bg-secondary/10">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-primary" />
+                      {office.name}
+                    </h4>
+                    <Badge variant="outline" className="text-xs">
+                      {office.radius}м
+                    </Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Navigation className="w-3 h-3" />
+                      <span className="font-mono text-xs">
+                        {office.lat.toFixed(6)}, {office.lng.toFixed(6)}
+                      </span>
+                    </div>
+                    <a
+                      href={`https://www.google.com/maps?q=${office.lat},${office.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline text-xs flex items-center gap-1 mt-2"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      Открыть в Google Maps
+                    </a>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Фильтры */}
       <Card className="p-4">
@@ -160,15 +419,32 @@ export default function Attendance() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          <div className="flex gap-2">
+
+          <div className="flex flex-wrap gap-2">
             <Input
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
               className="w-40"
             />
-            
+
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as AttendanceStatus | 'all')}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все статусы</SelectItem>
+                {Object.entries(STATUS_LABELS).map(([key, { label, icon }]) => (
+                  <SelectItem key={key} value={key}>
+                    <span className="flex items-center gap-2">
+                      {icon}
+                      {label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {isHR && (
               <Select value={filterEmployee} onValueChange={setFilterEmployee}>
                 <SelectTrigger className="w-48">
@@ -193,58 +469,55 @@ export default function Attendance() {
         <h2 className="text-xl font-semibold mb-4">
           Записи посещений - {new Date(filterDate).toLocaleDateString('ru-RU')}
         </h2>
-        
+
         {filteredRecords.length > 0 ? (
           <div className="space-y-3">
-            {filteredRecords.map((record) => (
-              <div 
-                key={record.id}
-                className="flex items-center justify-between p-4 border rounded-lg"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    {record.checkOut ? (
-                      <XCircle className="h-5 w-5 text-destructive" />
-                    ) : (
-                      <CheckCircle className="h-5 w-5 text-success" />
-                    )}
-                  </div>
-                  
-                  <div>
-                    <p className="font-medium">{record.employeeName}</p>
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                      <span className="flex items-center space-x-1">
-                        <Clock className="h-3 w-3" />
-                        <span>Приход: {new Date(record.checkIn).toLocaleTimeString('ru-RU')}</span>
-                      </span>
-                      {record.checkOut && (
+            {filteredRecords.map((record) => {
+              const statusInfo = STATUS_LABELS[record.status] || STATUS_LABELS.in_office;
+              return (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className={`flex-shrink-0 p-2 rounded-full ${statusInfo.color} text-white`}>
+                      {statusInfo.icon}
+                    </div>
+
+                    <div>
+                      <p className="font-medium">{record.employeeName}</p>
+                      <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                         <span className="flex items-center space-x-1">
                           <Clock className="h-3 w-3" />
-                          <span>Уход: {new Date(record.checkOut).toLocaleTimeString('ru-RU')}</span>
+                          <span>Приход: {new Date(record.checkIn).toLocaleTimeString('ru-RU')}</span>
                         </span>
-                      )}
-                      <span className="flex items-center space-x-1">
-                        <MapPin className="h-3 w-3" />
-                        <span>{record.location}</span>
-                      </span>
+                        {record.checkOut && (
+                          <span className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3" />
+                            <span>Уход: {new Date(record.checkOut).toLocaleTimeString('ru-RU')}</span>
+                          </span>
+                        )}
+                        <span className="flex items-center space-x-1">
+                          <MapPin className="h-3 w-3" />
+                          <span>{record.location}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <Badge className={`${statusInfo.color} text-white`}>
+                      {statusInfo.label}
+                    </Badge>
+
+                    <div className="text-right">
+                      <p className="font-medium">{calculateWorkTime(record.checkIn, record.checkOut)}</p>
+                      <p className="text-sm text-muted-foreground">Время работы</p>
                     </div>
                   </div>
                 </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Badge 
-                    variant={record.status === 'in_office' ? 'default' : 'secondary'}
-                  >
-                    {record.status === 'in_office' ? 'В офисе' : 'Удаленно'}
-                  </Badge>
-                  
-                  <div className="text-right">
-                    <p className="font-medium">{calculateWorkTime(record.checkIn, record.checkOut)}</p>
-                    <p className="text-sm text-muted-foreground">Время работы</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-8">

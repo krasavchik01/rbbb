@@ -30,8 +30,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-// Улучшенные компоненты графиков с футуристичным дизайном
-const FuturisticBarChart = ({ data, title, colors = ['#3b82f6', '#8b5cf6', '#ec4899'] }: { 
+// Улучшенные компоненты графиков с футуристичным дизайном (мемоизированы для производительности)
+const FuturisticBarChart = React.memo(({ data, title, colors = ['#3b82f6', '#8b5cf6', '#ec4899'] }: { 
   data: Array<{name: string, value: number}>, 
   title: string,
   colors?: string[]
@@ -73,9 +73,9 @@ const FuturisticBarChart = ({ data, title, colors = ['#3b82f6', '#8b5cf6', '#ec4
       </div>
     </div>
   );
-};
+});
 
-const FuturisticPieChart = ({ data, title }: { 
+const FuturisticPieChart = React.memo(({ data, title }: { 
   data: Array<{name: string, value: number, color: string}>, 
   title: string 
 }) => {
@@ -113,10 +113,10 @@ const FuturisticPieChart = ({ data, title }: {
       </div>
     </div>
   );
-};
+});
 
-// Компонент метрики с футуристичным дизайном
-const MetricCard = ({ 
+// Компонент метрики с футуристичным дизайном (мемоизирован)
+const MetricCard = React.memo(({ 
   title, 
   value, 
   icon: Icon, 
@@ -173,19 +173,20 @@ const MetricCard = ({
       </div>
     </Card>
   );
-};
+});
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { projects = [], loading: projectsLoading } = useProjects();
   const { employees = [], loading: employeesLoading } = useEmployees();
-  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const navigate = useNavigate();
 
-  // Загружаем записи посещений
-  useEffect(() => {
-    const records = JSON.parse(localStorage.getItem('attendanceRecords') || '[]');
-    setAttendanceRecords(records);
+  // Загружаем записи посещений с мемоизацией
+  const attendanceRecords = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('attendanceRecords') || '[]');
+    } catch {
+      return [];
+    }
   }, []);
 
   // Безопасные вычисления

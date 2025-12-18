@@ -1,9 +1,9 @@
-import { 
-  LayoutDashboard, 
-  FolderOpen, 
-  Users, 
-  Clock, 
-  Gift, 
+import {
+  LayoutDashboard,
+  FolderOpen,
+  Users,
+  Clock,
+  Gift,
   Settings,
   UserCheck,
   TrendingUp,
@@ -17,7 +17,8 @@ import {
   FileText,
   LogOut,
   Award,
-  Mail
+  Mail,
+  ClipboardList
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -146,28 +147,29 @@ const menuItems: MenuItem[] = [
   },
   
   // Уведомления - для всех
-  { 
-    title: "Уведомления", 
-    url: "/notifications", 
+  {
+    title: "Уведомления",
+    url: "/notifications",
     icon: Bell
+  },
+
+  // Служебные записки - для всех
+  {
+    title: "Служебные записки",
+    url: "/service-memos",
+    icon: ClipboardList
   },
   
   // Администрирование - только для админов и партнеров
-  { 
-    title: "Управление", 
-    url: "/user-management", 
+  {
+    title: "Управление",
+    url: "/user-management",
     icon: UserCog,
     allowedRoles: ['admin', 'partner']
   },
-  { 
-    title: "Роли", 
-    url: "/role-management", 
-    icon: Key,
-    allowedRoles: ['admin']
-  },
-  { 
-    title: "Шаблоны", 
-    url: "/template-editor", 
+  {
+    title: "Шаблоны",
+    url: "/template-editor",
     icon: FileText,
     allowedRoles: ['admin', 'partner']
   },
@@ -253,8 +255,8 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-2">
-              {menuItems.filter(item => 
-                ['Дашборд', 'Проекты', 'Уведомления'].includes(item.title)
+              {menuItems.filter(item =>
+                ['Дашборд', 'Проекты', 'Уведомления', 'Служебные записки'].includes(item.title)
               ).map((item) => {
                 // Проверяем разрешения
                 // item.permission может быть строкой (ключ разрешения) или массивом (старый формат)
@@ -411,8 +413,8 @@ export function AppSidebar() {
           const hasPermission = !item.permission || checkPermission(item.permission);
           const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
           const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
-          return hasPermission && hasRoleAccess && !isExcluded && 
-                 ['Управление', 'Роли', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title);
+          return hasPermission && hasRoleAccess && !isExcluded &&
+                 ['Управление', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title);
         }) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
@@ -420,8 +422,8 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-2">
-                {menuItems.filter(item => 
-                  ['Управление', 'Роли', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title)
+                {menuItems.filter(item =>
+                  ['Управление', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title)
                 ).map((item) => {
                   let hasPermission = true;
                   if (item.permission) {

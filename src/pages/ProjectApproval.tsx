@@ -8,10 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Users, 
+import {
+  CheckCircle2,
+  XCircle,
+  Users,
   Calendar,
   DollarSign,
   FileText,
@@ -19,8 +19,11 @@ import {
   Trash2,
   UserPlus,
   TrendingUp,
-  Building2
+  Building2,
+  AlertTriangle,
+  Eye
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectV3 } from "@/types/project-v3";
@@ -40,6 +43,15 @@ export default function ProjectApproval() {
   const [projects, setProjects] = useState<ProjectV3[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectV3 | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Массовое удаление
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+
+  // Проверка прав админа
+  const isAdmin = user?.role === 'admin' || user?.role === 'ceo';
 
   // Команда проекта
   const [teamMembers, setTeamMembers] = useState<{[key: string]: string}>({});
@@ -460,6 +472,133 @@ export default function ProjectApproval() {
     setSelectedProject(null);
   };
 
+  // Удаление проекта (только для админа)
+  const handleDeleteProject = async (project: ProjectV3) => {
+    if (!isAdmin) {
+      toast({
+        title: "Ошибка",
+        description: "Только администратор может удалять проекты",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const projectId = project.id;
+      if (!projectId) {
+        throw new Error('ID проекта не найден');
+      }
+
+      const deleted = await supabaseDataStore.deleteProject(projectId);
+      if (!deleted) {
+        throw new Error('Не удалось удалить проект');
+      }
+
+      toast({
+        title: "Проект удалён",
+        description: `Проект "${project.name}" успешно удалён из системы.`,
+      });
+
+      setProjects(projects.filter(p => p.id !== projectId));
+      setProjectToDelete(null);
+      await loadProjects();
+    } catch (error: any) {
+      console.error('❌ Ошибка удаления проекта:', error);
+      toast({
+        title: "Ошибка",
+        description: error?.message || "Не удалось удалить проект",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Переключение выбора проекта
+  const toggleProjectSelection = (projectId: string) => {
+    const newSelected = new Set(selectedProjects);
+    if (newSelected.has(projectId)) {
+      newSelected.delete(projectId);
+    } else {
+      newSelected.add(projectId);
+    }
+    setSelectedProjects(newSelected);
+  };
+
+  // Выбрать все проекты
+  const selectAllProjects = () => {
+    setSelectedProjects(new Set(projects.map(p => p.id)));
+  };
+
+  // Снять выделение со всех
+  const deselectAllProjects = () => {
+    setSelectedProjects(new Set());
+  };
+
+  // Массовое удаление выбранных проектов
+  const handleBulkDelete = async () => {
+    if (!isAdmin) {
+      toast({
+        title: "Ошибка",
+        description: "Только администратор может удалять проекты",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (selectedProjects.size === 0) {
+      toast({
+        title: "Ошибка",
+        description: "Не выбрано ни одного проекта для удаления",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!confirm(`Удалить ${selectedProjects.size} проектов? Это действие необратимо!`)) {
+      return;
+    }
+
+    setIsDeletingBulk(true);
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const projectId of selectedProjects) {
+        try {
+          const deleted = await supabaseDataStore.deleteProject(projectId);
+          if (deleted) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          console.error(`Ошибка удаления проекта ${projectId}:`, error);
+          failCount++;
+        }
+      }
+
+      toast({
+        title: "Массовое удаление завершено",
+        description: `Удалено: ${successCount}. Ошибок: ${failCount}`,
+        variant: successCount > 0 ? "default" : "destructive"
+      });
+
+      setProjects(projects.filter(p => !selectedProjects.has(p.id)));
+      setSelectedProjects(new Set());
+      await loadProjects();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error?.message || "Не удалось выполнить массовое удаление",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ru-RU').format(amount) + ' ₸';
   };
@@ -492,6 +631,39 @@ export default function ProjectApproval() {
 
         {/* Список проектов */}
         <TabsContent value="list" className="space-y-4">
+          {/* Панель массовых действий */}
+          {isAdmin && projects.length > 0 && (
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={selectedProjects.size === projects.length ? deselectAllProjects : selectAllProjects}
+                  >
+                    {selectedProjects.size === projects.length ? 'Снять выделение' : 'Выбрать все'}
+                  </Button>
+                  {selectedProjects.size > 0 && (
+                    <Badge variant="secondary">
+                      Выбрано: {selectedProjects.size}
+                    </Badge>
+                  )}
+                </div>
+                {selectedProjects.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={isDeletingBulk}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {isDeletingBulk ? 'Удаление...' : `Удалить ${selectedProjects.size}`}
+                  </Button>
+                )}
+              </div>
+            </Card>
+          )}
+
           {projects.length === 0 ? (
             <Card className="p-12 text-center">
               <CheckCircle2 className="w-16 h-16 mx-auto text-green-500 mb-4" />
@@ -501,17 +673,31 @@ export default function ProjectApproval() {
           ) : (
             projects.map(project => (
               <Card key={project.id} className="p-6 hover:shadow-lg transition-all">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Building2 className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{project.name}</h3>
-                        <p className="text-sm text-muted-foreground">{project.client.name}</p>
-                      </div>
+                <div className="flex items-start gap-4">
+                  {/* Чекбокс для массового удаления */}
+                  {isAdmin && (
+                    <div className="pt-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedProjects.has(project.id)}
+                        onChange={() => toggleProjectSelection(project.id)}
+                        className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                      />
                     </div>
+                  )}
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg">{project.name}</h3>
+                            <p className="text-sm text-muted-foreground">{project.client.name}</p>
+                          </div>
+                        </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
@@ -534,10 +720,49 @@ export default function ProjectApproval() {
                   </div>
 
                   <div className="flex flex-col gap-2">
+                    <Button onClick={() => navigate(`/project/${project.id}`)} variant="outline" className="whitespace-nowrap">
+                      <Eye className="w-4 h-4 mr-2" />
+                      Открыть
+                    </Button>
                     <Button onClick={() => setSelectedProject(project)} className="whitespace-nowrap">
                       <Users className="w-4 h-4 mr-2" />
                       Назначить команду
                     </Button>
+                    {isAdmin && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm" className="whitespace-nowrap">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Удалить
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                              <AlertTriangle className="w-5 h-5 text-red-500" />
+                              Удаление проекта
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Вы уверены, что хотите удалить проект "{project.name}"?
+                              <br /><br />
+                              Это действие нельзя отменить. Все данные проекта будут безвозвратно удалены.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Отмена</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteProject(project)}
+                              className="bg-red-600 hover:bg-red-700"
+                              disabled={isDeleting}
+                            >
+                              {isDeleting ? 'Удаление...' : 'Удалить проект'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                    </div>
                   </div>
                 </div>
               </Card>

@@ -2,24 +2,27 @@ import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useProjects } from '@/hooks/useProjects-simple';
+import { useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
+import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Clock,
   Briefcase,
   User,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  X
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 export default function Calendar() {
   const { user } = useAuth();
-  const { projects = [] } = useProjects();
+  const { projects = [], loading } = useProjects();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   // События из проектов
   const events = useMemo(() => {
@@ -30,28 +33,54 @@ export default function Calendar() {
       type: 'deadline' | 'start' | 'milestone';
       projectId: string;
       projectName: string;
+      status?: string;
     }> = [];
 
     projects.forEach((project: any) => {
-      if (project.deadline) {
-        eventsList.push({
-          id: `${project.id}-deadline`,
-          title: `Дедлайн: ${project.name || project.title}`,
-          date: new Date(project.deadline),
-          type: 'deadline',
-          projectId: project.id,
-          projectName: project.name || project.title || 'Без названия'
-        });
+      const projectId = project.id || project.notes?.id;
+      const projectName = project.name || project.notes?.name || project.title || 'Без названия';
+      const projectStatus = project.status || project.notes?.status;
+
+      // Проверяем deadline (может быть в разных местах)
+      const deadline = project.deadline || project.notes?.deadline;
+      if (deadline) {
+        try {
+          const deadlineDate = new Date(deadline);
+          if (!isNaN(deadlineDate.getTime())) {
+            eventsList.push({
+              id: `${projectId}-deadline`,
+              title: `Дедлайн: ${projectName}`,
+              date: deadlineDate,
+              type: 'deadline',
+              projectId: projectId,
+              projectName: projectName,
+              status: projectStatus
+            });
+          }
+        } catch (e) {
+          console.log('Invalid deadline date:', deadline);
+        }
       }
-      if (project.start_date) {
-        eventsList.push({
-          id: `${project.id}-start`,
-          title: `Старт: ${project.name || project.title}`,
-          date: new Date(project.start_date),
-          type: 'start',
-          projectId: project.id,
-          projectName: project.name || project.title || 'Без названия'
-        });
+
+      // Проверяем start_date (может быть в разных местах)
+      const startDate = project.start_date || project.notes?.startDate || project.notes?.createdAt;
+      if (startDate) {
+        try {
+          const startDateObj = new Date(startDate);
+          if (!isNaN(startDateObj.getTime())) {
+            eventsList.push({
+              id: `${projectId}-start`,
+              title: `Старт: ${projectName}`,
+              date: startDateObj,
+              type: 'start',
+              projectId: projectId,
+              projectName: projectName,
+              status: projectStatus
+            });
+          }
+        } catch (e) {
+          console.log('Invalid start_date:', startDate);
+        }
       }
     });
 
@@ -135,10 +164,11 @@ export default function Calendar() {
         {/* Календарь */}
         <div className="lg:col-span-2">
           <Card className="p-4">
-            <div className="mb-4">
+            <div className="mb-4 flex items-center justify-center gap-2">
               <h2 className="text-xl font-semibold text-center">
                 {format(currentDate, 'MMMM yyyy', { locale: ru })}
               </h2>
+              {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
             </div>
 
             {/* Дни недели */}
@@ -158,12 +188,15 @@ export default function Calendar() {
               {daysInMonth.map((day) => {
                 const dayEvents = getEventsForDay(day);
                 const isToday = isSameDay(day, new Date());
-                
+                const isSelected = selectedDay && isSameDay(day, selectedDay);
+
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`aspect-square border rounded p-1 ${
-                      isToday ? 'bg-primary/10 border-primary' : 'border-border'
+                    onClick={() => setSelectedDay(dayEvents.length > 0 ? day : null)}
+                    className={`aspect-square border rounded p-1 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-primary/20 border-primary ring-2 ring-primary' :
+                      isToday ? 'bg-primary/10 border-primary' : 'border-border hover:bg-secondary/30'
                     } ${!isSameMonth(day, currentDate) ? 'opacity-50' : ''}`}
                   >
                     <div className="text-sm font-medium mb-1">
@@ -189,6 +222,40 @@ export default function Calendar() {
                 );
               })}
             </div>
+
+            {/* Детали выбранного дня */}
+            {selectedDay && (
+              <div className="mt-4 p-4 border rounded-lg bg-secondary/10">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold">
+                    {format(selectedDay, 'dd MMMM yyyy', { locale: ru })}
+                  </h3>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedDay(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {getEventsForDay(selectedDay).map((event) => (
+                    <div key={event.id} className="p-3 border rounded-lg bg-background">
+                      <div className="flex items-center gap-2">
+                        <Badge className={getEventColor(event.type)}>
+                          {event.type === 'deadline' ? 'Дедлайн' : event.type === 'start' ? 'Старт' : 'Этап'}
+                        </Badge>
+                        <span className="font-medium">{event.projectName}</span>
+                      </div>
+                      {event.status && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Статус: {event.status === 'approved' ? 'Утверждён' :
+                                   event.status === 'pending' ? 'Ожидает' :
+                                   event.status === 'in_progress' ? 'В работе' :
+                                   event.status === 'completed' ? 'Завершён' : event.status}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 

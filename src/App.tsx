@@ -31,7 +31,10 @@ const Attendance = lazy(() => import('@/pages/Attendance'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
+const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
+const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
+const Register = lazy(() => import('@/pages/Register'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +53,7 @@ function App() {
           <Suspense fallback={<div style={{padding:16}}>Загрузка...</div>}>
             <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/register" element={<Register />} />
             <Route
               path="/dashboard"
               element={
@@ -286,6 +290,26 @@ function App() {
                 <ProtectedRoute allowedRoles={['partner', 'deputy_director', 'ceo', 'admin']}>
                   <Layout>
                     <MSUKCompliance />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/service-memos"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ServiceMemos />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/role-management"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout>
+                    <RoleManagement />
                   </Layout>
                 </ProtectedRoute>
               }
