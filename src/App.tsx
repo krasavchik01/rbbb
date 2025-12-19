@@ -33,6 +33,8 @@ const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
 const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
 const TeamEvaluation = lazy(() => import('@/pages/TeamEvaluation'));
+const AuditProcedures = lazy(() => import('@/pages/AuditProcedures'));
+const DemoUsersManagement = lazy(() => import('@/pages/DemoUsersManagement'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
@@ -311,6 +313,26 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <TeamEvaluation />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit-procedures"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AuditProcedures />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo-users"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout>
+                    <DemoUsersManagement />
                   </Layout>
                 </ProtectedRoute>
               }

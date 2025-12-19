@@ -18,7 +18,9 @@ import {
   LogOut,
   Award,
   Mail,
-  ClipboardList
+  ClipboardList,
+  BookOpen,
+  Zap
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -167,6 +169,13 @@ const menuItems: MenuItem[] = [
     icon: Award
   },
 
+  // Аудиторские процедуры - для всех
+  {
+    title: "Аудиторские процедуры",
+    url: "/audit-procedures",
+    icon: BookOpen
+  },
+
   // Администрирование - только для админов и партнеров
   {
     title: "Управление",
@@ -194,13 +203,19 @@ const menuItems: MenuItem[] = [
     icon: Activity,
     allowedRoles: ['admin']
   },
-  { 
-    title: "SMTP Настройки", 
-    url: "/smtp-settings", 
+  {
+    title: "SMTP Настройки",
+    url: "/smtp-settings",
     icon: Mail,
     allowedRoles: ['admin']
   },
-  
+  {
+    title: "Демо-пользователи",
+    url: "/demo-users",
+    icon: Zap,
+    allowedRoles: ['admin']
+  },
+
   // Настройки - для всех кроме директоров
   { 
     title: "Настройки", 
@@ -263,7 +278,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-2">
               {menuItems.filter(item =>
-                ['Дашборд', 'Проекты', 'Уведомления', 'Служебные записки'].includes(item.title)
+                ['Дашборд', 'Проекты', 'Уведомления', 'Служебные записки', 'Оценка команды', 'Аудиторские процедуры'].includes(item.title)
               ).map((item) => {
                 // Проверяем разрешения
                 // item.permission может быть строкой (ключ разрешения) или массивом (старый формат)
@@ -338,8 +353,8 @@ export function AppSidebar() {
           const hasPermission = !item.permission || checkPermission(item.permission);
           const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
           const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
-          return hasPermission && hasRoleAccess && !isExcluded && 
-                 ['Создать проект', 'Тендеры', 'Утверждение проектов', 'МСУК-1 Compliance', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title);
+          return hasPermission && hasRoleAccess && !isExcluded &&
+                 ['Создать проект', 'Тендеры', 'Утверждение проектов', 'МСУК-1 Compliance', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи', 'Оценка команды', 'Аудиторские процедуры'].includes(item.title);
         }) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
@@ -347,8 +362,8 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-2">
-                {menuItems.filter(item => 
-                  ['Создать проект', 'Тендеры', 'Утверждение проектов', 'МСУК-1 Compliance', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title)
+                {menuItems.filter(item =>
+                  ['Создать проект', 'Тендеры', 'Утверждение проектов', 'МСУК-1 Compliance', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи', 'Оценка команды', 'Аудиторские процедуры'].includes(item.title)
                 ).map((item) => {
                   let hasPermission = true;
                   if (item.permission) {
@@ -421,7 +436,7 @@ export function AppSidebar() {
           const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
           const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
           return hasPermission && hasRoleAccess && !isExcluded &&
-                 ['Управление', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title);
+                 ['Управление', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Демо-пользователи', 'Настройки'].includes(item.title);
         }) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
@@ -430,7 +445,7 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="space-y-2">
                 {menuItems.filter(item =>
-                  ['Управление', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Настройки'].includes(item.title)
+                  ['Управление', 'Шаблоны', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Демо-пользователи', 'Настройки'].includes(item.title)
                 ).map((item) => {
                   let hasPermission = true;
                   if (item.permission) {
