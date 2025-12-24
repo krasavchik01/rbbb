@@ -113,8 +113,22 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
     const current = await getAppSettings();
     const updated = { ...current, ...settings };
 
+    // Получаем id записи
+    const { data: settingsRow, error: fetchError } = await supabase
+      .from('app_settings')
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (fetchError || !settingsRow?.id) {
+      console.error('Ошибка получения id настроек:', fetchError);
+      throw new Error('Не удалось получить настройки для обновления');
+    }
+
+    console.log('Сохраняем настройки в Supabase, id:', settingsRow.id, 'данные:', updated);
+
     // Сохраняем в Supabase
-    const { error } = await supabase
+    const { data: updateResult, error } = await supabase
       .from('app_settings')
       .update({
         show_demo_users: updated.showDemoUsers,
@@ -126,7 +140,10 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
         maintenance_mode: updated.maintenanceMode,
         maintenance_message: updated.maintenanceMessage
       })
-      .eq('id', (await supabase.from('app_settings').select('id').limit(1).single()).data?.id || '');
+      .eq('id', settingsRow.id)
+      .select();
+
+    console.log('Результат обновления:', updateResult, 'ошибка:', error);
 
     if (error) {
       console.error('Ошибка сохранения в Supabase:', error);
