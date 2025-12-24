@@ -757,43 +757,81 @@ export default function Projects() {
     console.log('📦 Уникальных проектов после дедупликации:', uniqueProjects.length);
     
     // ИСКЛЮЧАЕМ проекты на утверждении (new/pending_approval) из общего списка
-    // Они должны быть только в ProjectApproval у зам. директора
+    // ФИЛЬТРАЦИЯ ПРОЕКТОВ ПО РОЛИ ПОЛЬЗОВАТЕЛЯ
+    // Каждая роль видит только свои проекты
     let filtered = uniqueProjects.filter(project => {
+      if (!user) return false;
+
       const notesStatus = project.notes?.status;
-      // Не показываем проекты на утверждении в общем списке
-      if (notesStatus === 'new' || notesStatus === 'pending_approval') {
-        return false;
+      const team = project.team || project.notes?.team || [];
+      const createdBy = project.createdBy || project.notes?.createdBy;
+
+      // Проверка: пользователь в команде проекта
+      const isInTeam = team.some((member: any) => {
+        const memberId = member.userId || member.id || member.employeeId;
+        return memberId === user.id;
+      });
+
+      // Админ и CEO видят ВСЕ проекты
+      if (user.role === 'admin' || user.role === 'ceo') {
+        return true;
       }
-      return true;
-    });
-    
-    // ФИЛЬТРАЦИЯ ПО РОЛИ: Партнер видит только свои проекты
-    if (user && user.role === 'partner') {
-      filtered = filtered.filter(project => {
-        // Проверяем, есть ли партнер в команде проекта
-        const team = project.team || project.notes?.team || [];
+
+      // Заместитель директора видит все кроме черновиков
+      if (user.role === 'deputy_director') {
+        return notesStatus !== 'draft';
+      }
+
+      // Отдел закупок видит свои созданные проекты (включая на утверждении)
+      if (user.role === 'procurement') {
+        return createdBy === user.id;
+      }
+
+      // Партнёр видит только проекты где он назначен партнёром
+      if (user.role === 'partner') {
+        // Не показываем проекты на утверждении
+        if (notesStatus === 'new' || notesStatus === 'pending_approval') {
+          return false;
+        }
         const isPartnerInTeam = team.some((member: any) => {
           const memberId = member.userId || member.id || member.employeeId;
           const memberRole = member.role || member.role_on_project;
           return memberId === user.id && memberRole === 'partner';
         });
         return isPartnerInTeam;
-      });
-      console.log(`🔍 [Projects] Фильтрация для партнера ${user.id}: показано ${filtered.length} из ${uniqueProjects.length} проектов`);
-    }
-    
-    // ФИЛЬТРАЦИЯ ПО РОЛИ: Менеджеры видят только проекты где они в команде
-    if (user && (user.role === 'manager_1' || user.role === 'manager_2' || user.role === 'manager_3')) {
-      filtered = filtered.filter(project => {
-        const team = project.team || project.notes?.team || [];
-        const isManagerInTeam = team.some((member: any) => {
-          const memberId = member.userId || member.id || member.employeeId;
-          return memberId === user.id;
-        });
-        return isManagerInTeam;
-      });
-      console.log(`🔍 [Projects] Фильтрация для менеджера ${user.id}: показано ${filtered.length} из ${uniqueProjects.length} проектов`);
-    }
+      }
+
+      // Менеджеры видят только проекты где они в команде
+      if (user.role === 'manager_1' || user.role === 'manager_2' || user.role === 'manager_3') {
+        // Не показываем проекты на утверждении
+        if (notesStatus === 'new' || notesStatus === 'pending_approval') {
+          return false;
+        }
+        return isInTeam;
+      }
+
+      // HR видит все проекты для управления персоналом
+      if (user.role === 'hr') {
+        return notesStatus !== 'new' && notesStatus !== 'pending_approval';
+      }
+
+      // Аудиторы и ассистенты видят ТОЛЬКО проекты где они назначены
+      if (['senior_auditor', 'auditor', 'junior_auditor', 'assistant'].includes(user.role)) {
+        // Не показываем проекты на утверждении
+        if (notesStatus === 'new' || notesStatus === 'pending_approval') {
+          return false;
+        }
+        return isInTeam;
+      }
+
+      // По умолчанию: проект в команде и не на утверждении
+      if (notesStatus === 'new' || notesStatus === 'pending_approval') {
+        return false;
+      }
+      return isInTeam;
+    });
+
+    console.log(`🔍 [Projects] Фильтрация для ${user?.role} (${user?.id}): показано ${filtered.length} из ${uniqueProjects.length} проектов`);
     
     // 1. Поиск по тексту (существующий)
     if (searchQuery.trim()) {

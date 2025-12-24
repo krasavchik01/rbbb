@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { MapPin, Clock, CheckCircle, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAppSettings, isWithinOfficeRadius } from '@/lib/appSettings';
 
 interface AttendanceRecord {
   id: string;
@@ -19,6 +20,7 @@ interface AttendanceRecord {
 export function CheckInWidget() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [appSettings] = useAppSettings();
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<string>('');
@@ -39,31 +41,38 @@ export function CheckInWidget() {
   }, [user?.id]);
 
   // Получаем геолокацию
-  const getCurrentLocation = async (): Promise<string> => {
-    return new Promise((resolve) => {
+  const getCurrentLocation = async (): Promise<{ location: string; coords: { lat: number; lng: number } }> => {
+    return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        resolve('Геолокация недоступна');
+        resolve({ location: 'Геолокация недоступна', coords: { lat: 0, lng: 0 } });
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          
-          // Простая проверка на офис (можно настроить координаты)
-          const officeLat = 43.2220; // Примерные координаты Алматы
-          const officeLng = 76.8512;
-          const distance = Math.sqrt(
-            Math.pow(latitude - officeLat, 2) + Math.pow(longitude - officeLng, 2)
-          );
-          
-          if (distance < 0.01) { // ~1км от офиса
-            resolve('В офисе');
+
+          // Используем настройки из appSettings вместо хардкода
+          if (appSettings.officeLocation.enabled) {
+            const inOffice = isWithinOfficeRadius(latitude, longitude);
+
+            if (inOffice) {
+              resolve({ location: 'В офисе', coords: { lat: latitude, lng: longitude } });
+            } else {
+              // Пользователь вне офиса - отклоняем отметку
+              const { radiusMeters, address } = appSettings.officeLocation;
+              reject(new Error(
+                `Вы находитесь вне офиса${address ? ` (${address})` : ''}. ` +
+                `Допустимое расстояние: ${radiusMeters}м. ` +
+                `Пожалуйста, подойдите ближе к офису для отметки прихода.`
+              ));
+            }
           } else {
-            resolve('Удаленно');
+            // Проверка геолокации отключена - разрешаем любое местоположение
+            resolve({ location: 'Удалённо', coords: { lat: latitude, lng: longitude } });
           }
         },
-        () => resolve('Геолокация недоступна'),
+        () => resolve({ location: 'Геолокация недоступна', coords: { lat: 0, lng: 0 } }),
         { timeout: 5000 }
       );
     });
@@ -72,12 +81,13 @@ export function CheckInWidget() {
   // Отметка прихода
   const handleCheckIn = async () => {
     if (!user) return;
-    
+
     setIsCheckingIn(true);
     try {
-      const location = await getCurrentLocation();
+      const result = await getCurrentLocation();
+      const { location, coords } = result;
       setCurrentLocation(location);
-      
+
       const now = new Date();
       const newRecord: AttendanceRecord = {
         id: Date.now().toString(),
@@ -98,9 +108,12 @@ export function CheckInWidget() {
         description: `Время: ${now.toLocaleTimeString('ru-RU')}\nМестоположение: ${location}`,
       });
     } catch (error) {
+      // Ошибка от reject() в getCurrentLocation - пользователь вне офиса
+      const errorMessage = error instanceof Error ? error.message : "Не удалось отметить приход";
+
       toast({
-        title: "Ошибка",
-        description: "Не удалось отметить приход",
+        title: "❌ Отметка невозможна",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

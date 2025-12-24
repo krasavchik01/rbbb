@@ -15,7 +15,6 @@ const Employees = lazy(() => import('@/pages/Employees'));
 const Timesheets = lazy(() => import('@/pages/Timesheets'));
 const Bonuses = lazy(() => import('@/pages/Bonuses'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
-const TemplateEditor = lazy(() => import('@/pages/TemplateEditor'));
 const TemplateConstructor = lazy(() => import('@/pages/TemplateConstructor'));
 const CreateProjectFromTemplate = lazy(() => import('@/pages/CreateProjectFromTemplate'));
 const CreateProjectProcurement = lazy(() => import('@/pages/CreateProjectProcurement'));
@@ -32,8 +31,7 @@ const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
 const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
-const TeamEvaluation = lazy(() => import('@/pages/TeamEvaluation'));
-const AuditProcedures = lazy(() => import('@/pages/AuditProcedures'));
+const Audit = lazy(() => import('@/pages/Audit'));
 const DemoUsersManagement = lazy(() => import('@/pages/DemoUsersManagement'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
@@ -178,16 +176,6 @@ function App() {
               }
             />
             <Route
-              path="/template-editor"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <TemplateEditor />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/template-constructor/:id"
               element={
                 <ProtectedRoute>
@@ -308,21 +296,11 @@ function App() {
               }
             />
             <Route
-              path="/team-evaluation"
+              path="/audit"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <TeamEvaluation />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/audit-procedures"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <AuditProcedures />
+                    <Audit />
                   </Layout>
                 </ProtectedRoute>
               }

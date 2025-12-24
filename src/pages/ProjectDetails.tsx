@@ -6,25 +6,15 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calendar, Users, ArrowLeft, CheckSquare, User, File, Briefcase, FileText, Plus } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar, Users, ArrowLeft, CheckSquare, File, Briefcase, FileText, Plus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 import { ProjectAmendmentForm } from "@/components/projects/ProjectAmendmentForm";
+import { ProjectTeamEvaluation } from "@/components/projects/ProjectTeamEvaluation";
 import { ProjectStage, AdditionalService, ProjectAmendment } from "@/types/project-v3";
-
-interface SimpleProject {
-  id: string;
-  name: string;
-  status: string;
-  completion: number;
-  team: number;
-  deadline: string;
-  company: string;
-}
 
 export default function ProjectDetails() {
   const params = useParams();
@@ -186,6 +176,7 @@ export default function ProjectDetails() {
           <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>
           <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>
           <TabsTrigger value="amendments" data-testid="tab-amendments">Доп соглашения</TabsTrigger>
+          <TabsTrigger value="evaluation" data-testid="tab-evaluation">Оценка команды</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -357,6 +348,18 @@ export default function ProjectDetails() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="evaluation" className="space-y-4">
+          <ProjectTeamEvaluation
+            projectId={project.id || project.notes?.id}
+            projectStatus={projectStatus}
+            teamMembers={teamMembers.map((m: any) => ({
+              userId: m.userId || m.id,
+              userName: m.userName || m.name,
+              role: m.role,
+            }))}
+          />
         </TabsContent>
       </Tabs>
 

@@ -1,26 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { 
+import { useAppSettings } from '@/lib/appSettings';
+import {
   User,
   Bell,
   Shield,
   Palette,
-  Mail,
-  Phone,
   Save,
-  CheckCircle
+  CheckCircle,
+  Settings2,
+  MapPin,
+  Users,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Settings() {
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
+  const [appSettings, updateAppSettings] = useAppSettings();
   const [isSaving, setIsSaving] = useState(false);
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
@@ -33,6 +39,66 @@ export default function Settings() {
       taskAssignments: true
     }
   });
+
+  // Локальное состояние для настроек офиса
+  const [officeSettings, setOfficeSettings] = useState({
+    enabled: appSettings.officeLocation.enabled,
+    latitude: appSettings.officeLocation.latitude.toString(),
+    longitude: appSettings.officeLocation.longitude.toString(),
+    radiusMeters: appSettings.officeLocation.radiusMeters.toString(),
+    address: appSettings.officeLocation.address
+  });
+
+  const isAdmin = user?.role === 'admin';
+
+  // Функция получения текущей геолокации
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: 'Ошибка',
+        description: 'Геолокация не поддерживается браузером',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setOfficeSettings({
+          ...officeSettings,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6)
+        });
+        toast({
+          title: 'Координаты получены',
+          description: `Широта: ${position.coords.latitude.toFixed(6)}, Долгота: ${position.coords.longitude.toFixed(6)}`
+        });
+      },
+      (error) => {
+        toast({
+          title: 'Ошибка геолокации',
+          description: error.message,
+          variant: 'destructive'
+        });
+      }
+    );
+  };
+
+  const saveOfficeSettings = () => {
+    updateAppSettings({
+      officeLocation: {
+        enabled: officeSettings.enabled,
+        latitude: parseFloat(officeSettings.latitude) || 0,
+        longitude: parseFloat(officeSettings.longitude) || 0,
+        radiusMeters: parseInt(officeSettings.radiusMeters) || 100,
+        address: officeSettings.address
+      }
+    });
+    toast({
+      title: 'Настройки офиса сохранены',
+      description: officeSettings.enabled ? 'Проверка геолокации включена' : 'Проверка геолокации отключена'
+    });
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -72,6 +138,7 @@ export default function Settings() {
           <TabsTrigger value="notifications">Уведомления</TabsTrigger>
           <TabsTrigger value="appearance">Внешний вид</TabsTrigger>
           <TabsTrigger value="security">Безопасность</TabsTrigger>
+          {isAdmin && <TabsTrigger value="system">Система</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -276,11 +343,182 @@ export default function Settings() {
                 <p className="text-sm text-muted-foreground">
                   <CheckCircle className="w-4 h-4 inline mr-2" />
                   Рекомендуется использовать пароль длиной не менее 8 символов
-        </p>
+                </p>
               </div>
             </div>
-      </Card>
+          </Card>
         </TabsContent>
+
+        {/* Вкладка системных настроек - только для админа */}
+        {isAdmin && (
+          <TabsContent value="system" className="space-y-4">
+            {/* Демо-пользователи */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Демо-пользователи
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label className="text-base">Показывать демо-аккаунты</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Отображать список демо-пользователей на странице входа для тестирования
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {appSettings.showDemoUsers ? (
+                      <Eye className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <EyeOff className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <Switch
+                      checked={appSettings.showDemoUsers}
+                      onCheckedChange={(checked) => {
+                        updateAppSettings({ showDemoUsers: checked });
+                        toast({
+                          title: checked ? 'Демо-аккаунты включены' : 'Демо-аккаунты скрыты',
+                          description: checked
+                            ? 'Пользователи увидят список демо-аккаунтов на странице входа'
+                            : 'Демо-аккаунты больше не отображаются на странице входа'
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Настройки геолокации офиса */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                Геолокация офиса
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label className="text-base">Проверка местоположения</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Проверять находится ли сотрудник в офисе при отметке посещаемости
+                    </p>
+                  </div>
+                  <Switch
+                    checked={officeSettings.enabled}
+                    onCheckedChange={(checked) => setOfficeSettings({ ...officeSettings, enabled: checked })}
+                  />
+                </div>
+
+                {officeSettings.enabled && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="latitude">Широта</Label>
+                        <Input
+                          id="latitude"
+                          type="text"
+                          value={officeSettings.latitude}
+                          onChange={(e) => setOfficeSettings({ ...officeSettings, latitude: e.target.value })}
+                          placeholder="43.238949"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="longitude">Долгота</Label>
+                        <Input
+                          id="longitude"
+                          type="text"
+                          value={officeSettings.longitude}
+                          onChange={(e) => setOfficeSettings({ ...officeSettings, longitude: e.target.value })}
+                          placeholder="76.945465"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="radius">Радиус проверки (метры)</Label>
+                      <Input
+                        id="radius"
+                        type="number"
+                        value={officeSettings.radiusMeters}
+                        onChange={(e) => setOfficeSettings({ ...officeSettings, radiusMeters: e.target.value })}
+                        placeholder="100"
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Сотрудник должен находиться в этом радиусе от офиса
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="address">Адрес офиса (опционально)</Label>
+                      <Input
+                        id="address"
+                        value={officeSettings.address}
+                        onChange={(e) => setOfficeSettings({ ...officeSettings, address: e.target.value })}
+                        placeholder="г. Алматы, ул. Примерная, 123"
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={getCurrentLocation}>
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Получить текущие координаты
+                      </Button>
+                    </div>
+
+                    {officeSettings.latitude && officeSettings.longitude && (
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm font-medium mb-2">Предпросмотр карты:</p>
+                        <a
+                          href={`https://www.google.com/maps?q=${officeSettings.latitude},${officeSettings.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Открыть в Google Maps
+                        </a>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <Button onClick={saveOfficeSettings}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Сохранить настройки офиса
+                </Button>
+              </div>
+            </Card>
+
+            {/* Системная информация */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Settings2 className="w-5 h-5" />
+                Системная информация
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Версия приложения:</span>
+                  <span className="font-mono">1.0.2</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Демо-режим:</span>
+                  <span className={appSettings.showDemoUsers ? 'text-green-500' : 'text-muted-foreground'}>
+                    {appSettings.showDemoUsers ? 'Включен' : 'Выключен'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Проверка геолокации:</span>
+                  <span className={appSettings.officeLocation.enabled ? 'text-green-500' : 'text-muted-foreground'}>
+                    {appSettings.officeLocation.enabled ? 'Включена' : 'Выключена'}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

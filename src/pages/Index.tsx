@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye, EyeOff, LogIn, Sparkles, UserPlus, Building2, Users, FolderKanban, BarChart3 } from 'lucide-react';
+import { useAppSettings } from '@/lib/appSettings';
 
 const Index = () => {
   const [email, setEmail] = useState('');
@@ -16,6 +17,7 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { user, login } = useAuth();
   const navigate = useNavigate();
+  const [appSettings] = useAppSettings();
 
   useEffect(() => {
     if (user) {
@@ -239,53 +241,55 @@ const Index = () => {
               </CardContent>
             </Card>
 
-            {/* Демо-вход */}
-            <details className="group">
-              <summary className="cursor-pointer list-none">
-                <Card className="border-blue-500/20 bg-slate-900/80 backdrop-blur-lg hover:border-blue-500/40 transition-colors">
-                  <CardContent className="py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-yellow-400" />
-                        <span className="text-white font-medium text-sm">Демо-аккаунты</span>
+            {/* Демо-вход - показывается только если включено в настройках */}
+            {appSettings.showDemoUsers && (
+              <details className="group">
+                <summary className="cursor-pointer list-none">
+                  <Card className="border-blue-500/20 bg-slate-900/80 backdrop-blur-lg hover:border-blue-500/40 transition-colors">
+                    <CardContent className="py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-5 h-5 text-yellow-400" />
+                          <span className="text-white font-medium text-sm">Демо-аккаунты</span>
+                        </div>
+                        <div className="text-slate-400 group-open:rotate-180 transition-transform text-sm">▼</div>
                       </div>
-                      <div className="text-slate-400 group-open:rotate-180 transition-transform text-sm">▼</div>
-                    </div>
+                    </CardContent>
+                  </Card>
+                </summary>
+                <Card className="border-blue-500/20 bg-slate-900/80 backdrop-blur-lg mt-2">
+                  <CardContent className="space-y-2 max-h-[300px] overflow-y-auto pt-4">
+                    {Object.entries(groupedAccounts).map(([category, accounts]) => (
+                      <div key={category} className="space-y-1">
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+                          {category}
+                        </div>
+                        {accounts.map((account) => (
+                          <Button
+                            key={account.email}
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start text-left h-auto py-1.5 bg-slate-800/30 border-slate-700 hover:bg-blue-900/20 hover:border-blue-500/50 transition-all"
+                            onClick={() => quickLogin(account.email, account.password)}
+                            disabled={isLoading}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <span className="text-base flex-shrink-0">{account.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-white text-xs truncate">{account.role}</div>
+                              </div>
+                              <div className="text-xs text-slate-500 font-mono bg-slate-800/50 px-1.5 py-0.5 rounded flex-shrink-0">
+                                {account.password}
+                              </div>
+                            </div>
+                          </Button>
+                        ))}
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
-              </summary>
-              <Card className="border-blue-500/20 bg-slate-900/80 backdrop-blur-lg mt-2">
-                <CardContent className="space-y-2 max-h-[300px] overflow-y-auto pt-4">
-                  {Object.entries(groupedAccounts).map(([category, accounts]) => (
-                    <div key={category} className="space-y-1">
-                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
-                        {category}
-                      </div>
-                      {accounts.map((account) => (
-                        <Button
-                          key={account.email}
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start text-left h-auto py-1.5 bg-slate-800/30 border-slate-700 hover:bg-blue-900/20 hover:border-blue-500/50 transition-all"
-                          onClick={() => quickLogin(account.email, account.password)}
-                          disabled={isLoading}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            <span className="text-base flex-shrink-0">{account.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-white text-xs truncate">{account.role}</div>
-                            </div>
-                            <div className="text-xs text-slate-500 font-mono bg-slate-800/50 px-1.5 py-0.5 rounded flex-shrink-0">
-                              {account.password}
-                            </div>
-                          </div>
-                        </Button>
-                      ))}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </details>
+              </details>
+            )}
           </div>
         </div>
       </div>
