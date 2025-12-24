@@ -49,7 +49,23 @@ export default function Settings() {
     address: appSettings.officeLocation.address
   });
 
+  // Локальное состояние для демо-аккаунтов
+  const [showDemoUsers, setShowDemoUsers] = useState(appSettings.showDemoUsers);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
   const isAdmin = user?.role === 'admin';
+
+  // Синхронизация с appSettings при изменении
+  useEffect(() => {
+    setShowDemoUsers(appSettings.showDemoUsers);
+    setOfficeSettings({
+      enabled: appSettings.officeLocation.enabled,
+      latitude: appSettings.officeLocation.latitude.toString(),
+      longitude: appSettings.officeLocation.longitude.toString(),
+      radiusMeters: appSettings.officeLocation.radiusMeters.toString(),
+      address: appSettings.officeLocation.address
+    });
+  }, [appSettings]);
 
   // Функция получения текущей геолокации
   const getCurrentLocation = () => {
@@ -82,6 +98,37 @@ export default function Settings() {
         });
       }
     );
+  };
+
+  // Сохранение всех системных настроек
+  const saveSystemSettings = async () => {
+    setIsSaving(true);
+    try {
+      await updateAppSettings({
+        showDemoUsers: showDemoUsers,
+        officeLocation: {
+          enabled: officeSettings.enabled,
+          latitude: parseFloat(officeSettings.latitude) || 0,
+          longitude: parseFloat(officeSettings.longitude) || 0,
+          radiusMeters: parseInt(officeSettings.radiusMeters) || 100,
+          address: officeSettings.address
+        }
+      });
+      setHasUnsavedChanges(false);
+      toast({
+        title: '✅ Настройки сохранены',
+        description: 'Изменения применены на всех устройствах',
+        duration: 3000
+      });
+    } catch (error) {
+      toast({
+        title: '❌ Ошибка сохранения',
+        description: 'Не удалось сохранить настройки',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const saveOfficeSettings = async () => {
@@ -375,33 +422,54 @@ export default function Settings() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {appSettings.showDemoUsers ? (
+                    {showDemoUsers ? (
                       <Eye className="w-4 h-4 text-green-500" />
                     ) : (
                       <EyeOff className="w-4 h-4 text-muted-foreground" />
                     )}
                     <Switch
-                      checked={appSettings.showDemoUsers}
-                      onCheckedChange={async (checked) => {
-                        try {
-                          await updateAppSettings({ showDemoUsers: checked });
-                          toast({
-                            title: checked ? 'Демо-аккаунты включены' : 'Демо-аккаунты скрыты',
-                            description: checked
-                              ? 'Пользователи увидят список демо-аккаунтов на всех устройствах'
-                              : 'Демо-аккаунты скрыты на всех устройствах'
-                          });
-                        } catch (error) {
-                          toast({
-                            title: 'Ошибка',
-                            description: 'Не удалось обновить настройки',
-                            variant: 'destructive'
-                          });
-                        }
+                      checked={showDemoUsers}
+                      onCheckedChange={(checked) => {
+                        setShowDemoUsers(checked);
+                        setHasUnsavedChanges(true);
                       }}
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Кнопка сохранения */}
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {hasUnsavedChanges ? (
+                    <>
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                      <span>Есть несохраненные изменения</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <span>Все изменения сохранены</span>
+                    </>
+                  )}
+                </div>
+                <Button
+                  onClick={saveSystemSettings}
+                  disabled={!hasUnsavedChanges || isSaving}
+                  className="gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Сохранение...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Сохранить изменения
+                    </>
+                  )}
+                </Button>
               </div>
             </Card>
 
