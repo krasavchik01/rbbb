@@ -84,20 +84,28 @@ export default function Settings() {
     );
   };
 
-  const saveOfficeSettings = () => {
-    updateAppSettings({
-      officeLocation: {
-        enabled: officeSettings.enabled,
-        latitude: parseFloat(officeSettings.latitude) || 0,
-        longitude: parseFloat(officeSettings.longitude) || 0,
-        radiusMeters: parseInt(officeSettings.radiusMeters) || 100,
-        address: officeSettings.address
-      }
-    });
-    toast({
-      title: 'Настройки офиса сохранены',
-      description: officeSettings.enabled ? 'Проверка геолокации включена' : 'Проверка геолокации отключена'
-    });
+  const saveOfficeSettings = async () => {
+    try {
+      await updateAppSettings({
+        officeLocation: {
+          enabled: officeSettings.enabled,
+          latitude: parseFloat(officeSettings.latitude) || 0,
+          longitude: parseFloat(officeSettings.longitude) || 0,
+          radiusMeters: parseInt(officeSettings.radiusMeters) || 100,
+          address: officeSettings.address
+        }
+      });
+      toast({
+        title: 'Настройки офиса сохранены',
+        description: officeSettings.enabled ? 'Проверка геолокации включена и применена для всех устройств' : 'Проверка геолокации отключена'
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка сохранения',
+        description: 'Не удалось сохранить настройки офиса',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -374,14 +382,22 @@ export default function Settings() {
                     )}
                     <Switch
                       checked={appSettings.showDemoUsers}
-                      onCheckedChange={(checked) => {
-                        updateAppSettings({ showDemoUsers: checked });
-                        toast({
-                          title: checked ? 'Демо-аккаунты включены' : 'Демо-аккаунты скрыты',
-                          description: checked
-                            ? 'Пользователи увидят список демо-аккаунтов на странице входа'
-                            : 'Демо-аккаунты больше не отображаются на странице входа'
-                        });
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await updateAppSettings({ showDemoUsers: checked });
+                          toast({
+                            title: checked ? 'Демо-аккаунты включены' : 'Демо-аккаунты скрыты',
+                            description: checked
+                              ? 'Пользователи увидят список демо-аккаунтов на всех устройствах'
+                              : 'Демо-аккаунты скрыты на всех устройствах'
+                          });
+                        } catch (error) {
+                          toast({
+                            title: 'Ошибка',
+                            description: 'Не удалось обновить настройки',
+                            variant: 'destructive'
+                          });
+                        }
                       }}
                     />
                   </div>
