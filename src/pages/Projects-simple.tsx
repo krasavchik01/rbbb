@@ -1996,7 +1996,26 @@ export default function Projects() {
                         </td>
                         
                         <td className="px-3 py-3">
-                          <Badge variant="secondary" className={`text-xs text-white ${getProjectStatusColor(project)}`}>
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs text-white ${getProjectStatusColor(project)} ${
+                              getProjectStatusLabel(project) === 'Ожидает распределения команды'
+                                ? 'cursor-pointer hover:opacity-80'
+                                : ''
+                            }`}
+                            onClick={() => {
+                              const status = getProjectStatusLabel(project);
+                              if (status === 'Ожидает распределения команды') {
+                                const projectId = project.id || project.projectId;
+                                navigate(`/project/${projectId}`, {
+                                  state: { project, openTeamAssignment: true }
+                                });
+                              }
+                            }}
+                            title={getProjectStatusLabel(project) === 'Ожидает распределения команды'
+                              ? 'Нажмите для назначения команды'
+                              : undefined}
+                          >
                             {getProjectStatusLabel(project)}
                           </Badge>
                         </td>

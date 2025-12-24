@@ -58,6 +58,7 @@ export default function ProjectWorkspace() {
   
   // Получаем проект из state (если передан при навигации)
   const projectFromState = (location.state as any)?.project;
+  const openTeamAssignment = (location.state as any)?.openTeamAssignment;
 
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
@@ -65,7 +66,9 @@ export default function ProjectWorkspace() {
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [isPlanningMode, setIsPlanningMode] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
-  
+  const [showTeamDialog, setShowTeamDialog] = useState(false);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+
   // Рабочие документы
   const [workPapers, setWorkPapers] = useState<WorkPaper[]>([]);
   const [selectedWorkPaper, setSelectedWorkPaper] = useState<WorkPaper | null>(null);
@@ -118,6 +121,16 @@ export default function ProjectWorkspace() {
     
     return grouped;
   }, [projectTasks]);
+
+  // Открыть диалог назначения команды если пришли с флагом
+  useEffect(() => {
+    if (openTeamAssignment && project) {
+      setShowTeamDialog(true);
+      // Инициализируем уже назначенных членов команды
+      const existingTeam = project.team || project.notes?.team || [];
+      setSelectedTeamMembers(existingTeam.map((m: any) => m.userId || m.id));
+    }
+  }, [openTeamAssignment, project]);
 
   // Загрузка рабочих документов проекта
   useEffect(() => {
@@ -1599,6 +1612,143 @@ export default function ProjectWorkspace() {
               className="bg-green-600 hover:bg-green-700"
             >
               Да, завершить проект
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Диалог назначения команды */}
+      <Dialog open={showTeamDialog} onOpenChange={setShowTeamDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Назначение команды проекта
+            </DialogTitle>
+            <DialogDescription>
+              Выберите сотрудников для работы над проектом "{project?.name || project?.client}"
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="text-sm text-muted-foreground">
+              Доступные сотрудники:
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
+              {employees?.filter(emp => emp.status === 'active').map((employee) => {
+                const isSelected = selectedTeamMembers.includes(employee.id);
+                const roleLabels: Record<string, string> = {
+                  partner: 'Партнер',
+                  manager_1: 'Менеджер 1',
+                  manager_2: 'Менеджер 2',
+                  manager_3: 'Менеджер 3',
+                  supervisor_1: 'Супервайзер 1',
+                  supervisor_2: 'Супервайзер 2',
+                  supervisor_3: 'Супервайзер 3',
+                  assistant_1: 'Ассистент 1',
+                  assistant_2: 'Ассистент 2',
+                  assistant_3: 'Ассистент 3',
+                };
+
+                return (
+                  <div
+                    key={employee.id}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedTeamMembers(prev => prev.filter(id => id !== employee.id));
+                      } else {
+                        setSelectedTeamMembers(prev => [...prev, employee.id]);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                        isSelected ? 'bg-primary border-primary' : 'border-muted-foreground'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">{employee.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {roleLabels[employee.role] || employee.role}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {selectedTeamMembers.length > 0 && (
+              <div className="text-sm">
+                <span className="text-muted-foreground">Выбрано:</span>{' '}
+                <span className="font-medium">{selectedTeamMembers.length}</span> сотрудников
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowTeamDialog(false)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  // Формируем команду из выбранных сотрудников
+                  const team = selectedTeamMembers.map(empId => {
+                    const emp = employees?.find(e => e.id === empId);
+                    return {
+                      userId: empId,
+                      name: emp?.name || '',
+                      role: emp?.role || ''
+                    };
+                  });
+
+                  // Обновляем проект
+                  const projectId = project?.id || project?.notes?.id || id;
+                  const updatedNotes = {
+                    ...(project?.notes || {}),
+                    team: team,
+                    status: team.length > 0 ? 'team_assembled' : (project?.notes?.status || 'approved')
+                  };
+
+                  await supabaseDataStore.updateProject(projectId, {
+                    team: team,
+                    notes: updatedNotes
+                  });
+
+                  // Обновляем локальное состояние
+                  setProject((prev: any) => ({
+                    ...prev,
+                    team: team,
+                    notes: updatedNotes
+                  }));
+
+                  setShowTeamDialog(false);
+
+                  toast({
+                    title: '✅ Команда назначена',
+                    description: `${team.length} сотрудников добавлены в проект`
+                  });
+                } catch (error: any) {
+                  console.error('Ошибка назначения команды:', error);
+                  toast({
+                    title: 'Ошибка',
+                    description: error.message || 'Не удалось назначить команду',
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              disabled={selectedTeamMembers.length === 0}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Назначить команду
             </Button>
           </div>
         </DialogContent>
