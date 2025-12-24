@@ -195,6 +195,12 @@ const menuItems: MenuItem[] = [
     icon: Zap,
     allowedRoles: ['admin']
   },
+  {
+    title: "🔍 Диагностика настроек",
+    url: "/settings-diagnostics",
+    icon: Settings,
+    allowedRoles: ['admin']
+  },
 
   // Настройки - для всех кроме директоров
   { 

@@ -36,6 +36,7 @@ const DemoUsersManagement = lazy(() => import('@/pages/DemoUsersManagement'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
+const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -321,6 +322,16 @@ function App() {
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Layout>
                     <RoleManagement />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings-diagnostics"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout>
+                    <SettingsDiagnostics />
                   </Layout>
                 </ProtectedRoute>
               }
