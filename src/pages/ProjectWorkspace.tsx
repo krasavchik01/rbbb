@@ -8,9 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  ArrowLeft, 
-  Check, 
+import {
+  ArrowLeft,
+  Check,
   Upload,
   FileText,
   CheckCircle,
@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Users,
   Calendar,
-  DollarSign
+  DollarSign,
+  Target
 } from "lucide-react";
 import { useTemplates, useProjects } from "@/hooks/useDataStore";
 import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
