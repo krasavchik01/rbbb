@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,8 +80,10 @@ export default function ProjectWorkspace() {
   const isPartner = user?.role === 'partner';
   const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
-  const canCompleteProject = isPartner || isPM;
-  const isCompleted = project?.status === 'completed' || project?.notes?.status === 'completed';
+  const projectStatus = project?.status || project?.notes?.status;
+  const isCompleted = projectStatus === 'completed';
+  const isInProgress = projectStatus === 'in_progress';
+  const canCompleteProject = (isPartner || isPM) && isInProgress;
   // Директор/зам видят только общую информацию, без деталей методологии
   const showFullDetails = !isDirector;
   
@@ -134,30 +136,30 @@ export default function ProjectWorkspace() {
     }
   }, [openTeamAssignment, project]);
 
-  // Загрузка рабочих документов проекта
-  useEffect(() => {
+  // Функция загрузки рабочих документов - вынесена для использования в onUpdate
+  const loadWorkPapers = useCallback(async () => {
     if (!id) return;
-    
-    const loadWorkPapers = async () => {
-      try {
-        const papers = await supabaseDataStore.getWorkPapers(id);
-        setWorkPapers(papers);
-        
-        // Если есть выбранный документ, обновляем его
-        if (selectedWorkPaper) {
-          const updated = papers.find(wp => wp.id === selectedWorkPaper.id);
-          if (updated) {
-            setSelectedWorkPaper(updated);
-          }
+    try {
+      const papers = await supabaseDataStore.getWorkPapers(id);
+      setWorkPapers(papers);
+
+      // Если есть выбранный документ, обновляем его
+      if (selectedWorkPaper) {
+        const updated = papers.find(wp => wp.id === selectedWorkPaper.id);
+        if (updated) {
+          setSelectedWorkPaper(updated);
         }
-      } catch (error) {
-        // Ошибка уже обработана в getWorkPapers, просто устанавливаем пустой массив
-        setWorkPapers([]);
       }
-    };
-    
+    } catch (error) {
+      // Ошибка уже обработана в getWorkPapers, просто устанавливаем пустой массив
+      setWorkPapers([]);
+    }
+  }, [id, selectedWorkPaper]);
+
+  // Загрузка рабочих документов проекта при монтировании
+  useEffect(() => {
     loadWorkPapers();
-  }, [id]); // Убрали selectedWorkPaper?.id из зависимостей, чтобы избежать бесконечного цикла
+  }, [id]); // Загружаем только при смене id
 
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {

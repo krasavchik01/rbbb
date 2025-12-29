@@ -871,15 +871,16 @@ class SupabaseDataStore {
    */
   async getWorkPapers(projectId: string): Promise<any[]> {
     try {
-      // Сначала получаем work_papers
+      console.log('🔍 Loading work papers for project:', projectId);
+      // Сначала получаем work_papers (без JOIN - таблица work_paper_templates может не существовать)
       const { data: workPapers, error } = await (supabase as any)
         .from('work_papers')
-        .select(`
-          *,
-          template:work_paper_templates(*)
-        `)
+        .select('*')
         .eq('project_id', projectId)
         .order('code', { ascending: true });
+
+      console.log('📦 Work papers loaded:', workPapers?.length || 0, 'items');
+      if (error) console.error('❌ Error loading work papers:', error);
 
       if (error) {
         // Если таблица не существует (404), возвращаем пустой массив
@@ -1178,22 +1179,42 @@ class SupabaseDataStore {
     data?: any;
   }): Promise<any> {
     try {
+      console.log('✏️ Creating work paper:', workPaper.code, 'for project:', workPaper.project_id);
       const { data, error } = await (supabase as any)
         .from('work_papers')
-        .insert([{
+        .insert({
           project_id: workPaper.project_id,
           code: workPaper.code,
           name: workPaper.name,
           status: workPaper.status,
           data: workPaper.data || {}
-        }])
+        })
         .select()
         .single();
 
       if (error) throw error;
+      console.log('✅ Work paper created:', data.id);
       return data;
     } catch (error) {
       console.error('❌ Error creating work paper:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Удаляет work paper
+   */
+  async deleteWorkPaper(workPaperId: string): Promise<void> {
+    try {
+      const { error } = await (supabase as any)
+        .from('work_papers')
+        .delete()
+        .eq('id', workPaperId);
+
+      if (error) throw error;
+      console.log('🗑️ Work paper deleted:', workPaperId);
+    } catch (error) {
+      console.error('❌ Error deleting work paper:', error);
       throw error;
     }
   }

@@ -61,17 +61,20 @@ interface TaskDistributionProps {
 }
 
 const STATUS_COLUMNS = [
-  { id: 'not_assigned', label: 'Не назначено', color: 'bg-gray-100' },
-  { id: 'assigned', label: 'Назначено', color: 'bg-blue-100' },
-  { id: 'in_progress', label: 'В работе', color: 'bg-yellow-100' },
-  { id: 'review', label: 'На проверке', color: 'bg-purple-100' },
-  { id: 'completed', label: 'Завершено', color: 'bg-green-100' }
+  { id: 'not_assigned', label: 'Не назначено', color: 'bg-gray-200 text-gray-800' },
+  { id: 'assigned', label: 'Назначено', color: 'bg-blue-200 text-blue-900' },
+  { id: 'in_progress', label: 'В работе', color: 'bg-yellow-200 text-yellow-900' },
+  { id: 'review', label: 'На проверке', color: 'bg-purple-200 text-purple-900' },
+  { id: 'completed', label: 'Завершено', color: 'bg-green-200 text-green-900' }
 ];
 
 export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate }: TaskDistributionProps) {
   const { user } = useAuth();
   const { employees } = useEmployees();
   const { toast } = useToast();
+
+  console.log('👥 Team members received:', teamMembers);
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [comment, setComment] = useState('');
@@ -92,13 +95,17 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
 
   // Преобразуем workPapers в tasks
   useEffect(() => {
-    if (!workPapers || workPapers.length === 0) return;
+    if (!workPapers) {
+      setTasks([]);
+      return;
+    }
 
     const tasksData: Task[] = workPapers.map((wp: any) => ({
       id: wp.id,
       code: wp.code,
       name: wp.name,
       status: wp.status === 'not_started' ? 'not_assigned' :
+              wp.status === 'not_assigned' ? 'not_assigned' :
               wp.status === 'in_progress' ? 'in_progress' :
               wp.status === 'awaiting_review' ? 'review' :
               wp.status === 'completed' ? 'completed' : 'assigned',
@@ -151,11 +158,28 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
     return grouped;
   }, [filteredProcedures]);
 
+  // Обогащаем teamMembers данными из employees
+  const enrichedTeamMembers = useMemo(() => {
+    return teamMembers.map(member => {
+      // Ищем полные данные сотрудника по userId или role
+      const employee = employees.find(emp =>
+        emp.id === (member.userId || member.id) ||
+        emp.role === member.role
+      );
+
+      return {
+        ...member,
+        name: member.name || member.displayName || member.username || employee?.name,
+        displayName: member.displayName || member.name || member.username || employee?.name
+      };
+    });
+  }, [teamMembers, employees]);
+
   // Статистика загруженности команды
   const teamWorkload = useMemo(() => {
     const workload: Record<string, { hours: number; tasks: number }> = {};
 
-    teamMembers.forEach(member => {
+    enrichedTeamMembers.forEach(member => {
       const memberId = member.userId || member.id;
       workload[memberId] = { hours: 0, tasks: 0 };
     });
@@ -168,7 +192,7 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
     });
 
     return workload;
-  }, [tasks, teamMembers]);
+  }, [tasks, enrichedTeamMembers]);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -316,7 +340,7 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
           project_id: projectId,
           code: procedure.code,
           name: procedure.name,
-          status: 'not_started',
+          status: 'not_assigned',
           data: {
             description: procedure.description,
             estimated_hours: procedure.estimatedHours,
@@ -461,14 +485,14 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
       </div>
 
       {/* Команда проекта с загруженностью */}
-      {isManager && teamMembers.length > 0 && (
+      {(isManager || isPartner) && teamMembers.length > 0 && (
         <Card className="p-6 bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20">
           <div className="flex items-center gap-2 mb-4">
             <Users className="w-5 h-5 text-primary" />
             <h3 className="font-semibold text-lg">Команда проекта ({teamMembers.length})</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {teamMembers.map(member => {
+            {enrichedTeamMembers.map(member => {
               const memberId = member.userId || member.id;
               const workload = teamWorkload[memberId] || { hours: 0, tasks: 0 };
               const maxHours = 40; // Максимальная недельная загрузка
@@ -481,11 +505,11 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center font-bold shadow-sm">
-                      {getInitials(member.name || member.displayName)}
+                      {getInitials(member.name || member.displayName || member.username)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">
-                        {member.name || member.displayName}
+                        {member.name || member.displayName || member.username}
                       </div>
                       <div className="text-xs opacity-70 mb-2">
                         {getRoleLabel(member.role)}
@@ -806,9 +830,9 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
                         <SelectValue placeholder="Выберите исполнителя" />
                       </SelectTrigger>
                       <SelectContent>
-                        {teamMembers.map(member => (
+                        {enrichedTeamMembers.map(member => (
                           <SelectItem key={member.userId || member.id} value={member.userId || member.id}>
-                            {member.name || member.displayName} - {getRoleLabel(member.role)}
+                            {member.name || member.displayName || member.username} - {getRoleLabel(member.role)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -866,16 +890,47 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
                 </div>
               )}
 
-              {isPartner && (
-                <div className="flex justify-end gap-2 pt-4 border-t">
+              <div className="flex justify-between gap-2 pt-4 border-t">
+                {(isPartner || isManager) && (
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      if (!selectedTask) return;
+                      if (!confirm(`Удалить процедуру ${selectedTask.code}?`)) return;
+
+                      try {
+                        await supabaseDataStore.deleteWorkPaper(selectedTask.id);
+                        toast({
+                          title: "Процедура удалена",
+                          description: `${selectedTask.code} успешно удалена`,
+                        });
+                        setIsCommentDialogOpen(false);
+                        if (onUpdate) onUpdate();
+                      } catch (error) {
+                        toast({
+                          title: "Ошибка",
+                          description: "Не удалось удалить процедуру",
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Удалить
+                  </Button>
+                )}
+
+                <div className="flex gap-2 ml-auto">
                   <Button variant="outline" onClick={() => setIsCommentDialogOpen(false)}>
-                    Отмена
+                    {isPartner || isManager ? 'Отмена' : 'Закрыть'}
                   </Button>
-                  <Button onClick={handleSaveComment}>
-                    Сохранить комментарий
-                  </Button>
+                  {isPartner && (
+                    <Button onClick={handleSaveComment}>
+                      Сохранить комментарий
+                    </Button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </DialogContent>
