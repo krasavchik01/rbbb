@@ -22,7 +22,8 @@ import {
   Users,
   Calendar,
   DollarSign,
-  Target
+  Target,
+  X
 } from "lucide-react";
 import { useTemplates, useProjects } from "@/hooks/useDataStore";
 import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
@@ -972,7 +973,7 @@ export default function ProjectWorkspace() {
           <TabsTrigger value="tasks">
             ✅ Задачи
           </TabsTrigger>
-          {(isPM || isPartner) && (
+          {isPM && (
             <TabsTrigger value="task-distribution">
               👥 Распределение задач
             </TabsTrigger>
@@ -1230,8 +1231,8 @@ export default function ProjectWorkspace() {
         </TabsContent>
         )}
 
-        {/* Вкладка распределения задач (для менеджеров и партнеров) */}
-        {(isPM || isPartner) && (
+        {/* Вкладка распределения задач (только для менеджеров) */}
+        {isPM && (
           <TabsContent value="task-distribution" className="space-y-4 mt-4">
             <TaskDistribution
               projectId={project?.id || id || ''}
@@ -1620,78 +1621,192 @@ export default function ProjectWorkspace() {
 
       {/* Диалог назначения команды */}
       <Dialog open={showTeamDialog} onOpenChange={setShowTeamDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
               Назначение команды проекта
             </DialogTitle>
             <DialogDescription>
-              Выберите сотрудников для работы над проектом "{project?.name || project?.client}"
+              Перетаскивайте сотрудников в команду проекта "{project?.name || project?.client}"
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="text-sm text-muted-foreground">
-              Доступные сотрудники:
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4 flex-1 overflow-hidden">
+            {/* Левая колонка - Доступные сотрудники */}
+            <div className="space-y-3 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Доступные сотрудники
+                </h3>
+                <Badge variant="secondary" className="text-xs">
+                  {employees?.filter(emp => emp.status === 'active' && !selectedTeamMembers.includes(emp.id)).length || 0}
+                </Badge>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
-              {employees?.filter(emp => emp.status === 'active').map((employee) => {
-                const isSelected = selectedTeamMembers.includes(employee.id);
-                const roleLabels: Record<string, string> = {
-                  partner: 'Партнер',
-                  manager_1: 'Менеджер 1',
-                  manager_2: 'Менеджер 2',
-                  manager_3: 'Менеджер 3',
-                  supervisor_1: 'Супервайзер 1',
-                  supervisor_2: 'Супервайзер 2',
-                  supervisor_3: 'Супервайзер 3',
-                  assistant_1: 'Ассистент 1',
-                  assistant_2: 'Ассистент 2',
-                  assistant_3: 'Ассистент 3',
-                };
+              <div className="grid grid-cols-1 gap-2 overflow-y-auto pr-2 flex-1">
+                {employees?.filter(emp => emp.status === 'active' && !selectedTeamMembers.includes(emp.id)).map((employee) => {
+                  const roleLabels: Record<string, string> = {
+                    partner: 'Партнер',
+                    manager_1: 'Менеджер 1',
+                    manager_2: 'Менеджер 2',
+                    manager_3: 'Менеджер 3',
+                    supervisor_1: 'Супервайзер 1',
+                    supervisor_2: 'Супервайзер 2',
+                    supervisor_3: 'Супервайзер 3',
+                    assistant_1: 'Ассистент 1',
+                    assistant_2: 'Ассистент 2',
+                    assistant_3: 'Ассистент 3',
+                  };
 
-                return (
-                  <div
-                    key={employee.id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedTeamMembers(prev => prev.filter(id => id !== employee.id));
-                      } else {
+                  const getRoleColor = (role: string) => {
+                    if (role === 'partner') return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+                    if (role.includes('manager')) return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+                    if (role.includes('supervisor')) return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+                    if (role.includes('assistant')) return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300';
+                    return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+                  };
+
+                  const getInitials = (name: string) => {
+                    const parts = name.split(' ');
+                    return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+                  };
+
+                  return (
+                    <div
+                      key={employee.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('employeeId', employee.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      className="group p-3 rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-md cursor-move transition-all"
+                      onClick={() => {
                         setSelectedTeamMembers(prev => [...prev, employee.id]);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                        isSelected ? 'bg-primary border-primary' : 'border-muted-foreground'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3 text-white" />}
-                      </div>
-                      <div>
-                        <div className="font-medium text-sm">{employee.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {roleLabels[employee.role] || employee.role}
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${getRoleColor(employee.role)}`}>
+                          {getInitials(employee.name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{employee.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {roleLabels[employee.role] || employee.role}
+                          </div>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
-            {selectedTeamMembers.length > 0 && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Выбрано:</span>{' '}
-                <span className="font-medium">{selectedTeamMembers.length}</span> сотрудников
+            {/* Правая колонка - Команда проекта */}
+            <div className="space-y-3 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Команда проекта
+                </h3>
+                <Badge variant="default" className="text-xs">
+                  {selectedTeamMembers.length}
+                </Badge>
               </div>
-            )}
+
+              <div
+                className="border-2 border-dashed border-primary/30 bg-primary/5 rounded-lg p-4 flex-1 overflow-y-auto"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.add('border-primary', 'bg-primary/10');
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove('border-primary', 'bg-primary/10');
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove('border-primary', 'bg-primary/10');
+                  const employeeId = e.dataTransfer.getData('employeeId');
+                  if (employeeId && !selectedTeamMembers.includes(employeeId)) {
+                    setSelectedTeamMembers(prev => [...prev, employeeId]);
+                  }
+                }}
+              >
+                {selectedTeamMembers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                    <Users className="w-12 h-12 mb-3 opacity-20" />
+                    <p className="text-sm">Перетащите сотрудников сюда</p>
+                    <p className="text-xs mt-1">или нажмите на них</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {selectedTeamMembers.map((empId) => {
+                      const employee = employees?.find(e => e.id === empId);
+                      if (!employee) return null;
+
+                      const roleLabels: Record<string, string> = {
+                        partner: 'Партнер',
+                        manager_1: 'Менеджер 1',
+                        manager_2: 'Менеджер 2',
+                        manager_3: 'Менеджер 3',
+                        supervisor_1: 'Супервайзер 1',
+                        supervisor_2: 'Супервайзер 2',
+                        supervisor_3: 'Супервайзер 3',
+                        assistant_1: 'Ассистент 1',
+                        assistant_2: 'Ассистент 2',
+                        assistant_3: 'Ассистент 3',
+                      };
+
+                      const getRoleColor = (role: string) => {
+                        if (role === 'partner') return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+                        if (role.includes('manager')) return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+                        if (role.includes('supervisor')) return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+                        if (role.includes('assistant')) return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300';
+                        return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+                      };
+
+                      const getInitials = (name: string) => {
+                        const parts = name.split(' ');
+                        return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+                      };
+
+                      return (
+                        <div
+                          key={employee.id}
+                          className="group p-3 rounded-lg border border-primary/30 bg-card shadow-sm hover:shadow-md transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${getRoleColor(employee.role)}`}>
+                              {getInitials(employee.name)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">{employee.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {roleLabels[employee.role] || employee.role}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                              onClick={() => {
+                                setSelectedTeamMembers(prev => prev.filter(id => id !== employee.id));
+                              }}
+                            >
+                              <X className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">

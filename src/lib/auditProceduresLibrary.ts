@@ -1125,3 +1125,225 @@ export function getProceduresByRole(role: AuditRole): ProcedureTemplate[] {
 export function calculateTotalHours(procedures: ProcedureTemplate[]): number {
   return procedures.reduce((sum, p) => sum + p.estimatedHours, 0);
 }
+
+// ============================================
+// ДОПОЛНИТЕЛЬНЫЕ ПРОЦЕДУРЫ ДЛЯ РЫНКА РК
+// ============================================
+
+export const KAZAKHSTAN_SPECIFIC_PROCEDURES: ProcedureTemplate[] = [
+  {
+    code: 'KZ-TAX-001',
+    name: 'Проверка налоговой отчетности РК',
+    description: 'Проверить соответствие налоговой отчетности требованиям Налогового кодекса РК (форма 100.00, 101.00, 200.00 и др.)',
+    stage: 'substantive_testing',
+    procedureType: 'inspection',
+    area: 'tax_compliance',
+    relatedISA: ['ISA_250', 'ISA_500'],
+    assertions: ['accuracy', 'completeness', 'presentation'],
+    riskLevel: 'high',
+    isRequired: true,
+    isSamplingBased: false,
+    requiredRole: 'tax_specialist',
+    estimatedHours: 8,
+  },
+  {
+    code: 'KZ-TAX-002',
+    name: 'Проверка расчетов по КПН',
+    description: 'Проверить правильность исчисления корпоративного подоходного налога по ставкам 20% (обычная) или 10% (для IT-компаний)',
+    stage: 'substantive_testing',
+    procedureType: 'recalculation',
+    area: 'tax_compliance',
+    relatedISA: ['ISA_500'],
+    assertions: ['accuracy', 'valuation'],
+    riskLevel: 'high',
+    isRequired: true,
+    isSamplingBased: false,
+    requiredRole: 'tax_specialist',
+    estimatedHours: 6,
+  },
+  {
+    code: 'KZ-TAX-003',
+    name: 'Проверка НДС (12%)',
+    description: 'Проверить правильность расчета НДС по ставке 12%, наличие счетов-фактур в ЭСФ, своевременность уплаты',
+    stage: 'substantive_testing',
+    procedureType: 'inspection',
+    area: 'tax_compliance',
+    relatedISA: ['ISA_500', 'ISA_530'],
+    assertions: ['accuracy', 'completeness', 'occurrence'],
+    riskLevel: 'high',
+    isRequired: true,
+    isSamplingBased: true,
+    requiredRole: 'tax_specialist',
+    estimatedHours: 10,
+  },
+  {
+    code: 'KZ-SOC-001',
+    name: 'Проверка социальных отчислений',
+    description: 'Проверить правильность расчета и уплаты социальных отчислений (СО 9.5%), социального налога (СН 9.5%), отчислений на ОСМС (2%), ОПВС (3.5%)',
+    stage: 'substantive_testing',
+    procedureType: 'recalculation',
+    area: 'payroll',
+    relatedISA: ['ISA_500'],
+    assertions: ['accuracy', 'completeness'],
+    riskLevel: 'high',
+    isRequired: true,
+    isSamplingBased: true,
+    requiredRole: 'assistant',
+    estimatedHours: 6,
+  },
+  {
+    code: 'KZ-FIN-001',
+    name: 'Соответствие НСФО/МСФО',
+    description: 'Проверить соответствие финансовой отчетности требованиям Национальных стандартов финансовой отчетности (НСФО) или МСФО в зависимости от категории компании',
+    stage: 'reporting',
+    procedureType: 'inspection',
+    area: 'disclosures',
+    relatedISA: ['ISA_700', 'ISA_720'],
+    assertions: ['presentation', 'classification'],
+    riskLevel: 'high',
+    isRequired: true,
+    isSamplingBased: false,
+    requiredRole: 'partner',
+    estimatedHours: 5,
+  },
+  {
+    code: 'KZ-FIN-002',
+    name: 'Проверка форм финотчетности РК',
+    description: 'Проверить наличие и правильность заполнения обязательных форм: Бухгалтерский баланс, ОПУ, ОДС, Отчет об изменениях в капитале, Примечания',
+    stage: 'reporting',
+    procedureType: 'inspection',
+    area: 'disclosures',
+    relatedISA: ['ISA_700'],
+    assertions: ['completeness', 'presentation'],
+    riskLevel: 'medium',
+    isRequired: true,
+    isSamplingBased: false,
+    requiredRole: 'manager',
+    estimatedHours: 4,
+  },
+  {
+    code: 'KZ-LABOR-001',
+    name: 'Проверка трудовых договоров',
+    description: 'Проверить соответствие трудовых договоров требованиям Трудового кодекса РК: форма, содержание, регистрация в ЦОН',
+    stage: 'substantive_testing',
+    procedureType: 'inspection',
+    area: 'payroll',
+    relatedISA: ['ISA_250', 'ISA_500'],
+    assertions: ['occurrence', 'completeness'],
+    riskLevel: 'medium',
+    isRequired: true,
+    isSamplingBased: true,
+    requiredRole: 'assistant',
+    estimatedHours: 3,
+  },
+  {
+    code: 'KZ-LABOR-002',
+    name: 'Проверка соответствия МРОТ',
+    description: 'Проверить, что заработная плата не ниже МРОТ (85 000 тенге с 01.01.2024), учет районных коэффициентов',
+    stage: 'substantive_testing',
+    procedureType: 'inspection',
+    area: 'payroll',
+    relatedISA: ['ISA_250', 'ISA_500'],
+    assertions: ['accuracy', 'valuation'],
+    riskLevel: 'medium',
+    isRequired: true,
+    isSamplingBased: true,
+    requiredRole: 'assistant',
+    estimatedHours: 2,
+  },
+  {
+    code: 'KZ-BANK-001',
+    name: 'Проверка валютного контроля',
+    description: 'Проверить соблюдение требований валютного законодательства РК: репатриация валютной выручки, разрешения НБ РК на операции',
+    stage: 'substantive_testing',
+    procedureType: 'inspection',
+    area: 'cash',
+    relatedISA: ['ISA_250', 'ISA_500'],
+    assertions: ['completeness', 'rights_obligations'],
+    riskLevel: 'high',
+    isRequired: false, // Только для компаний с валютными операциями
+    isSamplingBased: true,
+    requiredRole: 'manager',
+    estimatedHours: 4,
+  },
+  {
+    code: 'KZ-PROP-001',
+    name: 'Проверка налога на имущество',
+    description: 'Проверить правильность исчисления налога на имущество по ставкам 0.5-1.5% в зависимости от категории имущества',
+    stage: 'substantive_testing',
+    procedureType: 'recalculation',
+    area: 'fixed_assets',
+    relatedISA: ['ISA_500'],
+    assertions: ['accuracy', 'valuation'],
+    riskLevel: 'medium',
+    isRequired: true,
+    isSamplingBased: false,
+    requiredRole: 'assistant',
+    estimatedHours: 3,
+  },
+  {
+    code: 'KZ-LAND-001',
+    name: 'Проверка земельного налога',
+    description: 'Проверить правильность исчисления земельного налога согласно налоговому кодексу РК и базовым ставкам по регионам',
+    stage: 'substantive_testing',
+    procedureType: 'recalculation',
+    area: 'fixed_assets',
+    relatedISA: ['ISA_500'],
+    assertions: ['accuracy', 'completeness'],
+    riskLevel: 'medium',
+    isRequired: false, // Только для землевладельцев
+    isSamplingBased: false,
+    requiredRole: 'assistant',
+    estimatedHours: 2,
+  },
+  {
+    code: 'KZ-TRANS-001',
+    name: 'Проверка трансфертного ценообразования',
+    description: 'Проверить соблюдение правил трансфертного ценообразования для сделок со связанными сторонами (если годовой доход >3 млрд тенге)',
+    stage: 'substantive_testing',
+    procedureType: 'analytical',
+    area: 'related_parties',
+    relatedISA: ['ISA_550'],
+    assertions: ['valuation', 'accuracy'],
+    riskLevel: 'very_high',
+    isRequired: false, // Только для крупных компаний
+    isSamplingBased: false,
+    requiredRole: 'partner',
+    estimatedHours: 12,
+  },
+  {
+    code: 'KZ-STAT-001',
+    name: 'Проверка статистической отчетности',
+    description: 'Проверить наличие и своевременность сдачи статистической отчетности в Бюро национальной статистики (БНС)',
+    stage: 'completion',
+    procedureType: 'inquiry',
+    area: 'disclosures',
+    relatedISA: ['ISA_250'],
+    assertions: ['completeness'],
+    riskLevel: 'low',
+    isRequired: true,
+    isSamplingBased: false,
+    requiredRole: 'assistant',
+    estimatedHours: 1,
+  },
+];
+
+// Добавляем КЗ-процедуры в общий список
+export const ALL_PROCEDURE_TEMPLATES_WITH_KZ = [
+  ...ALL_PROCEDURE_TEMPLATES,
+  ...KAZAKHSTAN_SPECIFIC_PROCEDURES,
+];
+
+/**
+ * Получить только процедуры для РК
+ */
+export function getKazakhstanProcedures(): ProcedureTemplate[] {
+  return KAZAKHSTAN_SPECIFIC_PROCEDURES;
+}
+
+/**
+ * Получить процедуры с учетом региона
+ */
+export function getProceduresByRegion(includeKZ: boolean = true): ProcedureTemplate[] {
+  return includeKZ ? ALL_PROCEDURE_TEMPLATES_WITH_KZ : ALL_PROCEDURE_TEMPLATES;
+}
