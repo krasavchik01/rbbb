@@ -644,53 +644,54 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Виджет отметки посещений и активности */}
+      {/* Виджет отметки посещений */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
+        <div className={isDirector ? "lg:col-span-1" : "lg:col-span-3"}>
           <CheckInWidget />
         </div>
-        
-        {/* Последние активности */}
-        <div className="lg:col-span-2">
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
-            <div className="relative z-10">
-              <div className="flex items-center space-x-2 mb-6">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-secondary">
-                  <Clock className="h-5 w-5 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold">Последние активности</h3>
-              </div>
-              <div className="space-y-3">
-                {attendanceRecords
-                  .filter((r: any) => r.date === new Date().toDateString())
-                  .slice(-5)
-                  .map((record: any, index: number) => (
-                  <div key={index} className="flex items-center space-x-3 p-3 rounded-lg bg-secondary/30 backdrop-blur-sm border border-primary/10 hover:border-primary/30 transition-all group">
-                    <div className="flex-shrink-0">
-                      {record.checkOut ? (
-                        <div className="p-2 rounded-lg bg-destructive/20 group-hover:bg-destructive/30 transition-colors">
-                          <XCircle className="h-4 w-4 text-destructive" />
-                        </div>
-                      ) : (
-                        <div className="p-2 rounded-lg bg-green-500/20 group-hover:bg-green-500/30 transition-colors">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">
-                        {employees.find((emp: any) => emp.id === record.employeeId)?.name || 'Сотрудник'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {new Date(record.checkIn).toLocaleTimeString('ru-RU')}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-xs backdrop-blur-sm">
-                      {record.status === 'in_office' ? 'В офисе' : 'Удаленно'}
-                    </Badge>
+
+        {/* Последние активности - только для директоров */}
+        {isDirector && (
+          <div className="lg:col-span-2">
+            <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
+              <div className="relative z-10">
+                <div className="flex items-center space-x-2 mb-6">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-secondary">
+                    <Clock className="h-5 w-5 text-white" />
                   </div>
-                ))}
+                  <h3 className="text-lg font-semibold">Последние активности</h3>
+                </div>
+                <div className="space-y-3">
+                  {attendanceRecords
+                    .filter((r: any) => r.date === new Date().toDateString())
+                    .slice(-5)
+                    .map((record: any, index: number) => (
+                    <div key={index} className="flex items-center space-x-3 p-3 rounded-lg bg-secondary/30 backdrop-blur-sm border border-primary/10 hover:border-primary/30 transition-all group">
+                      <div className="flex-shrink-0">
+                        {record.checkOut ? (
+                          <div className="p-2 rounded-lg bg-destructive/20 group-hover:bg-destructive/30 transition-colors">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          </div>
+                        ) : (
+                          <div className="p-2 rounded-lg bg-green-500/20 group-hover:bg-green-500/30 transition-colors">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">
+                          {employees.find((emp: any) => emp.id === record.employeeId)?.name || 'Сотрудник'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {new Date(record.checkIn).toLocaleTimeString('ru-RU')}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs backdrop-blur-sm">
+                        {record.status === 'in_office' ? 'В офисе' : 'Удаленно'}
+                      </Badge>
+                    </div>
+                  ))}
                 
                 {attendanceRecords.filter((r: any) => r.date === new Date().toDateString()).length === 0 && (
                   <div className="text-center py-8">

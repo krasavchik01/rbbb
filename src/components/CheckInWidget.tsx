@@ -59,13 +59,8 @@ export function CheckInWidget() {
             if (inOffice) {
               resolve({ location: 'В офисе', coords: { lat: latitude, lng: longitude } });
             } else {
-              // Пользователь вне офиса - отклоняем отметку
-              const { radiusMeters, address } = appSettings.officeLocation;
-              reject(new Error(
-                `Вы находитесь вне офиса${address ? ` (${address})` : ''}. ` +
-                `Допустимое расстояние: ${radiusMeters}м. ` +
-                `Пожалуйста, подойдите ближе к офису для отметки прихода.`
-              ));
+              // Пользователь вне офиса - отмечаем как удаленно
+              resolve({ location: 'Удалённо', coords: { lat: latitude, lng: longitude } });
             }
           } else {
             // Проверка геолокации отключена - разрешаем любое местоположение

@@ -250,7 +250,7 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
         <div>
           <h2 className="text-2xl font-bold">Распределение задач</h2>
           <p className="text-muted-foreground">
-            {isManager ? 'Управляйте распределением задач между участниками' : 
+            {isManager ? 'Управляйте распределением задач между участниками' :
              isPartner ? 'Проверьте распределение задач и оставьте комментарии' :
              'Просмотр распределения задач'}
           </p>
@@ -265,6 +265,69 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
           </Button>
         )}
       </div>
+
+      {/* Команда проекта - видна всегда менеджеру */}
+      {isManager && teamMembers.length > 0 && (
+        <Card className="p-4 bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold">Команда проекта ({teamMembers.length})</h3>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+            {teamMembers.map(member => {
+              const roleLabels: Record<string, string> = {
+                partner: 'Партнер',
+                manager_1: 'Менеджер 1',
+                manager_2: 'Менеджер 2',
+                manager_3: 'Менеджер 3',
+                supervisor_1: 'Супервайзер 1',
+                supervisor_2: 'Супервайзер 2',
+                supervisor_3: 'Супервайзер 3',
+                assistant_1: 'Ассистент 1',
+                assistant_2: 'Ассистент 2',
+                assistant_3: 'Ассистент 3',
+              };
+
+              const getRoleColor = (role: string) => {
+                if (role === 'partner') return 'bg-purple-100 text-purple-700 border-purple-200';
+                if (role.includes('manager')) return 'bg-blue-100 text-blue-700 border-blue-200';
+                if (role.includes('supervisor')) return 'bg-green-100 text-green-700 border-green-200';
+                if (role.includes('assistant')) return 'bg-orange-100 text-orange-700 border-orange-200';
+                return 'bg-gray-100 text-gray-700 border-gray-200';
+              };
+
+              const getInitials = (name: string) => {
+                const parts = (name || '').split(' ');
+                return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+              };
+
+              return (
+                <div
+                  key={member.userId || member.id}
+                  className={`p-3 rounded-lg border-2 ${getRoleColor(member.role)} transition-all hover:shadow-md`}
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center font-bold text-sm shadow-sm">
+                      {getInitials(member.name || member.displayName)}
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium truncate max-w-[100px]">
+                        {member.name || member.displayName}
+                      </div>
+                      <div className="text-[10px] opacity-70">
+                        {roleLabels[member.role] || member.role}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            💡 Перетащите задачу на участника команды в колонках ниже
+          </p>
+        </Card>
+      )}
 
       {/* Канбан-доска */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
