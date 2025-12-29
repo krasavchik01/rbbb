@@ -380,11 +380,11 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
   };
 
   const getRoleColor = (role: string) => {
-    if (role === 'partner') return 'bg-purple-100 text-purple-700 border-purple-200';
-    if (role.includes('manager')) return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (role.includes('supervisor')) return 'bg-green-100 text-green-700 border-green-200';
-    if (role.includes('assistant')) return 'bg-orange-100 text-orange-700 border-orange-200';
-    return 'bg-gray-100 text-gray-700 border-gray-200';
+    if (role === 'partner') return 'bg-purple-50 border-purple-300';
+    if (role.includes('manager')) return 'bg-blue-50 border-blue-300';
+    if (role.includes('supervisor')) return 'bg-green-50 border-green-300';
+    if (role.includes('assistant')) return 'bg-orange-50 border-orange-300';
+    return 'bg-gray-50 border-gray-300';
   };
 
   const getInitials = (name: string) => {
@@ -789,10 +789,28 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm font-medium mb-1">Исполнитель:</p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedTask.assigned_user?.name || 'Не назначено'}
-                  </p>
+                  <p className="text-sm font-medium mb-2">Исполнитель:</p>
+                  {isManager ? (
+                    <Select
+                      value={selectedTask.assigned_to || ''}
+                      onValueChange={(value) => handleDrop(value, selectedTask.status)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите исполнителя" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teamMembers.map(member => (
+                          <SelectItem key={member.userId || member.id} value={member.userId || member.id}>
+                            {member.name || member.displayName} - {getRoleLabel(member.role)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedTask.assigned_user?.name || 'Не назначено'}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-1">Оценка времени:</p>

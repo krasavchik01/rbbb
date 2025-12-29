@@ -1168,11 +1168,42 @@ class SupabaseDataStore {
   }
 
   /**
+   * Создает отдельный workpaper
+   */
+  async createWorkPaper(workPaper: {
+    project_id: string;
+    code: string;
+    name: string;
+    status: string;
+    data?: any;
+  }): Promise<any> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('work_papers')
+        .insert([{
+          project_id: workPaper.project_id,
+          code: workPaper.code,
+          name: workPaper.name,
+          status: workPaper.status,
+          data: workPaper.data || {}
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('❌ Error creating work paper:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Получает методологии
    */
   async getMethodologies(): Promise<any[]> {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error} = await (supabase as any)
         .from('methodologies')
         .select('*')
         .eq('is_active', true)

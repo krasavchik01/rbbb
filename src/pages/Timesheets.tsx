@@ -68,10 +68,19 @@ export default function Timesheets() {
   // Получаем проекты пользователя (где он в команде)
   const userProjects = useMemo(() => {
     if (!user) return [];
-    return projects.filter((p: any) => {
+
+    // Фильтруем проекты где пользователь в команде
+    const filteredProjects = projects.filter((p: any) => {
       const team = p.team || [];
-      return team.some((member: any) => member.userId === user.id);
+      return team.some((member: any) => member.userId === user.id || member.id === user.id);
     });
+
+    // Если нет проектов в команде, показываем все активные проекты
+    if (filteredProjects.length === 0) {
+      return projects.filter((p: any) => p.status === 'active' || p.status === 'in_progress');
+    }
+
+    return filteredProjects;
   }, [projects, user]);
 
   // Загружаем тайм-шиты из localStorage
