@@ -221,31 +221,38 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
   };
 
   const handleDrop = async (userId: string, status: string) => {
-    if (!draggedTask || !isManager || isViewMode) return;
+    const taskId = draggedTask || selectedTask?.id;
+    if (!taskId || !isManager || isViewMode) return;
 
     try {
-      await supabaseDataStore.updateWorkPaper(draggedTask, {
+      // Определяем новый статус: если не назначено - делаем назначено
+      const newStatus = status === 'not_assigned' ? 'assigned' : status;
+
+      await supabaseDataStore.updateWorkPaper(taskId, {
         assigned_to: userId,
-        status: status as any
+        status: newStatus as any
       });
 
+      const assignedUser = employees.find(e => e.id === userId);
+
       setTasks(tasks.map(t =>
-        t.id === draggedTask
+        t.id === taskId
           ? {
               ...t,
               assigned_to: userId,
-              assigned_user: employees.find(e => e.id === userId),
-              status: status as any
+              assigned_user: assignedUser,
+              status: newStatus as any
             }
           : t
       ));
 
       toast({
-        title: "Задача переназначена",
-        description: "Задача успешно переназначена",
+        title: "Задача назначена",
+        description: `Исполнитель: ${assignedUser?.name || 'Назначен'}`,
       });
 
       setDraggedTask(null);
+      setIsCommentDialogOpen(false);
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Ошибка переназначения задачи:', error);
@@ -380,11 +387,11 @@ export function TaskDistribution({ projectId, teamMembers, workPapers, onUpdate 
   };
 
   const getRoleColor = (role: string) => {
-    if (role === 'partner') return 'bg-purple-50 border-purple-300';
-    if (role.includes('manager')) return 'bg-blue-50 border-blue-300';
-    if (role.includes('supervisor')) return 'bg-green-50 border-green-300';
-    if (role.includes('assistant')) return 'bg-orange-50 border-orange-300';
-    return 'bg-gray-50 border-gray-300';
+    if (role === 'partner') return 'bg-purple-500 text-white border-purple-600';
+    if (role.includes('manager')) return 'bg-blue-500 text-white border-blue-600';
+    if (role.includes('supervisor')) return 'bg-green-500 text-white border-green-600';
+    if (role.includes('assistant')) return 'bg-orange-500 text-white border-orange-600';
+    return 'bg-gray-500 text-white border-gray-600';
   };
 
   const getInitials = (name: string) => {
