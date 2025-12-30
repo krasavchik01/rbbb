@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Supabase API</title>
+</head>
+<body>
+    <h1>Test work_papers API</h1>
+    <button onclick="testAPI()">Test Insert</button>
+    <pre id="result"></pre>
+
+    <script>
+        const SUPABASE_URL = 'https://mknvqsnitzaurpwnhzwn.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbnZxc25pdHphdXJwd25oenduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NjE2NzUsImV4cCI6MjA2OTUzNzY3NX0.vK2JrnJJrlwag7zOMJBgPWbUnodwsYBouFxViu5PZFY';
+
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.textContent = 'Testing...';
+
+            try {
+                // Тест 1: Проверяем что таблица существует
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/work_papers?limit=1`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                result.textContent = `Status: ${response.status}\n`;
+                result.textContent += `Headers: ${JSON.stringify([...response.headers], null, 2)}\n\n`;
+
+                const data = await response.text();
+                result.textContent += `Response: ${data}`;
+
+                // Тест 2: Попробуем вставить
+                if (response.ok) {
+                    const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/work_papers`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=representation'
+                        },
+                        body: JSON.stringify({
+                            project_id: '00000000-0000-0000-0000-000000000000',
+                            code: 'TEST-API',
+                            name: 'Test from HTML',
+                            status: 'not_assigned',
+                            data: {}
+                        })
+                    });
+
+                    result.textContent += `\n\nInsert Status: ${insertResponse.status}\n`;
+                    const insertData = await insertResponse.text();
+                    result.textContent += `Insert Response: ${insertData}`;
+                }
+            } catch (error) {
+                result.textContent = `Error: ${error.message}\n${error.stack}`;
+            }
+        }
+    </script>
+</body>
+</html>

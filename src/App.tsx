@@ -34,6 +34,7 @@ const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
 const Audit = lazy(() => import('@/pages/Audit'));
 const DemoUsersManagement = lazy(() => import('@/pages/DemoUsersManagement'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
+const IFRS9 = lazy(() => import('@/pages/IFRS9'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
@@ -332,6 +333,16 @@ function App() {
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Layout>
                     <SettingsDiagnostics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ifrs9"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <IFRS9 />
                   </Layout>
                 </ProtectedRoute>
               }

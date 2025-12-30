@@ -20,7 +20,8 @@ import {
   Mail,
   ClipboardList,
   BookOpen,
-  Zap
+  Zap,
+  Calculator
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -162,6 +163,14 @@ const menuItems: MenuItem[] = [
     icon: BookOpen
   },
 
+  // МСФО 9 - расчет ECL
+  {
+    title: "МСФО 9 / ECL",
+    url: "/ifrs9",
+    icon: Calculator,
+    allowedRoles: ['partner', 'manager_1', 'manager_2', 'manager_3', 'deputy_director', 'ceo', 'admin']
+  },
+
   // Администрирование - только для админов и партнеров
   {
     title: "Управление",
@@ -264,7 +273,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-2">
               {menuItems.filter(item =>
-                ['Дашборд', 'Проекты', 'Уведомления', 'Служебные записки', 'Аудит'].includes(item.title)
+                ['Дашборд', 'Проекты', 'Уведомления', 'Служебные записки', 'Аудит', 'МСФО 9 / ECL'].includes(item.title)
               ).map((item) => {
                 // Проверяем разрешения
                 // item.permission может быть строкой (ключ разрешения) или массивом (старый формат)
