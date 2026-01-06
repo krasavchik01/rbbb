@@ -95,19 +95,19 @@ const menuItems: MenuItem[] = [
     allowedRoles: ['hr']
   },
   
-  // Работа и время - для всех кроме procurement и директоров
-  { 
-    title: "Тайм-щиты", 
-    url: "/timesheets", 
+  // Работа и время - для всех кроме procurement и директоров, но HR ДОЛЖЕН видеть
+  {
+    title: "Тайм-щиты",
+    url: "/timesheets",
     icon: Clock,
     excludeRoles: ['procurement', 'ceo', 'deputy_director']
   },
-  // Посещаемость - только для директоров
-  { 
-    title: "Посещаемость", 
-    url: "/attendance", 
+  // Посещаемость - для директоров и HR
+  {
+    title: "Посещаемость",
+    url: "/attendance",
     icon: Activity,
-    allowedRoles: ['ceo', 'deputy_director']
+    allowedRoles: ['ceo', 'deputy_director', 'hr', 'admin']
   },
   
   // Бонусы - для всех кроме procurement
@@ -148,27 +148,30 @@ const menuItems: MenuItem[] = [
     icon: Bell
   },
 
-  // Служебные записки - для всех
+  // Служебные записки - НЕ для отдела закупок
   {
     title: "Служебные записки",
     url: "/service-memos",
-    icon: ClipboardList
+    icon: ClipboardList,
+    excludeRoles: ['procurement']
   },
 
 
-  // Аудит по МСА - для всех
+  // Аудит по МСА - НЕ для отдела закупок (только для аудиторов)
   {
     title: "Аудит",
     url: "/audit",
-    icon: BookOpen
+    icon: BookOpen,
+    excludeRoles: ['procurement']
   },
 
-  // МСФО 9 - расчет ECL
+  // МСФО 9 - расчет ECL (НЕ для procurement)
   {
     title: "МСФО 9 / ECL",
     url: "/ifrs9",
     icon: Calculator,
-    allowedRoles: ['partner', 'manager_1', 'manager_2', 'manager_3', 'deputy_director', 'ceo', 'admin']
+    allowedRoles: ['partner', 'manager_1', 'manager_2', 'manager_3', 'deputy_director', 'ceo', 'admin'],
+    excludeRoles: ['procurement']
   },
 
   // Администрирование - только для админов и партнеров

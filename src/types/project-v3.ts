@@ -67,6 +67,23 @@ export interface ClientInfo {
   }[];
 }
 
+// Валюта проекта
+export type ProjectCurrency = 'KZT' | 'USD' | 'EUR' | 'RUB';
+
+export const CURRENCY_LABELS: Record<ProjectCurrency, string> = {
+  KZT: '₸ Тенге',
+  USD: '$ Доллар',
+  EUR: '€ Евро',
+  RUB: '₽ Рубль',
+};
+
+export const CURRENCY_SYMBOLS: Record<ProjectCurrency, string> = {
+  KZT: '₸',
+  USD: '$',
+  EUR: '€',
+  RUB: '₽',
+};
+
 // Информация о договоре
 export interface ContractInfo {
   number: string;              // Номер договора
@@ -75,7 +92,9 @@ export interface ContractInfo {
   serviceStartDate: string;    // Срок оказания услуг (начало)
   serviceEndDate: string;      // Срок оказания услуг (окончание)
   amountWithoutVAT: number;    // Сумма без НДС
+  currency?: ProjectCurrency;  // Валюта (по умолчанию KZT)
   contractScanUrl?: string;    // URL скана договора
+  contractOriginalUrl?: string; // URL оригинала договора (если заменили скан)
 }
 
 // Член команды проекта
@@ -199,13 +218,17 @@ export interface ProjectFile {
   category?: 'contract' | 'scan' | 'document' | 'screenshot' | 'other';
 }
 
-// Этап проекта
+// Этап проекта (с финансами)
 export interface ProjectStage {
   id: string;
-  name: string; // "Аудит за 6 месяцев"
+  name: string; // "Аудит за 6 месяцев", "2024 год", "2025 год"
   startDate: string;
   endDate: string;
   description?: string;
+  amountWithoutVAT: number;  // Сумма без НДС за этот этап
+  vatAmount: number;          // Сумма НДС (16%)
+  amountWithVAT: number;      // Сумма с НДС
+  year?: number;              // Год этапа (для удобства фильтрации)
 }
 
 // Дополнительная услуга

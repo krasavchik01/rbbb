@@ -160,7 +160,7 @@ function App() {
             <Route
               path="/attendance"
               element={
-                <ProtectedRoute allowedRoles={['ceo', 'deputy_director']}>
+                <ProtectedRoute allowedRoles={['ceo', 'deputy_director', 'hr', 'admin']}>
                   <Layout>
                     <Attendance />
                   </Layout>

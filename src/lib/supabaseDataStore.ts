@@ -488,21 +488,71 @@ class SupabaseDataStore {
   async updateProject(id: string, updates: any): Promise<Project | null> {
     // Обновляем в Supabase запись, найденную по notes/id или по id
     try {
-      // Сначала пробуем обновить по id
-      let { error } = await supabase
+      // Сначала получаем текущий проект
+      const { data: currentProject, error: fetchError } = await supabase
         .from('projects')
-        .update({ notes: JSON.stringify(updates), name: updates.name || updates.client?.name || 'Без названия', updated_at: new Date().toISOString() })
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError && !currentProject) {
+        // Пытаемся найти по notes ilike
+        const { data: projectByNotes, error: fetchError2 } = await supabase
+          .from('projects')
+          .select('*')
+          .ilike('notes', `%${id}%`)
+          .single();
+
+        if (fetchError2) throw fetchError2;
+        if (!projectByNotes) throw new Error('Project not found');
+
+        // Мержим существующие notes с обновлениями
+        const existingNotes = typeof projectByNotes.notes === 'string'
+          ? JSON.parse(projectByNotes.notes)
+          : projectByNotes.notes || {};
+
+        const mergedNotes = {
+          ...existingNotes,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: updateError } = await supabase
+          .from('projects')
+          .update({
+            notes: JSON.stringify(mergedNotes),
+            name: updates.name || updates.client?.name || existingNotes.name || 'Без названия',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', projectByNotes.id);
+
+        if (updateError) throw updateError;
+        return mergedNotes as Project;
+      }
+
+      // Мержим существующие notes с обновлениями
+      const existingNotes = typeof currentProject.notes === 'string'
+        ? JSON.parse(currentProject.notes)
+        : currentProject.notes || {};
+
+      const mergedNotes = {
+        ...existingNotes,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Обновляем проект
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          notes: JSON.stringify(mergedNotes),
+          name: updates.name || updates.client?.name || existingNotes.name || 'Без названия',
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
-      if (error) {
-        // Пытаемся по notes ilike (если id не совпадает с UUID)
-        const { error: err2 } = await supabase
-          .from('projects')
-          .update({ notes: JSON.stringify(updates), name: updates.name || updates.client?.name || 'Без названия', updated_at: new Date().toISOString() })
-          .ilike('notes', `%${id}%`);
-        if (err2) throw err2;
-      }
-      return updates as Project;
+      if (error) throw error;
+      return mergedNotes as Project;
     } catch (err) {
       console.error('❌ Error updating project in Supabase:', err);
       return null;
@@ -620,7 +670,7 @@ class SupabaseDataStore {
                        notes?.amount,
       ourCompany: notes?.ourCompany || notes?.companyName,
       companyName: notes?.companyName || notes?.ourCompany,
-      currency: notes?.currency || 'KZT',
+      currency: notes?.contract?.currency || notes?.currency || 'KZT',
       // Сохраняем notes отдельно для доступа к полным данным
       notes: notes,
       // Маппим contract если он есть в notes
@@ -632,6 +682,7 @@ class SupabaseDataStore {
         amountWithoutVAT: notes?.finances?.amountWithoutVAT ||
                          notes?.contract?.amountWithoutVAT ||
                          notes?.amountWithoutVAT,
+        currency: notes?.contract?.currency || notes?.currency || 'KZT',
       } : undefined),
       // Маппим client если есть
       client: notes?.client || (notes?.clientName ? {

@@ -44,8 +44,10 @@ import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 import { TemplateManager } from "@/components/projects/TemplateManager";
 import { WorkPaperTree } from "@/components/projects/WorkPaperTree";
 import { WorkPaperViewer } from "@/components/projects/WorkPaperViewer";
+import { ContractEditor } from "@/components/projects/ContractEditor";
 import { Task, ChecklistItem } from "@/types/project";
 import { WorkPaper, WorkPaperTemplate } from "@/types/workPapers";
+import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
 import { useMemo } from "react";
 
 export default function ProjectWorkspace() {
@@ -75,6 +77,9 @@ export default function ProjectWorkspace() {
   const [workPapers, setWorkPapers] = useState<WorkPaper[]>([]);
   const [selectedWorkPaper, setSelectedWorkPaper] = useState<WorkPaper | null>(null);
   const [workPaperSearchQuery, setWorkPaperSearchQuery] = useState('');
+
+  // Дополнительные соглашения
+  const [amendments, setAmendments] = useState<ProjectAmendment[]>([]);
   
   // Проверка роли партнёра
   const isPartner = user?.role === 'partner';
@@ -160,6 +165,30 @@ export default function ProjectWorkspace() {
   useEffect(() => {
     loadWorkPapers();
   }, [id]); // Загружаем только при смене id
+
+  // Загрузка дополнительных соглашений
+  const loadAmendments = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await supabaseDataStore.getProjectAmendments(id);
+      setAmendments(data.map((a: any) => ({
+        id: a.id,
+        projectId: a.project_id,
+        number: a.number,
+        date: a.date,
+        description: a.description,
+        fileUrl: a.file_url,
+        createdBy: a.created_by,
+        createdAt: a.created_at,
+      })));
+    } catch (error) {
+      console.error('Error loading amendments:', error);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadAmendments();
+  }, [id]);
 
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
@@ -964,9 +993,9 @@ export default function ProjectWorkspace() {
         </div>
       )}
 
-      {/* Вкладки: Планирование (для партнера), Задачи, Распределение задач, Рабочие процедуры, Шаблоны, Файлы */}
+      {/* Вкладки: Планирование (для партнера), Задачи, Распределение задач, Рабочие процедуры, Шаблоны, Файлы, Договор */}
       <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "tasks"} className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-6 gap-2">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-7 gap-2">
           {isPartner && (
             <TabsTrigger value="planning">
               📋 Планирование
@@ -992,6 +1021,9 @@ export default function ProjectWorkspace() {
           )}
           <TabsTrigger value="files">
             📁 Файлы
+          </TabsTrigger>
+          <TabsTrigger value="contract">
+            📜 Договор
           </TabsTrigger>
         </TabsList>
 
@@ -1334,6 +1366,55 @@ export default function ProjectWorkspace() {
             onFilesChange={(files) => {
               // Можно обновить состояние если нужно
             }}
+          />
+        </TabsContent>
+
+        {/* Вкладка договора и доп соглашений */}
+        <TabsContent value="contract" className="space-y-4 mt-4">
+          <ContractEditor
+            projectId={project?.id || id || ''}
+            contract={project?.contract || project?.notes?.contract || null}
+            amendments={amendments}
+            onContractUpdate={async (updatedContract) => {
+              // Обновляем contract в проекте
+              if (project) {
+                // Обновляем локальное состояние
+                const updatedProject = {
+                  ...project,
+                  contract: updatedContract,
+                  notes: {
+                    ...(project.notes || {}),
+                    contract: updatedContract,
+                  },
+                };
+                setProject(updatedProject);
+
+                // Сохраняем в Supabase только обновлённый contract
+                try {
+                  await supabaseDataStore.updateProject(project.id || id, {
+                    contract: updatedContract,
+                  });
+                  toast({
+                    title: '✅ Договор обновлён',
+                    description: 'Изменения сохранены',
+                  });
+                } catch (error) {
+                  console.error('Error updating project:', error);
+                  toast({
+                    title: '❌ Ошибка',
+                    description: 'Не удалось сохранить договор',
+                    variant: 'destructive',
+                  });
+                }
+              }
+            }}
+            onAmendmentAdd={(amendment) => {
+              setAmendments(prev => [amendment, ...prev]);
+            }}
+            onAmendmentDelete={(amendmentId) => {
+              setAmendments(prev => prev.filter(a => a.id !== amendmentId));
+            }}
+            canEdit={user?.role === 'procurement' || user?.role === 'admin' || user?.role === 'partner' || user?.role === 'deputy_director' || user?.role === 'ceo'}
           />
         </TabsContent>
       </Tabs>

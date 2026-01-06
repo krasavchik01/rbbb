@@ -22,6 +22,9 @@ import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate,
 import { supabase } from "@/integrations/supabase/client";
 import { notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
 import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates";
+import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
+import { ContractStagesEditor } from "@/components/projects/ContractStagesEditor";
+import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 
 // Простые типы
 interface SimpleProject {
@@ -425,6 +428,34 @@ export default function Projects() {
 
   // Агрессивная функция получения суммы БЕЗ НДС - проверяет ВСЕ возможные места
   const getProjectAmount = useCallback((project: any): { amount: number | null; currency: string } => {
+    // Функция для извлечения валюты из проекта
+    const getCurrency = (): string => {
+      // Проверяем все возможные места где может быть валюта
+      const possibleCurrencies = [
+        project.notes?.contract?.currency,
+        project.notes?.currency,
+        project.contract?.currency,
+        project.currency,
+        // Также проверяем если notes это строка
+        (() => {
+          try {
+            if (typeof project.notes === 'string') {
+              const parsed = JSON.parse(project.notes);
+              return parsed?.contract?.currency || parsed?.currency;
+            }
+          } catch {}
+          return null;
+        })()
+      ];
+
+      for (const curr of possibleCurrencies) {
+        if (curr && typeof curr === 'string' && ['KZT', 'USD', 'EUR', 'RUB'].includes(curr)) {
+          return curr;
+        }
+      }
+      return 'KZT';
+    };
+
     // Полный список всех возможных путей к сумме
     const possibleAmounts = [
       project.notes?.finances?.amountWithoutVAT,
@@ -440,13 +471,13 @@ export default function Projects() {
         try {
           if (typeof project.notes === 'string') {
             const parsed = JSON.parse(project.notes);
-            return parsed?.finances?.amountWithoutVAT || parsed?.amountWithoutVAT || parsed?.amount;
+            return parsed?.finances?.amountWithoutVAT || parsed?.contract?.amountWithoutVAT || parsed?.amountWithoutVAT || parsed?.amount;
           }
         } catch {}
         return null;
       })()
     ];
-    
+
     // Ищем первое валидное число
     for (const amount of possibleAmounts) {
       if (amount != null) {
@@ -458,28 +489,25 @@ export default function Projects() {
         } else {
           numAmount = Number(amount);
         }
-        
+
         if (!isNaN(numAmount) && isFinite(numAmount) && numAmount > 0) {
           return {
             amount: numAmount,
-            currency: project.notes?.currency || 
-                     (typeof project.notes === 'string' ? (() => {
-                       try {
-                         const parsed = JSON.parse(project.notes);
-                         return parsed?.currency;
-                       } catch { return null; }
-                     })() : null) ||
-                     project.currency || 'KZT'
+            currency: getCurrency()
           };
         }
       }
     }
-    
+
     return { amount: null, currency: 'KZT' };
   }, []);
 
   // Агрессивная функция получения суммы С НДС
   const getProjectAmountWithVAT = useCallback((project: any): { amount: number | null; currency: string } => {
+    // Сначала получаем валюту из getProjectAmount (единый источник)
+    const baseResult = getProjectAmount(project);
+    const currency = baseResult.currency;
+
     // Полный список всех возможных путей к сумме с НДС
     const possibleAmounts = [
       project.notes?.amountWithVAT,
@@ -497,7 +525,7 @@ export default function Projects() {
         return null;
       })()
     ];
-    
+
     // Ищем первое валидное число
     for (const amountWithVAT of possibleAmounts) {
       if (amountWithVAT != null) {
@@ -509,32 +537,21 @@ export default function Projects() {
         } else {
           numAmount = Number(amountWithVAT);
         }
-        
+
         if (!isNaN(numAmount) && isFinite(numAmount) && numAmount > 0) {
-          return {
-            amount: numAmount,
-            currency: project.notes?.currency || 
-                     (typeof project.notes === 'string' ? (() => {
-                       try {
-                         const parsed = JSON.parse(project.notes);
-                         return parsed?.currency;
-                       } catch { return null; }
-                     })() : null) ||
-                     project.currency || 'KZT'
-          };
+          return { amount: numAmount, currency };
         }
       }
     }
-    
+
     // Если суммы с НДС нет, рассчитываем: БЕЗ НДС * 1.12 (12% НДС в KZ)
-    const withoutVAT = getProjectAmount(project);
-    if (withoutVAT.amount) {
+    if (baseResult.amount) {
       return {
-        amount: withoutVAT.amount * 1.12,
-        currency: withoutVAT.currency
+        amount: baseResult.amount * 1.12,
+        currency
       };
     }
-    
+
     return { amount: null, currency: 'KZT' };
   }, [getProjectAmount]);
 
@@ -782,9 +799,9 @@ export default function Projects() {
         return notesStatus !== 'draft';
       }
 
-      // Отдел закупок видит свои созданные проекты (включая на утверждении)
+      // Отдел закупок видит ВСЕ проекты (они создают проекты для всех)
       if (user.role === 'procurement') {
-        return createdBy === user.id;
+        return true;
       }
 
       // Партнёр видит только проекты где он назначен партнёром
@@ -1026,22 +1043,167 @@ export default function Projects() {
         <div className="space-y-3">
           {/* Блок с суммой */}
           {showAmounts && amount && amount > 0 ? (
-            <div className="mb-2 p-2 bg-primary/10 rounded text-sm">
-              <span className="text-muted-foreground">Сумма: </span>
-              <span className="font-semibold text-primary">
-                {new Intl.NumberFormat('ru-RU', {
-                  style: 'currency',
-                  currency: currency,
-                  maximumFractionDigits: 0
-                }).format(amount)}
-              </span>
-              {currency && currency !== 'KZT' && (
-                <span className="text-xs text-muted-foreground ml-1">({currency})</span>
+            <div className="mb-2 space-y-2">
+              <div className="p-2 bg-primary/10 rounded text-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <span className="text-muted-foreground">Без НДС: </span>
+                    <span className="font-semibold text-primary">
+                      {new Intl.NumberFormat('ru-RU', {
+                        style: 'currency',
+                        currency: currency,
+                        maximumFractionDigits: 0
+                      }).format(amount)}
+                    </span>
+                    {currency && currency !== 'KZT' && (
+                      <span className="text-xs text-muted-foreground ml-1">({currency})</span>
+                    )}
+                  </div>
+                  {/* Кнопка быстрого редактирования для procurement */}
+                  {user?.role === 'procurement' && projectId && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <QuickPriceEditor
+                        projectId={projectId}
+                        projectName={projectName}
+                        currentAmount={amount}
+                        currentCurrency={currency as ProjectCurrency}
+                        onSave={async (newAmount, newCurrency) => {
+                          try {
+                            await supabaseDataStore.updateProject(projectId, {
+                              contract: {
+                                ...(project.contract || {}),
+                                amountWithoutVAT: newAmount,
+                                currency: newCurrency,
+                              },
+                              finances: {
+                                ...(project.finances || {}),
+                                amountWithoutVAT: newAmount,
+                              },
+                              currency: newCurrency,
+                              amountWithoutVAT: newAmount,
+                            });
+                            await refreshProjects();
+                            toast({
+                              title: "✅ Цена обновлена",
+                              description: `${newAmount.toLocaleString()} ${newCurrency}`,
+                            });
+                          } catch (error) {
+                            console.error('Error updating price:', error);
+                            throw error;
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+                {/* Показываем НДС и сумму с НДС */}
+                <div className="text-xs space-y-0.5 text-muted-foreground">
+                  <div>
+                    НДС 16%: {new Intl.NumberFormat('ru-RU', {
+                      style: 'currency',
+                      currency: currency,
+                      maximumFractionDigits: 0
+                    }).format(amount * 0.16)}
+                  </div>
+                  <div className="font-semibold">
+                    С НДС: {new Intl.NumberFormat('ru-RU', {
+                      style: 'currency',
+                      currency: currency,
+                      maximumFractionDigits: 0
+                    }).format(amount * 1.16)}
+                  </div>
+                </div>
+              </div>
+              {/* Кнопка этапов договора для procurement */}
+              {user?.role === 'procurement' && projectId && project.contract && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <ContractStagesEditor
+                    projectId={projectId}
+                    projectName={projectName}
+                    totalAmount={amount || 0}
+                    currency={currency as ProjectCurrency}
+                    contractStartDate={project.contract.serviceStartDate || new Date().toISOString().split('T')[0]}
+                    contractEndDate={project.contract.serviceEndDate || new Date().toISOString().split('T')[0]}
+                    currentStages={project.stages || []}
+                    onSave={async (stages: ProjectStage[]) => {
+                      try {
+                        await supabaseDataStore.updateProject(projectId, {
+                          stages: stages,
+                        });
+                        await refreshProjects();
+                        toast({
+                          title: "✅ Этапы договора обновлены",
+                          description: `Добавлено ${stages.length} этапов`,
+                        });
+                      } catch (error) {
+                        console.error('Error saving stages:', error);
+                        throw error;
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Список этапов (если есть) */}
+              {project.stages && project.stages.length > 0 && (
+                <div className="mt-2 p-2 bg-secondary/10 rounded text-xs space-y-1">
+                  <div className="font-semibold text-muted-foreground mb-1">Этапы договора:</div>
+                  {project.stages.map((stage: ProjectStage, idx: number) => (
+                    <div key={stage.id} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                      <span className="text-muted-foreground">{stage.name}</span>
+                      <span className="font-mono font-semibold">
+                        {stage.amountWithVAT.toLocaleString()} {CURRENCY_SYMBOLS[currency as ProjectCurrency]}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-1 font-semibold">
+                    <span>Итого с НДС:</span>
+                    <span className="font-mono">
+                      {project.stages.reduce((sum: number, s: ProjectStage) => sum + s.amountWithVAT, 0).toLocaleString()} {CURRENCY_SYMBOLS[currency as ProjectCurrency]}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
           ) : showAmounts ? (
-            <div className="mb-2 p-2 bg-muted/50 rounded text-xs text-muted-foreground">
-              Сумма не указана
+            <div className="mb-2 p-2 bg-muted/50 rounded flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Сумма не указана</span>
+              {/* Кнопка добавления цены для procurement */}
+              {user?.role === 'procurement' && projectId && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <QuickPriceEditor
+                    projectId={projectId}
+                    projectName={projectName}
+                    currentAmount={undefined}
+                    currentCurrency="KZT"
+                    onSave={async (newAmount, newCurrency) => {
+                      try {
+                        await supabaseDataStore.updateProject(projectId, {
+                          contract: {
+                            ...(project.contract || {}),
+                            amountWithoutVAT: newAmount,
+                            currency: newCurrency,
+                          },
+                          finances: {
+                            ...(project.finances || {}),
+                            amountWithoutVAT: newAmount,
+                          },
+                          currency: newCurrency,
+                          amountWithoutVAT: newAmount,
+                        });
+                        await refreshProjects();
+                        toast({
+                          title: "✅ Цена добавлена",
+                          description: `${newAmount.toLocaleString()} ${newCurrency}`,
+                        });
+                      } catch (error) {
+                        console.error('Error adding price:', error);
+                        throw error;
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </div>
           ) : null}
           

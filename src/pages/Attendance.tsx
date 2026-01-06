@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Settings, Building2, Briefcase, Home, Plane, Heart, Navigation } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAppSettings } from '@/lib/appSettings';
 
 // Расширенные статусы посещаемости
 type AttendanceStatus = 'in_office' | 'on_project' | 'remote' | 'vacation' | 'sick_leave' | 'day_off';
@@ -47,6 +48,7 @@ export default function Attendance() {
   const { user } = useAuth();
   const { employees = [] } = useEmployees();
   const { toast } = useToast();
+  const [appSettings] = useAppSettings();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterEmployee, setFilterEmployee] = useState('all');
@@ -54,19 +56,21 @@ export default function Attendance() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  // Настройки геолокации офиса
+  // Настройки геолокации офиса - БЕРЁМ ИЗ ГЛОБАЛЬНЫХ НАСТРОЕК
   const [officeSettingsOpen, setOfficeSettingsOpen] = useState(false);
-  const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>(() => {
-    const saved = localStorage.getItem('officeLocations');
-    return saved ? JSON.parse(saved) : [
-      { name: 'Главный офис', lat: 43.238949, lng: 76.945465, radius: 100 },
-    ];
-  });
-  const [newOfficeName, setNewOfficeName] = useState('');
-  const [newOfficeLat, setNewOfficeLat] = useState('');
-  const [newOfficeLng, setNewOfficeLng] = useState('');
-  const [newOfficeRadius, setNewOfficeRadius] = useState('100');
-  const [gettingLocation, setGettingLocation] = useState(false);
+  const officeLocations: OfficeLocation[] = useMemo(() => {
+    // Если координаты из глобальных настроек заданы
+    if (appSettings.officeLocation.latitude && appSettings.officeLocation.longitude) {
+      return [{
+        name: appSettings.officeLocation.address || 'Главный офис',
+        lat: appSettings.officeLocation.latitude,
+        lng: appSettings.officeLocation.longitude,
+        radius: appSettings.officeLocation.radiusMeters,
+      }];
+    }
+    // Фоллбэк на дефолтные координаты
+    return [{ name: 'Главный офис', lat: 43.238949, lng: 76.945465, radius: 100 }];
+  }, [appSettings]);
 
   // Загружаем записи посещений
   useEffect(() => {
@@ -117,59 +121,6 @@ export default function Attendance() {
     sickLeave: new Set(todayRecords.filter(r => r.status === 'sick_leave').map(r => r.employeeId)).size,
   };
 
-  // Функции для работы с геолокацией
-  const getCurrentLocation = () => {
-    setGettingLocation(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setNewOfficeLat(position.coords.latitude.toFixed(6));
-          setNewOfficeLng(position.coords.longitude.toFixed(6));
-          setGettingLocation(false);
-          toast({ title: 'Координаты получены', description: 'Текущее местоположение установлено' });
-        },
-        (error) => {
-          setGettingLocation(false);
-          toast({ title: 'Ошибка', description: 'Не удалось получить геолокацию: ' + error.message, variant: 'destructive' });
-        }
-      );
-    } else {
-      setGettingLocation(false);
-      toast({ title: 'Ошибка', description: 'Геолокация не поддерживается браузером', variant: 'destructive' });
-    }
-  };
-
-  const addOfficeLocation = () => {
-    if (!newOfficeName || !newOfficeLat || !newOfficeLng) {
-      toast({ title: 'Ошибка', description: 'Заполните все поля', variant: 'destructive' });
-      return;
-    }
-
-    const newLocation: OfficeLocation = {
-      name: newOfficeName,
-      lat: parseFloat(newOfficeLat),
-      lng: parseFloat(newOfficeLng),
-      radius: parseInt(newOfficeRadius) || 100,
-    };
-
-    const updated = [...officeLocations, newLocation];
-    setOfficeLocations(updated);
-    localStorage.setItem('officeLocations', JSON.stringify(updated));
-
-    setNewOfficeName('');
-    setNewOfficeLat('');
-    setNewOfficeLng('');
-    setNewOfficeRadius('100');
-
-    toast({ title: 'Офис добавлен', description: `Локация "${newOfficeName}" добавлена` });
-  };
-
-  const removeOfficeLocation = (index: number) => {
-    const updated = officeLocations.filter((_, i) => i !== index);
-    setOfficeLocations(updated);
-    localStorage.setItem('officeLocations', JSON.stringify(updated));
-    toast({ title: 'Офис удалён', description: 'Локация удалена из списка' });
-  };
 
   // Вычисляем время работы
   const calculateWorkTime = (checkIn: string, checkOut?: string) => {
@@ -197,103 +148,9 @@ export default function Attendance() {
           <p className="text-muted-foreground">Учет рабочего времени сотрудников</p>
         </div>
         {isAdmin && (
-          <Dialog open={officeSettingsOpen} onOpenChange={setOfficeSettingsOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Settings className="w-4 h-4 mr-2" />
-                Настройки офисов
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Настройки геолокации офисов
-                </DialogTitle>
-                <DialogDescription>
-                  Настройте локации офисов для автоматического определения присутствия сотрудников
-                </DialogDescription>
-              </DialogHeader>
-
-              {/* Существующие офисы */}
-              <div className="space-y-3">
-                <Label>Существующие офисы:</Label>
-                {officeLocations.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Нет настроенных офисов</p>
-                ) : (
-                  <div className="space-y-2">
-                    {officeLocations.map((office, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{office.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {office.lat}, {office.lng} (радиус: {office.radius}м)
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeOfficeLocation(index)}
-                          className="text-destructive"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Добавить новый офис */}
-              <div className="space-y-3 pt-4 border-t">
-                <Label>Добавить новый офис:</Label>
-                <Input
-                  placeholder="Название офиса"
-                  value={newOfficeName}
-                  onChange={(e) => setNewOfficeName(e.target.value)}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    placeholder="Широта (lat)"
-                    value={newOfficeLat}
-                    onChange={(e) => setNewOfficeLat(e.target.value)}
-                  />
-                  <Input
-                    placeholder="Долгота (lng)"
-                    value={newOfficeLng}
-                    onChange={(e) => setNewOfficeLng(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Радиус (м)"
-                    value={newOfficeRadius}
-                    onChange={(e) => setNewOfficeRadius(e.target.value)}
-                    className="w-32"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={getCurrentLocation}
-                    disabled={gettingLocation}
-                    className="flex-1"
-                  >
-                    <Navigation className="w-4 h-4 mr-2" />
-                    {gettingLocation ? 'Получение...' : 'Моё местоположение'}
-                  </Button>
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setOfficeSettingsOpen(false)}>
-                  Закрыть
-                </Button>
-                <Button onClick={addOfficeLocation}>
-                  Добавить офис
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Badge variant="outline" className="text-xs">
+            Настройки офиса: Настройки → Система → Геолокация офиса
+          </Badge>
         )}
       </div>
 
