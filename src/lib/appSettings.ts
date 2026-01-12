@@ -2,6 +2,7 @@
 // Эти настройки управляются администратором и применяются глобально для всех пользователей
 
 import { supabase } from '@/integrations/supabase/client';
+import { Company, DEFAULT_COMPANIES } from '@/types/companies';
 
 export interface AppSettings {
   // Показывать ли демо-пользователей на странице входа
@@ -17,6 +18,8 @@ export interface AppSettings {
   // Режим работы приложения
   maintenanceMode: boolean;
   maintenanceMessage: string;
+  // Список компаний (управляемый администратором)
+  companies: Company[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -29,7 +32,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     address: ''
   },
   maintenanceMode: false,
-  maintenanceMessage: ''
+  maintenanceMessage: '',
+  companies: DEFAULT_COMPANIES // Используем дефолтный список компаний
 };
 
 const SETTINGS_KEY = 'rb_app_settings'; // Используется для кеша
@@ -70,7 +74,8 @@ export async function getAppSettings(): Promise<AppSettings> {
           address: data.office_address ?? DEFAULT_SETTINGS.officeLocation.address
         },
         maintenanceMode: data.maintenance_mode ?? DEFAULT_SETTINGS.maintenanceMode,
-        maintenanceMessage: data.maintenance_message ?? DEFAULT_SETTINGS.maintenanceMessage
+        maintenanceMessage: data.maintenance_message ?? DEFAULT_SETTINGS.maintenanceMessage,
+        companies: (data.companies && Array.isArray(data.companies)) ? data.companies : DEFAULT_SETTINGS.companies
       };
 
       // Обновляем кеш
@@ -138,7 +143,8 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
         office_radius_meters: updated.officeLocation.radiusMeters,
         office_address: updated.officeLocation.address,
         maintenance_mode: updated.maintenanceMode,
-        maintenance_message: updated.maintenanceMessage
+        maintenance_message: updated.maintenanceMessage,
+        companies: updated.companies // Сохраняем компании
       })
       .eq('id', settingsRow.id)
       .select();

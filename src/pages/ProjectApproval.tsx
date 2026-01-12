@@ -101,7 +101,7 @@ export default function ProjectApproval() {
     // Если роль не замаплена, но она есть в PROJECT_ROLES, используем её
     const projectRoleNames = PROJECT_ROLES.map(r => r.role);
     const finalRole = mappedRole || (projectRoleNames.includes(emp.role as any) ? emp.role : null);
-    
+
     return {
       id: emp.id,
       name: emp.name || emp.email || 'Без имени',
@@ -111,11 +111,8 @@ export default function ProjectApproval() {
       location: 'office' as const,
       originalRole: emp.role // Сохраняем исходную роль для отладки
     };
-  }).filter(emp => {
-    // Фильтруем только тех, у кого роль есть в PROJECT_ROLES
-    const projectRoleNames = PROJECT_ROLES.map(r => r.role);
-    return projectRoleNames.includes(emp.role as any);
   });
+  // НЕ ФИЛЬТРУЕМ сотрудников - показываем всех реальных сотрудников из базы!
 
   // Логирование для отладки
   useEffect(() => {

@@ -130,6 +130,37 @@ export const PROJECT_ROLES: ProjectRole[] = [
     bonusPercent: 2,
     description: 'Младший ассистент'
   },
+  // Административные роли (могут быть назначены на проекты, но не получают бонусы автоматически)
+  {
+    role: 'admin',
+    label: 'Администратор',
+    bonusPercent: 0,
+    description: 'Системный администратор'
+  },
+  {
+    role: 'ceo',
+    label: 'CEO / Генеральный директор',
+    bonusPercent: 0,
+    description: 'Главный исполнительный директор'
+  },
+  {
+    role: 'deputy_director',
+    label: 'Заместитель директора',
+    bonusPercent: 0,
+    description: 'Заместитель генерального директора'
+  },
+  {
+    role: 'hr',
+    label: 'HR / Кадры',
+    bonusPercent: 0,
+    description: 'Отдел кадров'
+  },
+  {
+    role: 'procurement',
+    label: 'Отдел закупок',
+    bonusPercent: 0,
+    description: 'Отдел закупок и снабжения'
+  },
 ];
 
 // Общая сумма процентов = 100%

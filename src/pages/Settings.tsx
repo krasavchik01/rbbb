@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAppSettings } from '@/lib/appSettings';
+import { CompaniesManagement } from '@/components/settings/CompaniesManagement';
 import {
   User,
   Bell,
@@ -19,7 +20,8 @@ import {
   MapPin,
   Users,
   Eye,
-  EyeOff
+  EyeOff,
+  Building2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -194,6 +196,9 @@ export default function Settings() {
           <TabsTrigger value="appearance">Внешний вид</TabsTrigger>
           <TabsTrigger value="security">Безопасность</TabsTrigger>
           {isAdmin && <TabsTrigger value="system">Система</TabsTrigger>}
+          {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo') && (
+            <TabsTrigger value="companies">Компании</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -600,6 +605,33 @@ export default function Settings() {
                   </span>
                 </div>
               </div>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* Вкладка Компании */}
+        {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo') && (
+          <TabsContent value="companies" className="space-y-4">
+            <Card className="p-6">
+              <CompaniesManagement
+                companies={appSettings.companies}
+                onChange={async (updatedCompanies) => {
+                  try {
+                    await updateAppSettings({ companies: updatedCompanies });
+                    toast({
+                      title: '✅ Компании обновлены',
+                      description: 'Список компаний успешно сохранен',
+                    });
+                  } catch (error) {
+                    console.error('Error saving companies:', error);
+                    toast({
+                      title: 'Ошибка сохранения',
+                      description: 'Не удалось сохранить компании',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+              />
             </Card>
           </TabsContent>
         )}

@@ -18,8 +18,8 @@ export interface Company {
   updated_at: string;
 }
 
-// Список компаний группы
-export const COMPANIES: Company[] = [
+// Дефолтный список компаний (используется как fallback и для инициализации)
+export const DEFAULT_COMPANIES: Company[] = [
   {
     id: 'mak',
     name: 'ТОО МАК',
@@ -87,6 +87,10 @@ export const COMPANIES: Company[] = [
     updated_at: new Date().toISOString(),
   },
 ];
+
+// Совместимость: COMPANIES теперь ссылается на DEFAULT_COMPANIES
+// В будущем используйте getAppSettings().companies для получения актуального списка
+export const COMPANIES = DEFAULT_COMPANIES;
 
 // Получить компанию по ID
 export const getCompanyById = (id: string): Company | undefined => {
