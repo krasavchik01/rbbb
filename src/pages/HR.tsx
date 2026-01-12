@@ -14,9 +14,9 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useToast } from "@/hooks/use-toast";
 import { sendWelcomeEmail } from "@/lib/emailService";
 import * as XLSX from 'xlsx';
-import { 
-  Plus, 
-  Search, 
+import {
+  Plus,
+  Search,
   Download,
   Upload,
   Trash2,
@@ -31,7 +31,8 @@ import {
   TrendingUp,
   Clock,
   Target,
-  Building
+  Building,
+  Edit
 } from "lucide-react";
 
 export default function HR() {
@@ -44,9 +45,23 @@ export default function HR() {
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterRole, setFilterRole] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [newEmployee, setNewEmployee] = useState({
+    name: "",
+    email: "",
+    company: "",
+    role: "",
+    phone: "",
+    department: "",
+    position: "",
+    category: "auditors", // auditors | other
+    subcategory: "",
+    customRole: "",
+  });
+  const [editEmployee, setEditEmployee] = useState({
+    id: "",
     name: "",
     email: "",
     company: "",
@@ -283,6 +298,49 @@ export default function HR() {
       });
     } finally {
       setIsAddingEmployee(false);
+    }
+  };
+
+  // Редактирование сотрудника
+  const handleEditEmployee = async () => {
+    if (!editEmployee.id) return;
+
+    try {
+      const finalRole = editEmployee.category === 'auditors'
+        ? editEmployee.role
+        : (editEmployee.customRole || 'employee');
+
+      await supabaseDataStore.updateEmployee(editEmployee.id, {
+        name: editEmployee.name,
+        email: editEmployee.email,
+        role: finalRole,
+        whatsapp: editEmployee.phone || '',
+        department: editEmployee.category === 'auditors' ? 'Аудит' : (editEmployee.department || editEmployee.category),
+        position: editEmployee.subcategory || editEmployee.position || '',
+        phone: editEmployee.phone,
+        companyId: editEmployee.company,
+      });
+
+      await refresh();
+
+      toast({
+        title: "✅ Успех!",
+        description: `Сотрудник ${editEmployee.name} обновлён`,
+      });
+
+      setIsEditDialogOpen(false);
+      setEditEmployee({
+        id: "", name: "", email: "", company: "", role: "", phone: "",
+        department: "", position: "", category: "auditors", subcategory: "", customRole: ""
+      });
+
+    } catch (error: any) {
+      console.error('Error updating employee:', error);
+      toast({
+        title: "Ошибка",
+        description: error?.message || "Не удалось обновить сотрудника",
+        variant: "destructive",
+      });
     }
   };
 
@@ -907,18 +965,45 @@ export default function HR() {
                     </div>
                   </div>
                 {isAdmin && (
-          <Button 
-                    variant="ghost"
-                    size="sm"
-            onClick={() => {
-                      setSelectedEmployee(employee);
-                      setIsDeleteDialogOpen(true);
-                    }}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-          </Button>
-                        )}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Заполняем форму редактирования данными сотрудника
+                        const isAuditor = ['partner','manager_1','manager_2','manager_3','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(employee.role);
+                        setEditEmployee({
+                          id: employee.id,
+                          name: employee.name || '',
+                          email: employee.email || '',
+                          company: employee.company || '',
+                          role: isAuditor ? employee.role : '',
+                          phone: employee.phone || '',
+                          department: employee.department || '',
+                          position: employee.position || '',
+                          category: isAuditor ? 'auditors' : 'other',
+                          subcategory: employee.position || '',
+                          customRole: isAuditor ? '' : employee.role,
+                        });
+                        setIsEditDialogOpen(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedEmployee(employee);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
         </div>
               <div className="mt-4 space-y-2">
                 {employee.email && (
@@ -1468,6 +1553,152 @@ export default function HR() {
                 "Добавить"
               )}
               </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Employee Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Редактировать сотрудника</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Имя *</Label>
+              <Input
+                value={editEmployee.name}
+                onChange={(e) => setEditEmployee({ ...editEmployee, name: e.target.value })}
+                placeholder="Иванов Иван Иванович"
+              />
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={editEmployee.email}
+                onChange={(e) => setEditEmployee({ ...editEmployee, email: e.target.value })}
+                placeholder="ivanov@company.kz"
+              />
+            </div>
+            <div>
+              <Label>Компания</Label>
+              <Select
+                value={editEmployee.company}
+                onValueChange={(value) => setEditEmployee({ ...editEmployee, company: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите компанию" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map(company => (
+                    <SelectItem key={company.value} value={company.value}>
+                      {company.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Категория</Label>
+              <Select
+                value={editEmployee.category}
+                onValueChange={(value) => setEditEmployee({ ...editEmployee, category: value, role: '', customRole: '', subcategory: '', department: '' })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите категорию" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {editEmployee.category === 'auditors' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Роль (Аудиторы) *</Label>
+                  <Select
+                    value={editEmployee.role}
+                    onValueChange={(value) => setEditEmployee({ ...editEmployee, role: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Партнёр, РП, Супервайзер, ..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.filter(r => ['partner','manager_1','manager_2','manager_3','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(r.value)).map(role => (
+                        <SelectItem key={role.value} value={role.value}>
+                          {role.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ⚠️ Выберите правильную роль, чтобы сотрудник отображался при назначении на проекты
+                  </p>
+                </div>
+                <div>
+                  <Label>Подкатегория (опционально)</Label>
+                  <Input
+                    placeholder="Например: Аудит, IT-аудит"
+                    value={editEmployee.subcategory}
+                    onChange={(e) => setEditEmployee({ ...editEmployee, subcategory: e.target.value })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Новая категория</Label>
+                    <Input
+                      placeholder="Например: Отдел продаж"
+                      value={editEmployee.department}
+                      onChange={(e) => setEditEmployee({ ...editEmployee, department: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Подкатегория</Label>
+                    <Input
+                      placeholder="Например: B2B"
+                      value={editEmployee.subcategory}
+                      onChange={(e) => setEditEmployee({ ...editEmployee, subcategory: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Роль (кастомная)</Label>
+                  <Input
+                    placeholder="Введите роль сотрудника"
+                    value={editEmployee.customRole}
+                    onChange={(e) => setEditEmployee({ ...editEmployee, customRole: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+            <div>
+              <Label>Телефон</Label>
+              <Input
+                value={editEmployee.phone}
+                onChange={(e) => setEditEmployee({ ...editEmployee, phone: e.target.value })}
+                placeholder="+7 777 123 4567"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={handleEditEmployee}
+              disabled={!editEmployee.name || !editEmployee.email}
+            >
+              Сохранить изменения
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

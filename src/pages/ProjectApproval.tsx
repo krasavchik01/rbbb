@@ -823,8 +823,8 @@ export default function ProjectApproval() {
 
                 <div className="space-y-3">
                   {PROJECT_ROLES.map(projectRole => {
-                    // ИЗМЕНЕНО: Показываем ВСЕХ сотрудников для ВСЕХ ролей (заместитель сам решает кого назначить)
-                    const employeesForRole = availableEmployees; // Убрали фильтр по роли
+                    // Фильтруем сотрудников по роли (роли маппятся через mapEmployeeRoleToProjectRole)
+                    const employeesForRole = availableEmployees.filter(emp => emp.role === projectRole.role);
                     const isRoleSelected = selectedRoles[projectRole.role];
                     
                     return (
