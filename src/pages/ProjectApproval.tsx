@@ -823,7 +823,8 @@ export default function ProjectApproval() {
 
                 <div className="space-y-3">
                   {PROJECT_ROLES.map(projectRole => {
-                    const employeesForRole = availableEmployees.filter(emp => emp.role === projectRole.role);
+                    // ИЗМЕНЕНО: Показываем ВСЕХ сотрудников для ВСЕХ ролей (заместитель сам решает кого назначить)
+                    const employeesForRole = availableEmployees; // Убрали фильтр по роли
                     const isRoleSelected = selectedRoles[projectRole.role];
                     
                     return (
@@ -867,43 +868,51 @@ export default function ProjectApproval() {
                                   <SelectValue placeholder="Выберите сотрудника" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {employeesForRole.map(emp => (
-                                    <SelectItem key={emp.id} value={emp.id}>
-                                      <div className="flex items-center justify-between w-full gap-4">
-                                        <span>{emp.name}</span>
-                                        <div className="flex items-center gap-2 text-xs">
-                                          <Badge 
-                                            variant="outline" 
-                                            className={
-                                              emp.loadPercent >= 80 
-                                                ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200' 
-                                                : emp.loadPercent >= 50 
-                                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-200' 
-                                                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200'
-                                            }
-                                          >
-                                            Загрузка: {emp.loadPercent}%
-                                          </Badge>
-                                          <Badge variant="outline">
-                                            Проектов: {emp.activeProjects}
-                                          </Badge>
-                                          <Badge 
-                                            variant="outline"
-                                            className={emp.location === 'office' 
-                                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' 
-                                              : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-200'}
-                                          >
-                                            {emp.location === 'office' ? '🏢 В офисе' : '📍 На проекте'}
-                                          </Badge>
+                                  {employeesForRole.map(emp => {
+                                    const empOriginalRole = (emp as any).originalRole;
+                                    const roleLabel = PROJECT_ROLES.find(r => r.role === empOriginalRole)?.label || empOriginalRole;
+
+                                    return (
+                                      <SelectItem key={emp.id} value={emp.id}>
+                                        <div className="flex items-center justify-between w-full gap-4">
+                                          <div className="flex flex-col">
+                                            <span>{emp.name}</span>
+                                            <span className="text-xs text-muted-foreground">Роль: {roleLabel}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-xs">
+                                            <Badge
+                                              variant="outline"
+                                              className={
+                                                emp.loadPercent >= 80
+                                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200'
+                                                  : emp.loadPercent >= 50
+                                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-200'
+                                                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200'
+                                              }
+                                            >
+                                              Загрузка: {emp.loadPercent}%
+                                            </Badge>
+                                            <Badge variant="outline">
+                                              Проектов: {emp.activeProjects}
+                                            </Badge>
+                                            <Badge
+                                              variant="outline"
+                                              className={emp.location === 'office'
+                                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
+                                                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-200'}
+                                            >
+                                              {emp.location === 'office' ? '🏢 В офисе' : '📍 На проекте'}
+                                            </Badge>
+                                          </div>
                                         </div>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
+                                      </SelectItem>
+                                    );
+                                  })}
                                 </SelectContent>
                               </Select>
                             ) : (
                               <div className="text-sm text-yellow-600 dark:text-yellow-400 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
-                                ⚠️ Нет доступных {projectRole.label.toLowerCase()} в базе. Проверьте настройки сотрудников.
+                                ⚠️ Нет сотрудников в базе данных. Добавьте сотрудников через страницу "Сотрудники" или "HR".
                                 {projectRole.role === 'partner' && (
                                   <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
                                     Партнер обязателен для утверждения проекта.
