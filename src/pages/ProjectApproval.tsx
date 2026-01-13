@@ -826,12 +826,26 @@ export default function ProjectApproval() {
                     // Показываем только проектные роли (не административные)
                     .filter(pr => !['ceo', 'deputy_director', 'hr', 'procurement', 'admin'].includes(pr.role))
                     .map(projectRole => {
-                    // Показываем всех сотрудников для назначения на любую роль
-                    // Это позволяет зам. директору гибко назначать команду
+                    // Фильтруем сотрудников строго по роли
+                    // Маппинг: manager -> все manager_*, supervisor -> все supervisor_* и т.д.
                     const employeesForRole = availableEmployees.filter(emp => {
-                      // Исключаем административные роли из списка назначаемых на проектные роли
-                      const adminRoles = ['ceo', 'deputy_director', 'hr', 'procurement', 'admin', 'accountant'];
-                      return !adminRoles.includes(emp.role || '');
+                      const empRole = emp.role || '';
+                      const targetRole = projectRole.role;
+
+                      // Точное совпадение (manager_1 === manager_1)
+                      if (empRole === targetRole) return true;
+
+                      // Маппинг общих ролей на конкретные уровни
+                      // Сотрудник с ролью "manager" показывается во всех manager_1/2/3
+                      if (empRole === 'manager' && targetRole.startsWith('manager_')) return true;
+                      // Сотрудник с ролью "supervisor" показывается во всех supervisor_1/2/3
+                      if (empRole === 'supervisor' && targetRole.startsWith('supervisor_')) return true;
+                      // Сотрудник с ролью "assistant" показывается во всех assistant_1/2/3
+                      if (empRole === 'assistant' && targetRole.startsWith('assistant_')) return true;
+                      // Сотрудник с ролью "tax_specialist" показывается во всех tax_specialist_1/2
+                      if (empRole === 'tax_specialist' && targetRole.startsWith('tax_specialist_')) return true;
+
+                      return false;
                     });
                     const isRoleSelected = selectedRoles[projectRole.role];
                     
