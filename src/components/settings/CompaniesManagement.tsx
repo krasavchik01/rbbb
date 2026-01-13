@@ -19,6 +19,7 @@ export function CompaniesManagement({ companies, onChange }: CompaniesManagement
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Company>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleAdd = () => {
     setFormData({
@@ -70,7 +71,9 @@ export function CompaniesManagement({ companies, onChange }: CompaniesManagement
   };
 
   const handleDelete = (id: string) => {
-    onChange(companies.filter(c => c.id !== id));
+    const updatedCompanies = companies.filter(c => c.id !== id);
+    onChange(updatedCompanies);
+    setDeletingId(null);
   };
 
   const toggleActive = (id: string) => {
@@ -249,9 +252,16 @@ export function CompaniesManagement({ companies, onChange }: CompaniesManagement
                 <Button variant="ghost" size="sm" onClick={() => handleEdit(company)}>
                   <Edit className="w-4 h-4" />
                 </Button>
-                <AlertDialog>
+                <AlertDialog open={deletingId === company.id} onOpenChange={(open) => {
+                  if (!open) setDeletingId(null);
+                }}>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="text-destructive">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => setDeletingId(company.id)}
+                    >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </AlertDialogTrigger>
@@ -263,8 +273,11 @@ export function CompaniesManagement({ companies, onChange }: CompaniesManagement
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Отмена</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(company.id)} className="bg-destructive text-destructive-foreground">
+                      <AlertDialogCancel onClick={() => setDeletingId(null)}>Отмена</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(company.id)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
                         Удалить
                       </AlertDialogAction>
                     </AlertDialogFooter>

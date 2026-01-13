@@ -92,6 +92,9 @@ export interface ContractInfo {
   serviceStartDate: string;    // Срок оказания услуг (начало)
   serviceEndDate: string;      // Срок оказания услуг (окончание)
   amountWithoutVAT: number;    // Сумма без НДС
+  vatRate?: number;            // Ставка НДС в % (0, 12, 16)
+  vatAmount?: number;          // Сумма НДС
+  amountWithVAT?: number;      // Сумма с НДС
   currency?: ProjectCurrency;  // Валюта (по умолчанию KZT)
   contractScanUrl?: string;    // URL скана договора
   contractOriginalUrl?: string; // URL оригинала договора (если заменили скан)

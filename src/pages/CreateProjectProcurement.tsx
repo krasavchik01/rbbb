@@ -53,6 +53,7 @@ export default function CreateProjectProcurement() {
   const [serviceStartDate, setServiceStartDate] = useState("");
   const [serviceEndDate, setServiceEndDate] = useState("");
   const [amountWithoutVAT, setAmountWithoutVAT] = useState("");
+  const [vatRate, setVatRate] = useState("16"); // Ставка НДС в % (16% по умолчанию, 0% = без НДС)
   const [currency, setCurrency] = useState("KZT"); // KZT по умолчанию
   const [companyId, setCompanyId] = useState("");
   const [projectType, setProjectType] = useState<ProjectType | "">("");
@@ -64,8 +65,9 @@ export default function CreateProjectProcurement() {
     { companyId: "", sharePercentage: 50 },
   ]);
   
-  // Файл договора
-  const [contractFile, setContractFile] = useState<File | null>(null);
+  // Файлы документов (вместо одного файла договора)
+  const [contractFiles, setContractFiles] = useState<File[]>([]);
+  const MAX_TOTAL_SIZE_MB = 50; // Максимальный общий размер файлов в МБ
   
   // Новые поля: этапы, услуги, файлы
   const [hasStages, setHasStages] = useState(false);
@@ -138,9 +140,34 @@ export default function CreateProjectProcurement() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setContractFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      const allFiles = [...contractFiles, ...newFiles];
+
+      // Проверяем общий размер
+      const totalSize = allFiles.reduce((sum, file) => sum + file.size, 0);
+      const totalSizeMB = totalSize / (1024 * 1024);
+
+      if (totalSizeMB > MAX_TOTAL_SIZE_MB) {
+        toast({
+          title: "Превышен лимит размера",
+          description: `Общий размер файлов не может превышать ${MAX_TOTAL_SIZE_MB} МБ. Текущий: ${totalSizeMB.toFixed(1)} МБ`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setContractFiles(allFiles);
     }
+  };
+
+  const removeFile = (index: number) => {
+    setContractFiles(contractFiles.filter((_, i) => i !== index));
+  };
+
+  const getTotalFilesSize = () => {
+    const totalSize = contractFiles.reduce((sum, file) => sum + file.size, 0);
+    return (totalSize / (1024 * 1024)).toFixed(1);
   };
 
   const validateForm = (): boolean => {
@@ -244,9 +271,21 @@ export default function CreateProjectProcurement() {
         serviceStartDate: serviceStartDate,
         serviceEndDate: serviceEndDate,
         amountWithoutVAT: parseFloat(amountWithoutVAT),
+        vatRate: parseFloat(vatRate), // Ставка НДС (0, 12, 16)
+        vatAmount: parseFloat(amountWithoutVAT) * parseFloat(vatRate) / 100, // Сумма НДС
+        amountWithVAT: parseFloat(amountWithoutVAT) * (1 + parseFloat(vatRate) / 100), // Сумма с НДС
         currency: currency, // Валюта проекта
-        contractScanUrl: contractFile ? URL.createObjectURL(contractFile) : undefined,
+        // Сохраняем информацию о файлах (URL создаются позже при загрузке в Storage)
+        contractScanUrl: contractFiles.length > 0 ? 'pending_upload' : undefined,
       } as ContractInfo,
+
+      // Файлы документов (будут загружены в Supabase Storage)
+      documentFiles: contractFiles.map(file => ({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        localUrl: URL.createObjectURL(file),
+      })),
       
       team: [],
       tasks: [],
@@ -615,6 +654,32 @@ export default function CreateProjectProcurement() {
             </p>
           </div>
 
+          <div>
+            <Label htmlFor="vatRate">
+              Ставка НДС <Badge variant="secondary" className="ml-2 text-xs">НДС</Badge>
+            </Label>
+            <Select value={vatRate} onValueChange={setVatRate}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Без НДС (0%)</SelectItem>
+                <SelectItem value="12">НДС 12%</SelectItem>
+                <SelectItem value="16">НДС 16% (по умолчанию)</SelectItem>
+              </SelectContent>
+            </Select>
+            {amountWithoutVAT && parseFloat(amountWithoutVAT) > 0 && (
+              <div className="mt-2 p-2 bg-green-500/10 rounded border border-green-500/30">
+                <p className="text-xs text-green-400">
+                  💰 Сумма НДС: <span className="font-bold">{(parseFloat(amountWithoutVAT) * parseFloat(vatRate) / 100).toLocaleString('ru-RU')} {currency}</span>
+                </p>
+                <p className="text-xs text-green-400 mt-1">
+                  💵 Итого с НДС: <span className="font-bold">{(parseFloat(amountWithoutVAT) * (1 + parseFloat(vatRate) / 100)).toLocaleString('ru-RU')} {currency}</span>
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Чекбокс консорциума */}
           <div className="md:col-span-2">
             <div className="flex items-center space-x-2 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border-2 border-blue-400/50">
@@ -756,25 +821,65 @@ export default function CreateProjectProcurement() {
           </div>
 
           <div className="md:col-span-2">
-            <Label htmlFor="contractFile">Скан договора (PDF, JPG, PNG)</Label>
+            <Label htmlFor="contractFiles">
+              <FileText className="w-4 h-4 inline mr-2" />
+              Документы проекта (договор, сканы, приложения)
+            </Label>
             <div className="mt-2 border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
               <input
-                id="contractFile"
+                id="contractFiles"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                 onChange={handleFileChange}
                 className="hidden"
+                multiple
               />
-              <label htmlFor="contractFile" className="cursor-pointer">
+              <label htmlFor="contractFiles" className="cursor-pointer">
                 <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium mb-1">
-                  {contractFile ? contractFile.name : 'Нажмите для загрузки файла'}
+                  Нажмите для загрузки файлов
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  PDF, JPG, PNG • Макс. 10 МБ
+                  PDF, DOC, XLS, JPG, PNG • Можно выбрать несколько файлов
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Лимит: {MAX_TOTAL_SIZE_MB} МБ (использовано: {getTotalFilesSize()} МБ)
                 </p>
               </label>
             </div>
+
+            {/* Список загруженных файлов */}
+            {contractFiles.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Загружено файлов: {contractFiles.length} ({getTotalFilesSize()} МБ из {MAX_TOTAL_SIZE_MB} МБ)
+                </p>
+                <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
+                  {contractFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <FileText className="w-4 h-4 flex-shrink-0 text-primary" />
+                        <span className="text-sm truncate">{file.name}</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          ({(file.size / (1024 * 1024)).toFixed(1)} МБ)
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(index)}
+                        className="text-destructive hover:text-destructive flex-shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Card>
