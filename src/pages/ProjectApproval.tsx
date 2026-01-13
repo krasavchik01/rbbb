@@ -822,9 +822,17 @@ export default function ProjectApproval() {
                 </h3>
 
                 <div className="space-y-3">
-                  {PROJECT_ROLES.map(projectRole => {
-                    // Фильтруем сотрудников по роли (роли маппятся через mapEmployeeRoleToProjectRole)
-                    const employeesForRole = availableEmployees.filter(emp => emp.role === projectRole.role);
+                  {PROJECT_ROLES
+                    // Показываем только проектные роли (не административные)
+                    .filter(pr => !['ceo', 'deputy_director', 'hr', 'procurement', 'admin'].includes(pr.role))
+                    .map(projectRole => {
+                    // Показываем всех сотрудников для назначения на любую роль
+                    // Это позволяет зам. директору гибко назначать команду
+                    const employeesForRole = availableEmployees.filter(emp => {
+                      // Исключаем административные роли из списка назначаемых на проектные роли
+                      const adminRoles = ['ceo', 'deputy_director', 'hr', 'procurement', 'admin', 'accountant'];
+                      return !adminRoles.includes(emp.role || '');
+                    });
                     const isRoleSelected = selectedRoles[projectRole.role];
                     
                     return (
