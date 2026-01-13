@@ -64,6 +64,13 @@ export async function getAppSettings(): Promise<AppSettings> {
     }
 
     if (data) {
+      console.log('getAppSettings: данные из Supabase:', {
+        hasCompanies: !!data.companies,
+        isArray: Array.isArray(data.companies),
+        companiesCount: data.companies?.length,
+        companies: data.companies
+      });
+
       const settings: AppSettings = {
         showDemoUsers: data.show_demo_users ?? DEFAULT_SETTINGS.showDemoUsers,
         officeLocation: {
@@ -210,18 +217,27 @@ function toRad(deg: number): number {
   return deg * (Math.PI / 180);
 }
 
+// Принудительная очистка кеша (вызывать при необходимости)
+export function invalidateAppSettingsCache(): void {
+  cachedSettings = null;
+  cacheTimestamp = 0;
+}
+
 // Хук для использования настроек в React компонентах
 import { useState, useEffect } from 'react';
 
 export function useAppSettings(): [AppSettings, (settings: Partial<AppSettings>) => Promise<void>] {
-  const [settings, setSettings] = useState<AppSettings>(cachedSettings || DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Загружаем настройки при монтировании
     const loadSettings = async () => {
       try {
+        // Принудительно загружаем свежие данные из Supabase
+        invalidateAppSettingsCache();
         const loaded = await getAppSettings();
+        console.log('useAppSettings: загружены компании:', loaded.companies?.length, loaded.companies?.map(c => c.name));
         setSettings(loaded);
       } catch (error) {
         console.error('Ошибка загрузки настроек:', error);

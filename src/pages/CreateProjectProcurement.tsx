@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Upload, Plus, Trash2, FileText, Building2, User, Calendar, DollarSign, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { getActiveCompanies } from "@/types/companies";
+import { supabase } from "@/integrations/supabase/client";
+import { Company, DEFAULT_COMPANIES } from "@/types/companies";
 import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo, ProjectStage, AdditionalService } from "@/types/project-v3";
 import { notifyProjectCreated } from "@/lib/projectNotifications";
 import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
@@ -89,7 +90,35 @@ export default function CreateProjectProcurement() {
   
   const [projectFiles, setProjectFiles] = useState<File[]>([]);
 
-  const companies = getActiveCompanies();
+  // Загружаем компании напрямую из Supabase
+  const [companies, setCompanies] = useState<Company[]>(DEFAULT_COMPANIES.filter(c => c.isActive));
+
+  useEffect(() => {
+    const loadCompanies = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('companies')
+          .limit(1)
+          .single();
+
+        if (error) {
+          console.error('Ошибка загрузки компаний:', error);
+          return;
+        }
+
+        if (data?.companies && Array.isArray(data.companies)) {
+          console.log('Загружены компании из Supabase:', data.companies);
+          const activeCompanies = data.companies.filter((c: Company) => c.isActive);
+          setCompanies(activeCompanies);
+        }
+      } catch (err) {
+        console.error('Ошибка при загрузке компаний:', err);
+      }
+    };
+
+    loadCompanies();
+  }, []);
 
   const addContact = () => {
     setContacts([...contacts, { name: "", position: "", phone: "", email: "" }]);

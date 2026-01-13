@@ -616,14 +616,17 @@ export default function Settings() {
               <CompaniesManagement
                 companies={appSettings.companies}
                 onChange={async (updatedCompanies) => {
+                  console.log('=== СОХРАНЕНИЕ КОМПАНИЙ ===');
+                  console.log('Новый список компаний:', updatedCompanies);
                   try {
                     await updateAppSettings({ companies: updatedCompanies });
+                    console.log('Компании успешно сохранены в Supabase');
                     toast({
                       title: '✅ Компании обновлены',
                       description: 'Список компаний успешно сохранен',
                     });
                   } catch (error) {
-                    console.error('Error saving companies:', error);
+                    console.error('ОШИБКА сохранения компаний:', error);
                     toast({
                       title: 'Ошибка сохранения',
                       description: 'Не удалось сохранить компании',
