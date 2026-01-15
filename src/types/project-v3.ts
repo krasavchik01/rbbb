@@ -84,6 +84,27 @@ export const CURRENCY_SYMBOLS: Record<ProjectCurrency, string> = {
   RUB: '₽',
 };
 
+// Допсоглашение к договору
+export interface ContractAmendment {
+  id: string;
+  number: string;              // Номер допсоглашения
+  date: string;                // Дата допсоглашения
+  type: 'prolongation' | 'amount_change' | 'scope_change' | 'other'; // Тип изменения
+  description: string;         // Описание изменений
+  newAmount?: number;          // Новая сумма (если изменилась)
+  newEndDate?: string;         // Новая дата окончания (если пролонгация)
+  documentUrl?: string;        // URL скана допсоглашения
+  createdBy: string;
+  createdAt: string;
+}
+
+// Разбивка суммы по годам (для многолетних договоров)
+export interface YearlyAmount {
+  year: number;                // Год (2024, 2025, ...)
+  amount: number;              // Сумма на этот год
+  description?: string;        // Примечание
+}
+
 // Информация о договоре
 export interface ContractInfo {
   number: string;              // Номер договора
@@ -98,6 +119,11 @@ export interface ContractInfo {
   currency?: ProjectCurrency;  // Валюта (по умолчанию KZT)
   contractScanUrl?: string;    // URL скана договора
   contractOriginalUrl?: string; // URL оригинала договора (если заменили скан)
+
+  // Допсоглашения и изменения
+  amendments?: ContractAmendment[];  // Допсоглашения
+  yearlyAmounts?: YearlyAmount[];    // Разбивка по годам
+  isMultiYear?: boolean;             // Многолетний договор
 }
 
 // Член команды проекта

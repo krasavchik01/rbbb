@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calendar, Users, ArrowLeft, CheckSquare, File, Briefcase, FileText, Plus } from "lucide-react";
+import { Calendar, Users, ArrowLeft, CheckSquare, File, Briefcase, FileText, Plus, Edit } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,6 +14,7 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 import { ProjectAmendmentForm } from "@/components/projects/ProjectAmendmentForm";
 import { ProjectTeamEvaluation } from "@/components/projects/ProjectTeamEvaluation";
+import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
 import { ProjectStage, AdditionalService, ProjectAmendment } from "@/types/project-v3";
 
 export default function ProjectDetails() {
@@ -28,6 +29,7 @@ export default function ProjectDetails() {
   const [projectFiles, setProjectFiles] = useState<any[]>([]);
   const [projectAmendments, setProjectAmendments] = useState<ProjectAmendment[]>([]);
   const [isAmendmentDialogOpen, setIsAmendmentDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Загрузка проекта
   useEffect(() => {
@@ -83,6 +85,9 @@ export default function ProjectDetails() {
   // Проверка прав для добавления доп соглашений
   const canAddAmendment = user?.role === 'procurement' || user?.role === 'admin' || user?.role === 'ceo';
 
+  // Проверка прав для редактирования проекта (отдел закупок)
+  const canEditProject = user?.role === 'procurement' || user?.role === 'admin' || user?.role === 'ceo';
+
   // Получаем этапы проекта из notes
   const projectStages = useMemo<ProjectStage[]>(() => {
     if (!project) return [];
@@ -137,9 +142,16 @@ export default function ProjectDetails() {
           <h1 className="text-3xl font-bold">{projectName}</h1>
           <p className="text-muted-foreground">Компания: {projectCompany}</p>
         </div>
-        <Button variant="outline" onClick={() => navigate(-1)}>
-          <ArrowLeft className="w-4 h-4 mr-2" /> Назад
-        </Button>
+        <div className="flex gap-2">
+          {canEditProject && (
+            <Button onClick={() => setIsEditDialogOpen(true)}>
+              <Edit className="w-4 h-4 mr-2" /> Редактировать
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => navigate(-1)}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Назад
+          </Button>
+        </div>
       </div>
 
       <Card className="p-6 space-y-6">
@@ -377,6 +389,18 @@ export default function ProjectDetails() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Диалог редактирования проекта (для отдела закупок) */}
+      {canEditProject && project && (
+        <ProjectEditProcurement
+          project={project}
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSave={(updatedProject) => {
+            setProject(updatedProject);
+          }}
+        />
+      )}
     </div>
   );
 }
