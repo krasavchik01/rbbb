@@ -66,28 +66,28 @@ const ALL_ROLES: { value: UserRole; label: string; adminOnly?: boolean }[] = [
   { value: 'contractor', label: ROLE_LABELS.contractor },
 ];
 
-// Маппинг ролей приложения на роли БД
+// Маппинг ролей приложения на роли БД (теперь сохраняем точные роли)
 const roleToDbRole: Record<string, DbAppRole> = {
-  'ceo': 'partner',
-  'deputy_director': 'partner',
+  'ceo': 'ceo' as DbAppRole,
+  'deputy_director': 'deputy_director' as DbAppRole,
   'company_director': 'partner',
-  'procurement': 'admin',
+  'procurement': 'procurement' as DbAppRole,
   'partner': 'partner',
-  'hr': 'admin',
+  'hr': 'hr' as DbAppRole,
   'admin': 'admin',
   'manager_1': 'manager',
   'manager_2': 'manager',
   'manager_3': 'manager',
-  'supervisor_1': 'manager',
-  'supervisor_2': 'manager',
-  'supervisor_3': 'manager',
+  'supervisor_1': 'supervisor' as DbAppRole,
+  'supervisor_2': 'supervisor' as DbAppRole,
+  'supervisor_3': 'supervisor' as DbAppRole,
   'assistant_1': 'assistant',
   'assistant_2': 'assistant',
   'assistant_3': 'assistant',
   'tax_specialist_1': 'tax_specialist',
   'tax_specialist_2': 'tax_specialist',
-  'accountant': 'employee',
-  'contractor': 'employee',
+  'accountant': 'accountant' as DbAppRole,
+  'contractor': 'contractor' as DbAppRole,
 };
 
 
@@ -392,16 +392,34 @@ export default function UserManagement() {
 
     // Пытаемся определить роль из БД роли и уровня
     let appRole: UserRole = 'assistant_1';
-    if (employee.role === 'assistant') {
-      appRole = `assistant_${employee.level}` as UserRole;
-    } else if (employee.role === 'manager') {
-      appRole = `manager_${employee.level}` as UserRole;
-    } else if (employee.role === 'tax_specialist') {
-      appRole = `tax_specialist_${employee.level}` as UserRole;
-    } else if (employee.role === 'partner') {
+    const dbRole = employee.role;
+
+    // Прямые роли (сохраняются как есть)
+    if (dbRole === 'ceo') {
+      appRole = 'ceo';
+    } else if (dbRole === 'deputy_director') {
+      appRole = 'deputy_director';
+    } else if (dbRole === 'hr') {
+      appRole = 'hr';
+    } else if (dbRole === 'procurement') {
+      appRole = 'procurement';
+    } else if (dbRole === 'partner') {
       appRole = 'partner';
-    } else if (employee.role === 'admin') {
+    } else if (dbRole === 'admin') {
       appRole = 'admin';
+    } else if (dbRole === 'accountant') {
+      appRole = 'accountant';
+    } else if (dbRole === 'contractor') {
+      appRole = 'contractor';
+    // Роли с уровнями
+    } else if (dbRole === 'assistant') {
+      appRole = `assistant_${employee.level}` as UserRole;
+    } else if (dbRole === 'manager') {
+      appRole = `manager_${employee.level}` as UserRole;
+    } else if (dbRole === 'supervisor') {
+      appRole = `supervisor_${employee.level}` as UserRole;
+    } else if (dbRole === 'tax_specialist') {
+      appRole = `tax_specialist_${employee.level}` as UserRole;
     }
 
     setFormData({
@@ -417,7 +435,23 @@ export default function UserManagement() {
   };
 
   const getRoleLabel = (dbRole: string, level: string) => {
-    // Ищем соответствующую роль в ALL_ROLES
+    // Прямые роли без уровня
+    const directRoles: Record<string, string> = {
+      'ceo': 'CEO / Генеральный директор',
+      'deputy_director': 'Заместитель директора',
+      'hr': 'HR специалист',
+      'procurement': 'Отдел закупок',
+      'partner': 'Партнер',
+      'admin': 'Администратор',
+      'accountant': 'Бухгалтер',
+      'contractor': 'ГПХ (Подрядчик)',
+    };
+
+    if (directRoles[dbRole]) {
+      return directRoles[dbRole];
+    }
+
+    // Роли с уровнями
     const roleKey = `${dbRole}_${level}`;
     const found = ALL_ROLES.find(r => r.value === roleKey);
     if (found) return found.label;
@@ -430,8 +464,10 @@ export default function UserManagement() {
   };
 
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" | "outline" => {
+    if (role === 'ceo' || role === 'deputy_director') return 'destructive';
     if (role === 'admin' || role === 'partner') return 'destructive';
-    if (role === 'manager') return 'default';
+    if (role === 'hr' || role === 'procurement') return 'secondary';
+    if (role === 'manager' || role === 'supervisor') return 'default';
     if (role === 'tax_specialist') return 'secondary';
     return 'outline';
   };
