@@ -154,17 +154,21 @@ export default function ProjectDetails() {
         </div>
       </div>
 
+      {/* Карточка со статусом - для закупок упрощённая */}
       <Card className="p-6 space-y-6">
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{projectStatus}</Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Users className="w-4 h-4" /> Команда
+          {/* Команда - скрываем от закупок */}
+          {user?.role !== 'procurement' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="w-4 h-4" /> Команда
+              </div>
+              <div className="text-lg font-semibold">{teamMembers.length} участников</div>
             </div>
-            <div className="text-lg font-semibold">{teamMembers.length} участников</div>
-          </div>
+          )}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="w-4 h-4" /> Дедлайн
@@ -173,23 +177,99 @@ export default function ProjectDetails() {
               {new Date(projectDeadline).toLocaleDateString('ru-RU')}
             </div>
           </div>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Прогресс</div>
-            <Progress value={completionPct} className="h-2" />
-            <div className="text-sm">{completionPct}%</div>
-          </div>
+          {/* Прогресс - скрываем от закупок */}
+          {user?.role !== 'procurement' && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Прогресс</div>
+              <Progress value={completionPct} className="h-2" />
+              <div className="text-sm">{completionPct}%</div>
+            </div>
+          )}
         </div>
       </Card>
 
-      <Tabs defaultValue="overview" className="space-y-4" data-testid="project-tabs">
+      {/* Для закупок показываем только нужные вкладки */}
+      <Tabs defaultValue={user?.role === 'procurement' ? 'contract' : 'overview'} className="space-y-4" data-testid="project-tabs">
         <TabsList>
-          <TabsTrigger value="overview" data-testid="tab-overview">Обзор</TabsTrigger>
-          <TabsTrigger value="files" data-testid="tab-files">Файлы</TabsTrigger>
-          <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>
-          <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>
+          {user?.role !== 'procurement' && (
+            <TabsTrigger value="overview" data-testid="tab-overview">Обзор</TabsTrigger>
+          )}
+          {user?.role === 'procurement' && (
+            <TabsTrigger value="contract" data-testid="tab-contract">Договор</TabsTrigger>
+          )}
+          <TabsTrigger value="files" data-testid="tab-files">Документы</TabsTrigger>
           <TabsTrigger value="amendments" data-testid="tab-amendments">Доп соглашения</TabsTrigger>
-          <TabsTrigger value="evaluation" data-testid="tab-evaluation">Оценка команды</TabsTrigger>
+          {user?.role !== 'procurement' && (
+            <>
+              <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>
+              <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>
+              <TabsTrigger value="evaluation" data-testid="tab-evaluation">Оценка команды</TabsTrigger>
+            </>
+          )}
         </TabsList>
+
+        {/* Вкладка Договор - для отдела закупок */}
+        <TabsContent value="contract" className="space-y-4">
+          <Card className="p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              Информация о договоре
+            </h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <span className="text-sm text-muted-foreground">Номер договора</span>
+                  <p className="font-medium">{project?.contract?.number || '—'}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Дата договора</span>
+                  <p className="font-medium">{project?.contract?.date ? new Date(project.contract.date).toLocaleDateString('ru-RU') : '—'}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Предмет договора</span>
+                  <p className="font-medium">{project?.contract?.subject || '—'}</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <span className="text-sm text-muted-foreground">Срок оказания услуг</span>
+                  <p className="font-medium">
+                    {project?.contract?.serviceStartDate ? new Date(project.contract.serviceStartDate).toLocaleDateString('ru-RU') : '—'}
+                    {' — '}
+                    {project?.contract?.serviceEndDate ? new Date(project.contract.serviceEndDate).toLocaleDateString('ru-RU') : '—'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Сумма без НДС</span>
+                  <p className="font-medium text-lg">{project?.contract?.amountWithoutVAT?.toLocaleString() || '—'} ₸</p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">НДС ({project?.contract?.vatRate || 0}%)</span>
+                  <p className="font-medium">{project?.contract?.vatAmount?.toLocaleString() || '—'} ₸</p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Итого с НДС</span>
+                  <p className="font-medium text-lg text-primary">{project?.contract?.amountWithVAT?.toLocaleString() || '—'} ₸</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Разбивка по годам если есть */}
+            {project?.contract?.isMultiYear && project?.contract?.yearlyAmounts?.length > 0 && (
+              <div className="mt-6 pt-6 border-t">
+                <h4 className="font-medium mb-3">Разбивка по годам</h4>
+                <div className="space-y-2">
+                  {project.contract.yearlyAmounts.map((ya: any) => (
+                    <div key={ya.year} className="flex justify-between p-2 bg-muted rounded">
+                      <span>{ya.year} год</span>
+                      <span className="font-medium">{ya.amount?.toLocaleString()} ₸</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
