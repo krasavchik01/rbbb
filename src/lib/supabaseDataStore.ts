@@ -313,26 +313,38 @@ class SupabaseDataStore {
   }
 
   async updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee | null> {
+    console.log('🔄 updateEmployee called:', { id, updates });
+
     if (this.isOnline) {
       try {
+        const updateData: any = {
+          updated_at: new Date().toISOString(),
+        };
+
+        // Добавляем только те поля которые переданы
+        if (updates.name !== undefined) updateData.name = updates.name;
+        if (updates.email !== undefined) updateData.email = updates.email;
+        if (updates.role !== undefined) updateData.role = updates.role;
+        if (updates.level !== undefined) updateData.level = updates.level;
+        if (updates.phone !== undefined) updateData.whatsapp = updates.phone;
+        if (updates.department !== undefined) updateData.department = updates.department;
+        if (updates.position !== undefined) updateData.position = updates.position;
+
+        console.log('📤 Sending to Supabase:', updateData);
+
         const { data, error } = await supabase
           .from('employees')
-          .update({
-            name: updates.name,
-            email: updates.email,
-            role: updates.role as any,
-            level: updates.level as any,
-            whatsapp: updates.phone || null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', id)
           .select()
           .single();
 
+        console.log('📥 Supabase response:', { data, error });
+
         if (!error && data) {
           const mapped = this.mapSupabaseEmployee(data);
-          console.log('✅ Updated employee in Supabase:', id);
-          
+          console.log('✅ Updated employee in Supabase:', id, 'new role:', mapped.role);
+
           // Обновляем в localStorage
           const employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
           const index = employees.findIndex(e => e.id === id);
@@ -340,8 +352,10 @@ class SupabaseDataStore {
             employees[index] = mapped;
             this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
           }
-          
+
           return mapped;
+        } else if (error) {
+          console.error('❌ Supabase update error:', error);
         }
       } catch (err) {
         console.error('❌ Error updating employee in Supabase:', err);

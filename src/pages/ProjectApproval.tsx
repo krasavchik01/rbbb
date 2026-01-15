@@ -66,9 +66,10 @@ export default function ProjectApproval() {
   const [showFinancialInfo, setShowFinancialInfo] = useState(false);
   const [financialVisibleTo, setFinancialVisibleTo] = useState<string[]>([]);
   
-  // Новый ГПХ
+  // Новый ГПХ/Субподряд
   const [newContractorName, setNewContractorName] = useState("");
   const [newContractorAmount, setNewContractorAmount] = useState("");
+  const [newContractorType, setNewContractorType] = useState<'gph' | 'subcontract'>('gph');
 
   // Маппинг ролей сотрудников из Supabase на роли проектов
   const mapEmployeeRoleToProjectRole = (employeeRole: string): string | null => {
@@ -217,7 +218,7 @@ export default function ProjectApproval() {
     if (!newContractorName.trim() || !newContractorAmount || parseFloat(newContractorAmount) <= 0) {
       toast({
         title: "Ошибка",
-        description: "Укажите имя ГПХ и сумму",
+        description: "Укажите имя и сумму",
         variant: "destructive"
       });
       return;
@@ -227,6 +228,7 @@ export default function ProjectApproval() {
       id: `contractor_${Date.now()}`,
       name: newContractorName,
       amount: parseFloat(newContractorAmount),
+      type: newContractorType,
       addedBy: user?.id || "",
       addedAt: new Date().toISOString(),
     };
@@ -234,6 +236,7 @@ export default function ProjectApproval() {
     setContractors([...contractors, contractor]);
     setNewContractorName("");
     setNewContractorAmount("");
+    setNewContractorType('gph');
   };
 
   const removeContractor = (id: string) => {
@@ -1042,7 +1045,71 @@ export default function ProjectApproval() {
                 </div>
               </Card>
 
-              {/* ГПХ убран - зам. директор не управляет финансами */}
+              {/* ГПХ и Субподряд */}
+              <Card className="p-4">
+                <h3 className="font-semibold flex items-center gap-2 mb-4">
+                  <Users className="w-5 h-5 text-primary" />
+                  ГПХ и Субподряд
+                </h3>
+
+                {/* Список добавленных ГПХ/Субподрядчиков */}
+                {contractors.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {contractors.map((contractor) => (
+                      <div key={contractor.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                        <div>
+                          <span className="font-medium">{contractor.name}</span>
+                          {contractor.type && (
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {contractor.type === 'subcontract' ? 'Субподряд' : 'ГПХ'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {contractor.amount.toLocaleString()} ₸
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeContractor(contractor.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Форма добавления */}
+                <div className="grid grid-cols-4 gap-2">
+                  <Select value={newContractorType} onValueChange={(v: 'gph' | 'subcontract') => setNewContractorType(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gph">ГПХ</SelectItem>
+                      <SelectItem value="subcontract">Субподряд</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="ФИО / Название"
+                    value={newContractorName}
+                    onChange={(e) => setNewContractorName(e.target.value)}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Сумма"
+                    value={newContractorAmount}
+                    onChange={(e) => setNewContractorAmount(e.target.value)}
+                  />
+                  <Button onClick={addContractor} variant="outline">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Добавить
+                  </Button>
+                </div>
+              </Card>
 
               {/* Финансовый расчёт убран - зам. директор его не видит */}
 

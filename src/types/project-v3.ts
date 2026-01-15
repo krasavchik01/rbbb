@@ -110,11 +110,12 @@ export interface TeamMember {
   assignedBy: string;
 }
 
-// ГПХ (подрядчик)
+// ГПХ (подрядчик) или Субподряд
 export interface Contractor {
   id: string;
   name: string;
   amount: number;              // Сумма оплаты
+  type?: 'gph' | 'subcontract'; // Тип: ГПХ или Субподряд
   description?: string;
   addedBy: string;
   addedAt: string;
