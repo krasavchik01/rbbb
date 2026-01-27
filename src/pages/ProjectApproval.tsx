@@ -710,11 +710,16 @@ export default function ProjectApproval() {
                       </div>
                       <div>
                         <Label className="text-xs text-muted-foreground">Сумма без НДС</Label>
-                        <p className="font-semibold text-green-600">{formatCurrency(project.contract.amountWithoutVAT)}</p>
+                        <p className="font-semibold text-green-600">
+                          {project.contract?.amountWithoutVAT ? formatCurrency(project.contract.amountWithoutVAT) : 'Не указано'}
+                        </p>
                       </div>
                       <div>
                         <Label className="text-xs text-muted-foreground">Срок</Label>
-                        <p className="text-sm">{new Date(project.contract.serviceStartDate).toLocaleDateString('ru-RU')} - {new Date(project.contract.serviceEndDate).toLocaleDateString('ru-RU')}</p>
+                        <p className="text-sm">
+                          {project.contract.serviceStartDate && `${new Date(project.contract.serviceStartDate).toLocaleDateString('ru-RU')} - `}
+                          {new Date(project.contract.serviceEndDate).toLocaleDateString('ru-RU')}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -893,7 +898,9 @@ export default function ProjectApproval() {
                                   <SelectValue placeholder="Выберите сотрудника" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {employeesForRole.map(emp => {
+                                  {employeesForRole
+                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                    .map(emp => {
                                     const empOriginalRole = (emp as any).originalRole;
                                     const roleLabel = PROJECT_ROLES.find(r => r.role === empOriginalRole)?.label || empOriginalRole;
 
