@@ -18,12 +18,14 @@ import {
   Edit,
   Save,
   X,
-  AlertCircle
+  AlertCircle,
+  FolderOpen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectV3, ContractAmendment, YearlyAmount } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { ProjectFileManager } from "./ProjectFileManager";
 
 interface ProjectEditProcurementProps {
   project: ProjectV3;
@@ -174,7 +176,7 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
             amountWithoutVAT: amendments.find(a => a.type === 'amount_change' && a.newAmount)?.newAmount || project.finances?.amountWithoutVAT
           }
         }),
-        updatedAt: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         updatedBy: user?.id
       };
 
@@ -217,8 +219,9 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
         </DialogHeader>
 
         <Tabs defaultValue="contract" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="contract">Договор</TabsTrigger>
+            <TabsTrigger value="files">Файлы</TabsTrigger>
             <TabsTrigger value="amendments">
               Допсоглашения
               {amendments.length > 0 && (
@@ -227,6 +230,21 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
             </TabsTrigger>
             <TabsTrigger value="years">По годам</TabsTrigger>
           </TabsList>
+
+          {/* Вкладка файлов */}
+          <TabsContent value="files" className="space-y-4">
+            <Card className="p-4">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <FolderOpen className="w-4 h-4" />
+                Файлы проекта
+              </h3>
+              <ProjectFileManager
+                projectId={project.id}
+                uploadedBy={user?.id || ""}
+                onFilesChange={() => {}}
+              />
+            </Card>
+          </TabsContent>
 
           {/* Вкладка договора */}
           <TabsContent value="contract" className="space-y-4">
