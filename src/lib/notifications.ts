@@ -243,27 +243,49 @@ export const notifyNewProject = async (projectName: string, creatorName: string,
  * Уведомить зам. директора о новом проекте
  */
 export const notifyDeputyDirectorNewProject = async (projectName: string, clientName: string, amount: string) => {
-  // Находим зам. директора
-  const deputyUserId = 'deputy_1'; // TODO: получать из базы
+  try {
+    // Находим зам. директора из базы Supabase
+    console.log('🔍 Ищем зам. директора в базе...');
+    const { data: employees, error } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('role', 'deputy_director' as any)
+      .limit(1);
 
-  console.log('🔔 Создаём уведомление для зам. директора:', {
-    userId: deputyUserId,
-    projectName,
-    clientName,
-    amount
-  });
+    if (error) {
+      console.error('❌ Ошибка поиска зам. директора:', error);
+      return null;
+    }
 
-  const notification = await addNotification({
-    user_id: deputyUserId,
-    title: '📋 Новый проект требует утверждения',
-    message: `Отдел закупок создал проект "${projectName}" для клиента ${clientName}. Сумма: ${amount} ₸. Требуется ваше утверждение.`,
-    type: 'info',
-    action_url: '/project-approval',
-  });
+    if (!employees || employees.length === 0) {
+      console.warn('⚠️ Зам. директор не найден в базе!');
+      return null;
+    }
 
-  console.log('✅ Уведомление создано:', notification);
+    const deputyUserId = employees[0].id;
 
-  return notification;
+    console.log('🔔 Создаём уведомление для зам. директора:', {
+      userId: deputyUserId,
+      projectName,
+      clientName,
+      amount
+    });
+
+    const notification = await addNotification({
+      user_id: deputyUserId,
+      title: '📋 Новый проект требует утверждения',
+      message: `Отдел закупок создал проект "${projectName}" для клиента ${clientName}. Сумма: ${amount} ₸. Требуется ваше утверждение.`,
+      type: 'info',
+      action_url: '/project-approval',
+    });
+
+    console.log('✅ Уведомление создано:', notification);
+
+    return notification;
+  } catch (error) {
+    console.error('❌ Ошибка создания уведомления для зам. директора:', error);
+    return null;
+  }
 };
 
 /**

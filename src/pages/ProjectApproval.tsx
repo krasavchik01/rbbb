@@ -50,8 +50,8 @@ export default function ProjectApproval() {
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
-  // Проверка прав админа
-  const isAdmin = user?.role === 'admin' || user?.role === 'ceo';
+  // Проверка прав админа (включая зам. директора)
+  const isAdmin = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'deputy_director';
 
   // Команда проекта
   const [teamMembers, setTeamMembers] = useState<{[key: string]: string}>({});

@@ -4,6 +4,7 @@
  */
 
 import { addNotification } from './notifications';
+import { supabase } from '@/integrations/supabase/client';
 
 // ====================
 // ЭТАП 1: Создание проекта
@@ -19,15 +20,32 @@ export const notifyProjectCreated = async (params: {
   currency: string;
   creatorName: string;
 }) => {
-  const deputyUserId = 'deputy_1';
+  try {
+    // Находим зам. директора из базы
+    const { data: employees, error } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('role', 'deputy_director' as any)
+      .limit(1);
 
-  return addNotification({
-    user_id: deputyUserId,
-    title: '📋 Новый проект требует утверждения',
-    message: `${params.creatorName} создал проект "${params.projectName}" для ${params.clientName}. Сумма: ${params.currency}${params.amount}. Требуется ваше утверждение.`,
-    type: 'info',
-    action_url: '/project-approval',
-  });
+    if (error || !employees || employees.length === 0) {
+      console.warn('⚠️ Зам. директор не найден в базе для уведомления');
+      return null;
+    }
+
+    const deputyUserId = employees[0].id;
+
+    return addNotification({
+      user_id: deputyUserId,
+      title: '📋 Новый проект требует утверждения',
+      message: `${params.creatorName} создал проект "${params.projectName}" для ${params.clientName}. Сумма: ${params.currency}${params.amount}. Требуется ваше утверждение.`,
+      type: 'info',
+      action_url: '/project-approval',
+    });
+  } catch (error) {
+    console.error('❌ Ошибка создания уведомления для зам. директора:', error);
+    return null;
+  }
 };
 
 // ====================
