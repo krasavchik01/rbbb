@@ -1,8 +1,9 @@
 /**
  * Система уведомлений для полного жизненного цикла проекта
+ * Все функции async, работают через Supabase
  */
 
-import { addNotification, getNotifications } from './notifications';
+import { addNotification } from './notifications';
 
 // ====================
 // ЭТАП 1: Создание проекта
@@ -11,7 +12,7 @@ import { addNotification, getNotifications } from './notifications';
 /**
  * Отдел закупок создал проект → Уведомляет зам. директора
  */
-export const notifyProjectCreated = (params: {
+export const notifyProjectCreated = async (params: {
   projectName: string;
   clientName: string;
   amount: string;
@@ -19,13 +20,13 @@ export const notifyProjectCreated = (params: {
   creatorName: string;
 }) => {
   const deputyUserId = 'deputy_1';
-  
+
   return addNotification({
-    userId: deputyUserId,
+    user_id: deputyUserId,
     title: '📋 Новый проект требует утверждения',
     message: `${params.creatorName} создал проект "${params.projectName}" для ${params.clientName}. Сумма: ${params.currency}${params.amount}. Требуется ваше утверждение.`,
     type: 'info',
-    actionUrl: '/project-approval',
+    action_url: '/project-approval',
   });
 };
 
@@ -36,7 +37,7 @@ export const notifyProjectCreated = (params: {
 /**
  * Зам. директор утвердил проект → Уведомляет партнёра
  */
-export const notifyProjectApproved = (params: {
+export const notifyProjectApproved = async (params: {
   projectName: string;
   partnerId: string;
   partnerName: string;
@@ -48,39 +49,35 @@ export const notifyProjectApproved = (params: {
     projectName: params.projectName,
     approverName: params.approverName
   });
-  
-  const notification = addNotification({
-    userId: params.partnerId,
+
+  const notification = await addNotification({
+    user_id: params.partnerId,
     title: '✅ Проект утверждён - распределите задачи',
     message: `${params.approverName} утвердил проект "${params.projectName}". Команда назначена. Откройте проект для распределения задач на основе процедур.`,
     type: 'success',
-    actionUrl: '/projects',
+    action_url: '/projects',
   });
-  
+
   console.log(`✅ [notifyProjectApproved] Уведомление создано:`, notification);
-  
-  // Проверяем, что уведомление сохранилось
-  const savedNotifications = getNotifications(params.partnerId);
-  console.log(`📋 [notifyProjectApproved] Все уведомления партнера (${params.partnerId}):`, savedNotifications.length);
-  
+
   return notification;
 };
 
 /**
  * Зам. директор отклонил проект → Уведомляет отдел закупок
  */
-export const notifyProjectRejected = (params: {
+export const notifyProjectRejected = async (params: {
   projectName: string;
   reason: string;
   procurementUserId: string;
   rejectorName: string;
 }) => {
   return addNotification({
-    userId: params.procurementUserId,
+    user_id: params.procurementUserId,
     title: '❌ Проект отклонён',
     message: `${params.rejectorName} отклонил проект "${params.projectName}". Причина: ${params.reason}`,
     type: 'error',
-    actionUrl: '/projects',
+    action_url: '/projects',
   });
 };
 
@@ -91,7 +88,7 @@ export const notifyProjectRejected = (params: {
 /**
  * Партнёр назначил PM → Уведомляет PM
  */
-export const notifyPMAssigned = (params: {
+export const notifyPMAssigned = async (params: {
   projectName: string;
   pmId: string;
   pmName: string;
@@ -99,11 +96,11 @@ export const notifyPMAssigned = (params: {
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.pmId,
+    user_id: params.pmId,
     title: '🎯 Вы назначены менеджером проекта',
     message: `${params.partnerName} назначил вас PM на проект "${params.projectName}". Партнер распределит задачи на основе процедур, после чего вы получите уведомления о назначенных задачах.`,
     type: 'success',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
@@ -114,7 +111,7 @@ export const notifyPMAssigned = (params: {
 /**
  * PM добавил сотрудника в команду → Уведомляет сотрудника
  */
-export const notifyTeamMemberAdded = (params: {
+export const notifyTeamMemberAdded = async (params: {
   projectName: string;
   memberId: string;
   memberName: string;
@@ -123,48 +120,50 @@ export const notifyTeamMemberAdded = (params: {
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.memberId,
+    user_id: params.memberId,
     title: '👥 Вы добавлены в команду проекта',
     message: `${params.assignerName} добавил вас в проект "${params.projectName}" в роли ${params.role}.`,
     type: 'info',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * PM удалил сотрудника из команды → Уведомляет сотрудника
  */
-export const notifyTeamMemberRemoved = (params: {
+export const notifyTeamMemberRemoved = async (params: {
   projectName: string;
   memberId: string;
   removerName: string;
 }) => {
   return addNotification({
-    userId: params.memberId,
+    user_id: params.memberId,
     title: '⚠️ Вы удалены из проекта',
     message: `${params.removerName} удалил вас из проекта "${params.projectName}".`,
     type: 'warning',
-    actionUrl: '/projects',
+    action_url: '/projects',
   });
 };
 
 /**
  * Команда собрана → Уведомляет всю команду
  */
-export const notifyTeamAssembled = (params: {
+export const notifyTeamAssembled = async (params: {
   projectName: string;
   teamIds: string[];
   projectId: string;
   pmName: string;
 }) => {
-  return params.teamIds.map(memberId => 
-    addNotification({
-      userId: memberId,
-      title: '🚀 Команда собрана - проект стартует',
-      message: `${params.pmName} собрал команду для проекта "${params.projectName}". Начинаем работу!`,
-      type: 'success',
-      actionUrl: `/project/${params.projectId}`,
-    })
+  return Promise.all(
+    params.teamIds.map(memberId =>
+      addNotification({
+        user_id: memberId,
+        title: '🚀 Команда собрана - проект стартует',
+        message: `${params.pmName} собрал команду для проекта "${params.projectName}". Начинаем работу!`,
+        type: 'success',
+        action_url: `/project/${params.projectId}`,
+      })
+    )
   );
 };
 
@@ -175,7 +174,7 @@ export const notifyTeamAssembled = (params: {
 /**
  * Создана новая задача → Уведомляет исполнителя
  */
-export const notifyTaskAssigned = (params: {
+export const notifyTaskAssigned = async (params: {
   taskName: string;
   assigneeId: string;
   projectName: string;
@@ -184,18 +183,18 @@ export const notifyTaskAssigned = (params: {
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.assigneeId,
+    user_id: params.assigneeId,
     title: '📝 Новая задача назначена',
     message: `${params.creatorName} назначил вам задачу "${params.taskName}" в проекте "${params.projectName}". Дедлайн: ${params.deadline}`,
     type: 'info',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * Задача завершена → Уведомляет PM
  */
-export const notifyTaskCompleted = (params: {
+export const notifyTaskCompleted = async (params: {
   taskName: string;
   pmId: string;
   completorName: string;
@@ -203,18 +202,18 @@ export const notifyTaskCompleted = (params: {
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.pmId,
+    user_id: params.pmId,
     title: '✅ Задача выполнена',
     message: `${params.completorName} завершил задачу "${params.taskName}" в проекте "${params.projectName}".`,
     type: 'success',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * Приближается дедлайн задачи → Уведомляет исполнителя
  */
-export const notifyTaskDeadlineApproaching = (params: {
+export const notifyTaskDeadlineApproaching = async (params: {
   taskName: string;
   assigneeId: string;
   daysLeft: number;
@@ -222,18 +221,18 @@ export const notifyTaskDeadlineApproaching = (params: {
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.assigneeId,
+    user_id: params.assigneeId,
     title: '⏰ Дедлайн задачи приближается',
     message: `Задача "${params.taskName}" в проекте "${params.projectName}" - осталось ${params.daysLeft} дней.`,
     type: 'warning',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * Задача просрочена → Уведомляет PM и исполнителя
  */
-export const notifyTaskOverdue = (params: {
+export const notifyTaskOverdue = async (params: {
   taskName: string;
   assigneeId: string;
   pmId: string;
@@ -241,21 +240,21 @@ export const notifyTaskOverdue = (params: {
   projectId: string;
 }) => {
   // Уведомляем исполнителя
-  addNotification({
-    userId: params.assigneeId,
+  await addNotification({
+    user_id: params.assigneeId,
     title: '🚨 Задача просрочена!',
     message: `Дедлайн задачи "${params.taskName}" в проекте "${params.projectName}" истёк!`,
     type: 'error',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 
   // Уведомляем PM
   return addNotification({
-    userId: params.pmId,
+    user_id: params.pmId,
     title: '🚨 Задача просрочена',
     message: `Задача "${params.taskName}" в проекте "${params.projectName}" просрочена!`,
     type: 'error',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
@@ -266,25 +265,25 @@ export const notifyTaskOverdue = (params: {
 /**
  * Проект отправлен на проверку → Уведомляет QA/супервайзера
  */
-export const notifyProjectSentToReview = (params: {
+export const notifyProjectSentToReview = async (params: {
   projectName: string;
   reviewerId: string;
   pmName: string;
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.reviewerId,
+    user_id: params.reviewerId,
     title: '🔍 Проект на проверке',
     message: `${params.pmName} отправил проект "${params.projectName}" на вашу проверку.`,
     type: 'info',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * Проверка завершена - есть замечания → Уведомляет PM и команду
  */
-export const notifyReviewCommentsAdded = (params: {
+export const notifyReviewCommentsAdded = async (params: {
   projectName: string;
   pmId: string;
   teamIds: string[];
@@ -293,22 +292,24 @@ export const notifyReviewCommentsAdded = (params: {
   projectId: string;
 }) => {
   const targets = [params.pmId, ...params.teamIds];
-  
-  return targets.map(userId =>
-    addNotification({
-      userId,
-      title: '📝 Замечания по проекту',
-      message: `${params.reviewerName} оставил ${params.commentsCount} замечаний по проекту "${params.projectName}". Требуется доработка.`,
-      type: 'warning',
-      actionUrl: `/project/${params.projectId}`,
-    })
+
+  return Promise.all(
+    targets.map(userId =>
+      addNotification({
+        user_id: userId,
+        title: '📝 Замечания по проекту',
+        message: `${params.reviewerName} оставил ${params.commentsCount} замечаний по проекту "${params.projectName}". Требуется доработка.`,
+        type: 'warning',
+        action_url: `/project/${params.projectId}`,
+      })
+    )
   );
 };
 
 /**
  * Проверка пройдена → Уведомляет PM и партнёра
  */
-export const notifyReviewPassed = (params: {
+export const notifyReviewPassed = async (params: {
   projectName: string;
   pmId: string;
   partnerId: string;
@@ -316,21 +317,21 @@ export const notifyReviewPassed = (params: {
   projectId: string;
 }) => {
   // Уведомляем PM
-  addNotification({
-    userId: params.pmId,
+  await addNotification({
+    user_id: params.pmId,
     title: '✅ Проект прошёл проверку',
     message: `${params.reviewerName} одобрил проект "${params.projectName}". Можно отправлять клиенту!`,
     type: 'success',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 
   // Уведомляем партнёра
   return addNotification({
-    userId: params.partnerId,
+    user_id: params.partnerId,
     title: '✅ Проект готов',
     message: `Проект "${params.projectName}" прошёл проверку и готов к отправке клиенту.`,
     type: 'success',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
@@ -341,7 +342,7 @@ export const notifyReviewPassed = (params: {
 /**
  * Отправлено клиенту → Уведомляет партнёра и CEO
  */
-export const notifyProjectSentToClient = (params: {
+export const notifyProjectSentToClient = async (params: {
   projectName: string;
   partnerId: string;
   ceoId: string;
@@ -349,28 +350,28 @@ export const notifyProjectSentToClient = (params: {
   projectId: string;
 }) => {
   // Уведомляем партнёра
-  addNotification({
-    userId: params.partnerId,
+  await addNotification({
+    user_id: params.partnerId,
     title: '📤 Проект отправлен клиенту',
     message: `${params.pmName} отправил проект "${params.projectName}" на подписание клиенту.`,
     type: 'info',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 
   // Уведомляем CEO
   return addNotification({
-    userId: params.ceoId,
+    user_id: params.ceoId,
     title: '📤 Проект ожидает подписания',
     message: `Проект "${params.projectName}" отправлен клиенту на подписание.`,
     type: 'info',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * Клиент подписал → Уведомляет всех
  */
-export const notifyProjectSignedByClient = (params: {
+export const notifyProjectSignedByClient = async (params: {
   projectName: string;
   partnerId: string;
   pmId: string;
@@ -379,15 +380,17 @@ export const notifyProjectSignedByClient = (params: {
   projectId: string;
 }) => {
   const allUserIds = [params.ceoId, params.partnerId, params.pmId, ...params.teamIds];
-  
-  return allUserIds.map(userId =>
-    addNotification({
-      userId,
-      title: '🎉 Клиент подписал проект!',
-      message: `Проект "${params.projectName}" успешно подписан клиентом. Ожидаем выплаты бонусов.`,
-      type: 'success',
-      actionUrl: `/project/${params.projectId}`,
-    })
+
+  return Promise.all(
+    allUserIds.map(userId =>
+      addNotification({
+        user_id: userId,
+        title: '🎉 Клиент подписал проект!',
+        message: `Проект "${params.projectName}" успешно подписан клиентом. Ожидаем выплаты бонусов.`,
+        type: 'success',
+        action_url: `/project/${params.projectId}`,
+      })
+    )
   );
 };
 
@@ -398,38 +401,40 @@ export const notifyProjectSignedByClient = (params: {
 /**
  * CEO утвердил выплаты → Уведомляет команду
  */
-export const notifyBonusesApproved = (params: {
+export const notifyBonusesApproved = async (params: {
   projectName: string;
   teamIds: string[];
   ceoName: string;
   projectId: string;
 }) => {
-  return params.teamIds.map(memberId =>
-    addNotification({
-      userId: memberId,
-      title: '💰 Бонусы утверждены!',
-      message: `${params.ceoName} утвердил выплату бонусов по проекту "${params.projectName}".`,
-      type: 'success',
-      actionUrl: '/bonuses',
-    })
+  return Promise.all(
+    params.teamIds.map(memberId =>
+      addNotification({
+        user_id: memberId,
+        title: '💰 Бонусы утверждены!',
+        message: `${params.ceoName} утвердил выплату бонусов по проекту "${params.projectName}".`,
+        type: 'success',
+        action_url: '/bonuses',
+      })
+    )
   );
 };
 
 /**
  * Бонус начислен → Уведомляет сотрудника
  */
-export const notifyBonusPaid = (params: {
+export const notifyBonusPaid = async (params: {
   employeeId: string;
   amount: string;
   currency: string;
   projectName: string;
 }) => {
   return addNotification({
-    userId: params.employeeId,
+    user_id: params.employeeId,
     title: '💸 Бонус выплачен!',
     message: `Вам начислен бонус ${params.currency}${params.amount} за проект "${params.projectName}".`,
     type: 'success',
-    actionUrl: '/bonuses',
+    action_url: '/bonuses',
   });
 };
 
@@ -440,7 +445,7 @@ export const notifyBonusPaid = (params: {
 /**
  * Проект закрыт → Уведомляет всю команду
  */
-export const notifyProjectClosed = (params: {
+export const notifyProjectClosed = async (params: {
   projectName: string;
   partnerId: string;
   pmId: string;
@@ -450,15 +455,17 @@ export const notifyProjectClosed = (params: {
   projectId: string;
 }) => {
   const allUserIds = [params.partnerId, params.pmId, ...params.teamIds];
-  
-  return allUserIds.map(userId =>
-    addNotification({
-      userId,
-      title: '🏁 Проект завершён',
-      message: `Проект "${params.projectName}" успешно завершён. Общая сумма: ${params.currency}${params.totalAmount}. Спасибо за работу!`,
-      type: 'success',
-      actionUrl: `/project/${params.projectId}`,
-    })
+
+  return Promise.all(
+    allUserIds.map(userId =>
+      addNotification({
+        user_id: userId,
+        title: '🏁 Проект завершён',
+        message: `Проект "${params.projectName}" успешно завершён. Общая сумма: ${params.currency}${params.totalAmount}. Спасибо за работу!`,
+        type: 'success',
+        action_url: `/project/${params.projectId}`,
+      })
+    )
   );
 };
 
@@ -469,7 +476,7 @@ export const notifyProjectClosed = (params: {
 /**
  * Упоминание в комментарии
  */
-export const notifyMentionedInComment = (params: {
+export const notifyMentionedInComment = async (params: {
   mentionedUserId: string;
   projectName: string;
   authorName: string;
@@ -477,35 +484,33 @@ export const notifyMentionedInComment = (params: {
   projectId: string;
 }) => {
   return addNotification({
-    userId: params.mentionedUserId,
+    user_id: params.mentionedUserId,
     title: '💬 Вас упомянули',
     message: `${params.authorName} упомянул вас в комментарии к проекту "${params.projectName}": "${params.comment.slice(0, 50)}..."`,
     type: 'info',
-    actionUrl: `/project/${params.projectId}`,
+    action_url: `/project/${params.projectId}`,
   });
 };
 
 /**
  * Новый файл добавлен
  */
-export const notifyFileUploaded = (params: {
+export const notifyFileUploaded = async (params: {
   projectName: string;
   fileName: string;
   uploaderName: string;
   teamIds: string[];
   projectId: string;
 }) => {
-  return params.teamIds.map(memberId =>
-    addNotification({
-      userId: memberId,
-      title: '📎 Новый файл добавлен',
-      message: `${params.uploaderName} добавил файл "${params.fileName}" в проект "${params.projectName}".`,
-      type: 'info',
-      actionUrl: `/project/${params.projectId}`,
-    })
+  return Promise.all(
+    params.teamIds.map(memberId =>
+      addNotification({
+        user_id: memberId,
+        title: '📎 Новый файл добавлен',
+        message: `${params.uploaderName} добавил файл "${params.fileName}" в проект "${params.projectName}".`,
+        type: 'info',
+        action_url: `/project/${params.projectId}`,
+      })
+    )
   );
 };
-
-
-
-
