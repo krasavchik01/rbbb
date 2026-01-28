@@ -950,11 +950,15 @@ export default function Projects() {
     const completedTasks = tasks.filter(task => task.status === 'done').length;
     const totalTasks = tasks.length;
     const checklistProgress = tasks.reduce((acc, task) => {
+      // Проверяем что checklist существует
+      if (!task.checklist || !Array.isArray(task.checklist)) {
+        return acc;
+      }
       const completed = task.checklist.filter(item => item.done).length;
       const total = task.checklist.length;
       return acc + (total > 0 ? completed / total : 0);
     }, 0) / Math.max(totalTasks, 1);
-    
+
     return {
       totalTasks,
       completedTasks,
@@ -2211,9 +2215,13 @@ export default function Projects() {
                             {tasks.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {tasks.map((task, index) => {
+                                  // Проверяем что checklist существует
+                                  if (!task.checklist || !Array.isArray(task.checklist)) {
+                                    return null;
+                                  }
                                   const completed = task.checklist.filter(item => item.done).length;
                                   const total = task.checklist.length;
-                                  
+
                                   return (
                                     <div key={index} className="flex items-center space-x-1 text-xs">
                                       <span className="text-xs">{task.title.substring(0, 6)}...</span>
