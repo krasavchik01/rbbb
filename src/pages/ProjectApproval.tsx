@@ -50,8 +50,11 @@ export default function ProjectApproval() {
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
-  // Проверка прав админа (включая зам. директора)
-  const isAdmin = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'deputy_director';
+  // Проверка прав админа (БЕЗ зам. директора!)
+  const isAdmin = user?.role === 'admin' || user?.role === 'ceo';
+
+  // Зам. директор имеет право управлять проектами на утверждении
+  const canManageProjects = isAdmin || user?.role === 'deputy_director';
 
   // Команда проекта
   const [teamMembers, setTeamMembers] = useState<{[key: string]: string}>({});
@@ -406,10 +409,10 @@ export default function ProjectApproval() {
         console.log(`✅ [ProjectApproval] Уведомления отправлены всем ${updatedProject.team.length} участникам проекта. Результаты:`, results);
         
         // Проверяем, что уведомления действительно сохранились
-        updatedProject.team.forEach(member => {
-          const savedNotifications = getNotifications(member.userId);
+        for (const member of updatedProject.team) {
+          const savedNotifications = await getNotifications(member.userId);
           console.log(`📋 [ProjectApproval] Уведомления для ${member.userName} (${member.userId}):`, savedNotifications.length, 'шт.');
-        });
+        }
       } catch (error) {
         console.error('❌ [ProjectApproval] Ошибка при отправке уведомлений:', error);
         // Не блокируем процесс утверждения, если уведомления не отправились
@@ -472,12 +475,12 @@ export default function ProjectApproval() {
     setSelectedProject(null);
   };
 
-  // Удаление проекта (только для админа)
+  // Удаление проекта (для админа и зам. директора)
   const handleDeleteProject = async (project: ProjectV3) => {
-    if (!isAdmin) {
+    if (!canManageProjects) {
       toast({
         title: "Ошибка",
-        description: "Только администратор может удалять проекты",
+        description: "У вас нет прав для удаления проектов",
         variant: "destructive"
       });
       return;
@@ -538,10 +541,10 @@ export default function ProjectApproval() {
 
   // Массовое удаление выбранных проектов
   const handleBulkDelete = async () => {
-    if (!isAdmin) {
+    if (!canManageProjects) {
       toast({
         title: "Ошибка",
-        description: "Только администратор может удалять проекты",
+        description: "У вас нет прав для удаления проектов",
         variant: "destructive"
       });
       return;
@@ -632,7 +635,7 @@ export default function ProjectApproval() {
         {/* Список проектов */}
         <TabsContent value="list" className="space-y-4">
           {/* Панель массовых действий */}
-          {isAdmin && projects.length > 0 && (
+          {canManageProjects && projects.length > 0 && (
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

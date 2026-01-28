@@ -37,6 +37,13 @@ export interface Project extends Omit<SupabaseProject, 'status'> {
   createdByName?: string;
   approvedBy?: string;
   approvalDate?: string;
+  completionPercent?: number;
+  completion?: number;
+  team?: any[];
+  tasks?: any[];
+  contract?: any;
+  client?: any;
+  finances?: any;
 }
 
 export interface Timesheet extends SupabaseTimesheet {
@@ -685,6 +692,12 @@ class SupabaseDataStore {
       ourCompany: notes?.ourCompany || notes?.companyName,
       companyName: notes?.companyName || notes?.ourCompany,
       currency: notes?.contract?.currency || notes?.currency || 'KZT',
+      // Извлекаем процент выполнения из notes или из kpi_percentage
+      completionPercent: notes?.completionPercent || proj.kpi_percentage || 0,
+      completion: notes?.completionPercent || notes?.completion || proj.kpi_percentage || 0,
+      // Извлекаем команду и задачи из notes
+      team: notes?.team || [],
+      tasks: notes?.tasks || [],
       // Сохраняем notes отдельно для доступа к полным данным
       notes: notes,
       // Маппим contract если он есть в notes

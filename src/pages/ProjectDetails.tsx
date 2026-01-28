@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calendar, Users, ArrowLeft, CheckSquare, File, Briefcase, FileText, Plus, Edit } from "lucide-react";
+import { Calendar, Users, ArrowLeft, CheckSquare, File, Briefcase, FileText, Plus, Edit, DollarSign } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
@@ -201,6 +201,7 @@ export default function ProjectDetails() {
           <TabsTrigger value="amendments" data-testid="tab-amendments">Доп соглашения</TabsTrigger>
           {user?.role !== 'procurement' && (
             <>
+              <TabsTrigger value="tasks" data-testid="tab-tasks">Задачи</TabsTrigger>
               <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>
               <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>
               <TabsTrigger value="evaluation" data-testid="tab-evaluation">Оценка команды</TabsTrigger>
@@ -282,19 +283,28 @@ export default function ProjectDetails() {
                 {teamMembers.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Команда не назначена</p>
                 ) : (
-                  teamMembers.map((member: any) => (
-                    <div key={member.userId || member.id} className="flex items-center gap-3 p-3 rounded bg-secondary/20">
-                      <Avatar className="w-8 h-8">
-                        <AvatarFallback>
-                          {(member.userName || member.name || 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{member.userName || member.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{member.role}</p>
+                  teamMembers.map((member: any) => {
+                    const bonusAmount = project.finances?.teamBonuses?.[member.userId || member.id] || 0;
+                    return (
+                      <div key={member.userId || member.id} className="flex items-center gap-3 p-3 rounded bg-secondary/20">
+                        <Avatar className="w-8 h-8">
+                          <AvatarFallback>
+                            {(member.userName || member.name || 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{member.userName || member.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{member.role}</p>
+                        </div>
+                        {bonusAmount > 0 && (
+                          <div className="flex items-center gap-1 text-primary">
+                            <DollarSign className="w-4 h-4" />
+                            <span className="text-sm font-semibold">{bonusAmount.toLocaleString()} ₸</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
@@ -320,6 +330,58 @@ export default function ProjectDetails() {
               </div>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="tasks" className="space-y-4">
+          <Card className="p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-primary" />
+              Задачи проекта
+            </h3>
+            {!project.tasks || project.tasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Задачи не созданы</p>
+            ) : (
+              <div className="space-y-3">
+                {project.tasks.map((task: any, index: number) => {
+                  const executor = teamMembers.find((m: any) => m.userId === task.assignedTo);
+                  const bonusAmount = project.finances?.teamBonuses?.[task.assignedTo] || 0;
+                  return (
+                    <div key={task.id || index} className="p-4 border rounded-lg" data-testid="project-task">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium">{task.title || task.name}</h4>
+                            <Badge variant={task.status === 'completed' ? 'default' : 'secondary'}>
+                              {task.status === 'completed' ? '✅ Выполнено' : '🔄 В работе'}
+                            </Badge>
+                          </div>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-sm">
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-medium">{executor?.userName || executor?.name || 'Не назначен'}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4 text-muted-foreground" />
+                              <span>{task.deadline ? new Date(task.deadline).toLocaleDateString('ru-RU') : 'Нет дедлайна'}</span>
+                            </div>
+                            {bonusAmount > 0 && (
+                              <div className="flex items-center gap-1 text-primary">
+                                <DollarSign className="w-4 h-4" />
+                                <span className="font-medium">{bonusAmount.toLocaleString()} ₸</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
         </TabsContent>
 
         <TabsContent value="files" className="space-y-4">

@@ -216,10 +216,7 @@ export default function CreateProjectProcurement() {
       toast({ title: "Ошибка", description: "Укажите предмет договора", variant: "destructive" });
       return false;
     }
-    if (!serviceEndDate) {
-      toast({ title: "Ошибка", description: "Укажите дату окончания услуг", variant: "destructive" });
-      return false;
-    }
+    // serviceEndDate теперь не обязателен
     if (!amountWithoutVAT || parseFloat(amountWithoutVAT) <= 0) {
       toast({ title: "Ошибка", description: "Укажите сумму без НДС", variant: "destructive" });
       return false;
@@ -638,7 +635,7 @@ export default function CreateProjectProcurement() {
 
           <div>
             <Label htmlFor="serviceEndDate">
-              Срок оказания услуг (окончание) <Badge variant="destructive" className="ml-2 text-xs">Обязательно</Badge>
+              Срок оказания услуг (окончание)
             </Label>
             <div className="flex items-center gap-2 mt-1">
               <Calendar className="w-4 h-4 text-muted-foreground" />
