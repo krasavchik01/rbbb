@@ -38,6 +38,12 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // Данные клиента
+  const [clientName, setClientName] = useState(project.client?.name || project.clientName || "");
+  const [clientWebsite, setClientWebsite] = useState(project.client?.website || "");
+  const [clientActivity, setClientActivity] = useState(project.client?.activity || "");
+  const [clientCity, setClientCity] = useState(project.client?.city || "");
+
   // Основные данные договора
   const [contractNumber, setContractNumber] = useState(project.contract?.number || "");
   const [contractDate, setContractDate] = useState(project.contract?.date || "");
@@ -164,6 +170,14 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
 
       const updatedProject: ProjectV3 = {
         ...project,
+        // Обновляем данные клиента
+        client: {
+          ...project.client,
+          name: clientName,
+          website: clientWebsite,
+          activity: clientActivity,
+          city: clientCity
+        },
         contract: updatedContract,
         // Если была пролонгация - обновляем даты проекта
         ...(amendments.some(a => a.type === 'prolongation' && a.newEndDate) && {
@@ -218,8 +232,9 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="contract" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="client" className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="client">Клиент</TabsTrigger>
             <TabsTrigger value="contract">Договор</TabsTrigger>
             <TabsTrigger value="files">Файлы</TabsTrigger>
             <TabsTrigger value="amendments">
@@ -230,6 +245,60 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
             </TabsTrigger>
             <TabsTrigger value="years">По годам</TabsTrigger>
           </TabsList>
+
+          {/* Вкладка клиента */}
+          <TabsContent value="client" className="space-y-4">
+            <Card className="p-4">
+              <h3 className="font-semibold mb-4">Информация о клиенте</h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="clientName">Название клиента</Label>
+                  <Input
+                    id="clientName"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="ТОО 'Компания'"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="clientWebsite">Веб-сайт</Label>
+                  <Input
+                    id="clientWebsite"
+                    type="url"
+                    value={clientWebsite}
+                    onChange={(e) => setClientWebsite(e.target.value)}
+                    placeholder="https://example.com"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="clientActivity">Вид деятельности</Label>
+                  <Input
+                    id="clientActivity"
+                    value={clientActivity}
+                    onChange={(e) => setClientActivity(e.target.value)}
+                    placeholder="Производство и торговля"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="clientCity">Город</Label>
+                  <Input
+                    id="clientCity"
+                    value={clientCity}
+                    onChange={(e) => setClientCity(e.target.value)}
+                    placeholder="Алматы"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
 
           {/* Вкладка файлов */}
           <TabsContent value="files" className="space-y-4">
