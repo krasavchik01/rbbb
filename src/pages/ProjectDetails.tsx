@@ -112,6 +112,19 @@ export default function ProjectDetails() {
     return project?.completionPercent || project?.completion || 0;
   }, [project]);
 
+  // Определяем какие вкладки показывать
+  const hasTasks = useMemo(() => {
+    return project?.tasks && Array.isArray(project.tasks) && project.tasks.length > 0;
+  }, [project]);
+
+  const hasStages = useMemo(() => {
+    return projectStages.length > 0;
+  }, [projectStages]);
+
+  const hasServices = useMemo(() => {
+    return additionalServices.length > 0;
+  }, [additionalServices]);
+
   if (!project) {
     return (
       <div className="p-6">
@@ -201,10 +214,10 @@ export default function ProjectDetails() {
           <TabsTrigger value="amendments" data-testid="tab-amendments">Доп соглашения</TabsTrigger>
           {user?.role !== 'procurement' && (
             <>
-              <TabsTrigger value="tasks" data-testid="tab-tasks">Задачи</TabsTrigger>
-              <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>
-              <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>
-              <TabsTrigger value="evaluation" data-testid="tab-evaluation">Оценка команды</TabsTrigger>
+              {hasTasks && <TabsTrigger value="tasks" data-testid="tab-tasks">Задачи</TabsTrigger>}
+              {hasStages && <TabsTrigger value="stages" data-testid="tab-stages">Этапы</TabsTrigger>}
+              {hasServices && <TabsTrigger value="services" data-testid="tab-services">Услуги</TabsTrigger>}
+              {teamMembers.length > 0 && <TabsTrigger value="evaluation" data-testid="tab-evaluation">Оценка команды</TabsTrigger>}
             </>
           )}
         </TabsList>
