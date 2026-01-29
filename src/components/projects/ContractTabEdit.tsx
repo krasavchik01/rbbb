@@ -15,6 +15,7 @@ interface ContractTabEditProps {
   onSave: (updatedProject: ProjectV3) => void;
 }
 
+// Inline editing component for contract tab - force redeploy
 export function ContractTabEdit({ project, onSave }: ContractTabEditProps) {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
