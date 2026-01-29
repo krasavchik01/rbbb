@@ -1375,6 +1375,9 @@ export default function ProjectWorkspace() {
             projectId={project?.id || id || ''}
             contract={project?.contract || project?.notes?.contract || null}
             amendments={amendments}
+            projectType={project?.type || project?.notes?.type || ''}
+            companyId={project?.companyId || project?.notes?.companyId || ''}
+            companyName={project?.companyName || project?.notes?.companyName || ''}
             onContractUpdate={async (updatedContract) => {
               // Обновляем contract в проекте
               if (project) {
@@ -1405,6 +1408,27 @@ export default function ProjectWorkspace() {
                     description: 'Не удалось сохранить договор',
                     variant: 'destructive',
                   });
+                }
+              }
+            }}
+            onProjectSettingsUpdate={async (settings) => {
+              if (project) {
+                const updatedProject = {
+                  ...project,
+                  ...(settings.type && { type: settings.type }),
+                  ...(settings.companyId && { companyId: settings.companyId }),
+                  ...(settings.companyName && { companyName: settings.companyName }),
+                };
+                setProject(updatedProject);
+
+                try {
+                  await supabaseDataStore.updateProject(project.id || id, {
+                    ...(settings.type && { type: settings.type }),
+                    ...(settings.companyId && { companyId: settings.companyId }),
+                    ...(settings.companyName && { companyName: settings.companyName }),
+                  });
+                } catch (error) {
+                  console.error('Error updating project settings:', error);
                 }
               }
             }}

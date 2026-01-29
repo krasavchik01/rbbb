@@ -50,13 +50,18 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
-import { ContractInfo, ProjectAmendment, ProjectCurrency, CURRENCY_LABELS } from '@/types/project-v3';
+import { ContractInfo, ProjectAmendment, ProjectCurrency, CURRENCY_LABELS, ProjectType, PROJECT_TYPE_LABELS } from '@/types/project-v3';
+import { DEFAULT_COMPANIES } from '@/types/companies';
 
 interface ContractEditorProps {
   projectId: string;
   contract: ContractInfo | null;
   amendments?: ProjectAmendment[];
+  projectType?: string;
+  companyId?: string;
+  companyName?: string;
   onContractUpdate: (contract: ContractInfo) => void;
+  onProjectSettingsUpdate?: (settings: { type?: string; companyId?: string; companyName?: string }) => void;
   onAmendmentAdd?: (amendment: ProjectAmendment) => void;
   onAmendmentDelete?: (amendmentId: string) => void;
   canEdit?: boolean;
@@ -66,7 +71,11 @@ export function ContractEditor({
   projectId,
   contract,
   amendments = [],
+  projectType: initialProjectType,
+  companyId: initialCompanyId,
+  companyName: initialCompanyName,
   onContractUpdate,
+  onProjectSettingsUpdate,
   onAmendmentAdd,
   onAmendmentDelete,
   canEdit = true,
@@ -76,6 +85,11 @@ export function ContractEditor({
   const [editedContract, setEditedContract] = useState<ContractInfo | null>(contract);
   const [showAddAmendment, setShowAddAmendment] = useState(false);
   const [amendmentToDelete, setAmendmentToDelete] = useState<string | null>(null);
+
+  // Настройки проекта
+  const [editedProjectType, setEditedProjectType] = useState(initialProjectType || '');
+  const [editedCompanyId, setEditedCompanyId] = useState(initialCompanyId || '');
+  const companies = DEFAULT_COMPANIES.filter(c => c.isActive);
 
   // Форма доп соглашения
   const [newAmendment, setNewAmendment] = useState({
@@ -93,6 +107,14 @@ export function ContractEditor({
   useEffect(() => {
     setEditedContract(contract);
   }, [contract]);
+
+  useEffect(() => {
+    setEditedProjectType(initialProjectType || '');
+  }, [initialProjectType]);
+
+  useEffect(() => {
+    setEditedCompanyId(initialCompanyId || '');
+  }, [initialCompanyId]);
 
   const handleSaveContract = async () => {
     if (!editedContract) return;
@@ -119,7 +141,24 @@ export function ContractEditor({
         editedContract.contractOriginalUrl = result.publicUrl;
       }
 
+      // Рассчитываем НДС
+      const vatRate = editedContract.vatRate || 0;
+      const amountWithoutVAT = editedContract.amountWithoutVAT || 0;
+      editedContract.vatAmount = amountWithoutVAT * (vatRate / 100);
+      editedContract.amountWithVAT = amountWithoutVAT + editedContract.vatAmount;
+
       onContractUpdate(editedContract);
+
+      // Сохраняем настройки проекта (вид проекта, компания)
+      if (onProjectSettingsUpdate) {
+        const selectedCompany = companies.find(c => c.id === editedCompanyId);
+        onProjectSettingsUpdate({
+          type: editedProjectType || undefined,
+          companyId: editedCompanyId || undefined,
+          companyName: selectedCompany?.name || undefined,
+        });
+      }
+
       setIsEditing(false);
       setContractFile(null);
       setOriginalFile(null);
@@ -323,7 +362,7 @@ export function ContractEditor({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Валюта</Label>
                   <Select
@@ -348,6 +387,75 @@ export function ContractEditor({
                     onChange={(e) => setEditedContract(prev => prev ? { ...prev, amountWithoutVAT: parseFloat(e.target.value) || 0 } : null)}
                     placeholder="10000000"
                   />
+                </div>
+                <div>
+                  <Label>Ставка НДС</Label>
+                  <Select
+                    value={String(editedContract?.vatRate ?? 16)}
+                    onValueChange={(value) => setEditedContract(prev => prev ? { ...prev, vatRate: parseFloat(value) } : null)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Без НДС (0%)</SelectItem>
+                      <SelectItem value="12">НДС 12%</SelectItem>
+                      <SelectItem value="16">НДС 16%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Итоговые суммы */}
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Сумма без НДС:</span>
+                    <p className="font-medium">{(editedContract?.amountWithoutVAT || 0).toLocaleString()} {editedContract?.currency || 'KZT'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">НДС ({editedContract?.vatRate ?? 16}%):</span>
+                    <p className="font-medium">{((editedContract?.amountWithoutVAT || 0) * ((editedContract?.vatRate ?? 16) / 100)).toLocaleString()} {editedContract?.currency || 'KZT'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground font-semibold">Итого с НДС:</span>
+                    <p className="font-bold text-primary">{((editedContract?.amountWithoutVAT || 0) * (1 + (editedContract?.vatRate ?? 16) / 100)).toLocaleString()} {editedContract?.currency || 'KZT'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Настройки проекта */}
+              <div>
+                <h4 className="font-medium mb-3">Настройки проекта</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Вид проекта</Label>
+                    <Select value={editedProjectType} onValueChange={setEditedProjectType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите вид проекта" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PROJECT_TYPE_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Компания-исполнитель</Label>
+                    <Select value={editedCompanyId} onValueChange={setEditedCompanyId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите компанию" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
@@ -423,6 +531,24 @@ export function ContractEditor({
                 </div>
               </div>
 
+              {/* НДС и итого */}
+              {contract.vatRate !== undefined && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ставка НДС</p>
+                    <p className="font-medium">{contract.vatRate === 0 ? 'Без НДС' : `${contract.vatRate}%`}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Сумма НДС</p>
+                    <p className="font-medium">{formatCurrency(contract.vatAmount || 0, contract.currency)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Итого с НДС</p>
+                    <p className="font-bold text-primary">{formatCurrency(contract.amountWithVAT || 0, contract.currency)}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Срок оказания услуг</p>
@@ -455,6 +581,26 @@ export function ContractEditor({
                   </div>
                 </div>
               </div>
+
+              {/* Настройки проекта - только просмотр */}
+              {(initialProjectType || initialCompanyName) && (
+                <div className="pt-4 border-t">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {initialProjectType && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Вид проекта</p>
+                        <p className="font-medium">{PROJECT_TYPE_LABELS[initialProjectType as ProjectType] || initialProjectType}</p>
+                      </div>
+                    )}
+                    {initialCompanyName && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Компания-исполнитель</p>
+                        <p className="font-medium">{initialCompanyName}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
