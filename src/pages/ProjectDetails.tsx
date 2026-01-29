@@ -15,6 +15,7 @@ import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 import { ProjectAmendmentForm } from "@/components/projects/ProjectAmendmentForm";
 import { ProjectTeamEvaluation } from "@/components/projects/ProjectTeamEvaluation";
 import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
+import { ContractTabEdit } from "@/components/projects/ContractTabEdit";
 import { ProjectStage, AdditionalService, ProjectAmendment } from "@/types/project-v3";
 
 export default function ProjectDetails() {
@@ -224,65 +225,12 @@ export default function ProjectDetails() {
 
         {/* Вкладка Договор - для отдела закупок */}
         <TabsContent value="contract" className="space-y-4">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              Информация о договоре
-            </h3>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <span className="text-sm text-muted-foreground">Номер договора</span>
-                  <p className="font-medium">{project?.contract?.number || '—'}</p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Дата договора</span>
-                  <p className="font-medium">{project?.contract?.date ? new Date(project.contract.date).toLocaleDateString('ru-RU') : '—'}</p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Предмет договора</span>
-                  <p className="font-medium">{project?.contract?.subject || '—'}</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <span className="text-sm text-muted-foreground">Срок оказания услуг</span>
-                  <p className="font-medium">
-                    {project?.contract?.serviceStartDate ? new Date(project.contract.serviceStartDate).toLocaleDateString('ru-RU') : '—'}
-                    {' — '}
-                    {project?.contract?.serviceEndDate ? new Date(project.contract.serviceEndDate).toLocaleDateString('ru-RU') : '—'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Сумма без НДС</span>
-                  <p className="font-medium text-lg">{project?.contract?.amountWithoutVAT?.toLocaleString() || '—'} ₸</p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">НДС ({project?.contract?.vatRate || 0}%)</span>
-                  <p className="font-medium">{project?.contract?.vatAmount?.toLocaleString() || '—'} ₸</p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Итого с НДС</span>
-                  <p className="font-medium text-lg text-primary">{project?.contract?.amountWithVAT?.toLocaleString() || '—'} ₸</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Разбивка по годам если есть */}
-            {project?.contract?.isMultiYear && project?.contract?.yearlyAmounts?.length > 0 && (
-              <div className="mt-6 pt-6 border-t">
-                <h4 className="font-medium mb-3">Разбивка по годам</h4>
-                <div className="space-y-2">
-                  {project.contract.yearlyAmounts.map((ya: any) => (
-                    <div key={ya.year} className="flex justify-between p-2 bg-muted rounded">
-                      <span>{ya.year} год</span>
-                      <span className="font-medium">{ya.amount?.toLocaleString()} ₸</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
+          <ContractTabEdit
+            project={project}
+            onSave={(updatedProject) => {
+              setProject(updatedProject);
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="overview" className="space-y-6">
