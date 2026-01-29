@@ -70,9 +70,13 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
   );
 
   // Допсоглашения
-  const [amendments, setAmendments] = useState<ContractAmendment[]>(
-    project.contract?.amendments || []
-  );
+  const [amendments, setAmendments] = useState<ContractAmendment[]>(() => {
+    const contractAmendments = project.contract?.amendments || [];
+    console.log('=== ИНИЦИАЛИЗАЦИЯ ДОПСОГЛАШЕНИЙ ===');
+    console.log('Проект:', project.name);
+    console.log('Допсоглашения из contract:', contractAmendments);
+    return contractAmendments;
+  });
 
   // Новое допсоглашение
   const [newAmendment, setNewAmendment] = useState({
@@ -247,6 +251,11 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
         updated_at: new Date().toISOString()
       };
 
+      console.log('=== СОХРАНЕНИЕ ПРОЕКТА ===');
+      console.log('Проект ID:', project.id);
+      console.log('Допсоглашения:', amendments);
+      console.log('Обновленный проект:', updatedProject);
+
       await supabaseDataStore.updateProject(project.id, updatedProject);
 
       toast({
@@ -256,11 +265,13 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
 
       onSave(updatedProject);
       onClose();
-    } catch (error) {
-      console.error("Ошибка сохранения:", error);
+    } catch (error: any) {
+      console.error("❌ ОШИБКА СОХРАНЕНИЯ:", error);
+      console.error("Детали ошибки:", error.message);
+      console.error("Stack:", error.stack);
       toast({
-        title: "Ошибка",
-        description: "Не удалось сохранить изменения",
+        title: "Ошибка сохранения",
+        description: error.message || "Не удалось сохранить изменения",
         variant: "destructive"
       });
     } finally {
