@@ -19,13 +19,16 @@ import {
   Save,
   X,
   AlertCircle,
-  FolderOpen
+  FolderOpen,
+  Settings,
+  Building2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { ProjectV3, ContractAmendment, YearlyAmount } from "@/types/project-v3";
+import { ProjectV3, ContractAmendment, YearlyAmount, ProjectType, PROJECT_TYPE_LABELS } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { ProjectFileManager } from "./ProjectFileManager";
+import { DEFAULT_COMPANIES } from "@/types/companies";
 
 interface ProjectEditProcurementProps {
   project: ProjectV3;
@@ -39,7 +42,7 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
   const { user } = useAuth();
 
   // Данные клиента
-  const [clientName, setClientName] = useState(project.client?.name || project.clientName || "");
+  const [clientName, setClientName] = useState(project.client?.name || "");
   const [clientWebsite, setClientWebsite] = useState(project.client?.website || "");
   const [clientActivity, setClientActivity] = useState(project.client?.activity || "");
   const [clientCity, setClientCity] = useState(project.client?.city || "");
@@ -52,6 +55,13 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
   const [serviceEndDate, setServiceEndDate] = useState(project.contract?.serviceEndDate || "");
   const [amountWithoutVAT, setAmountWithoutVAT] = useState(project.contract?.amountWithoutVAT?.toString() || "");
   const [vatRate, setVatRate] = useState(project.contract?.vatRate?.toString() || "16");
+
+  // Настройки проекта
+  const [currency, setCurrency] = useState(project.contract?.currency || "KZT");
+  const [projectType, setProjectType] = useState(project.type || "");
+  const [companyId, setCompanyId] = useState(project.companyId || "");
+  const [isConsortium, setIsConsortium] = useState(false); // Консорциум в ProjectV3 не предусмотрен
+  const [consortiumMembers, setConsortiumMembers] = useState<any[]>([]); // Пока не используется
 
   // Многолетний договор
   const [isMultiYear, setIsMultiYear] = useState(project.contract?.isMultiYear || false);
@@ -75,6 +85,9 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
   });
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // Загружаем список компаний (используем дефолтные компании)
+  const companies = DEFAULT_COMPANIES.filter(c => c.isActive);
 
   // Добавить год в разбивку
   const addYear = () => {
@@ -143,6 +156,40 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
     setAmendments(amendments.filter(a => a.id !== id));
   };
 
+  // Функции для консорциума
+  const addConsortiumMember = () => {
+    const currentTotal = consortiumMembers.reduce((sum: number, m: any) => sum + m.sharePercentage, 0);
+    const remaining = 100 - currentTotal;
+    setConsortiumMembers([...consortiumMembers, { companyId: "", sharePercentage: remaining > 0 ? remaining : 10 }]);
+  };
+
+  const removeConsortiumMember = (index: number) => {
+    if (consortiumMembers.length <= 2) {
+      toast({ title: "Ошибка", description: "Минимум 2 участника консорциума", variant: "destructive" });
+      return;
+    }
+    setConsortiumMembers(consortiumMembers.filter((_: any, i: number) => i !== index));
+  };
+
+  const updateConsortiumMember = (index: number, field: 'companyId' | 'sharePercentage', value: string | number) => {
+    const updated = [...consortiumMembers];
+    if (field === 'sharePercentage') {
+      updated[index][field] = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    } else {
+      updated[index][field] = value as string;
+    }
+    setConsortiumMembers(updated);
+  };
+
+  const getTotalShare = () => {
+    return consortiumMembers.reduce((sum: number, m: any) => sum + m.sharePercentage, 0);
+  };
+
+  const isShareValid = () => {
+    const total = getTotalShare();
+    return Math.abs(total - 100) < 0.01;
+  };
+
   // Сохранить изменения
   const handleSave = async () => {
     setIsSaving(true);
@@ -178,7 +225,14 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
           activity: clientActivity,
           city: clientCity
         },
-        contract: updatedContract,
+        contract: {
+          ...updatedContract,
+          currency: currency
+        },
+        // Обновляем настройки проекта
+        type: projectType as ProjectType,
+        companyId: companyId || project.companyId,
+        companyName: companies.find(c => c.id === (companyId || project.companyId))?.name || project.companyName,
         // Если была пролонгация - обновляем даты проекта
         ...(amendments.some(a => a.type === 'prolongation' && a.newEndDate) && {
           endDate: amendments.find(a => a.type === 'prolongation' && a.newEndDate)?.newEndDate
@@ -190,8 +244,7 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
             amountWithoutVAT: amendments.find(a => a.type === 'amount_change' && a.newAmount)?.newAmount || project.finances?.amountWithoutVAT
           }
         }),
-        updated_at: new Date().toISOString(),
-        updatedBy: user?.id
+        updated_at: new Date().toISOString()
       };
 
       await supabaseDataStore.updateProject(project.id, updatedProject);
@@ -233,9 +286,10 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
         </DialogHeader>
 
         <Tabs defaultValue="client" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="client">Клиент</TabsTrigger>
             <TabsTrigger value="contract">Договор</TabsTrigger>
+            <TabsTrigger value="settings">Настройки</TabsTrigger>
             <TabsTrigger value="files">Файлы</TabsTrigger>
             <TabsTrigger value="amendments">
               Допсоглашения
@@ -296,6 +350,149 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
                     className="mt-1"
                   />
                 </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* Вкладка настроек */}
+          <TabsContent value="settings" className="space-y-4">
+            <Card className="p-4">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Настройки проекта
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Валюта договора</Label>
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="KZT">🇰🇿 Тенге (₸)</SelectItem>
+                      <SelectItem value="USD">🇺🇸 Доллар ($)</SelectItem>
+                      <SelectItem value="EUR">🇪🇺 Евро (€)</SelectItem>
+                      <SelectItem value="RUB">🇷🇺 Рубль (₽)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Вид проекта</Label>
+                  <Select value={projectType} onValueChange={setProjectType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите вид проекта" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PROJECT_TYPE_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Консорциум */}
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="consortium">Консорциум</Label>
+                    <Switch
+                      id="consortium"
+                      checked={isConsortium}
+                      onCheckedChange={setIsConsortium}
+                    />
+                  </div>
+                  {isConsortium && (
+                    <Badge variant={isShareValid() ? "default" : "destructive"}>
+                      Сумма долей: {getTotalShare().toFixed(1)}%
+                    </Badge>
+                  )}
+                </div>
+
+                {isConsortium ? (
+                  <div className="space-y-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Участники консорциума
+                    </h4>
+
+                    {consortiumMembers.map((member: any, index: number) => (
+                      <div key={index} className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+                        <div className="flex-1">
+                          <Label className="text-xs">Компания</Label>
+                          <Select
+                            value={member.companyId}
+                            onValueChange={(v) => updateConsortiumMember(index, 'companyId', v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Выберите компанию" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {companies.map((company) => (
+                                <SelectItem key={company.id} value={company.id}>
+                                  {company.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="w-32">
+                          <Label className="text-xs">Доля %</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={member.sharePercentage}
+                            onChange={(e) => updateConsortiumMember(index, 'sharePercentage', e.target.value)}
+                          />
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeConsortiumMember(index)}
+                          disabled={consortiumMembers.length <= 2}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+
+                    <Button onClick={addConsortiumMember} variant="outline" className="w-full">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Добавить участника
+                    </Button>
+
+                    {!isShareValid() && (
+                      <div className="flex items-center gap-2 text-yellow-600 text-sm p-3 bg-yellow-50 rounded-lg">
+                        <AlertCircle className="w-4 h-4" />
+                        Сумма долей должна быть 100%
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Компания-исполнитель</Label>
+                    <Select value={companyId} onValueChange={setCompanyId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите компанию" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </Card>
           </TabsContent>
