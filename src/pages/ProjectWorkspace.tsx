@@ -166,29 +166,13 @@ export default function ProjectWorkspace() {
     loadWorkPapers();
   }, [id]); // Загружаем только при смене id
 
-  // Загрузка дополнительных соглашений
-  const loadAmendments = useCallback(async () => {
-    if (!id) return;
-    try {
-      const data = await supabaseDataStore.getProjectAmendments(id);
-      setAmendments(data.map((a: any) => ({
-        id: a.id,
-        projectId: a.project_id,
-        number: a.number,
-        date: a.date,
-        description: a.description,
-        fileUrl: a.file_url,
-        createdBy: a.created_by,
-        createdAt: a.created_at,
-      })));
-    } catch (error) {
-      console.error('Error loading amendments:', error);
-    }
-  }, [id]);
-
+  // Загрузка дополнительных соглашений из JSON проекта
   useEffect(() => {
-    loadAmendments();
-  }, [id]);
+    if (project) {
+      const contractAmendments = project?.contract?.amendments || project?.notes?.contract?.amendments || [];
+      setAmendments(contractAmendments);
+    }
+  }, [project?.contract?.amendments, project?.notes?.contract?.amendments]);
 
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
@@ -1432,11 +1416,67 @@ export default function ProjectWorkspace() {
                 }
               }
             }}
-            onAmendmentAdd={(amendment) => {
-              setAmendments(prev => [amendment, ...prev]);
+            onAmendmentAdd={async (amendment) => {
+              const newAmendments = [amendment, ...amendments];
+              setAmendments(newAmendments);
+
+              // Сохраняем в JSON проекта
+              if (project) {
+                const currentContract = project.contract || project.notes?.contract || {};
+                const updatedContract = {
+                  ...currentContract,
+                  amendments: newAmendments,
+                };
+                const updatedProject = {
+                  ...project,
+                  contract: updatedContract,
+                  notes: { ...(project.notes || {}), contract: updatedContract },
+                };
+                setProject(updatedProject);
+
+                try {
+                  await supabaseDataStore.updateProject(project.id || id, {
+                    contract: updatedContract,
+                  });
+                  toast({
+                    title: '✅ Доп. соглашение сохранено',
+                  });
+                } catch (error) {
+                  console.error('Error saving amendment:', error);
+                  toast({
+                    title: '❌ Ошибка',
+                    description: 'Не удалось сохранить доп. соглашение',
+                    variant: 'destructive',
+                  });
+                }
+              }
             }}
-            onAmendmentDelete={(amendmentId) => {
-              setAmendments(prev => prev.filter(a => a.id !== amendmentId));
+            onAmendmentDelete={async (amendmentId) => {
+              const newAmendments = amendments.filter(a => a.id !== amendmentId);
+              setAmendments(newAmendments);
+
+              // Сохраняем в JSON проекта
+              if (project) {
+                const currentContract = project.contract || project.notes?.contract || {};
+                const updatedContract = {
+                  ...currentContract,
+                  amendments: newAmendments,
+                };
+                const updatedProject = {
+                  ...project,
+                  contract: updatedContract,
+                  notes: { ...(project.notes || {}), contract: updatedContract },
+                };
+                setProject(updatedProject);
+
+                try {
+                  await supabaseDataStore.updateProject(project.id || id, {
+                    contract: updatedContract,
+                  });
+                } catch (error) {
+                  console.error('Error deleting amendment:', error);
+                }
+              }
             }}
             canEdit={user?.role === 'procurement' || user?.role === 'admin' || user?.role === 'partner' || user?.role === 'deputy_director' || user?.role === 'ceo'}
           />

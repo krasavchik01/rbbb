@@ -211,14 +211,7 @@ export function ContractEditor({
         createdAt: new Date().toISOString(),
       };
 
-      // Сохраняем в Supabase
-      await supabaseDataStore.createProjectAmendment(projectId, {
-        number: amendment.number,
-        date: amendment.date,
-        description: amendment.description,
-        fileUrl: amendment.fileUrl,
-      }, 'system');
-
+      // Сохраняем через колбэк (в JSON проекта, минуя RLS на project_amendments)
       onAmendmentAdd?.(amendment);
 
       setNewAmendment({ number: '', date: '', description: '', amountChange: 0 });
@@ -243,7 +236,7 @@ export function ContractEditor({
     if (!amendmentToDelete) return;
 
     try {
-      await supabaseDataStore.deleteProjectAmendment(amendmentToDelete);
+      // Удаляем через колбэк (в JSON проекта)
       onAmendmentDelete?.(amendmentToDelete);
       setAmendmentToDelete(null);
 
