@@ -890,7 +890,22 @@ export default function Projects() {
         return filterLongTerm === true ? isLongTerm : !isLongTerm;
       });
     }
-    
+
+    // 5. Сортировка по дате договора (от новых к старым)
+    filtered.sort((a, b) => {
+      // Приоритет: дата договора > дедлайн > дата создания
+      const getDate = (p: any) => {
+        return p.contract?.date || p.notes?.contract?.date ||
+               p.deadline || p.notes?.deadline ||
+               p.endDate || p.notes?.endDate ||
+               p.created_at || p.notes?.created_at || '';
+      };
+      const dateA = getDate(a);
+      const dateB = getDate(b);
+      // Сортировка по убыванию (новые сверху)
+      return dateB.localeCompare(dateA);
+    });
+
     setFilteredProjects(filtered);
   }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm]);
 

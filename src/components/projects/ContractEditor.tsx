@@ -553,7 +553,12 @@ export function ContractEditor({
                   <p className="text-sm text-muted-foreground">Файлы</p>
                   <div className="flex gap-2 mt-1">
                     {contract.contractScanUrl && (
-                      <a href={contract.contractScanUrl} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={contract.contractScanUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Badge variant="outline" className="cursor-pointer hover:bg-primary/10">
                           <FileText className="w-3 h-3 mr-1" />
                           Скан
@@ -561,7 +566,12 @@ export function ContractEditor({
                       </a>
                     )}
                     {contract.contractOriginalUrl && (
-                      <a href={contract.contractOriginalUrl} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={contract.contractOriginalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Badge variant="outline" className="cursor-pointer hover:bg-primary/10 bg-green-500/10 border-green-500/30">
                           <FileText className="w-3 h-3 mr-1" />
                           Оригинал

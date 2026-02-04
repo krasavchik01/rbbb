@@ -148,7 +148,7 @@ export function ProjectFileManager({
     }
 
     try {
-      await supabaseDataStore.deleteProjectFile(file.id, uploadedBy);
+      await supabaseDataStore.deleteProjectFile(file.id, uploadedBy, projectId);
       toast({
         title: "✅ Успех",
         description: `Файл "${file.fileName}" удален`,

@@ -23,7 +23,8 @@ import {
   Calendar,
   DollarSign,
   Target,
-  X
+  X,
+  Edit
 } from "lucide-react";
 import { useTemplates, useProjects } from "@/hooks/useDataStore";
 import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
@@ -45,6 +46,7 @@ import { TemplateManager } from "@/components/projects/TemplateManager";
 import { WorkPaperTree } from "@/components/projects/WorkPaperTree";
 import { WorkPaperViewer } from "@/components/projects/WorkPaperViewer";
 import { ContractEditor } from "@/components/projects/ContractEditor";
+import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
 import { Task, ChecklistItem } from "@/types/project";
 import { WorkPaper, WorkPaperTemplate } from "@/types/workPapers";
 import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
@@ -72,6 +74,7 @@ export default function ProjectWorkspace() {
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showTeamDialog, setShowTeamDialog] = useState(false);
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Рабочие документы
   const [workPapers, setWorkPapers] = useState<WorkPaper[]>([]);
@@ -85,6 +88,7 @@ export default function ProjectWorkspace() {
   const isPartner = user?.role === 'partner';
   const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
+  const isProcurement = user?.role === 'procurement';
   const projectStatus = project?.status || project?.notes?.status;
   const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
@@ -731,6 +735,13 @@ export default function ProjectWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Кнопка редактирования для закупщика */}
+          {isProcurement && project && (
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Edit className="w-4 h-4 mr-2" />
+              Редактировать
+            </Button>
+          )}
           {/* Индикатор синхронизации */}
           {syncStatus.isSyncing && (
             <Badge variant="outline" className="animate-pulse">
@@ -855,9 +866,14 @@ export default function ProjectWorkspace() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Команда проекта */}
           <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Команда проекта</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">Команда проекта</h3>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowTeamDialog(true)}>
+                <Edit className="w-4 h-4" />
+              </Button>
             </div>
             <div className="space-y-2">
               {(project.team || project.notes?.team || []).map((member: any, index: number) => {
@@ -2016,6 +2032,19 @@ export default function ProjectWorkspace() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Диалог редактирования для закупщика */}
+      {project && (
+        <ProjectEditProcurement
+          project={project}
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSave={(updatedProject) => {
+            setProject(updatedProject);
+            setIsEditDialogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
