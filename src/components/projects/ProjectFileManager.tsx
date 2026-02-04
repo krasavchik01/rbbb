@@ -27,35 +27,58 @@ interface ProjectFileManagerProps {
   uploadedBy: string;
   canDelete?: (file: ProjectFile) => boolean;
   onFilesChange?: (files: ProjectFile[]) => void;
+  initialFiles?: any[]; // Файлы из notes.files (обход RLS)
 }
 
-export function ProjectFileManager({ 
-  projectId, 
+export function ProjectFileManager({
+  projectId,
   uploadedBy,
   canDelete = (file) => file.uploadedBy === uploadedBy,
-  onFilesChange 
+  onFilesChange,
+  initialFiles = []
 }: ProjectFileManagerProps) {
   const { toast } = useToast();
-  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [files, setFiles] = useState<ProjectFile[]>(initialFiles as ProjectFile[]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // Обновляем файлы когда приходят initialFiles
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      setFiles(initialFiles as ProjectFile[]);
+      onFilesChange?.(initialFiles as ProjectFile[]);
+    }
+  }, [initialFiles]);
+
   // Загрузка списка файлов
   const loadFiles = useCallback(async () => {
     try {
+      // Сначала пробуем API
       const projectFiles = await supabaseDataStore.getProjectFiles(projectId);
+      // Если API вернул пустой массив, используем initialFiles
+      if (projectFiles.length === 0 && initialFiles.length > 0) {
+        setFiles(initialFiles as ProjectFile[]);
+        onFilesChange?.(initialFiles as ProjectFile[]);
+        return;
+      }
       setFiles(projectFiles);
       onFilesChange?.(projectFiles);
     } catch (error: any) {
       console.error('Error loading files:', error);
+      // При ошибке используем initialFiles
+      if (initialFiles.length > 0) {
+        setFiles(initialFiles as ProjectFile[]);
+        onFilesChange?.(initialFiles as ProjectFile[]);
+        return;
+      }
       toast({
         title: "Ошибка",
         description: "Не удалось загрузить список файлов",
         variant: "destructive",
       });
     }
-  }, [projectId, onFilesChange, toast]);
+  }, [projectId, onFilesChange, toast, initialFiles]);
 
   // Загрузка файла
   const handleFileUpload = async (file: File, category: ProjectFile['category'] = 'other') => {

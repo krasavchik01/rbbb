@@ -1363,6 +1363,7 @@ export default function ProjectWorkspace() {
           <ProjectFileManager
             projectId={project?.id || id || ''}
             uploadedBy={user?.id || ''}
+            initialFiles={project?.notes?.files || []}
             onFilesChange={(files) => {
               // Можно обновить состояние если нужно
             }}
