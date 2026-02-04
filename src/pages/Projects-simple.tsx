@@ -84,6 +84,10 @@ export default function Projects() {
   const [filterDeadlineFrom, setFilterDeadlineFrom] = useState<string>('');
   const [filterDeadlineTo, setFilterDeadlineTo] = useState<string>('');
 
+  // Сортировка
+  type SortOption = 'deadline_asc' | 'deadline_desc' | 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc';
+  const [sortBy, setSortBy] = useState<SortOption>('deadline_asc'); // По умолчанию: ближайшие дедлайны сверху
+
   // Массовые действия (только для CEO)
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [isDeletingMultiple, setIsDeletingMultiple] = useState(false);
@@ -891,23 +895,154 @@ export default function Projects() {
       });
     }
 
-    // 5. Сортировка по дате договора (от новых к старым)
+    // 5. Фильтр по статусу
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(project => {
+        const projectStatusLabel = getProjectStatusLabel(project);
+        return projectStatusLabel === filterStatus;
+      });
+    }
+
+    // 6. Фильтр по прогрессу
+    if (filterProgressMin !== '' || filterProgressMax !== '') {
+      filtered = filtered.filter(project => {
+        const progress = project.completionPercent || project.completion || 0;
+        if (filterProgressMin !== '' && progress < filterProgressMin) return false;
+        if (filterProgressMax !== '' && progress > filterProgressMax) return false;
+        return true;
+      });
+    }
+
+    // 7. Фильтр по сумме
+    if (filterAmountMin !== '' || filterAmountMax !== '') {
+      filtered = filtered.filter(project => {
+        const { amount } = getProjectAmount(project);
+        if (amount === null) return false;
+        if (filterAmountMin !== '' && amount < filterAmountMin) return false;
+        if (filterAmountMax !== '' && amount > filterAmountMax) return false;
+        return true;
+      });
+    }
+
+    // 8. Фильтр по наличию команды
+    if (filterHasTeam !== 'all') {
+      filtered = filtered.filter(project => {
+        const team = project.team || project.notes?.team || [];
+        const hasTeam = team.length > 0;
+        return filterHasTeam === hasTeam;
+      });
+    }
+
+    // 9. Фильтр по наличию задач
+    if (filterHasTasks !== 'all') {
+      filtered = filtered.filter(project => {
+        const tasks = project.tasks || [];
+        const hasTasks = tasks.length > 0;
+        return filterHasTasks === hasTasks;
+      });
+    }
+
+    // 10. Фильтр по дедлайну (диапазон дат)
+    if (filterDeadlineFrom || filterDeadlineTo) {
+      filtered = filtered.filter(project => {
+        const deadline = project.contract?.serviceEndDate || project.deadline || project.notes?.contract?.serviceEndDate;
+        if (!deadline) return false;
+
+        try {
+          const deadlineDate = new Date(deadline);
+          if (isNaN(deadlineDate.getTime())) return false;
+
+          if (filterDeadlineFrom) {
+            const fromDate = new Date(filterDeadlineFrom);
+            if (deadlineDate < fromDate) return false;
+          }
+
+          if (filterDeadlineTo) {
+            const toDate = new Date(filterDeadlineTo);
+            // Добавляем день чтобы включить конечную дату
+            toDate.setDate(toDate.getDate() + 1);
+            if (deadlineDate >= toDate) return false;
+          }
+
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    // 11. Сортировка
     filtered.sort((a, b) => {
-      // Приоритет: дата договора > дедлайн > дата создания
-      const getDate = (p: any) => {
-        return p.contract?.date || p.notes?.contract?.date ||
-               p.deadline || p.notes?.deadline ||
-               p.endDate || p.notes?.endDate ||
-               p.created_at || p.notes?.created_at || '';
+      const getDeadline = (p: any) => {
+        const deadline = p.contract?.serviceEndDate || p.deadline || p.notes?.contract?.serviceEndDate || p.notes?.deadline;
+        if (!deadline) return Infinity;
+        try {
+          const date = new Date(deadline);
+          return isNaN(date.getTime()) ? Infinity : date.getTime();
+        } catch {
+          return Infinity;
+        }
       };
-      const dateA = getDate(a);
-      const dateB = getDate(b);
-      // Сортировка по убыванию (новые сверху)
-      return dateB.localeCompare(dateA);
+
+      const getContractDate = (p: any) => {
+        const date = p.contract?.date || p.notes?.contract?.date || p.created_at || p.notes?.created_at;
+        if (!date) return 0;
+        try {
+          const d = new Date(date);
+          return isNaN(d.getTime()) ? 0 : d.getTime();
+        } catch {
+          return 0;
+        }
+      };
+
+      const getName = (p: any) => (p.name || p.client?.name || '').toLowerCase();
+
+      switch (sortBy) {
+        case 'deadline_asc': {
+          // Ближайшие дедлайны сверху
+          const deadlineA = getDeadline(a);
+          const deadlineB = getDeadline(b);
+          return deadlineA - deadlineB;
+        }
+        case 'deadline_desc': {
+          // Дальние дедлайны сверху
+          const deadlineA = getDeadline(a);
+          const deadlineB = getDeadline(b);
+          return deadlineB - deadlineA;
+        }
+        case 'date_desc': {
+          // Новые проекты сверху (по дате договора)
+          return getContractDate(b) - getContractDate(a);
+        }
+        case 'date_asc': {
+          // Старые проекты сверху
+          return getContractDate(a) - getContractDate(b);
+        }
+        case 'amount_desc': {
+          // По сумме (большие сверху)
+          const amountA = getProjectAmount(a).amount || 0;
+          const amountB = getProjectAmount(b).amount || 0;
+          return amountB - amountA;
+        }
+        case 'amount_asc': {
+          // По сумме (маленькие сверху)
+          const amountA = getProjectAmount(a).amount || 0;
+          const amountB = getProjectAmount(b).amount || 0;
+          return amountA - amountB;
+        }
+        case 'name_asc': {
+          return getName(a).localeCompare(getName(b), 'ru');
+        }
+        case 'name_desc': {
+          return getName(b).localeCompare(getName(a), 'ru');
+        }
+        default:
+          return 0;
+      }
     });
 
     setFilteredProjects(filtered);
-  }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm]);
+  }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount]);
 
 
   // Функции для управления задачами
@@ -1826,6 +1961,26 @@ export default function Projects() {
                   className="h-8 text-xs"
                 />
               </div>
+            </div>
+
+            {/* Сортировка */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Сортировка</Label>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="deadline_asc">По дедлайну (ближайшие)</SelectItem>
+                  <SelectItem value="deadline_desc">По дедлайну (дальние)</SelectItem>
+                  <SelectItem value="date_desc">По дате (новые)</SelectItem>
+                  <SelectItem value="date_asc">По дате (старые)</SelectItem>
+                  <SelectItem value="amount_desc">По сумме (большие)</SelectItem>
+                  <SelectItem value="amount_asc">По сумме (маленькие)</SelectItem>
+                  <SelectItem value="name_asc">По названию (А-Я)</SelectItem>
+                  <SelectItem value="name_desc">По названию (Я-А)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

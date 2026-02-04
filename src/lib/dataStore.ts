@@ -214,16 +214,47 @@ class DataStore {
           .from('projects')
           .select('*')
           .order('created_at', { ascending: false });
-        
+
         if (!error && data) {
-          this.saveToLocalStorage(STORAGE_KEYS.PROJECTS, data);
-          return data;
+          // Парсим notes JSON для каждого проекта
+          const parsedProjects = data.map((proj: any) => {
+            let notes: any = {};
+            try {
+              if (proj.notes) {
+                notes = typeof proj.notes === 'string' ? JSON.parse(proj.notes) : proj.notes;
+              }
+            } catch (e) {
+              console.error('Ошибка парсинга notes:', e);
+            }
+
+            // Мержим данные из notes на верхний уровень для совместимости
+            return {
+              ...proj,
+              name: notes?.name || proj.name || notes?.client?.name || 'Без названия',
+              clientName: notes?.clientName || notes?.client?.name,
+              contractNumber: notes?.contractNumber || notes?.contract?.number,
+              amountWithoutVAT: notes?.finances?.amountWithoutVAT ||
+                               notes?.contract?.amountWithoutVAT ||
+                               notes?.amountWithoutVAT,
+              ourCompany: notes?.ourCompany || notes?.companyName,
+              companyName: notes?.companyName || notes?.ourCompany,
+              team: notes?.team || [],
+              tasks: notes?.tasks || [],
+              // ВАЖНО: парсим contract из notes для доступа к contractScanUrl и contractOriginalUrl
+              contract: notes?.contract || undefined,
+              // Сохраняем распарсенные notes
+              notes: notes,
+            };
+          });
+
+          this.saveToLocalStorage(STORAGE_KEYS.PROJECTS, parsedProjects);
+          return parsedProjects;
         }
       } catch (err) {
         console.error('Ошибка Supabase:', err);
       }
     }
-    
+
     return this.getFromLocalStorage<Project>(STORAGE_KEYS.PROJECTS);
   }
 
