@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Bell, Menu } from 'lucide-react';
+import { Bell, Menu, GitCommit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -8,6 +8,10 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { useNavigate } from 'react-router-dom';
 import { getUnreadCount } from '@/lib/notifications';
 import { useState, useEffect } from 'react';
+
+// Глобальные переменные из vite.config.ts
+declare const __APP_VERSION__: string;
+declare const __BUILD_TIME__: string;
 
 export function AppHeader() {
   const { user } = useAuth();
@@ -50,10 +54,22 @@ export function AppHeader() {
         </div>
         
         <div className="flex items-center space-x-2 md:space-x-4">
+          {/* Бейдж версии для админа */}
+          {user.role === 'admin' && (
+            <Badge
+              variant="outline"
+              className="hidden md:flex items-center gap-1 text-xs font-mono bg-muted/50 cursor-default"
+              title={`Сборка: ${__BUILD_TIME__}`}
+            >
+              <GitCommit className="h-3 w-3" />
+              {__APP_VERSION__}
+            </Badge>
+          )}
+
           <ThemeToggle />
-          
-          <Button 
-            variant="ghost" 
+
+          <Button
+            variant="ghost"
             size="icon"
             className="h-10 w-10 md:h-9 md:w-9 touch-manipulation relative"
             onClick={() => navigate('/notifications')}
