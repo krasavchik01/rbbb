@@ -60,6 +60,7 @@ interface ContractEditorProps {
   projectType?: string;
   companyId?: string;
   companyName?: string;
+  projectFiles?: any[]; // Файлы из notes.files
   onContractUpdate: (contract: ContractInfo) => void;
   onProjectSettingsUpdate?: (settings: { type?: string; companyId?: string; companyName?: string }) => void;
   onAmendmentAdd?: (amendment: ProjectAmendment) => void;
@@ -74,6 +75,7 @@ export function ContractEditor({
   projectType: initialProjectType,
   companyId: initialCompanyId,
   companyName: initialCompanyName,
+  projectFiles = [],
   onContractUpdate,
   onProjectSettingsUpdate,
   onAmendmentAdd,
@@ -83,6 +85,15 @@ export function ContractEditor({
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editedContract, setEditedContract] = useState<ContractInfo | null>(contract);
+
+  // Получаем файлы договора из notes.files или из contract
+  const contractFilesFromNotes = projectFiles.filter((f: any) => f.category === 'contract');
+  const contractScanUrl = contract?.contractScanUrl && contract.contractScanUrl !== 'pending_upload'
+    ? contract.contractScanUrl
+    : contractFilesFromNotes[0]?.publicUrl || contractFilesFromNotes[0]?.url;
+  const contractOriginalUrl = contract?.contractOriginalUrl && contract.contractOriginalUrl !== 'pending_upload'
+    ? contract.contractOriginalUrl
+    : contractFilesFromNotes[1]?.publicUrl || contractFilesFromNotes[1]?.url;
   const [showAddAmendment, setShowAddAmendment] = useState(false);
   const [amendmentToDelete, setAmendmentToDelete] = useState<string | null>(null);
 
@@ -551,10 +562,10 @@ export function ContractEditor({
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Файлы</p>
-                  <div className="flex gap-2 mt-1">
-                    {contract.contractScanUrl && (
+                  <div className="flex gap-2 mt-1 flex-wrap">
+                    {contractScanUrl && (
                       <a
-                        href={contract.contractScanUrl}
+                        href={contractScanUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -565,9 +576,9 @@ export function ContractEditor({
                         </Badge>
                       </a>
                     )}
-                    {contract.contractOriginalUrl && (
+                    {contractOriginalUrl && (
                       <a
-                        href={contract.contractOriginalUrl}
+                        href={contractOriginalUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -578,7 +589,24 @@ export function ContractEditor({
                         </Badge>
                       </a>
                     )}
-                    {!contract.contractScanUrl && !contract.contractOriginalUrl && (
+                    {/* Показываем все файлы договора из notes.files */}
+                    {contractFilesFromNotes.length > 0 && !contractScanUrl && !contractOriginalUrl && (
+                      contractFilesFromNotes.map((file: any, idx: number) => (
+                        <a
+                          key={file.id || idx}
+                          href={file.publicUrl || file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Badge variant="outline" className="cursor-pointer hover:bg-primary/10">
+                            <FileText className="w-3 h-3 mr-1" />
+                            {file.fileName || `Файл ${idx + 1}`}
+                          </Badge>
+                        </a>
+                      ))
+                    )}
+                    {!contractScanUrl && !contractOriginalUrl && contractFilesFromNotes.length === 0 && (
                       <span className="text-sm text-muted-foreground">Файлы не загружены</span>
                     )}
                   </div>

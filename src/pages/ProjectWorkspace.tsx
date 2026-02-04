@@ -1378,6 +1378,7 @@ export default function ProjectWorkspace() {
             projectType={project?.type || project?.notes?.type || ''}
             companyId={project?.companyId || project?.notes?.companyId || ''}
             companyName={project?.companyName || project?.notes?.companyName || ''}
+            projectFiles={project?.notes?.files || []}
             onContractUpdate={async (updatedContract) => {
               // Обновляем contract в проекте
               if (project) {
