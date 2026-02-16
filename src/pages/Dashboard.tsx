@@ -7,11 +7,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { CheckInWidget } from '@/components/CheckInWidget';
-import { 
-  TrendingUp, 
-  Users, 
-  Briefcase, 
-  DollarSign, 
+import {
+  TrendingUp,
+  Users,
+  Briefcase,
+  DollarSign,
   Calendar,
   Clock,
   Target,
@@ -20,6 +20,7 @@ import {
   Activity,
   CheckCircle,
   AlertTriangle,
+  AlertCircle,
   Zap,
   XCircle,
   FileText,
@@ -179,6 +180,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { projects = [], loading: projectsLoading } = useProjects();
   const { employees = [], loading: employeesLoading } = useEmployees();
+  const navigate = useNavigate();
 
   // Загружаем записи посещений с мемоизацией
   const attendanceRecords = useMemo(() => {
@@ -417,6 +419,51 @@ export default function Dashboard() {
     }));
   }, [projects, user]);
 
+  // Подсчёт срочных дедлайнов
+  const urgentDeadlines = useMemo(() => {
+    let overdue = 0;
+    let critical = 0; // 0-3 дня
+    let warning = 0;  // 4-7 дней
+    const urgentList: Array<{ project: any; daysLeft: number; urgency: 'overdue' | 'critical' | 'warning' }> = [];
+
+    userProjects.forEach((project: any) => {
+      // Пропускаем завершённые проекты
+      const status = project.notes?.status || project.status;
+      if (status === 'completed' || status === 'closed') return;
+
+      const deadlineStr = project.contract?.serviceEndDate || project.deadline || project.notes?.contract?.serviceEndDate || project.notes?.deadline;
+      if (!deadlineStr) return;
+
+      try {
+        const deadline = new Date(deadlineStr);
+        if (isNaN(deadline.getTime())) return;
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        deadline.setHours(0, 0, 0, 0);
+
+        const diffTime = deadline.getTime() - now.getTime();
+        const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (daysLeft < 0) {
+          overdue++;
+          urgentList.push({ project, daysLeft, urgency: 'overdue' });
+        } else if (daysLeft <= 3) {
+          critical++;
+          urgentList.push({ project, daysLeft, urgency: 'critical' });
+        } else if (daysLeft <= 7) {
+          warning++;
+          urgentList.push({ project, daysLeft, urgency: 'warning' });
+        }
+      } catch {}
+    });
+
+    // Сортируем по срочности
+    urgentList.sort((a, b) => a.daysLeft - b.daysLeft);
+
+    return { overdue, critical, warning, total: overdue + critical + warning, urgentList };
+  }, [userProjects]);
+
   if (projectsLoading || employeesLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -459,6 +506,94 @@ export default function Dashboard() {
           <span>Обновлено: {new Date().toLocaleTimeString('ru-RU')}</span>
         </Badge>
       </div>
+
+      {/* Уведомление о срочных дедлайнах */}
+      {urgentDeadlines.total > 0 && (
+        <Card className={`p-4 border-2 ${
+          urgentDeadlines.overdue > 0
+            ? 'bg-red-50 border-red-300 dark:bg-red-950/50 dark:border-red-800'
+            : urgentDeadlines.critical > 0
+              ? 'bg-orange-50 border-orange-300 dark:bg-orange-950/50 dark:border-orange-800'
+              : 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/50 dark:border-yellow-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            <AlertCircle className={`w-6 h-6 mt-0.5 ${
+              urgentDeadlines.overdue > 0
+                ? 'text-red-600 dark:text-red-400'
+                : urgentDeadlines.critical > 0
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-yellow-600 dark:text-yellow-400'
+            }`} />
+            <div className="flex-1">
+              <h3 className={`font-semibold text-lg ${
+                urgentDeadlines.overdue > 0
+                  ? 'text-red-800 dark:text-red-200'
+                  : urgentDeadlines.critical > 0
+                    ? 'text-orange-800 dark:text-orange-200'
+                    : 'text-yellow-800 dark:text-yellow-200'
+              }`}>
+                ⚠️ Внимание! Срочные дедлайны
+              </h3>
+              <div className="flex flex-wrap gap-4 mt-2">
+                {urgentDeadlines.overdue > 0 && (
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300 font-medium">
+                    <span className="text-lg">🔴</span>
+                    <span>Просрочено: {urgentDeadlines.overdue}</span>
+                  </div>
+                )}
+                {urgentDeadlines.critical > 0 && (
+                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-medium">
+                    <span className="text-lg">🟠</span>
+                    <span>До 3 дней: {urgentDeadlines.critical}</span>
+                  </div>
+                )}
+                {urgentDeadlines.warning > 0 && (
+                  <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300 font-medium">
+                    <span className="text-lg">🟡</span>
+                    <span>До 7 дней: {urgentDeadlines.warning}</span>
+                  </div>
+                )}
+              </div>
+              {/* Список срочных проектов */}
+              {urgentDeadlines.urgentList.length > 0 && (
+                <div className="mt-3">
+                  <details>
+                    <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                      Показать проекты ({urgentDeadlines.urgentList.length})
+                    </summary>
+                    <ul className="mt-2 space-y-1 ml-4">
+                      {urgentDeadlines.urgentList.slice(0, 5).map(({ project, daysLeft, urgency }) => (
+                        <li key={project.id || project.notes?.id} className="flex items-center gap-2 text-sm">
+                          <span className={urgency === 'overdue' ? 'text-red-600' : urgency === 'critical' ? 'text-orange-600' : 'text-yellow-600'}>
+                            {urgency === 'overdue' ? '🔴' : urgency === 'critical' ? '🟠' : '🟡'}
+                          </span>
+                          <span className="font-medium truncate max-w-[250px]">
+                            {project.name || project.client?.name || 'Без названия'}
+                          </span>
+                          <span className="text-muted-foreground">
+                            ({daysLeft < 0 ? `просрочен на ${Math.abs(daysLeft)} дн.` : daysLeft === 0 ? 'сегодня!' : `осталось ${daysLeft} дн.`})
+                          </span>
+                        </li>
+                      ))}
+                      {urgentDeadlines.urgentList.length > 5 && (
+                        <li className="text-muted-foreground">... и ещё {urgentDeadlines.urgentList.length - 5}</li>
+                      )}
+                    </ul>
+                  </details>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => navigate('/projects')}
+              >
+                Перейти к проектам →
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Основные метрики - адаптивные для каждой роли */}
       <div className={`grid grid-cols-1 md:grid-cols-2 ${isDirector ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>

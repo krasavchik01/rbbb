@@ -304,14 +304,140 @@ export const notifyProjectAssignment = async (projectName: string, role: string,
 /**
  * Создать уведомление о дедлайне
  */
-export const notifyDeadline = async (projectName: string, daysLeft: number, recipientUserId: string) => {
+export const notifyDeadline = async (projectName: string, daysLeft: number, recipientUserId: string, projectId?: string) => {
+  // Определяем тип уведомления в зависимости от срочности
+  let title = '';
+  let type: 'info' | 'success' | 'warning' | 'error' = 'warning';
+
+  if (daysLeft < 0) {
+    title = '🔴 Просрочен дедлайн!';
+    type = 'error';
+  } else if (daysLeft === 0) {
+    title = '🔴 Дедлайн сегодня!';
+    type = 'error';
+  } else if (daysLeft <= 3) {
+    title = '🟠 Срочно! Дедлайн через ' + daysLeft + ' дн.';
+    type = 'error';
+  } else if (daysLeft <= 7) {
+    title = '🟡 Приближается дедлайн';
+    type = 'warning';
+  } else {
+    title = '⏰ Напоминание о дедлайне';
+    type = 'info';
+  }
+
+  const message = daysLeft < 0
+    ? `Проект "${projectName}" просрочен на ${Math.abs(daysLeft)} дн.!`
+    : daysLeft === 0
+      ? `Проект "${projectName}" - дедлайн сегодня!`
+      : `Проект "${projectName}" - осталось ${daysLeft} дней до дедлайна.`;
+
   return addNotification({
     user_id: recipientUserId,
-    title: '⏰ Приближается дедлайн',
-    message: `Проект "${projectName}" - осталось ${daysLeft} дней до дедлайна.`,
-    type: 'warning',
-    action_url: '/projects',
+    title,
+    message,
+    type,
+    action_url: projectId ? `/projects/${projectId}` : '/projects',
   });
+};
+
+/**
+ * Проверить дедлайны всех проектов и отправить уведомления
+ * Вызывается периодически (раз в день или при входе)
+ */
+export const checkDeadlinesAndNotify = async (
+  projects: any[],
+  currentUserId: string,
+  userRole: string
+): Promise<{ notified: number; projects: string[] }> => {
+  const notifiedProjects: string[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Ключ для хранения последней проверки
+  const lastCheckKey = `deadline_check_${currentUserId}`;
+  const lastCheck = localStorage.getItem(lastCheckKey);
+  const lastCheckDate = lastCheck ? new Date(lastCheck) : null;
+
+  // Проверяем не чаще раза в день
+  if (lastCheckDate) {
+    const lastCheckDay = new Date(lastCheckDate);
+    lastCheckDay.setHours(0, 0, 0, 0);
+    if (lastCheckDay.getTime() === today.getTime()) {
+      console.log('📅 Дедлайны уже проверялись сегодня');
+      return { notified: 0, projects: [] };
+    }
+  }
+
+  console.log('🔍 Проверка дедлайнов проектов...');
+
+  for (const project of projects) {
+    // Пропускаем завершённые проекты
+    const status = project.notes?.status || project.status;
+    if (status === 'completed' || status === 'closed') continue;
+
+    // Получаем дедлайн
+    const deadlineStr = project.contract?.serviceEndDate ||
+      project.deadline ||
+      project.notes?.contract?.serviceEndDate ||
+      project.notes?.deadline;
+
+    if (!deadlineStr) continue;
+
+    try {
+      const deadline = new Date(deadlineStr);
+      if (isNaN(deadline.getTime())) continue;
+      deadline.setHours(0, 0, 0, 0);
+
+      const diffTime = deadline.getTime() - today.getTime();
+      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Определяем кому отправлять уведомления
+      const shouldNotify = daysLeft <= 7; // Уведомляем за 7 дней и меньше
+
+      if (!shouldNotify) continue;
+
+      // Проверяем, имеет ли текущий пользователь отношение к проекту
+      const team = project.team || project.notes?.team || [];
+      const isInTeam = team.some((member: any) => {
+        const memberId = member.userId || member.id || member.employeeId;
+        return memberId === currentUserId;
+      });
+
+      // CEO и deputy_director видят все проекты
+      const isDirector = userRole === 'ceo' || userRole === 'deputy_director';
+
+      if (!isInTeam && !isDirector) continue;
+
+      const projectName = project.name || project.client?.name || 'Без названия';
+      const projectId = project.id || project.notes?.id;
+
+      // Проверяем, не отправляли ли уже уведомление для этого проекта сегодня
+      const notificationKey = `deadline_notified_${projectId}_${daysLeft}`;
+      if (localStorage.getItem(notificationKey)) continue;
+
+      // Отправляем уведомление
+      await notifyDeadline(projectName, daysLeft, currentUserId, projectId);
+      notifiedProjects.push(projectName);
+
+      // Запоминаем что отправили
+      localStorage.setItem(notificationKey, new Date().toISOString());
+
+      // Очищаем старые ключи через неделю
+      setTimeout(() => {
+        localStorage.removeItem(notificationKey);
+      }, 7 * 24 * 60 * 60 * 1000);
+
+    } catch (error) {
+      console.error('Ошибка проверки дедлайна для проекта:', project.id, error);
+    }
+  }
+
+  // Запоминаем дату последней проверки
+  localStorage.setItem(lastCheckKey, new Date().toISOString());
+
+  console.log(`✅ Отправлено ${notifiedProjects.length} уведомлений о дедлайнах`);
+  return { notified: notifiedProjects.length, projects: notifiedProjects };
 };
 
 /**

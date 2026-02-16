@@ -1,12 +1,16 @@
 import React from 'react';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
+import { useDeadlineNotifications } from '@/hooks/useDeadlineNotifications';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export default function Layout({ children }: LayoutProps) {
+  // Автоматическая проверка дедлайнов при входе
+  useDeadlineNotifications();
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex flex-1 overflow-hidden">

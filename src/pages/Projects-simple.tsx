@@ -559,6 +559,75 @@ export default function Projects() {
     return { amount: null, currency: 'KZT' };
   }, [getProjectAmount]);
 
+  // Функция для определения срочности дедлайна
+  type DeadlineUrgency = 'overdue' | 'critical' | 'warning' | 'normal' | 'none';
+
+  const getDeadlineUrgency = useCallback((project: any): { urgency: DeadlineUrgency; daysLeft: number | null; deadline: Date | null } => {
+    const deadlineStr = project.contract?.serviceEndDate || project.deadline || project.notes?.contract?.serviceEndDate || project.notes?.deadline;
+
+    if (!deadlineStr) {
+      return { urgency: 'none', daysLeft: null, deadline: null };
+    }
+
+    try {
+      const deadline = new Date(deadlineStr);
+      if (isNaN(deadline.getTime())) {
+        return { urgency: 'none', daysLeft: null, deadline: null };
+      }
+
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      deadline.setHours(0, 0, 0, 0);
+
+      const diffTime = deadline.getTime() - now.getTime();
+      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (daysLeft < 0) {
+        return { urgency: 'overdue', daysLeft, deadline };
+      } else if (daysLeft <= 3) {
+        return { urgency: 'critical', daysLeft, deadline };
+      } else if (daysLeft <= 7) {
+        return { urgency: 'warning', daysLeft, deadline };
+      } else {
+        return { urgency: 'normal', daysLeft, deadline };
+      }
+    } catch {
+      return { urgency: 'none', daysLeft: null, deadline: null };
+    }
+  }, []);
+
+  // Счётчик срочных проектов
+  const urgentProjectsStats = useMemo(() => {
+    let overdue = 0;
+    let critical = 0; // 0-3 дня
+    let warning = 0;  // 4-7 дней
+    const urgentProjects: Array<{ project: any; urgency: DeadlineUrgency; daysLeft: number }> = [];
+
+    realProjects.forEach(project => {
+      // Пропускаем завершённые проекты
+      const status = project.notes?.status || project.status;
+      if (status === 'completed') return;
+
+      const { urgency, daysLeft } = getDeadlineUrgency(project);
+
+      if (urgency === 'overdue') {
+        overdue++;
+        urgentProjects.push({ project, urgency, daysLeft: daysLeft! });
+      } else if (urgency === 'critical') {
+        critical++;
+        urgentProjects.push({ project, urgency, daysLeft: daysLeft! });
+      } else if (urgency === 'warning') {
+        warning++;
+        urgentProjects.push({ project, urgency, daysLeft: daysLeft! });
+      }
+    });
+
+    // Сортируем по срочности (просроченные первыми)
+    urgentProjects.sort((a, b) => a.daysLeft - b.daysLeft);
+
+    return { overdue, critical, warning, total: overdue + critical + warning, urgentProjects };
+  }, [realProjects, getDeadlineUrgency]);
+
   // Получаем все уникальные статусы для фильтра
   const availableStatuses = useMemo(() => {
     const statuses = new Set<string>();
@@ -1502,12 +1571,92 @@ export default function Projects() {
 
   return (
     <div className="space-y-6">
+      {/* Уведомление о срочных дедлайнах */}
+      {urgentProjectsStats.total > 0 && (
+        <div className={`rounded-lg border p-4 ${
+          urgentProjectsStats.overdue > 0
+            ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
+            : urgentProjectsStats.critical > 0
+              ? 'bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800'
+              : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            <AlertCircle className={`w-5 h-5 mt-0.5 ${
+              urgentProjectsStats.overdue > 0
+                ? 'text-red-600 dark:text-red-400'
+                : urgentProjectsStats.critical > 0
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-yellow-600 dark:text-yellow-400'
+            }`} />
+            <div className="flex-1">
+              <h3 className={`font-semibold ${
+                urgentProjectsStats.overdue > 0
+                  ? 'text-red-800 dark:text-red-200'
+                  : urgentProjectsStats.critical > 0
+                    ? 'text-orange-800 dark:text-orange-200'
+                    : 'text-yellow-800 dark:text-yellow-200'
+              }`}>
+                Внимание! Срочные дедлайны
+              </h3>
+              <div className="flex flex-wrap gap-3 mt-2 text-sm">
+                {urgentProjectsStats.overdue > 0 && (
+                  <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-300 font-medium">
+                    🔴 Просрочено: {urgentProjectsStats.overdue}
+                  </span>
+                )}
+                {urgentProjectsStats.critical > 0 && (
+                  <span className="inline-flex items-center gap-1 text-orange-700 dark:text-orange-300 font-medium">
+                    🟠 До 3 дней: {urgentProjectsStats.critical}
+                  </span>
+                )}
+                {urgentProjectsStats.warning > 0 && (
+                  <span className="inline-flex items-center gap-1 text-yellow-700 dark:text-yellow-300 font-medium">
+                    🟡 До 7 дней: {urgentProjectsStats.warning}
+                  </span>
+                )}
+              </div>
+              {/* Краткий список срочных проектов */}
+              {urgentProjectsStats.urgentProjects.length > 0 && (
+                <div className="mt-3 text-sm">
+                  <details>
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                      Показать проекты ({urgentProjectsStats.urgentProjects.length})
+                    </summary>
+                    <ul className="mt-2 space-y-1 ml-4">
+                      {urgentProjectsStats.urgentProjects.slice(0, 10).map(({ project, urgency, daysLeft }) => (
+                        <li key={project.id || project.notes?.id} className="flex items-center gap-2">
+                          <span className={urgency === 'overdue' ? 'text-red-600' : urgency === 'critical' ? 'text-orange-600' : 'text-yellow-600'}>
+                            {urgency === 'overdue' ? '🔴' : urgency === 'critical' ? '🟠' : '🟡'}
+                          </span>
+                          <span
+                            className="hover:underline cursor-pointer truncate max-w-[300px]"
+                            onClick={() => navigate(`/projects/${project.id || project.notes?.id}`, { state: { project } })}
+                          >
+                            {project.name || project.client?.name || 'Без названия'}
+                          </span>
+                          <span className="text-muted-foreground">
+                            ({daysLeft < 0 ? `просрочен на ${Math.abs(daysLeft)} дн.` : `осталось ${daysLeft} дн.`})
+                          </span>
+                        </li>
+                      ))}
+                      {urgentProjectsStats.urgentProjects.length > 10 && (
+                        <li className="text-muted-foreground">... и ещё {urgentProjectsStats.urgentProjects.length - 10}</li>
+                      )}
+                    </ul>
+                  </details>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Заголовок */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Проекты</h1>
           <p className="text-muted-foreground">
-            {user?.role === 'partner' ? 'Мои проекты' : 
+            {user?.role === 'partner' ? 'Мои проекты' :
              user?.role === 'procurement' ? 'Управление проектами' :
              'Проекты'}
           </p>
@@ -2444,37 +2593,53 @@ export default function Projects() {
                         </td>
                         
                         <td className="px-3 py-3">
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center space-x-1 text-xs">
-                              <span>📅</span>
-                              <span>
-                                {(() => {
-                                  try {
-                                    const deadline = project.contract?.serviceEndDate || project.deadline;
-                                    if (!deadline) return '—';
-                                    const date = new Date(deadline);
-                                    if (isNaN(date.getTime())) return '—';
-                                    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-                                  } catch {
-                                    return '—';
-                                  }
-                                })()}
-                              </span>
-                            </div>
-                            <span className="text-xs font-semibold text-primary ml-5">
-                              {(() => {
-                                try {
-                                  const deadline = project.contract?.serviceEndDate || project.deadline;
-                                  if (!deadline) return '';
-                                  const date = new Date(deadline);
-                                  if (isNaN(date.getTime())) return '';
-                                  return date.getFullYear();
-                                } catch {
-                                  return '';
-                                }
-                              })()}
-                            </span>
-                          </div>
+                          {(() => {
+                            const { urgency, daysLeft, deadline } = getDeadlineUrgency(project);
+                            const bgColor = urgency === 'overdue'
+                              ? 'bg-red-100 dark:bg-red-900/30'
+                              : urgency === 'critical'
+                                ? 'bg-orange-100 dark:bg-orange-900/30'
+                                : urgency === 'warning'
+                                  ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                                  : '';
+                            const textColor = urgency === 'overdue'
+                              ? 'text-red-700 dark:text-red-300'
+                              : urgency === 'critical'
+                                ? 'text-orange-700 dark:text-orange-300'
+                                : urgency === 'warning'
+                                  ? 'text-yellow-700 dark:text-yellow-300'
+                                  : '';
+                            const icon = urgency === 'overdue' ? '🔴' : urgency === 'critical' ? '🟠' : urgency === 'warning' ? '🟡' : '📅';
+
+                            return (
+                              <div className={`flex flex-col gap-0.5 rounded px-1 py-0.5 ${bgColor}`}>
+                                <div className={`flex items-center space-x-1 text-xs ${textColor}`}>
+                                  <span>{icon}</span>
+                                  <span className="font-medium">
+                                    {deadline
+                                      ? deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+                                      : '—'
+                                    }
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 ml-5">
+                                  <span className="text-xs font-semibold text-primary">
+                                    {deadline ? deadline.getFullYear() : ''}
+                                  </span>
+                                  {daysLeft !== null && (
+                                    <span className={`text-[10px] ${textColor || 'text-muted-foreground'}`}>
+                                      {daysLeft < 0
+                                        ? `(${Math.abs(daysLeft)}д. назад)`
+                                        : daysLeft === 0
+                                          ? '(сегодня!)'
+                                          : `(${daysLeft}д.)`
+                                      }
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </td>
                         
                         <td className="px-3 py-3">
