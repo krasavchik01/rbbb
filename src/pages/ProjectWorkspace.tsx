@@ -1394,10 +1394,21 @@ export default function ProjectWorkspace() {
                 };
                 setProject(updatedProject);
 
-                // Сохраняем в Supabase только обновлённый contract
+                // Сохраняем в Supabase contract + finances (чтобы сумма обновилась в списке)
                 try {
+                  const newAmount = updatedContract.amountWithoutVAT || 0;
+                  const newVat = updatedContract.vatRate || 0;
+                  const newVatAmount = newAmount * (newVat / 100);
                   await supabaseDataStore.updateProject(project.id || id, {
                     contract: updatedContract,
+                    finances: {
+                      ...(project.finances || {}),
+                      amountWithoutVAT: newAmount,
+                      vatRate: newVat,
+                      vatAmount: newVatAmount,
+                      amountWithVAT: newAmount + newVatAmount,
+                      currency: updatedContract.currency || 'KZT',
+                    },
                   });
                   toast({
                     title: '✅ Договор обновлён',

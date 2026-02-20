@@ -233,6 +233,15 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
           ...updatedContract,
           currency: currency
         },
+        // Всегда синхронизируем finances с суммой договора (чтобы в списке показывалась актуальная сумма)
+        finances: {
+          ...project.finances,
+          amountWithoutVAT: amount,
+          vatRate: vat,
+          vatAmount: vatAmount,
+          amountWithVAT: amount + vatAmount,
+          currency: currency,
+        },
         // Обновляем настройки проекта
         type: projectType as ProjectType,
         companyId: companyId || project.companyId,
@@ -240,13 +249,6 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
         // Если была пролонгация - обновляем даты проекта
         ...(amendments.some(a => a.type === 'prolongation' && a.newEndDate) && {
           endDate: amendments.find(a => a.type === 'prolongation' && a.newEndDate)?.newEndDate
-        }),
-        // Если изменилась сумма - обновляем
-        ...(amendments.some(a => a.type === 'amount_change' && a.newAmount) && {
-          finances: {
-            ...project.finances,
-            amountWithoutVAT: amendments.find(a => a.type === 'amount_change' && a.newAmount)?.newAmount || project.finances?.amountWithoutVAT
-          }
         }),
         updated_at: new Date().toISOString()
       };
@@ -256,7 +258,11 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
       console.log('Допсоглашения:', amendments);
       console.log('Обновленный проект:', updatedProject);
 
-      await supabaseDataStore.updateProject(project.id, updatedProject);
+      const result = await supabaseDataStore.updateProject(project.id, updatedProject);
+
+      if (result === null) {
+        throw new Error("Не удалось сохранить в базе данных. Проверьте подключение или обратитесь к администратору.");
+      }
 
       toast({
         title: "✅ Проект обновлён",

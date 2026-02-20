@@ -434,6 +434,32 @@ class SupabaseDataStore {
     }
   }
 
+  async getProject(id: string): Promise<Project | null> {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error || !data) {
+        // Fallback: search by notes id
+        const { data: byNotes, error: err2 } = await supabase
+          .from('projects')
+          .select('*')
+          .ilike('notes', `%"id":"${id}"%`)
+          .limit(1)
+          .single();
+        if (err2 || !byNotes) return null;
+        return this.mapSupabaseProject(byNotes);
+      }
+      return this.mapSupabaseProject(data);
+    } catch (err) {
+      console.error('❌ Error getting project:', err);
+      return null;
+    }
+  }
+
   async createProject(project: any): Promise<Project> {
     // Сохраняем только в Supabase, со статусом черновик и полным объектом в notes
     try {
@@ -576,7 +602,7 @@ class SupabaseDataStore {
       return mergedNotes as Project;
     } catch (err) {
       console.error('❌ Error updating project in Supabase:', err);
-      return null;
+      throw err;
     }
   }
 
@@ -781,12 +807,8 @@ class SupabaseDataStore {
       const existingFiles = project?.notes?.files || [];
       const updatedFiles = [...existingFiles, fileRecord];
 
-      await this.updateProject(projectId, {
-        notes: {
-          ...project?.notes,
-          files: updatedFiles
-        }
-      } as any);
+      // Обновляем files напрямую на верхнем уровне notes (НЕ через notes.notes.files)
+      await this.updateProject(projectId, { files: updatedFiles } as any);
 
       // Также пробуем сохранить в отдельную таблицу (может не работать из-за RLS)
       try {
@@ -875,14 +897,9 @@ class SupabaseDataStore {
         if (file) {
           storagePath = file.storagePath;
 
-          // Удаляем из notes.files
+          // Удаляем из notes.files (обновляем на верхнем уровне)
           const updatedFiles = files.filter((f: any) => f.id !== fileId);
-          await this.updateProject(projectId, {
-            notes: {
-              ...project?.notes,
-              files: updatedFiles
-            }
-          } as any);
+          await this.updateProject(projectId, { files: updatedFiles } as any);
         }
       }
 
