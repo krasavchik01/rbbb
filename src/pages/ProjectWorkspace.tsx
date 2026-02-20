@@ -1009,12 +1009,12 @@ export default function ProjectWorkspace() {
               👥 Распределение задач
             </TabsTrigger>
           )}
-          {activeTemplate && showFullDetails && (
+          {activeTemplate && showFullDetails && !isProcurement && (
             <TabsTrigger value="procedures">
               🔧 Рабочие процедуры
             </TabsTrigger>
           )}
-          {showFullDetails && (
+          {showFullDetails && !isProcurement && (
             <TabsTrigger value="templates">
               📄 Шаблоны
             </TabsTrigger>
@@ -1233,8 +1233,8 @@ export default function ProjectWorkspace() {
           </Card>
         </TabsContent>
 
-        {/* Вкладка рабочих процедур (только если есть шаблон и не директор) */}
-        {activeTemplate && showFullDetails && (
+        {/* Вкладка рабочих процедур (только если есть шаблон, не директор и не закупки) */}
+        {activeTemplate && showFullDetails && !isProcurement && (
           <TabsContent value="procedures" className="space-y-4 mt-4">
           {/* Навигация по этапам */}
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -1280,8 +1280,8 @@ export default function ProjectWorkspace() {
           </TabsContent>
         )}
 
-        {/* Вкладка шаблонов (только если не директор) */}
-        {showFullDetails && (
+        {/* Вкладка шаблонов (только если не директор и не закупки) */}
+        {showFullDetails && !isProcurement && (
           <TabsContent value="templates" className="space-y-4 mt-4">
             <TemplateManager
               projectId={project?.id || id || ''}

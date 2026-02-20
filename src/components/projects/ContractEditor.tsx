@@ -520,35 +520,35 @@ export function ContractEditor({
                 </Button>
               </div>
             </div>
-          ) : contract && (
+          ) : (editedContract || contract) && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Предмет договора</p>
-                  <p className="font-medium">{contract.subject || 'Не указан'}</p>
+                  <p className="font-medium">{editedContract?.subject || contract?.subject || 'Не указан'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Сумма без НДС</p>
                   <p className="font-bold text-lg text-primary">
-                    {formatCurrency(contract.amountWithoutVAT, contract.currency)}
+                    {formatCurrency(editedContract?.amountWithoutVAT ?? contract?.amountWithoutVAT, editedContract?.currency || contract?.currency)}
                   </p>
                 </div>
               </div>
 
               {/* НДС и итого */}
-              {contract.vatRate !== undefined && (
+              {(editedContract?.vatRate ?? contract?.vatRate) !== undefined && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Ставка НДС</p>
-                    <p className="font-medium">{contract.vatRate === 0 ? 'Без НДС' : `${contract.vatRate}%`}</p>
+                    <p className="font-medium">{(editedContract?.vatRate ?? contract?.vatRate) === 0 ? 'Без НДС' : `${editedContract?.vatRate ?? contract?.vatRate}%`}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Сумма НДС</p>
-                    <p className="font-medium">{formatCurrency(contract.vatAmount || 0, contract.currency)}</p>
+                    <p className="font-medium">{formatCurrency(editedContract?.vatAmount ?? contract?.vatAmount ?? 0, editedContract?.currency || contract?.currency)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Итого с НДС</p>
-                    <p className="font-bold text-primary">{formatCurrency(contract.amountWithVAT || 0, contract.currency)}</p>
+                    <p className="font-bold text-primary">{formatCurrency(editedContract?.amountWithVAT ?? contract?.amountWithVAT ?? 0, editedContract?.currency || contract?.currency)}</p>
                   </div>
                 </div>
               )}
@@ -557,7 +557,7 @@ export function ContractEditor({
                 <div>
                   <p className="text-sm text-muted-foreground">Срок оказания услуг</p>
                   <p className="font-medium">
-                    {contract.serviceStartDate && new Date(contract.serviceStartDate).toLocaleDateString('ru-RU')} — {contract.serviceEndDate && new Date(contract.serviceEndDate).toLocaleDateString('ru-RU')}
+                    {(editedContract?.serviceStartDate || contract?.serviceStartDate) && new Date(editedContract?.serviceStartDate || contract?.serviceStartDate || '').toLocaleDateString('ru-RU')} — {(editedContract?.serviceEndDate || contract?.serviceEndDate) && new Date(editedContract?.serviceEndDate || contract?.serviceEndDate || '').toLocaleDateString('ru-RU')}
                   </p>
                 </div>
                 <div>
