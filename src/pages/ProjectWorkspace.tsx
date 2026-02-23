@@ -994,16 +994,18 @@ export default function ProjectWorkspace() {
       )}
 
       {/* Вкладки: Планирование (для партнера), Задачи, Распределение задач, Рабочие процедуры, Шаблоны, Файлы, Договор */}
-      <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : "tasks"} className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-7 gap-2">
+      <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : isProcurement ? "contract" : "tasks"} className="w-full">
+        <TabsList className="flex flex-wrap gap-1">
           {isPartner && (
             <TabsTrigger value="planning">
               📋 Планирование
             </TabsTrigger>
           )}
-          <TabsTrigger value="tasks">
-            ✅ Задачи
-          </TabsTrigger>
+          {!isProcurement && (
+            <TabsTrigger value="tasks">
+              ✅ Задачи
+            </TabsTrigger>
+          )}
           {isPM && (
             <TabsTrigger value="task-distribution">
               👥 Распределение задач
@@ -1119,8 +1121,8 @@ export default function ProjectWorkspace() {
           </TabsContent>
         )}
 
-        {/* Вкладка задач */}
-        <TabsContent value="tasks" className="space-y-4 mt-4">
+        {/* Вкладка задач (не для ОЗ) */}
+        {!isProcurement && <TabsContent value="tasks" className="space-y-4 mt-4">
           <Card className="p-6">
             <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Задачи проекта</h3>
@@ -1231,7 +1233,7 @@ export default function ProjectWorkspace() {
               </div>
             )}
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         {/* Вкладка рабочих процедур (только если есть шаблон, не директор и не закупки) */}
         {activeTemplate && showFullDetails && !isProcurement && (
@@ -1381,34 +1383,39 @@ export default function ProjectWorkspace() {
             companyName={project?.companyName || project?.notes?.companyName || ''}
             projectFiles={project?.notes?.files || []}
             onContractUpdate={async (updatedContract) => {
-              // Обновляем contract в проекте
               if (project) {
-                // Обновляем локальное состояние
-                const updatedProject = {
+                const newAmount = updatedContract.amountWithoutVAT || 0;
+                const newVat = updatedContract.vatRate || 0;
+                const newVatAmount = newAmount * (newVat / 100);
+                const newFinances = {
+                  ...(project.notes?.finances || {}),
+                  amountWithoutVAT: newAmount,
+                  vatRate: newVat,
+                  vatAmount: newVatAmount,
+                  amountWithVAT: newAmount + newVatAmount,
+                  currency: updatedContract.currency || 'KZT',
+                };
+
+                // Обновляем ВСЕ поля локального состояния сразу
+                setProject({
                   ...project,
                   contract: updatedContract,
+                  amountWithoutVAT: newAmount,
+                  finances: newFinances,
                   notes: {
                     ...(project.notes || {}),
                     contract: updatedContract,
+                    finances: newFinances,
+                    amountWithoutVAT: newAmount,
                   },
-                };
-                setProject(updatedProject);
+                });
 
-                // Сохраняем в Supabase contract + finances (чтобы сумма обновилась в списке)
+                // Сохраняем в Supabase
                 try {
-                  const newAmount = updatedContract.amountWithoutVAT || 0;
-                  const newVat = updatedContract.vatRate || 0;
-                  const newVatAmount = newAmount * (newVat / 100);
                   await supabaseDataStore.updateProject(project.id || id, {
                     contract: updatedContract,
-                    finances: {
-                      ...(project.finances || {}),
-                      amountWithoutVAT: newAmount,
-                      vatRate: newVat,
-                      vatAmount: newVatAmount,
-                      amountWithVAT: newAmount + newVatAmount,
-                      currency: updatedContract.currency || 'KZT',
-                    },
+                    finances: newFinances,
+                    amountWithoutVAT: newAmount,
                   });
                   toast({
                     title: '✅ Договор обновлён',
