@@ -196,7 +196,7 @@ export default function Settings() {
           <TabsTrigger value="appearance">Внешний вид</TabsTrigger>
           <TabsTrigger value="security">Безопасность</TabsTrigger>
           {isAdmin && <TabsTrigger value="system">Система</TabsTrigger>}
-          {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo') && (
+          {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo' || user?.role === 'deputy_director') && (
             <TabsTrigger value="companies">Компании</TabsTrigger>
           )}
         </TabsList>
@@ -610,7 +610,7 @@ export default function Settings() {
         )}
 
         {/* Вкладка Компании */}
-        {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo') && (
+        {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo' || user?.role === 'deputy_director') && (
           <TabsContent value="companies" className="space-y-4">
             <Card className="p-6">
               <CompaniesManagement
