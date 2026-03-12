@@ -1916,8 +1916,8 @@ export default function Projects() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Все компании</SelectItem>
-                  {allAppCompanies.map(c => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  {availableCompanies.map(company => (
+                    <SelectItem key={company} value={company}>{companyDisplayMap[company] || company}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
