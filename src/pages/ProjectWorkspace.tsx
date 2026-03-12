@@ -805,14 +805,14 @@ export default function ProjectWorkspace() {
       {/* Ранее здесь была старая информационная панель. Теперь вся эта информация перенесена в красивый Дашборд ниже. */}
 
       {/* Вкладки с информацией о проекте */}
-      <Tabs defaultValue="dashboard" className="w-full">
+      <Tabs defaultValue={isProcurement ? "files" : "dashboard"} className="w-full">
         <TabsList className="flex flex-wrap gap-1">
-          <TabsTrigger value="dashboard">📊 Дашборд</TabsTrigger>
-          {!(isDirector || isAdmin) && <TabsTrigger value="tasks">✅ Задачи</TabsTrigger>}
-          {!(isDirector || isAdmin) && activeTemplate && <TabsTrigger value="procedures">🔧 Рабочие процедуры</TabsTrigger>}
-          {!(isDirector || isAdmin) && <TabsTrigger value="planning">📋 Планирование</TabsTrigger>}
-          {!(isDirector || isAdmin) && (isPM || isPartner) && <TabsTrigger value="task-distribution">👥 Распределение задач</TabsTrigger>}
-          {!(isDirector || isAdmin) && activeTemplate && <TabsTrigger value="templates">📄 Шаблоны</TabsTrigger>}
+          {!isProcurement && <TabsTrigger value="dashboard">📊 Дашборд</TabsTrigger>}
+          {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks">✅ Задачи</TabsTrigger>}
+          {!(isDirector || isAdmin || isProcurement) && activeTemplate && <TabsTrigger value="procedures">🔧 Рабочие процедуры</TabsTrigger>}
+          {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="planning">📋 Планирование</TabsTrigger>}
+          {!(isDirector || isAdmin || isProcurement) && (isPM || isPartner) && <TabsTrigger value="task-distribution">👥 Распределение задач</TabsTrigger>}
+          {!(isDirector || isAdmin || isProcurement) && activeTemplate && <TabsTrigger value="templates">📄 Шаблоны</TabsTrigger>}
 
           <TabsTrigger value="files">📁 Файлы</TabsTrigger>
           <TabsTrigger value="contract">📜 Договор</TabsTrigger>
