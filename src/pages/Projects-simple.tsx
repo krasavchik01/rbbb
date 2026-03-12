@@ -954,11 +954,25 @@ export default function Projects() {
       });
     }
 
-    // 3. Фильтр по компании
+    // 3. Фильтр по компании (нечёткий поиск — убираем юр. префиксы и ищем по ядру)
     if (filterCompany !== 'all') {
+      // Удаляем юридические префиксы и нормализуем строку
+      const stripLegal = (s: string) => s
+        .toLowerCase()
+        .replace(/\b(тоо|чк|ао|оао|зао|оо|ип|пао|нко|филиал|branch|llp|ltd|inc|llc)\b/gi, '')
+        .replace(/[.,\-"«»]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const filterCore = stripLegal(filterCompany);
+
       filtered = filtered.filter(project => {
-        const company = project.companyName || project.ourCompany || project.company;
-        return company === filterCompany;
+        const rawCompany = project.companyName || project.ourCompany || project.company
+          || project.notes?.companyName || project.notes?.ourCompany || '';
+        if (!rawCompany) return false;
+        const projectCore = stripLegal(rawCompany);
+        // Совпадение если одно содержит другое (оба направления)
+        return projectCore.includes(filterCore) || filterCore.includes(projectCore) || rawCompany === filterCompany;
       });
     }
 
