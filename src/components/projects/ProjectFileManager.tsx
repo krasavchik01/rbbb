@@ -6,16 +6,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Upload, 
-  File, 
-  Download, 
-  Trash2, 
-  CheckCircle2, 
-  AlertCircle,
-  X
+import {
+  File,
+  Download,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
@@ -39,9 +33,6 @@ export function ProjectFileManager({
 }: ProjectFileManagerProps) {
   const { toast } = useToast();
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles as ProjectFile[]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Обновляем файлы когда приходят initialFiles
   useEffect(() => {
@@ -80,84 +71,6 @@ export function ProjectFileManager({
     }
   }, [projectId, onFilesChange, toast, initialFiles]);
 
-  // Загрузка файла
-  const handleFileUpload = async (file: File, category: ProjectFile['category'] = 'other') => {
-    // Валидация размера (макс 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    if (file.size > maxSize) {
-      toast({
-        title: "Ошибка",
-        description: `Файл слишком большой. Максимальный размер: 50MB`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Валидация типа файла
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-    ];
-    
-    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|doc|docx|jpg|jpeg|png|webp)$/i)) {
-      toast({
-        title: "Ошибка",
-        description: "Разрешены только файлы: PDF, Word, изображения",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-    setUploadError(null);
-
-    try {
-      // Симуляция прогресса (реальный прогресс нужно делать через Storage API с onUploadProgress)
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90));
-      }, 100);
-
-      const result = await supabaseDataStore.uploadProjectFile(
-        projectId,
-        file,
-        category,
-        uploadedBy
-      );
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      toast({
-        title: "✅ Успех",
-        description: `Файл "${file.name}" успешно загружен`,
-      });
-
-      // Обновляем список файлов
-      await loadFiles();
-      
-      // Сбрасываем состояние
-      setTimeout(() => {
-        setIsUploading(false);
-        setUploadProgress(0);
-      }, 500);
-    } catch (error: any) {
-      clearInterval(progressInterval);
-      setIsUploading(false);
-      setUploadProgress(0);
-      const errorMessage = error?.message || "Не удалось загрузить файл";
-      setUploadError(errorMessage);
-      toast({
-        title: "❌ Ошибка",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    }
-  };
 
   // Удаление файла
   const handleDeleteFile = async (file: ProjectFile) => {
@@ -189,26 +102,49 @@ export function ProjectFileManager({
   // Скачивание файла
   const handleDownloadFile = async (file: ProjectFile) => {
     try {
-      // Используем публичный URL из Storage
       let url = (file as any).publicUrl;
-      
-      // Если публичного URL нет, получаем signed URL из Supabase Storage
-      if (!url && file.storagePath) {
+
+      // Если это файл из Seafile
+      if ((file as any).isSeafile || (url && url.startsWith('seafile://'))) {
         try {
+          const downloadUrl = await supabaseDataStore.getSeafileDownloadUrl(file.storagePath);
+          if (downloadUrl) {
+            url = downloadUrl;
+          } else {
+            throw new Error('Не удалось получить ссылку на файл из Seafile');
+          }
+        } catch (error) {
+          console.error('Ошибка получения ссылки Seafile:', error);
+          toast({
+            title: "Ошибка конфигурации Seafile",
+            description: "Невозможно скачать файл",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      // Если публичного URL нет или он локальный, но файла локально нет, 
+      // пробуем получить signed URL из Supabase Storage (наследие старой системы)
+      else if (!url && file.storagePath) {
+        try {
+          // Определяем бакет по пути или категории
+          let bucketName = 'project-files';
+          if (file.storagePath.includes('contracts/')) bucketName = 'contracts';
+          else if (file.storagePath.includes('documents/')) bucketName = 'documents';
+
           const { data, error } = await supabase.storage
-            .from('project-files')
+            .from(bucketName)
             .createSignedUrl(file.storagePath, 3600); // URL действителен 1 час
-          
+
           if (error) throw error;
           url = data.signedUrl;
         } catch (error) {
           console.error('Ошибка получения signed URL:', error);
-          // Пробуем использовать storagePath напрямую
           url = file.storagePath;
         }
       }
-      
-      if (url) {
+
+      if (url && !url.startsWith('seafile://')) {
         // Создаем временную ссылку для скачивания
         const a = document.createElement('a');
         a.href = url;
@@ -232,19 +168,6 @@ export function ProjectFileManager({
         variant: "destructive",
       });
     }
-  };
-
-  // Обработка выбора файлов
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles || selectedFiles.length === 0) return;
-
-    Array.from(selectedFiles).forEach(file => {
-      handleFileUpload(file);
-    });
-    
-    // Сбрасываем input
-    e.target.value = '';
   };
 
   // Загружаем файлы при монтировании
@@ -273,58 +196,7 @@ export function ProjectFileManager({
             <File className="w-5 h-5" />
             Файлы проекта
           </h3>
-          <div className="flex items-center gap-2">
-            <label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isUploading}
-                className="cursor-pointer"
-                asChild
-              >
-                <span>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Загрузить файлы
-                </span>
-              </Button>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </label>
-          </div>
         </div>
-
-        {/* Прогресс загрузки */}
-        {isUploading && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span>Загрузка файла...</span>
-              <span>{uploadProgress}%</span>
-            </div>
-            <Progress value={uploadProgress} />
-          </div>
-        )}
-
-        {/* Ошибка загрузки */}
-        {uploadError && (
-          <Alert variant="destructive">
-            <AlertCircle className="w-4 h-4" />
-            <AlertDescription>{uploadError}</AlertDescription>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setUploadError(null)}
-              className="absolute top-2 right-2"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </Alert>
-        )}
 
         {/* Список файлов */}
         {files.length === 0 ? (

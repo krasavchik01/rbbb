@@ -3,6 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useSupabaseData';
@@ -32,14 +34,14 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 // Улучшенные компоненты графиков с футуристичным дизайном (мемоизированы для производительности)
-const FuturisticBarChart = React.memo(({ data, title, colors = ['#3b82f6', '#8b5cf6', '#ec4899'] }: { 
-  data: Array<{name: string, value: number}>, 
+const FuturisticBarChart = React.memo(({ data, title, colors = ['#3b82f6', '#8b5cf6', '#ec4899'] }: {
+  data: Array<{ name: string, value: number }>,
   title: string,
   colors?: string[]
 }) => {
   const safeValue = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
   const maxValue = Math.max(...data.map(d => safeValue(d.value)), 1);
-  
+
   return (
     <div className="space-y-4">
       <h4 className="font-semibold text-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -57,9 +59,9 @@ const FuturisticBarChart = React.memo(({ data, title, colors = ['#3b82f6', '#8b5
                 <span className="text-sm font-bold text-primary">{value}</span>
               </div>
               <div className="relative w-full h-3 bg-secondary/30 rounded-full overflow-hidden backdrop-blur-sm">
-                <div 
+                <div
                   className="h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden group-hover:scale-105"
-                  style={{ 
+                  style={{
                     width: `${Math.max(0, Math.min(100, width))}%`,
                     background: `linear-gradient(90deg, ${color}, ${color}dd)`,
                     boxShadow: `0 0 20px ${color}40`
@@ -76,13 +78,13 @@ const FuturisticBarChart = React.memo(({ data, title, colors = ['#3b82f6', '#8b5
   );
 });
 
-const FuturisticPieChart = React.memo(({ data, title }: { 
-  data: Array<{name: string, value: number, color: string}>, 
-  title: string 
+const FuturisticPieChart = React.memo(({ data, title }: {
+  data: Array<{ name: string, value: number, color: string }>,
+  title: string
 }) => {
   const safeValue = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
   const total = data.reduce((sum, item) => sum + safeValue(item.value), 0);
-  
+
   return (
     <div className="space-y-4">
       <h4 className="font-semibold text-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -93,13 +95,13 @@ const FuturisticPieChart = React.memo(({ data, title }: {
           const value = safeValue(item.value);
           const percent = total > 0 ? Math.round((value / total) * 100) : 0;
           return (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className="flex items-center space-x-3 p-3 rounded-lg bg-gradient-to-br from-secondary/50 to-secondary/20 backdrop-blur-sm border border-primary/20 hover:border-primary/40 transition-all group"
             >
-              <div 
+              <div
                 className="w-4 h-4 rounded-full flex-shrink-0 group-hover:scale-125 transition-transform"
-                style={{ 
+                style={{
                   backgroundColor: item.color,
                   boxShadow: `0 0 10px ${item.color}60`
                 }}
@@ -117,11 +119,11 @@ const FuturisticPieChart = React.memo(({ data, title }: {
 });
 
 // Компонент метрики с футуристичным дизайном (мемоизирован)
-const MetricCard = React.memo(({ 
-  title, 
-  value, 
-  icon: Icon, 
-  trend, 
+const MetricCard = React.memo(({
+  title,
+  value,
+  icon: Icon,
+  trend,
   subtitle,
   gradient = "from-blue-500 to-purple-600"
 }: {
@@ -133,23 +135,23 @@ const MetricCard = React.memo(({
   gradient?: string;
 }) => {
   const navigate = useNavigate();
-  
+
   return (
     <Card className="p-6 relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-all duration-300 border-2 border-transparent hover:border-primary/30 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
       {/* Градиентный фон при наведении */}
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
-      
+
       {/* Декоративные элементы */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-secondary/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
-      
+
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
           <div className={`p-3 rounded-xl bg-gradient-to-br ${gradient} shadow-lg shadow-primary/20`}>
             <Icon className="h-6 w-6 text-white" />
           </div>
           {trend && (
-            <Badge 
+            <Badge
               variant={trend.value >= 0 ? "default" : "destructive"}
               className="flex items-center gap-1"
             >
@@ -182,6 +184,9 @@ export default function Dashboard() {
   const { employees = [], loading: employeesLoading } = useEmployees();
   const navigate = useNavigate();
 
+  // Состояние для фильтра проектов по компании
+  const [showOtherCompanies, setShowOtherCompanies] = useState(false);
+
   // Загружаем записи посещений с мемоизацией
   const attendanceRecords = useMemo(() => {
     try {
@@ -202,12 +207,12 @@ export default function Dashboard() {
   // Фильтрация проектов по роли пользователя
   const userProjects = useMemo(() => {
     if (!user) return [];
-    
+
     // CEO и deputy_director видят все проекты
     if (user.role === 'ceo' || user.role === 'deputy_director') {
       return projects;
     }
-    
+
     // Партнер видит только свои проекты
     if (user.role === 'partner') {
       return projects.filter((p: any) => {
@@ -219,7 +224,7 @@ export default function Dashboard() {
         });
       });
     }
-    
+
     // Менеджеры видят проекты где они в команде
     if (user.role === 'manager_1' || user.role === 'manager_2' || user.role === 'manager_3') {
       return projects.filter((p: any) => {
@@ -230,38 +235,48 @@ export default function Dashboard() {
         });
       });
     }
-    
+
     // Остальные сотрудники видят проекты где они в команде
-    return projects.filter((p: any) => {
+    const baseProjects = projects.filter((p: any) => {
       const team = p.team || p.notes?.team || [];
       return team.some((member: any) => {
         const memberId = member.userId || member.id || member.employeeId;
         return memberId === user.id;
       });
     });
-  }, [projects, user]);
+
+    // Применяем фильтр по ТОО МАК (если галочка не стоит, показываем только ТОО МАК)
+    if (!showOtherCompanies) {
+      return baseProjects.filter((p: any) => {
+        const companyName = p.client?.name || p.clientName || p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || p.client || '';
+        return typeof companyName === 'string' && companyName.toLowerCase().includes('мак');
+      });
+    }
+
+    return baseProjects;
+  }, [projects, user, showOtherCompanies]);
 
   // Статистика проектов по реальным данным
   const projectStats = useMemo(() => {
     const total = userProjects.length;
-    
+
     // Проекты ожидающие утверждения партнером (только для CEO/deputy)
-    const pendingPartnerApproval = (user?.role === 'ceo' || user?.role === 'deputy_director') 
+    const pendingPartnerApproval = (user?.role === 'ceo' || user?.role === 'deputy_director')
       ? projects.filter((p: any) => {
-          const notesStatus = p.notes?.status;
-          return notesStatus === 'new' || notesStatus === 'pending_approval';
-        }).length
+        const notesStatus = p.notes?.status;
+        return notesStatus === 'new' || notesStatus === 'pending_approval';
+      }).length
       : 0;
-    
+
     // Проекты ожидающие распределения команды (только для CEO/deputy)
     const awaitingTeam = (user?.role === 'ceo' || user?.role === 'deputy_director')
       ? projects.filter((p: any) => {
-          const notesStatus = p.notes?.status;
-          return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
-                  (!p.team || p.team.length === 0);
-        }).length
+        const notesStatus = p.notes?.status;
+        return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
+          (!p.team || p.team.length === 0);
+      }).length
       : 0;
-    
+
     // Активные проекты
     const active = userProjects.filter((p: any) => {
       const notesStatus = p.notes?.status;
@@ -269,41 +284,41 @@ export default function Dashboard() {
       const status = p.status || p.notes?.status;
       return status === 'in_progress' || status === 'active';
     }).length;
-    
+
     // Завершённые
     const completed = userProjects.filter((p: any) => {
       const status = p.status || p.notes?.status;
       return status === 'completed' || status === 'closed';
     }).length;
-    
+
     // Общая сумма проектов пользователя
     const totalRevenue = userProjects.reduce((sum: number, p: any) => {
       const amount = p.notes?.finances?.amountWithoutVAT ||
-                     p.notes?.contract?.amountWithoutVAT ||
-                     p.notes?.amountWithoutVAT ||
-                     p.notes?.amount ||
-                     p.contract?.amountWithoutVAT ||
-                     p.amountWithoutVAT ||
-                     p.amount ||
-                     0;
+        p.notes?.contract?.amountWithoutVAT ||
+        p.notes?.amountWithoutVAT ||
+        p.notes?.amount ||
+        p.contract?.amountWithoutVAT ||
+        p.amountWithoutVAT ||
+        p.amount ||
+        0;
       return sum + safeNumber(amount);
     }, 0);
-    
-    // Проекты по компаниям
+
+    // Проекты по компаниям (клиентам или внутренним)
     const projectsByCompany = userProjects.reduce((acc: any, p: any) => {
-      const company = p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || 'Не указана';
+      const company = p.client?.name || p.clientName || p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || p.client || 'Не указана';
       acc[company] = (acc[company] || 0) + 1;
       return acc;
     }, {});
-    
+
     // Средний бюджет проекта
     const avgBudget = total > 0 ? totalRevenue / total : 0;
-    
+
     // Прогресс проектов (средний)
-    const avgProgress = userProjects.length > 0 
+    const avgProgress = userProjects.length > 0
       ? Math.round(userProjects.reduce((sum: number, p: any) => sum + (p.completionPercent || p.completion || 0), 0) / userProjects.length)
       : 0;
-    
+
     return {
       total,
       pendingPartnerApproval,
@@ -326,14 +341,14 @@ export default function Dashboard() {
         attendanceToday: 0
       };
     }
-    
+
     return {
       total: employees.length,
       byRole: employees.reduce((acc: any, emp: any) => {
         acc[emp.role] = (acc[emp.role] || 0) + 1;
         return acc;
       }, {}),
-      attendanceToday: attendanceRecords.filter((r: any) => 
+      attendanceToday: attendanceRecords.filter((r: any) =>
         r.date === new Date().toDateString()
       ).length
     };
@@ -346,14 +361,14 @@ export default function Dashboard() {
       { name: 'В работе', value: (projectStats.active || 0), color: '#10b981' },
       { name: 'Завершенные', value: (projectStats.completed || 0), color: '#3b82f6' }
     ];
-    
+
     if (isDirector) {
       data.unshift(
         { name: 'Ожидают утверждения', value: (projectStats.pendingPartnerApproval || 0), color: '#f59e0b' },
         { name: 'Ожидают команды', value: (projectStats.awaitingTeam || 0), color: '#fb923c' }
       );
     }
-    
+
     return data;
   }, [projectStats, user]);
 
@@ -362,7 +377,7 @@ export default function Dashboard() {
       return [];
     }
     return Object.entries(projectStats.projectsByCompany)
-      .sort(([,a]: any, [,b]: any) => (b as number) - (a as number))
+      .sort(([, a]: any, [, b]: any) => (b as number) - (a as number))
       .slice(0, 5)
       .map(([name, count]: [string, any]) => ({
         name: name.length > 15 ? name.substring(0, 15) + '...' : name,
@@ -370,49 +385,75 @@ export default function Dashboard() {
       }));
   }, [projectStats.projectsByCompany]);
 
-  const roleDistributionData = useMemo(() => {
+  const roleDistributionPieData = useMemo(() => {
     if (!employeeStats.byRole || Object.keys(employeeStats.byRole).length === 0) {
       return [];
     }
-    return Object.entries(employeeStats.byRole).map(([role, count]) => ({
-      name: role === 'partner' ? 'Партнеры' : 
-            role === 'manager_1' || role === 'manager_2' || role === 'manager_3' ? 'Менеджеры' :
-            role === 'manager' ? 'Менеджеры' :
+    const colorPalette = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#14b8a6', '#f43f5e'];
+    return Object.entries(employeeStats.byRole).map(([role, count], index) => ({
+      name: role === 'partner' ? 'Партнеры' :
+        role === 'manager_1' || role === 'manager_2' || role === 'manager_3' ? 'Менеджеры' :
+          role === 'manager' ? 'Менеджеры' :
             role === 'tax_specialist' ? 'Налоговики' :
-            role === 'assistant' ? 'Ассистенты' :
-            role === 'admin' ? 'Админы' : role,
-      value: (count as number) || 0
-    }));
+              role === 'senior_auditor' ? 'Ст. аудиторы' :
+                role === 'assistant' ? 'Ассистенты' :
+                  role === 'admin' ? 'Админы' : role,
+      value: (count as number) || 0,
+      color: colorPalette[index % colorPalette.length]
+    })).sort((a, b) => b.value - a.value);
   }, [employeeStats.byRole]);
+
+  // Топ 5 проектов по выручке
+  const topProjectsData = useMemo(() => {
+    if (user?.role !== 'ceo' && user?.role !== 'deputy_director') return [];
+
+    return [...userProjects]
+      .filter((p: any) => {
+        const amount = safeNumber(p.finances?.amountWithoutVAT || p.notes?.finances?.amountWithoutVAT || p.contract?.amountWithoutVAT || p.amount || 0);
+        return amount > 0;
+      })
+      .sort((a: any, b: any) => {
+        const valA = safeNumber(a.finances?.amountWithoutVAT || a.notes?.finances?.amountWithoutVAT || a.contract?.amountWithoutVAT || a.amount || 0);
+        const valB = safeNumber(b.finances?.amountWithoutVAT || b.notes?.finances?.amountWithoutVAT || b.contract?.amountWithoutVAT || b.amount || 0);
+        return valB - valA;
+      })
+      .slice(0, 5)
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name || p.client?.name || p.companyName || 'Проект',
+        value: safeNumber(p.finances?.amountWithoutVAT || p.notes?.finances?.amountWithoutVAT || p.contract?.amountWithoutVAT || p.amount || 0),
+        progress: p.completionPercent || p.completion || 0
+      }));
+  }, [userProjects, user]);
 
   // Реальная месячная выручка (только для директоров)
   const monthlyRevenueData = useMemo(() => {
     if (user?.role !== 'ceo' && user?.role !== 'deputy_director') return [];
-    
+
     const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
     const revenueByMonth: Record<string, number> = {};
-    
+
     projects.forEach((p: any) => {
       const deadline = p.contract?.serviceEndDate || p.deadline;
       if (!deadline) return;
-      
+
       try {
         const date = new Date(deadline);
         const monthKey = months[date.getMonth()];
         if (monthKey) {
           const amount = p.notes?.finances?.amountWithoutVAT ||
-                        p.notes?.contract?.amountWithoutVAT ||
-                        p.notes?.amountWithoutVAT ||
-                        p.notes?.amount ||
-                        p.contract?.amountWithoutVAT ||
-                        p.amountWithoutVAT ||
-                        p.amount ||
-                        0;
+            p.notes?.contract?.amountWithoutVAT ||
+            p.notes?.amountWithoutVAT ||
+            p.notes?.amount ||
+            p.contract?.amountWithoutVAT ||
+            p.amountWithoutVAT ||
+            p.amount ||
+            0;
           revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + safeNumber(amount);
         }
-      } catch {}
+      } catch { }
     });
-    
+
     return months.slice(0, 6).map(month => ({
       name: month,
       value: revenueByMonth[month] || 0
@@ -455,7 +496,7 @@ export default function Dashboard() {
           warning++;
           urgentList.push({ project, daysLeft, urgency: 'warning' });
         }
-      } catch {}
+      } catch { }
     });
 
     // Сортируем по срочности
@@ -489,49 +530,59 @@ export default function Dashboard() {
             📊 Дашборд
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isDirector 
-              ? 'Обзор деятельности компании' 
+            {isDirector
+              ? 'Обзор деятельности компании'
               : isPartner
-              ? 'Мои проекты и активность'
-              : isManager
-              ? 'Управление проектами'
-              : isProcurement
-              ? 'Проекты на утверждении'
-              : 'Моя деятельность'}
+                ? 'Мои проекты и активность'
+                : isManager
+                  ? 'Управление проектами'
+                  : isProcurement
+                    ? 'Проекты на утверждении'
+                    : 'Моя деятельность'}
           </p>
         </div>
-        <Badge variant="outline" className="flex items-center space-x-2 px-4 py-2 backdrop-blur-sm border-primary/20">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <Activity className="h-4 w-4" />
-          <span>Обновлено: {new Date().toLocaleTimeString('ru-RU')}</span>
-        </Badge>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center space-x-2 bg-secondary/20 p-2 rounded-lg backdrop-blur-sm border border-primary/10">
+            <Switch
+              id="show-other-companies"
+              checked={showOtherCompanies}
+              onCheckedChange={setShowOtherCompanies}
+            />
+            <Label htmlFor="show-other-companies" className="text-sm font-medium cursor-pointer">
+              Показать другие компании
+            </Label>
+          </div>
+
+          <Badge variant="outline" className="flex items-center space-x-2 px-4 py-2 backdrop-blur-sm border-primary/20">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <Activity className="h-4 w-4" />
+            <span>Обновлено: {new Date().toLocaleTimeString('ru-RU')}</span>
+          </Badge>
+        </div>
       </div>
 
       {/* Уведомление о срочных дедлайнах */}
       {urgentDeadlines.total > 0 && (
-        <Card className={`p-4 border-2 ${
-          urgentDeadlines.overdue > 0
-            ? 'bg-red-50 border-red-300 dark:bg-red-950/50 dark:border-red-800'
-            : urgentDeadlines.critical > 0
-              ? 'bg-orange-50 border-orange-300 dark:bg-orange-950/50 dark:border-orange-800'
-              : 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/50 dark:border-yellow-800'
-        }`}>
+        <Card className={`p-4 border-2 ${urgentDeadlines.overdue > 0
+          ? 'bg-red-50 border-red-300 dark:bg-red-950/50 dark:border-red-800'
+          : urgentDeadlines.critical > 0
+            ? 'bg-orange-50 border-orange-300 dark:bg-orange-950/50 dark:border-orange-800'
+            : 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/50 dark:border-yellow-800'
+          }`}>
           <div className="flex items-start gap-3">
-            <AlertCircle className={`w-6 h-6 mt-0.5 ${
-              urgentDeadlines.overdue > 0
-                ? 'text-red-600 dark:text-red-400'
-                : urgentDeadlines.critical > 0
-                  ? 'text-orange-600 dark:text-orange-400'
-                  : 'text-yellow-600 dark:text-yellow-400'
-            }`} />
+            <AlertCircle className={`w-6 h-6 mt-0.5 ${urgentDeadlines.overdue > 0
+              ? 'text-red-600 dark:text-red-400'
+              : urgentDeadlines.critical > 0
+                ? 'text-orange-600 dark:text-orange-400'
+                : 'text-yellow-600 dark:text-yellow-400'
+              }`} />
             <div className="flex-1">
-              <h3 className={`font-semibold text-lg ${
-                urgentDeadlines.overdue > 0
-                  ? 'text-red-800 dark:text-red-200'
-                  : urgentDeadlines.critical > 0
-                    ? 'text-orange-800 dark:text-orange-200'
-                    : 'text-yellow-800 dark:text-yellow-200'
-              }`}>
+              <h3 className={`font-semibold text-lg ${urgentDeadlines.overdue > 0
+                ? 'text-red-800 dark:text-red-200'
+                : urgentDeadlines.critical > 0
+                  ? 'text-orange-800 dark:text-orange-200'
+                  : 'text-yellow-800 dark:text-yellow-200'
+                }`}>
                 ⚠️ Внимание! Срочные дедлайны
               </h3>
               <div className="flex flex-wrap gap-4 mt-2">
@@ -596,7 +647,7 @@ export default function Dashboard() {
       )}
 
       {/* Основные метрики - адаптивные для каждой роли */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${isDirector ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4`}>
         {/* Общая выручка - только для директоров */}
         {isDirector && (
           <MetricCard
@@ -611,10 +662,10 @@ export default function Dashboard() {
 
         {/* Активные проекты */}
         <MetricCard
-          title="Активные проекты"
+          title="В работе"
           value={projectStats.active}
-          icon={Briefcase}
-          subtitle={`из ${projectStats.total} всего`}
+          icon={Activity}
+          subtitle={`из ${projectStats.total} проектов`}
           gradient="from-blue-500 to-cyan-600"
         />
 
@@ -634,12 +685,12 @@ export default function Dashboard() {
           title="Завершено"
           value={projectStats.completed}
           icon={CheckCircle}
-          subtitle="Проектов"
+          subtitle="Успешных проектов"
           gradient="from-indigo-500 to-blue-600"
         />
 
-        {/* Средний прогресс - для партнеров и менеджеров */}
-        {(isPartner || isManager) && (
+        {/* Средний прогресс - для всех кроме директоров (у них выручка/сотрудники) */}
+        {!isDirector && (
           <MetricCard
             title="Средний прогресс"
             value={`${projectStats.avgProgress}%`}
@@ -650,29 +701,61 @@ export default function Dashboard() {
         )}
 
         {/* Ожидают утверждения - для procurement и директоров */}
-        {(isProcurement || isDirector) && projectStats.pendingPartnerApproval > 0 && (
+        {(isProcurement || isDirector) && (
           <MetricCard
-            title="Ожидают утверждения"
+            title="На утверждении"
             value={projectStats.pendingPartnerApproval}
             icon={AlertTriangle}
             subtitle="Требуют внимания"
-            gradient="from-yellow-500 to-orange-600"
+            gradient={projectStats.pendingPartnerApproval > 0 ? "from-yellow-500 to-orange-600" : "from-slate-400 to-slate-500"}
           />
         )}
       </div>
 
       {/* Графики и аналитика - адаптивные */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Прогресс выполнения (новый виджет) */}
+        {projectStats.active > 0 && (
+          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-1 flex flex-col justify-center">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
+            <div className="relative z-10 text-center">
+              <h3 className="text-lg font-semibold mb-6 flex items-center justify-center gap-2">
+                <Target className="h-5 w-5 text-blue-500" />Средний прогресс
+              </h3>
+
+              <div className="relative inline-flex items-center justify-center mb-4">
+                <svg className="w-32 h-32 transform -rotate-90">
+                  <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-secondary/30" />
+                  <circle
+                    cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="12" fill="transparent"
+                    strokeDasharray={351.86} strokeDashoffset={351.86 - (351.86 * projectStats.avgProgress) / 100}
+                    strokeLinecap="round" className="text-blue-500 transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center flex-col">
+                  <span className="text-3xl font-bold">{projectStats.avgProgress}%</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between text-sm text-muted-foreground px-4 mt-2">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span>В работе</span>
+                <span className="font-medium">{projectStats.active} шт.</span>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Статус проектов */}
         {projectStatusData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-2">
             <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-secondary">
                   <PieChart className="h-5 w-5 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold">Статус проектов</h3>
+                <h3 className="text-lg font-semibold">Аналитика по статусам проектов</h3>
               </div>
               <FuturisticPieChart data={projectStatusData} title="" />
             </div>
@@ -697,18 +780,61 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Распределение по ролям - только для директоров */}
-        {isDirector && roleDistributionData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+        {/* Распределение по ролям - только для директоров (теперь красивый PieChart) */}
+        {isDirector && roleDistributionPieData.length > 0 && (
+          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-1">
             <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/5 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600">
                   <Users className="h-5 w-5 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold">Команда по ролям</h3>
+                <h3 className="text-lg font-semibold">Структура команды</h3>
               </div>
-              <FuturisticBarChart data={roleDistributionData} title="" colors={['#8b5cf6', '#ec4899', '#f59e0b']} />
+              <FuturisticPieChart data={roleDistributionPieData} title="" />
+            </div>
+          </Card>
+        )}
+
+        {/* Топ 5 проектов по бюджету (НОВЫЙ ВИДЖЕТ) */}
+        {isDirector && topProjectsData.length > 0 && (
+          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-2">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl" />
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-2">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
+                    <Award className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Топ-5 проектов по выручке</h3>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>Все проекты &rarr;</Button>
+              </div>
+              <div className="space-y-4">
+                {topProjectsData.map((proj, idx) => (
+                  <div key={proj.id || idx} className="bg-white dark:bg-slate-900 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-800 hover:border-amber-300 transition-colors">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-400 font-bold text-sm">
+                          #{idx + 1}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm line-clamp-1" title={proj.name}>{proj.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{proj.progress}% завершено</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border-amber-200">
+                          {(proj.value).toLocaleString('ru-RU')} ₸
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+                      <div className="bg-amber-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${Math.max(0, Math.min(100, proj.progress))}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </Card>
         )}
@@ -744,7 +870,7 @@ export default function Dashboard() {
                 <div className="flex justify-between items-center p-3 rounded-lg bg-secondary/30 backdrop-blur-sm">
                   <span className="text-sm font-medium">Сегодня в офисе</span>
                   <span className="font-bold text-primary">
-                    {attendanceRecords.filter((r: any) => 
+                    {attendanceRecords.filter((r: any) =>
                       r.date === new Date().toDateString() && r.status === 'in_office'
                     ).length}
                   </span>
@@ -752,25 +878,25 @@ export default function Dashboard() {
                 <div className="flex justify-between items-center p-3 rounded-lg bg-secondary/30 backdrop-blur-sm">
                   <span className="text-sm font-medium">Удаленно</span>
                   <span className="font-bold text-secondary-foreground">
-                    {attendanceRecords.filter((r: any) => 
+                    {attendanceRecords.filter((r: any) =>
                       r.date === new Date().toDateString() && r.status === 'remote'
                     ).length}
                   </span>
                 </div>
                 <div className="relative w-full h-4 bg-secondary/30 rounded-full overflow-hidden backdrop-blur-sm">
-                  <div 
+                  <div
                     className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-1000"
-                    style={{ 
-                      width: `${employeeStats.total > 0 ? 
-                        Math.min(100, (employeeStats.attendanceToday / employeeStats.total) * 100) : 0}%` 
+                    style={{
+                      width: `${employeeStats.total > 0 ?
+                        Math.min(100, (employeeStats.attendanceToday / employeeStats.total) * 100) : 0}%`
                     }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  {employeeStats.total > 0 ? 
-                    Math.round((employeeStats.attendanceToday / employeeStats.total) * 100) : 0}% 
+                  {employeeStats.total > 0 ?
+                    Math.round((employeeStats.attendanceToday / employeeStats.total) * 100) : 0}%
                   сотрудников сегодня
                 </p>
               </div>
@@ -802,43 +928,43 @@ export default function Dashboard() {
                     .filter((r: any) => r.date === new Date().toDateString())
                     .slice(-5)
                     .map((record: any, index: number) => (
-                    <div key={index} className="flex items-center space-x-3 p-3 rounded-lg bg-secondary/30 backdrop-blur-sm border border-primary/10 hover:border-primary/30 transition-all group">
-                      <div className="flex-shrink-0">
-                        {record.checkOut ? (
-                          <div className="p-2 rounded-lg bg-destructive/20 group-hover:bg-destructive/30 transition-colors">
-                            <XCircle className="h-4 w-4 text-destructive" />
-                          </div>
-                        ) : (
-                          <div className="p-2 rounded-lg bg-green-500/20 group-hover:bg-green-500/30 transition-colors">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          </div>
-                        )}
+                      <div key={index} className="flex items-center space-x-3 p-3 rounded-lg bg-secondary/30 backdrop-blur-sm border border-primary/10 hover:border-primary/30 transition-all group">
+                        <div className="flex-shrink-0">
+                          {record.checkOut ? (
+                            <div className="p-2 rounded-lg bg-destructive/20 group-hover:bg-destructive/30 transition-colors">
+                              <XCircle className="h-4 w-4 text-destructive" />
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-lg bg-green-500/20 group-hover:bg-green-500/30 transition-colors">
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">
+                            {employees.find((emp: any) => emp.id === record.employeeId)?.name || 'Сотрудник'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {new Date(record.checkIn).toLocaleTimeString('ru-RU')}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs backdrop-blur-sm">
+                          {record.status === 'in_office' ? 'В офисе' : 'Удаленно'}
+                        </Badge>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">
-                          {employees.find((emp: any) => emp.id === record.employeeId)?.name || 'Сотрудник'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {new Date(record.checkIn).toLocaleTimeString('ru-RU')}
-                        </p>
+                    ))}
+
+                  {attendanceRecords.filter((r: any) => r.date === new Date().toDateString()).length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="p-4 rounded-full bg-muted/20 inline-block mb-3">
+                        <AlertTriangle className="h-8 w-8 text-muted-foreground" />
                       </div>
-                      <Badge variant="outline" className="text-xs backdrop-blur-sm">
-                        {record.status === 'in_office' ? 'В офисе' : 'Удаленно'}
-                      </Badge>
+                      <p className="text-sm text-muted-foreground">Нет активностей за сегодня</p>
                     </div>
-                  ))}
-                
-                {attendanceRecords.filter((r: any) => r.date === new Date().toDateString()).length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="p-4 rounded-full bg-muted/20 inline-block mb-3">
-                      <AlertTriangle className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Нет активностей за сегодня</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
           </div>
         )}
       </div>

@@ -1,18 +1,16 @@
 /**
- * Хук для синхронизации данных проектов с Supabase
+ * Хук для синхронизации данных проектов с Express-сервером (СХД/NAS)
  * С ПОЛНЫМ FALLBACK на localStorage!
- * 
+ *
  * Принцип работы:
  * 1. Всегда работает с localStorage (быстро, офлайн)
- * 2. Пытается синхронизироваться с Supabase (если доступен)
- * 3. Если Supabase недоступен - работает только с localStorage
+ * 2. Пытается синхронизироваться с сервером (если доступен)
+ * 3. Если сервер недоступен - работает только с localStorage
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useCallback } from 'react';
 import { ProjectData } from '@/types/methodology';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface SyncStatus {
   isOnline: boolean;
@@ -21,21 +19,33 @@ interface SyncStatus {
   error?: string;
 }
 
+// Базовый URL для API сервера
+function getServerApiUrl(): string {
+  if (typeof window !== 'undefined') {
+    // В разработке Vite на 8080, сервер на 3000
+    if (window.location.port === '8080') {
+      return `http://${window.location.hostname}:3000/api`;
+    }
+    return '/api';
+  }
+  return '/api';
+}
+
 export function useProjectDataSync(projectId: string) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: false,
     isSyncing: false
   });
 
   const projectDataKey = `rb_project_data_${projectId}`;
+  const apiUrl = getServerApiUrl();
 
-  // Проверка доступности Supabase
-  const checkSupabaseConnection = async (): Promise<boolean> => {
+  // Проверка доступности сервера
+  const checkServerConnection = async (): Promise<boolean> => {
     try {
-      const { error } = await supabase.from('project_data').select('id').limit(1);
-      return !error;
+      const response = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(3000) });
+      return response.ok;
     } catch (e) {
       return false;
     }
@@ -68,60 +78,53 @@ export function useProjectDataSync(projectId: string) {
     }
   }, [projectDataKey, toast]);
 
-  // Загрузка данных из Supabase
-  const loadFromSupabase = useCallback(async (): Promise<ProjectData | null> => {
+  // Загрузка данных с сервера (СХД)
+  const loadFromServer = useCallback(async (): Promise<ProjectData | null> => {
     try {
-      const { data, error } = await supabase
-        .from('project_data')
-        .select('*')
-        .eq('project_id', projectId)
-        .single();
+      const response = await fetch(`${apiUrl}/project-data/${projectId}`);
 
-      if (error) {
-        console.log('Supabase load error (это нормально если проект новый):', error.message);
+      if (response.status === 404) {
+        console.log('📂 Данные проекта на сервере не найдены (новый проект)');
         return null;
       }
 
-      if (data) {
-        // Преобразуем из формата Supabase в наш формат
-        const projectData: ProjectData = {
-          projectId: data.project_id,
-          templateId: data.template_id,
-          templateVersion: data.template_version,
-          passportData: data.passport_data || {},
-          stagesData: data.stages_data || {},
-          completionStatus: data.completion_status || {
-            totalElements: 0,
-            completedElements: 0,
-            percentage: 0
-          },
-          history: data.history || []
-        };
-
-        return projectData;
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
+
+      const data = await response.json();
+
+      // Преобразуем из серверного формата
+      const projectData: ProjectData = {
+        projectId: data.project_id || data.projectId,
+        templateId: data.template_id || data.templateId,
+        templateVersion: data.template_version || data.templateVersion,
+        passportData: data.passport_data || data.passportData || {},
+        stagesData: data.stages_data || data.stagesData || {},
+        completionStatus: data.completion_status || data.completionStatus || {
+          totalElements: 0,
+          completedElements: 0,
+          percentage: 0
+        },
+        history: data.history || [],
+        updated_at: data.updated_at
+      };
+
+      return projectData;
     } catch (e) {
-      console.log('Supabase недоступен, работаем с localStorage:', e);
+      console.log('Сервер недоступен, работаем с localStorage:', e);
     }
     return null;
-  }, [projectId]);
+  }, [projectId, apiUrl]);
 
-  // Сохранение в Supabase
-  const saveToSupabase = useCallback(async (data: ProjectData): Promise<boolean> => {
+  // Сохранение на сервер (СХД)
+  const saveToServer = useCallback(async (data: ProjectData): Promise<boolean> => {
     try {
-      // Проверяем доступность
-      const isOnline = await checkSupabaseConnection();
+      const isOnline = await checkServerConnection();
       if (!isOnline) {
-        console.log('Supabase недоступен, сохраняем только в localStorage');
+        console.log('Сервер недоступен, сохраняем только в localStorage');
         return false;
       }
-
-      // Проверяем существует ли запись
-      const { data: existing } = await supabase
-        .from('project_data')
-        .select('id')
-        .eq('project_id', projectId)
-        .single();
 
       const payload = {
         project_id: data.projectId,
@@ -131,24 +134,16 @@ export function useProjectDataSync(projectId: string) {
         stages_data: data.stagesData,
         completion_status: data.completionStatus,
         history: data.history,
-        created_by: user?.id
       };
 
-      if (existing) {
-        // Обновляем существующую запись
-        const { error } = await supabase
-          .from('project_data')
-          .update(payload)
-          .eq('project_id', projectId);
+      const response = await fetch(`${apiUrl}/project-data/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-        if (error) throw error;
-      } else {
-        // Создаём новую запись
-        const { error } = await supabase
-          .from('project_data')
-          .insert(payload);
-
-        if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
 
       setSyncStatus(prev => ({
@@ -159,62 +154,77 @@ export function useProjectDataSync(projectId: string) {
 
       return true;
     } catch (e: any) {
-      console.log('Ошибка синхронизации с Supabase:', e.message);
+      console.log('Ошибка синхронизации с сервером:', e.message);
       setSyncStatus(prev => ({
         ...prev,
         error: e.message
       }));
       return false;
     }
-  }, [projectId, user]);
+  }, [projectId, apiUrl]);
 
   // Основная функция загрузки данных
   const loadProjectData = useCallback(async (): Promise<ProjectData | null> => {
     // СНАЧАЛА загружаем из localStorage (быстро)
     const localData = loadFromLocalStorage();
 
-    // ЗАТЕМ пытаемся синхронизироваться с Supabase
+    // ЗАТЕМ пытаемся синхронизироваться с сервером
     setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-    
-    const isOnline = await checkSupabaseConnection();
-    
+
+    const isOnline = await checkServerConnection();
+
     if (isOnline) {
-      const supabaseData = await loadFromSupabase();
-      
-      if (supabaseData) {
-        // Если в Supabase есть более свежие данные - используем их
-        if (!localData || new Date(supabaseData.completionStatus.toString()) > new Date(localData.completionStatus.toString())) {
-          saveToLocalStorage(supabaseData);
+      const serverData = await loadFromServer();
+
+      if (serverData) {
+        // Сравнение версий по updated_at
+        const localUpdatedAt = (localData as any)?.updated_at ? new Date((localData as any).updated_at).getTime() : 0;
+        const remoteUpdatedAt = (serverData as any)?.updated_at ? new Date((serverData as any).updated_at).getTime() : 0;
+
+        if (!localData || remoteUpdatedAt > localUpdatedAt) {
+          console.log('🔄 Данные на сервере новее или локальных нет, обновляем локально');
+          saveToLocalStorage(serverData);
           setSyncStatus({ isOnline: true, isSyncing: false, lastSyncAt: new Date().toISOString() });
-          return supabaseData;
+          return serverData;
+        } else if (localUpdatedAt > remoteUpdatedAt) {
+          console.log('🔄 Локальные данные новее, сохраняем на сервер');
+          await saveToServer(localData);
+          setSyncStatus({ isOnline: true, isSyncing: false, lastSyncAt: new Date().toISOString() });
+          return localData;
+        } else {
+          console.log('✅ Данные синхронизированы');
+          setSyncStatus({ isOnline: true, isSyncing: false, lastSyncAt: new Date().toISOString() });
+          return localData;
         }
+      } else if (localData) {
+        console.log('Сервер пуст, но есть локальные данные. Загружаем на сервер.');
+        await saveToServer(localData);
+        setSyncStatus({ isOnline: true, isSyncing: false, lastSyncAt: new Date().toISOString() });
+        return localData;
       }
-      
+
       setSyncStatus({ isOnline: true, isSyncing: false });
     } else {
       setSyncStatus({ isOnline: false, isSyncing: false });
     }
 
-    // Возвращаем данные из localStorage
     return localData;
-  }, [loadFromLocalStorage, loadFromSupabase, saveToLocalStorage]);
+  }, [loadFromLocalStorage, loadFromServer, saveToLocalStorage, saveToServer]);
 
   // Основная функция сохранения данных
   const saveProjectData = useCallback(async (data: ProjectData): Promise<void> => {
     // ВСЕГДА сохраняем в localStorage (гарантированно работает)
     saveToLocalStorage(data);
 
-    // ПЫТАЕМСЯ синхронизировать с Supabase (не критично если не получится)
+    // ПЫТАЕМСЯ синхронизировать с сервером (не критично если не получится)
     setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-    const synced = await saveToSupabase(data);
-    setSyncStatus(prev => ({ 
-      ...prev, 
+    const synced = await saveToServer(data);
+    setSyncStatus(prev => ({
+      ...prev,
       isSyncing: false,
-      isOnline: synced 
+      isOnline: synced
     }));
-
-    // Не показываем тост о синхронизации каждый раз, только если важно
-  }, [saveToLocalStorage, saveToSupabase]);
+  }, [saveToLocalStorage, saveToServer]);
 
   // Принудительная синхронизация
   const forceSync = useCallback(async (): Promise<void> => {
@@ -229,32 +239,32 @@ export function useProjectDataSync(projectId: string) {
     }
 
     setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-    const synced = await saveToSupabase(localData);
-    
+    const synced = await saveToServer(localData);
+
     if (synced) {
       toast({
         title: "Синхронизировано!",
-        description: "Данные успешно сохранены на сервере",
+        description: "Данные успешно сохранены на сервере (СХД)",
       });
-      setSyncStatus(prev => ({ 
-        ...prev, 
+      setSyncStatus(prev => ({
+        ...prev,
         isSyncing: false,
         isOnline: true,
         lastSyncAt: new Date().toISOString()
       }));
     } else {
       toast({
-        title: "Синхронизация недоступна",
+        title: "Сервер недоступен",
         description: "Данные сохранены локально, синхронизация будет позже",
         variant: "destructive"
       });
-      setSyncStatus(prev => ({ 
-        ...prev, 
+      setSyncStatus(prev => ({
+        ...prev,
         isSyncing: false,
         isOnline: false
       }));
     }
-  }, [loadFromLocalStorage, saveToSupabase, toast]);
+  }, [loadFromLocalStorage, saveToServer, toast]);
 
   return {
     loadProjectData,
@@ -263,6 +273,3 @@ export function useProjectDataSync(projectId: string) {
     syncStatus
   };
 }
-
-
-

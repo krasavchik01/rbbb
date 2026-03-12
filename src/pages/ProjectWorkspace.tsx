@@ -61,7 +61,7 @@ export default function ProjectWorkspace() {
   const { employees } = useEmployees();
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   // Получаем проект из state (если передан при навигации)
   const projectFromState = (location.state as any)?.project;
   const openTeamAssignment = (location.state as any)?.openTeamAssignment;
@@ -83,28 +83,30 @@ export default function ProjectWorkspace() {
 
   // Дополнительные соглашения
   const [amendments, setAmendments] = useState<ProjectAmendment[]>([]);
-  
+
   // Проверка роли партнёра
   const isPartner = user?.role === 'partner';
   const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
   const isProcurement = user?.role === 'procurement';
+  const isAdmin = user?.role === 'admin';
+  const isProcurementOrAdmin = isProcurement || isAdmin;
   const projectStatus = project?.status || project?.notes?.status;
   const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
   const canCompleteProject = (isPartner || isPM) && isInProgress;
   // Директор/зам видят только общую информацию, без деталей методологии
   const showFullDetails = !isDirector;
-  
+
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
-  const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } = 
+  const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } =
     useProjectDataSync(id || '');
 
   // Фильтруем задачи для текущего проекта (всегда вызывается, до условных вычислений)
   const projectTasks = useMemo(() => {
     if (!id || !allTasks) return [];
-    return allTasks.filter((task: any) => 
-      task.project_id === id || 
+    return allTasks.filter((task: any) =>
+      task.project_id === id ||
       task.project_id === project?.id ||
       task.project_id === project?.notes?.id
     );
@@ -113,7 +115,7 @@ export default function ProjectWorkspace() {
   // Группируем задачи по сотрудникам (всегда вызывается, до условных вычислений)
   const tasksByEmployee = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
-    
+
     projectTasks.forEach((task: any) => {
       const assignees = task.assignees || [];
       if (assignees.length === 0) {
@@ -131,7 +133,7 @@ export default function ProjectWorkspace() {
         });
       }
     });
-    
+
     return grouped;
   }, [projectTasks]);
 
@@ -181,7 +183,7 @@ export default function ProjectWorkspace() {
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
     if (!id) return;
-    
+
     // Если проект уже установлен и это тот же проект, не перезагружаем
     if (project) {
       const currentProjectId = project.id || project.notes?.id || '';
@@ -196,7 +198,7 @@ export default function ProjectWorkspace() {
       if (stateProjectId === id || (typeof stateProjectId === 'string' && stateProjectId.includes(id))) {
         console.log('✅ [ProjectWorkspace] Используем проект из state:', projectFromState.name || projectFromState.id);
         setProject(projectFromState);
-        
+
         // Загружаем данные проекта
         loadProjectData().then(data => {
           if (data) {
@@ -227,7 +229,7 @@ export default function ProjectWorkspace() {
         (typeof notesId === 'string' && notesId.includes(id))
       );
     });
-    
+
     // Если проект найден и еще не установлен, устанавливаем его
     if (foundProject) {
       // Если проект уже установлен и это тот же проект, не обновляем
@@ -290,7 +292,7 @@ export default function ProjectWorkspace() {
     if (!projectData) return;
 
     const newData = { ...projectData };
-    
+
     if (!newData.stagesData[stageId]) {
       newData.stagesData[stageId] = {};
     }
@@ -438,7 +440,7 @@ export default function ProjectWorkspace() {
             const element = RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages
               .flatMap(s => s.elements)
               .find(e => e.id === procedure.elementId);
-            
+
             notifyTaskAssigned({
               taskName: element?.title || 'Процедура',
               assigneeId: procedure.responsibleUserId,
@@ -598,7 +600,7 @@ export default function ProjectWorkspace() {
                   <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm font-medium mb-1">Нажмите для загрузки файла</p>
                   <p className="text-xs text-muted-foreground">
-                    {element.config?.allowedFileTypes?.join(', ') || 'Любой формат'} • 
+                    {element.config?.allowedFileTypes?.join(', ') || 'Любой формат'} •
                     Макс. {element.config?.maxFileSize || 10} МБ
                   </p>
                   <input type="file" className="hidden" accept={element.config?.allowedFileTypes?.join(',')} />
@@ -682,17 +684,17 @@ export default function ProjectWorkspace() {
   }
 
   // Автоматически определяем шаблон: если проект аудиторский - используем методологию Russell Bedford
-  const activeTemplate = template || (project?.type === 'audit' || project?.notes?.type === 'audit' || 
-    project?.contract?.subject?.toLowerCase().includes('аудит') || 
+  const activeTemplate = template || (project?.type === 'audit' || project?.notes?.type === 'audit' ||
+    project?.contract?.subject?.toLowerCase().includes('аудит') ||
     project?.name?.toLowerCase().includes('аудит') ? RUSSELL_BEDFORD_AUDIT_METHODOLOGY : null);
-  
+
   // Если шаблон все еще не найден, но есть проект - показываем карточку без шаблона
   // (можно работать с задачами и файлами)
 
   // Используем displayStages для навигации (только если есть шаблон)
-  const displayStages = activeTemplate ? (projectData?.methodology ? 
+  const displayStages = activeTemplate ? (projectData?.methodology ?
     activeTemplate.stages
-      .filter(stage => 
+      .filter(stage =>
         projectData.methodology.stages.some((ms: any) => ms.stageId === stage.id)
       )
       .map(stage => {
@@ -714,8 +716,8 @@ export default function ProjectWorkspace() {
       }) : activeTemplate.stages) : [];
 
   const currentStage = displayStages[currentStageIndex] || displayStages[0];
-  const stageProgress = currentStage ? 
-    (Object.values((projectData?.stagesData[currentStage.id] || {})).filter((e: any) => e.completed).length / currentStage.elements.length) * 100 
+  const stageProgress = currentStage ?
+    (Object.values((projectData?.stagesData[currentStage.id] || {})).filter((e: any) => e.completed).length / currentStage.elements.length) * 100
     : 0;
 
   return (
@@ -735,8 +737,8 @@ export default function ProjectWorkspace() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Кнопка редактирования для закупщика */}
-          {isProcurement && project && (
+          {/* Кнопка редактирования для закупщика и админа */}
+          {isProcurementOrAdmin && project && (
             <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
               <Edit className="w-4 h-4 mr-2" />
               Редактировать
@@ -780,7 +782,7 @@ export default function ProjectWorkspace() {
           </div>
         </Card>
       )}
-      
+
       {/* Статистика задач (если нет шаблона, но есть задачи) */}
       {!activeTemplate && projectTasks.length > 0 && (
         <Card className="p-6">
@@ -791,246 +793,286 @@ export default function ProjectWorkspace() {
                 {projectTasks.filter((t: any) => t.status === 'done').length} из {projectTasks.length} выполнено
               </span>
             </div>
-            <Progress 
-              value={projectTasks.length > 0 ? 
-                (projectTasks.filter((t: any) => t.status === 'done').length / projectTasks.length) * 100 : 0} 
-              className="h-3" 
+            <Progress
+              value={projectTasks.length > 0 ?
+                (projectTasks.filter((t: any) => t.status === 'done').length / projectTasks.length) * 100 : 0}
+              className="h-3"
             />
           </div>
         </Card>
       )}
 
-      {/* Информационная панель для директора/зама - только общая информация */}
-      {isDirector && project && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Команда проекта */}
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Команда</h3>
-            </div>
-            <div className="space-y-2">
-              <p className="text-2xl font-bold">{(project.team || project.notes?.team || []).length}</p>
-              <p className="text-xs text-muted-foreground">участников</p>
-            </div>
-          </Card>
+      {/* Ранее здесь была старая информационная панель. Теперь вся эта информация перенесена в красивый Дашборд ниже. */}
 
-          {/* Статус */}
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Статус</h3>
-            </div>
-            <Badge variant="outline" className="text-sm">
-              {project.status === 'approved' ? 'Утвержден' :
-               project.status === 'in_progress' ? 'В работе' :
-               project.status === 'completed' ? 'Завершен' :
-               project.notes?.status === 'approved' ? 'Утвержден' :
-               project.notes?.status === 'in_progress' ? 'В работе' :
-               project.notes?.status === 'completed' ? 'Завершен' :
-               'Неизвестно'}
-            </Badge>
-          </Card>
-
-          {/* Прогресс */}
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Target className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Прогресс</h3>
-            </div>
-            <div className="space-y-2">
-              <p className="text-2xl font-bold">{project.completionPercent || project.completion || 0}%</p>
-              <Progress value={project.completionPercent || project.completion || 0} className="h-2" />
-            </div>
-          </Card>
-
-          {/* Дедлайн */}
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Дедлайн</h3>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {project.contract?.serviceEndDate || project.deadline || project.contract?.date 
-                  ? new Date(project.contract?.serviceEndDate || project.deadline || project.contract?.date).toLocaleDateString('ru-RU')
-                  : 'Не указан'}
-              </p>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Информационная панель для партнера */}
-      {isPartner && project && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Команда проекта */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold">Команда проекта</h3>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowTeamDialog(true)}>
-                <Edit className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {(project.team || project.notes?.team || []).map((member: any, index: number) => {
-                const employee = employees.find((e: any) => e.id === (member.userId || member.id || member.employeeId));
-                const roleLabel = member.role === 'partner' ? 'Партнер' :
-                                 member.role === 'manager_1' ? 'Менеджер 1' :
-                                 member.role === 'manager_2' ? 'Менеджер 2' :
-                                 member.role === 'manager_3' ? 'Менеджер 3' :
-                                 member.role || 'Участник';
-                return (
-                  <div key={index} className="flex items-center justify-between p-2 bg-secondary/50 rounded">
-                    <span className="text-sm font-medium">{employee?.name || member.userName || 'Неизвестный'}</span>
-                    <Badge variant="outline" className="text-xs">{roleLabel}</Badge>
-                  </div>
-                );
-              })}
-              {(!project.team || project.team.length === 0) && (
-                <p className="text-sm text-muted-foreground">Команда не назначена</p>
-              )}
-            </div>
-          </Card>
-
-          {/* Сроки и статус */}
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Сроки и статус</h3>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Дедлайн:</span>
-                <p className="font-medium">
-                  {project.contract?.serviceEndDate || project.deadline || project.contract?.date 
-                    ? new Date(project.contract?.serviceEndDate || project.deadline || project.contract?.date).toLocaleDateString('ru-RU')
-                    : 'Не указан'}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Статус:</span>
-                <p className="font-medium">
-                  {project.status === 'approved' ? 'Утвержден' :
-                   project.status === 'in_progress' ? 'В работе' :
-                   project.status === 'completed' ? 'Завершен' :
-                   project.notes?.status === 'approved' ? 'Утвержден' :
-                   project.notes?.status === 'in_progress' ? 'В работе' :
-                   project.notes?.status === 'completed' ? 'Завершен' :
-                   'Неизвестно'}
-                </p>
-              </div>
-              {project.approvedAt && (
-                <div>
-                  <span className="text-muted-foreground">Утвержден:</span>
-                  <p className="font-medium text-xs">
-                    {new Date(project.approvedAt).toLocaleDateString('ru-RU')}
-                  </p>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Финансовая информация (если разрешено) */}
-          {(project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || '')) || 
-           !project.financialVisibility || 
-           (project.finances && isPartner) ? (
-            <Card className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold">Финансы</h3>
-              </div>
-              <div className="space-y-2 text-sm">
-                {project.finances?.amountWithoutVAT && (
-                  <div>
-                    <span className="text-muted-foreground">Сумма без НДС:</span>
-                    <p className="font-medium">
-                      {Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU')} ₸
-                    </p>
-                  </div>
-                )}
-                {project.finances?.bonusBase && (
-                  <div>
-                    <span className="text-muted-foreground">База бонусов:</span>
-                    <p className="font-medium">
-                      {Number(project.finances.bonusBase).toLocaleString('ru-RU')} ₸
-                    </p>
-                  </div>
-                )}
-                {project.finances?.totalBonusAmount && (
-                  <div>
-                    <span className="text-muted-foreground">Общая сумма бонусов:</span>
-                    <p className="font-medium text-green-600">
-                      {Number(project.finances.totalBonusAmount).toLocaleString('ru-RU')} ₸
-                    </p>
-                  </div>
-                )}
-                {project.finances?.grossProfit && (
-                  <div>
-                    <span className="text-muted-foreground">Валовая прибыль:</span>
-                    <p className="font-medium text-blue-600">
-                      {Number(project.finances.grossProfit).toLocaleString('ru-RU')} ₸
-                    </p>
-                  </div>
-                )}
-                {(!project.finances || Object.keys(project.finances).length === 0) && (
-                  <p className="text-muted-foreground">Финансовая информация не доступна</p>
-                )}
-              </div>
-            </Card>
-          ) : (
-            <Card className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <DollarSign className="w-5 h-5 text-muted-foreground" />
-                <h3 className="font-semibold text-muted-foreground">Финансы</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">Финансовая информация скрыта</p>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Вкладки: Планирование (для партнера), Задачи, Распределение задач, Рабочие процедуры, Шаблоны, Файлы, Договор */}
-      <Tabs defaultValue={isPartner && projectData?.methodology ? "planning" : isProcurement ? "contract" : "tasks"} className="w-full">
+      {/* Вкладки с информацией о проекте */}
+      <Tabs defaultValue="dashboard" className="w-full">
         <TabsList className="flex flex-wrap gap-1">
-          {isPartner && (
-            <TabsTrigger value="planning">
-              📋 Планирование
-            </TabsTrigger>
-          )}
-          {!isProcurement && (
-            <TabsTrigger value="tasks">
-              ✅ Задачи
-            </TabsTrigger>
-          )}
-          {isPM && (
-            <TabsTrigger value="task-distribution">
-              👥 Распределение задач
-            </TabsTrigger>
-          )}
-          {activeTemplate && showFullDetails && !isProcurement && (
-            <TabsTrigger value="procedures">
-              🔧 Рабочие процедуры
-            </TabsTrigger>
-          )}
-          {showFullDetails && !isProcurement && (
-            <TabsTrigger value="templates">
-              📄 Шаблоны
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="files">
-            📁 Файлы
-          </TabsTrigger>
-          <TabsTrigger value="contract">
-            📜 Договор
-          </TabsTrigger>
+          <TabsTrigger value="dashboard">📊 Дашборд</TabsTrigger>
+          {!(isDirector || isAdmin) && <TabsTrigger value="tasks">✅ Задачи</TabsTrigger>}
+          {!(isDirector || isAdmin) && activeTemplate && <TabsTrigger value="procedures">🔧 Рабочие процедуры</TabsTrigger>}
+          {!(isDirector || isAdmin) && <TabsTrigger value="planning">📋 Планирование</TabsTrigger>}
+          {!(isDirector || isAdmin) && (isPM || isPartner) && <TabsTrigger value="task-distribution">👥 Распределение задач</TabsTrigger>}
+          {!(isDirector || isAdmin) && activeTemplate && <TabsTrigger value="templates">📄 Шаблоны</TabsTrigger>}
+
+          <TabsTrigger value="files">📁 Файлы</TabsTrigger>
+          <TabsTrigger value="contract">📜 Договор</TabsTrigger>
         </TabsList>
 
-        {/* Вкладка планирования для партнёра */}
-        {isPartner && (
+        {/* Главный Дашборд для всех ролей */}
+        {project && (
+          <TabsContent value="dashboard" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+              {/* Главный прогресс */}
+              <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 flex flex-col justify-center items-center text-center lg:col-span-1 shadow-sm">
+                <Target className="w-12 h-12 text-blue-600 mb-4" />
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Общий прогресс</h3>
+                <div className="w-full max-w-[200px] mb-2">
+                  <div className="flex justify-between text-sm font-medium mb-1">
+                    <span>Выполнено</span>
+                    <span className="text-blue-700">{project.completionPercent || project.completion || 0}%</span>
+                  </div>
+                  <Progress value={project.completionPercent || project.completion || 0} className="h-3" />
+                </div>
+                <Badge variant={project.status === 'completed' ? 'default' : 'secondary'} className="mt-4 text-sm px-4 py-1">
+                  {project.status === 'approved' ? 'Утвержден' :
+                    project.status === 'in_progress' ? 'В работе' :
+                      project.status === 'completed' ? 'Завершен' : 'В работе'}
+                </Badge>
+              </Card>
+
+              {/* Текущий этап и задачи */}
+              <Card className="p-6 lg:col-span-2 shadow-sm border-slate-200">
+                <div className="flex items-center gap-2 mb-6">
+                  <CheckCircle2 className="w-6 h-6 text-primary" />
+                  <h3 className="text-xl font-bold">Статус выполнения</h3>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Активный этап */}
+                  {(() => {
+                    let activeStageName = 'Этапы не определены';
+                    let activeStageProgress = 0;
+                    if (displayStages.length > 0 && projectData?.stagesData) {
+                      const activeStage = displayStages.find(stage => {
+                        const stageData = projectData.stagesData[stage.id] || {};
+                        const completed = Object.values(stageData).filter((e: any) => e.completed).length;
+                        return completed < stage.elements.length;
+                      });
+                      if (activeStage) {
+                        activeStageName = activeStage.name;
+                        const stageData = projectData.stagesData[activeStage.id] || {};
+                        const completed = Object.values(stageData).filter((e: any) => e.completed).length;
+                        activeStageProgress = activeStage.elements.length > 0 ? Math.round((completed / activeStage.elements.length) * 100) : 0;
+                      } else {
+                        activeStageName = 'Все этапы завершены';
+                        activeStageProgress = 100;
+                      }
+                    }
+                    return (
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Текущий этап (методология)</span>
+                          <span className="text-sm font-bold">{activeStageProgress}%</span>
+                        </div>
+                        <p className="font-semibold text-lg mb-2 truncate" title={activeStageName}>{activeStageName}</p>
+                        <Progress value={activeStageProgress} className="h-2" />
+                      </div>
+                    );
+                  })()}
+
+                  {/* Сводка по задачам */}
+                  {(() => {
+                    const total = projectTasks.length;
+                    const completed = projectTasks.filter(t => t.status === 'completed').length;
+                    const inProgress = projectTasks.filter(t => t.status === 'in_progress').length;
+                    const tasksPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                    return (
+                      <div className="bg-secondary/40 p-4 rounded-xl border border-secondary/60">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Задачи проекта</span>
+                          <span className="text-sm font-bold">{completed} / {total}</span>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1 flex flex-col justify-center">
+                            <Progress value={tasksPercent} className="h-2 mb-1 bg-slate-200" />
+                          </div>
+                          <div className="flex gap-3 text-sm">
+                            <div className="flex items-center gap-1.5 border-l-2 border-amber-500 pl-2">
+                              <span className="text-muted-foreground">В работе:</span>
+                              <span className="font-semibold">{inProgress}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 border-l-2 border-green-500 pl-2">
+                              <span className="text-muted-foreground">Готово:</span>
+                              <span className="font-semibold">{completed}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </Card>
+
+              {/* Временная шкала */}
+              <Card className="p-6 lg:col-span-1 shadow-sm border-slate-200 flex flex-col justify-center">
+                <div className="flex items-center gap-2 mb-4">
+                  <Calendar className="w-6 h-6 text-primary" />
+                  <h3 className="text-xl font-bold">Таймлайн</h3>
+                </div>
+                {(() => {
+                  let daysTotal = 0, daysPassed = 0, daysRemaining = 0, timeProgress = 0;
+                  const endStr = project.contract?.serviceEndDate || project.deadline;
+                  const startStr = project.createdAt;
+
+                  if (startStr && endStr) {
+                    const start = new Date(startStr).getTime();
+                    const end = new Date(endStr).getTime();
+                    const now = new Date().getTime();
+
+                    if (end > start) {
+                      daysTotal = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+                      daysPassed = Math.max(0, Math.ceil((now - start) / (1000 * 60 * 60 * 24)));
+                      daysRemaining = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+                      timeProgress = Math.min(100, Math.max(0, Math.round((daysPassed / daysTotal) * 100)));
+                    }
+                  }
+
+                  return endStr ? (
+                    <div className="space-y-4">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Осталось дней</p>
+                        <p className={`text-4xl font-bold ${daysRemaining < 3 ? 'text-red-500' : daysRemaining < 10 ? 'text-amber-500' : 'text-slate-800'}`}>
+                          {daysRemaining > 0 ? daysRemaining : 0}
+                        </p>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                          <span>Старт</span>
+                          <span>Финиш</span>
+                        </div>
+                        <Progress value={timeProgress} className={`h-2 ${daysRemaining < 3 ? '[&>div]:bg-red-500' : timeProgress > 80 ? '[&>div]:bg-amber-500' : ''}`} />
+                      </div>
+
+                      <div className="bg-secondary/40 p-3 rounded-lg flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Дедлайн:</span>
+                        <span className="font-medium">{new Date(endStr).toLocaleDateString('ru-RU')}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">Сроки не заданы</div>
+                  );
+                })()}
+              </Card>
+
+              {/* Команда проекта */}
+              <Card className="p-6 lg:col-span-4 shadow-sm border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-6 h-6 text-primary" />
+                    <h3 className="text-xl font-bold">Управление командой</h3>
+                  </div>
+                  <Button onClick={() => setShowTeamDialog(true)} variant="outline">
+                    <Edit className="w-4 h-4 mr-2" />
+                    Изменить состав
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {(project.team || project.notes?.team || []).map((member: any, index: number) => {
+                    const employee = employees.find((e: any) => e.id === (member.userId || member.id || member.employeeId));
+                    const roleLabel = member.role === 'partner' ? 'Партнер' :
+                      member.role === 'manager_1' ? 'Менеджер 1' :
+                        member.role === 'senior_auditor' ? 'Ст. аудитор' :
+                          member.role === 'assistant' ? 'Ассистент' : member.role || 'Участник';
+                    return (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-white shadow-sm rounded-xl border border-slate-100 hover:border-primary/30 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                          {(employee?.name || member.userName || 'Н')[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate" title={employee?.name || member.userName || 'Неизвестный'}>
+                            {employee?.name || member.userName || 'Неизвестный'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{roleLabel}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(!project.team || project.team.length === 0) && (
+                    <div className="col-span-full text-center py-6 text-muted-foreground border-2 border-dashed rounded-xl">
+                      Команда пока не назначена
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* Финансовая сводка */}
+              {((project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || '')) ||
+                !project.financialVisibility || (project.finances && (isPartner || isDirector || isAdmin))) ? (
+                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 border-slate-200">
+                  <div className="col-span-full flex items-center gap-2 mb-2">
+                    <DollarSign className="w-6 h-6 text-green-600" />
+                    <h3 className="text-xl font-bold">Финансовая сводка</h3>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
+                    <p className="text-2xl font-bold">
+                      {project.finances?.amountWithoutVAT ? Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">База бонусов</p>
+                    <p className="text-2xl font-bold">
+                      {project.finances?.bonusBase ? Number(project.finances.bonusBase).toLocaleString('ru-RU') : '0'} ₸
+                    </p>
+                  </div>
+
+                  {(isDirector || isAdmin || isPartner) && (
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-green-100">
+                      <p className="text-xs text-green-700 font-medium uppercase tracking-wider mb-1">Общие бонусы</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {project.finances?.totalBonusAmount ? Number(project.finances.totalBonusAmount).toLocaleString('ru-RU') : '0'} ₸
+                      </p>
+                    </div>
+                  )}
+
+                  {(isDirector || isAdmin || isPartner) && (
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
+                      <p className="text-xs text-blue-700 font-medium uppercase tracking-wider mb-1">Валовая прибыль</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {project.finances?.grossProfit ? Number(project.finances.grossProfit).toLocaleString('ru-RU') : '0'} ₸
+                      </p>
+                    </div>
+                  )}
+                </Card>
+              ) : project.finances ? (
+                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 border-slate-200">
+                  <div className="col-span-full flex items-center gap-2 mb-2">
+                    <DollarSign className="w-6 h-6 text-muted-foreground" />
+                    <h3 className="text-xl font-bold text-muted-foreground">Финансовая информация</h3>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
+                    <p className="text-2xl font-bold">
+                      {project.finances?.amountWithoutVAT ? Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground text-center">Детальная финансовая информация доступна руководству и партнёрам</p>
+                  </div>
+                </Card>
+              ) : null}
+            </div>
+          </TabsContent>
+        )}
+
+        {/* Вкладка планирования */}
+        {!(isDirector || isAdmin) && (
           <TabsContent value="planning" className="space-y-4 mt-4">
             <Card className="p-6">
               {projectData?.methodology ? (
@@ -1042,11 +1084,13 @@ export default function ProjectWorkspace() {
                         Планирование выполнено. Выбрано {projectData.methodology.selectedProcedures.length} процедур
                       </p>
                     </div>
-                    <Button variant="outline" onClick={() => setIsPlanningMode(true)}>
-                      Изменить планирование
-                    </Button>
+                    {(isPartner || isPM || isAdmin) && (
+                      <Button variant="outline" onClick={() => setIsPlanningMode(true)}>
+                        Изменить планирование
+                      </Button>
+                    )}
                   </div>
-                  
+
                   {/* Отображение выбранных процедур по этапам */}
                   <div className="space-y-4">
                     {projectData.methodology.stages.map((stage: any) => {
@@ -1054,7 +1098,7 @@ export default function ProjectWorkspace() {
                       return (
                         <Card key={stage.stageId} className="p-4">
                           <div className="flex items-center gap-2 mb-3">
-                            <Badge 
+                            <Badge
                               style={{ backgroundColor: stageTemplate?.color || '#3b82f6' }}
                               className="text-white"
                             >
@@ -1066,9 +1110,9 @@ export default function ProjectWorkspace() {
                             {stage.elements.map((element: any) => {
                               const responsible = employees.find((e: any) => e.id === element.responsibleUserId);
                               const roleLabel = element.responsibleRole === 'assistant' ? 'Ассистент' :
-                                               element.responsibleRole === 'senior_auditor' ? 'Старший аудитор' :
-                                               element.responsibleRole === 'manager' ? 'Менеджер' :
-                                               element.responsibleRole === 'partner' ? 'Партнёр' : element.responsibleRole;
+                                element.responsibleRole === 'senior_auditor' ? 'Старший аудитор' :
+                                  element.responsibleRole === 'manager' ? 'Менеджер' :
+                                    element.responsibleRole === 'partner' ? 'Партнёр' : element.responsibleRole;
                               return (
                                 <div key={element.elementId} className="flex items-center justify-between p-2 bg-secondary/50 rounded">
                                   <span className="text-sm">{element.title}</span>
@@ -1089,9 +1133,11 @@ export default function ProjectWorkspace() {
                   <p className="text-muted-foreground mb-4">
                     Планирование ещё не выполнено. Выберите необходимые процедуры и распределите их по ответственным.
                   </p>
-                  <Button onClick={() => setIsPlanningMode(true)}>
-                    Начать планирование
-                  </Button>
+                  {(isPartner || isPM || isAdmin) && (
+                    <Button onClick={() => setIsPlanningMode(true)}>
+                      Начать планирование
+                    </Button>
+                  )}
                 </div>
               )}
             </Card>
@@ -1106,7 +1152,7 @@ export default function ProjectWorkspace() {
                       Выберите необходимые процедуры для проекта и назначьте ответственных (Ассистент, Старший аудитор, Менеджер, Партнёр)
                     </DialogDescription>
                   </DialogHeader>
-                  
+
                   <MethodologySelector
                     template={RUSSELL_BEDFORD_AUDIT_METHODOLOGY}
                     projectId={project?.id || id || ''}
@@ -1121,154 +1167,218 @@ export default function ProjectWorkspace() {
           </TabsContent>
         )}
 
-        {/* Вкладка задач (не для ОЗ) */}
-        {!isProcurement && <TabsContent value="tasks" className="space-y-4 mt-4">
-          <Card className="p-6">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">Задачи проекта</h3>
-              <p className="text-sm text-muted-foreground">
-                Все задачи проекта, сгруппированные по ответственным сотрудникам
-              </p>
-            </div>
-            
-            {projectTasks.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">Задач пока нет</p>
+        {/* Вкладка задач */}
+        {!(isDirector || isAdmin) && (
+          <TabsContent value="tasks" className="space-y-4 mt-4">
+            <Card className="p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold mb-2">Задачи проекта</h3>
+                <p className="text-sm text-muted-foreground">
+                  Все задачи проекта, сгруппированные по ответственным сотрудникам
+                </p>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Задачи по сотрудникам */}
-                {Object.entries(tasksByEmployee).map(([employeeId, tasks]) => {
-                  const employee = employeeId === 'unassigned' ? null : employees.find((e: any) => e.id === employeeId);
-                  const employeeName = employee ? employee.name : 'Не назначены';
-                  
-                  return (
-                    <Card key={employeeId} className="p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Users className="w-5 h-5 text-primary" />
-                        <h4 className="font-semibold">{employeeName}</h4>
-                        <Badge variant="outline">{tasks.length} задач</Badge>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        {tasks.map((task: any) => {
-                          const completedChecklist = (task.checklist || []).filter((item: ChecklistItem) => item.done).length;
-                          const totalChecklist = (task.checklist || []).length;
-                          const checklistProgress = totalChecklist > 0 ? (completedChecklist / totalChecklist) * 100 : 0;
-                          
-                          return (
-                            <Card key={task.id} className="p-4 border-l-4 border-l-primary">
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h5 className="font-medium">{task.title}</h5>
-                                    <Badge variant={
-                                      task.priority === 'high' ? 'destructive' :
-                                      task.priority === 'med' ? 'default' : 'secondary'
-                                    }>
-                                      {task.priority === 'high' ? 'Высокий' :
-                                       task.priority === 'med' ? 'Средний' : 'Низкий'}
-                                    </Badge>
-                                    <Badge variant={
-                                      task.status === 'done' ? 'default' :
-                                      task.status === 'in_progress' ? 'secondary' : 'outline'
-                                    }>
-                                      {task.status === 'done' ? 'Выполнено' :
-                                       task.status === 'in_progress' ? 'В работе' : 'К выполнению'}
-                                    </Badge>
+
+              {projectTasks.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">Задач пока нет</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Задачи по сотрудникам */}
+                  {Object.entries(tasksByEmployee).map(([employeeId, tasks]) => {
+                    const employee = employeeId === 'unassigned' ? null : employees.find((e: any) => e.id === employeeId);
+                    const employeeName = employee ? employee.name : 'Не назначены';
+
+                    return (
+                      <Card key={employeeId} className="p-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Users className="w-5 h-5 text-primary" />
+                          <h4 className="font-semibold">{employeeName}</h4>
+                          <Badge variant="outline">{tasks.length} задач</Badge>
+                        </div>
+
+                        <div className="space-y-3">
+                          {tasks.map((task: any) => {
+                            const completedChecklist = (task.checklist || []).filter((item: ChecklistItem) => item.done).length;
+                            const totalChecklist = (task.checklist || []).length;
+                            const checklistProgress = totalChecklist > 0 ? (completedChecklist / totalChecklist) * 100 : 0;
+
+                            return (
+                              <Card key={task.id} className="p-4 border-l-4 border-l-primary">
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <h5 className="font-medium">{task.title}</h5>
+                                      <Badge variant={
+                                        task.priority === 'high' ? 'destructive' :
+                                          task.priority === 'med' ? 'default' : 'secondary'
+                                      }>
+                                        {task.priority === 'high' ? 'Высокий' :
+                                          task.priority === 'med' ? 'Средний' : 'Низкий'}
+                                      </Badge>
+                                      <Badge variant={
+                                        task.status === 'done' ? 'default' :
+                                          task.status === 'in_progress' ? 'secondary' : 'outline'
+                                      }>
+                                        {task.status === 'done' ? 'Выполнено' :
+                                          task.status === 'in_progress' ? 'В работе' : 'К выполнению'}
+                                      </Badge>
+                                    </div>
+
+                                    {task.description && (
+                                      <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
+                                    )}
+
+                                    {/* Чек-лист */}
+                                    {task.checklist && task.checklist.length > 0 && (
+                                      <div className="mt-3 space-y-2">
+                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                          <span>Чек-лист: {completedChecklist}/{totalChecklist}</span>
+                                          <span>{Math.round(checklistProgress)}%</span>
+                                        </div>
+                                        <Progress value={checklistProgress} className="h-1" />
+                                        <div className="space-y-1">
+                                          {task.checklist.map((item: ChecklistItem, idx: number) => (
+                                            <div key={idx} className="flex items-center gap-2 text-sm">
+                                              {item.done ? (
+                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                              ) : (
+                                                <Circle className="w-4 h-4 text-muted-foreground" />
+                                              )}
+                                              <span className={item.done ? 'line-through text-muted-foreground' : ''}>
+                                                {item.item}
+                                              </span>
+                                              {item.required && (
+                                                <Badge variant="outline" className="text-xs">Обязательно</Badge>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Время */}
+                                    {(task.estimate_h || task.spent_h) && (
+                                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                                        {task.estimate_h && (
+                                          <span>Оценка: {task.estimate_h}ч</span>
+                                        )}
+                                        {task.spent_h > 0 && (
+                                          <span>Потрачено: {task.spent_h}ч</span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                  
-                                  {task.description && (
-                                    <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
-                                  )}
-                                  
-                                  {/* Чек-лист */}
-                                  {task.checklist && task.checklist.length > 0 && (
-                                    <div className="mt-3 space-y-2">
-                                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                        <span>Чек-лист: {completedChecklist}/{totalChecklist}</span>
-                                        <span>{Math.round(checklistProgress)}%</span>
-                                      </div>
-                                      <Progress value={checklistProgress} className="h-1" />
-                                      <div className="space-y-1">
-                                        {task.checklist.map((item: ChecklistItem, idx: number) => (
-                                          <div key={idx} className="flex items-center gap-2 text-sm">
-                                            {item.done ? (
-                                              <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                            ) : (
-                                              <Circle className="w-4 h-4 text-muted-foreground" />
-                                            )}
-                                            <span className={item.done ? 'line-through text-muted-foreground' : ''}>
-                                              {item.item}
-                                            </span>
-                                            {item.required && (
-                                              <Badge variant="outline" className="text-xs">Обязательно</Badge>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Время */}
-                                  {(task.estimate_h || task.spent_h) && (
-                                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                                      {task.estimate_h && (
-                                        <span>Оценка: {task.estimate_h}ч</span>
-                                      )}
-                                      {task.spent_h > 0 && (
-                                        <span>Потрачено: {task.spent_h}ч</span>
-                                      )}
-                                    </div>
-                                  )}
                                 </div>
-                              </div>
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </TabsContent>}
-
-        {/* Вкладка рабочих процедур (только если есть шаблон, не директор и не закупки) */}
-        {activeTemplate && showFullDetails && !isProcurement && (
-          <TabsContent value="procedures" className="space-y-4 mt-4">
-          {/* Навигация по этапам */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {displayStages.map((stage, index) => {
-              const stageData = projectData?.stagesData[stage.id] || {};
-              const completedCount = Object.values(stageData).filter(e => e.completed).length;
-              const totalCount = stage.elements.length;
-              const isCompleted = completedCount === totalCount && totalCount > 0;
-              const isCurrent = index === currentStageIndex;
-
-              return (
-                <Button
-                  key={stage.id}
-                  variant={isCurrent ? "default" : "outline"}
-                  className={`flex-shrink-0 ${isCompleted ? 'bg-green-500 hover:bg-green-600' : ''}`}
-                  onClick={() => setCurrentStageIndex(index)}
-                >
-                  <span className="mr-2">{index + 1}.</span>
-                  {stage.name}
-                  <Badge variant="secondary" className="ml-2">
-                    {completedCount}/{totalCount}
-                  </Badge>
-                  {isCompleted && <CheckCircle2 className="w-4 h-4 ml-2" />}
-                </Button>
-              );
-            })}
-          </div>
-        </TabsContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
         )}
 
-        {/* Вкладка распределения задач (только для менеджеров) */}
-        {isPM && (
+        {/* Вкладка рабочих процедур */}
+        {!(isDirector || isAdmin) && activeTemplate && (
+          <TabsContent value="procedures" className="space-y-4 mt-4">
+            {/* Навигация по этапам */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {displayStages.map((stage, index) => {
+                const stageData = projectData?.stagesData[stage.id] || {};
+                const completedCount = Object.values(stageData).filter(e => e.completed).length;
+                const totalCount = stage.elements.length;
+                const isCompleted = completedCount === totalCount && totalCount > 0;
+                const isCurrent = index === currentStageIndex;
+
+                return (
+                  <Button
+                    key={stage.id}
+                    variant={isCurrent ? "default" : "outline"}
+                    className={`flex-shrink-0 ${isCompleted ? 'bg-green-500 hover:bg-green-600' : ''}`}
+                    onClick={() => setCurrentStageIndex(index)}
+                  >
+                    <span className="mr-2">{index + 1}.</span>
+                    {stage.name}
+                    <Badge variant="secondary" className="ml-2">
+                      {completedCount}/{totalCount}
+                    </Badge>
+                    {isCompleted && <CheckCircle2 className="w-4 h-4 ml-2" />}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {/* Содержимое текущего этапа */}
+            {(() => {
+              const currentStage = displayStages[currentStageIndex];
+              if (!currentStage) return null;
+
+              return (
+                <Card className="p-6 mt-4 border-t-4" style={{ borderTopColor: currentStage.color || '#3b82f6' }}>
+                  <div className="mb-6">
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                      <CheckCircle2 className="w-6 h-6" style={{ color: currentStage.color || '#3b82f6' }} />
+                      {currentStageIndex + 1}. {currentStage.name}
+                    </h3>
+                    {currentStage.description && (
+                      <p className="text-muted-foreground mt-2 text-sm">{currentStage.description}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {currentStage.elements.length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground bg-secondary/20 rounded-lg">
+                        В этом этапе нет рабочих процедур
+                      </div>
+                    ) : (
+                      currentStage.elements.map((element, idx) => {
+                        const elementData = projectData?.stagesData?.[currentStage.id]?.[element.id];
+                        const isCompleted = elementData?.completed;
+                        const icon = ELEMENT_TYPE_ICONS[element.type] || <FileText className="w-4 h-4" />;
+
+                        return (
+                          <div key={element.id} className="p-4 border rounded-lg bg-card hover:bg-secondary/10 transition-colors flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                            <div className={`mt-1 sm:mt-0 p-2 rounded-full flex-shrink-0 ${isCompleted ? 'bg-green-100 text-green-600' : 'bg-secondary text-primary'}`}>
+                              {isCompleted ? <Check className="w-4 h-4" /> : icon}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <h4 className={`font-medium text-sm sm:text-base ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+                                {idx + 1}. {element.title}
+                              </h4>
+                              {element.description && (
+                                <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">{element.description}</p>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap sm:flex-col items-center sm:items-end gap-2 flex-shrink-0 mt-2 sm:mt-0">
+                              <Badge variant={element.required ? 'default' : 'secondary'} className="text-xs">
+                                {element.required ? 'Обязательно' : 'Опционально'}
+                              </Badge>
+                              {isCompleted && (
+                                <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-xs">
+                                  Выполнено
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </Card>
+              );
+            })()}
+          </TabsContent>
+        )}
+
+        {/* Вкладка распределения задач */}
+        {!(isDirector || isAdmin) && (isPM || isPartner) && (
           <TabsContent value="task-distribution" className="space-y-4 mt-4">
             <TaskDistribution
               projectId={project?.id || id || ''}
@@ -1282,8 +1392,8 @@ export default function ProjectWorkspace() {
           </TabsContent>
         )}
 
-        {/* Вкладка шаблонов (только если не директор и не закупки) */}
-        {showFullDetails && !isProcurement && (
+        {/* Вкладка шаблонов */}
+        {!(isDirector || isAdmin) && activeTemplate && (
           <TabsContent value="templates" className="space-y-4 mt-4">
             <TemplateManager
               projectId={project?.id || id || ''}
@@ -1300,7 +1410,7 @@ export default function ProjectWorkspace() {
         )}
 
         {/* Вкладка рабочих документов */}
-        {workPapers.length > 0 && (
+        {!(isDirector || isAdmin) && workPapers.length > 0 && (
           <TabsContent value="workpapers" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Дерево документов */}
@@ -1315,7 +1425,7 @@ export default function ProjectWorkspace() {
                   onSearchChange={setWorkPaperSearchQuery}
                 />
               </div>
-              
+
               {/* Просмотр документа */}
               <div className="lg:col-span-2">
                 {selectedWorkPaper ? (
@@ -1324,9 +1434,9 @@ export default function ProjectWorkspace() {
                     template={selectedWorkPaper.template as WorkPaperTemplate}
                     onStatusChange={(status) => {
                       // Обновляем статус в списке
-                      setWorkPapers(prev => 
-                        prev.map(wp => 
-                          wp.id === selectedWorkPaper.id 
+                      setWorkPapers(prev =>
+                        prev.map(wp =>
+                          wp.id === selectedWorkPaper.id
                             ? { ...wp, status }
                             : wp
                         )
@@ -1335,9 +1445,9 @@ export default function ProjectWorkspace() {
                     }}
                     onSave={(data) => {
                       // Обновляем данные в списке
-                      setWorkPapers(prev => 
-                        prev.map(wp => 
-                          wp.id === selectedWorkPaper.id 
+                      setWorkPapers(prev =>
+                        prev.map(wp =>
+                          wp.id === selectedWorkPaper.id
                             ? { ...wp, data }
                             : wp
                         )
@@ -1366,6 +1476,7 @@ export default function ProjectWorkspace() {
             projectId={project?.id || id || ''}
             uploadedBy={user?.id || ''}
             initialFiles={project?.notes?.files || []}
+            canDelete={() => isProcurementOrAdmin}
             onFilesChange={(files) => {
               // Можно обновить состояние если нужно
             }}
@@ -1514,7 +1625,7 @@ export default function ProjectWorkspace() {
                 }
               }
             }}
-            canEdit={user?.role === 'procurement' || user?.role === 'admin' || user?.role === 'partner' || user?.role === 'deputy_director' || user?.role === 'ceo'}
+            canEdit={isProcurementOrAdmin}
           />
         </TabsContent>
       </Tabs>
@@ -1541,9 +1652,9 @@ export default function ProjectWorkspace() {
             {currentStage.elements.map((element) => {
               // Показываем информацию о назначенном ответственном
               const elementData = projectData?.stagesData[currentStage.id]?.[element.id];
-              const responsible = elementData?.responsibleUserId ? 
+              const responsible = elementData?.responsibleUserId ?
                 employees.find((e: any) => e.id === elementData.responsibleUserId) : null;
-              
+
               return (
                 <div key={element.id}>
                   {responsible && (
@@ -1603,9 +1714,9 @@ export default function ProjectWorkspace() {
               const methodologyElement = projectData?.methodology?.stages
                 .find((s: any) => s.stageId === currentStage.id)
                 ?.elements.find((e: any) => e.elementId === element.id);
-              const responsible = methodologyElement?.responsibleUserId ? 
+              const responsible = methodologyElement?.responsibleUserId ?
                 employees.find((e: any) => e.id === methodologyElement.responsibleUserId) : null;
-              
+
               return (
                 <div key={element.id}>
                   {responsible && (
@@ -1666,7 +1777,7 @@ export default function ProjectWorkspace() {
                 После завершения проекта автоматически рассчитаются и начислятся бонусы всем членам команды.
               </p>
             </div>
-            <Button 
+            <Button
               onClick={() => setShowCompleteDialog(true)}
               className="bg-green-600 hover:bg-green-700"
             >
@@ -1711,10 +1822,10 @@ export default function ProjectWorkspace() {
             <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>
               Отмена
             </Button>
-            <Button 
+            <Button
               onClick={async () => {
                 if (!project || !user) return;
-                
+
                 try {
                   // Обновляем статус проекта
                   const updatedProject = {
@@ -1732,7 +1843,7 @@ export default function ProjectWorkspace() {
 
                   // Рассчитываем финансы и бонусы
                   const finances = calculateProjectFinances(updatedProject);
-                  
+
                   // Обновляем финансы проекта
                   const projectWithFinances = {
                     ...updatedProject,
@@ -1777,10 +1888,10 @@ export default function ProjectWorkspace() {
                   });
 
                   setShowCompleteDialog(false);
-                  
+
                   // Обновляем проект в локальном состоянии
                   setProject(projectWithFinances);
-                  
+
                   // Перезагружаем страницу через 2 секунды
                   setTimeout(() => {
                     window.location.reload();

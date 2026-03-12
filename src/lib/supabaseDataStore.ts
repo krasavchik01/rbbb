@@ -25,7 +25,7 @@ export interface Employee extends Omit<SupabaseEmployee, 'role' | 'level'> {
 }
 
 export interface Project extends Omit<SupabaseProject, 'status'> {
-  status: 'active' | 'in_progress' | 'completed';
+  status: 'В работе' | 'На проверке' | 'Черновик' | 'Завершён' | 'Приостановлен';
   clientName?: string;
   clientWebsite?: string;
   contractNumber?: string;
@@ -44,6 +44,8 @@ export interface Project extends Omit<SupabaseProject, 'status'> {
   contract?: any;
   client?: any;
   finances?: any;
+  updated_at: string | null;
+  notes: any;
 }
 
 export interface Timesheet extends SupabaseTimesheet {
@@ -77,6 +79,18 @@ class SupabaseDataStore {
 
   constructor() {
     this.checkConnection();
+  }
+
+  // Базовый URL для API файлов (ваш локальный сервер/NAS)
+  private get fileApiUrl(): string {
+    if (typeof window !== 'undefined') {
+      // В разработке Vite на 8080, сервер на 3000
+      if (window.location.port === '8080') {
+        return `http://${window.location.hostname}:3000/api`;
+      }
+      return '/api';
+    }
+    return '/api';
   }
 
   // Проверка подключения к Supabase
@@ -162,18 +176,18 @@ class SupabaseDataStore {
 
         if (!error && data) {
           let employees = data.map(emp => this.mapSupabaseEmployee(emp));
-          
+
           // Добавляем демо-пользователей если их нет
           const demoEmployees = this.initializeDemoEmployees();
           const existingIds = new Set(employees.map(e => e.id));
           const missingEmployees = demoEmployees.filter(e => !existingIds.has(e.id));
-          
+
           if (missingEmployees.length > 0) {
             console.log('🔧 Adding', missingEmployees.length, 'missing demo employees to Supabase list...');
             employees = [...employees, ...missingEmployees];
             console.log('✅ Added missing demo employees. Total:', employees.length);
           }
-          
+
           this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
           console.log('✅ Loaded employees from Supabase:', employees.length);
           return employees;
@@ -185,19 +199,19 @@ class SupabaseDataStore {
 
     console.log('📦 Loading employees from localStorage (fallback)');
     let employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
-    
+
     // Всегда проверяем и добавляем демо-пользователей
     const demoEmployees = this.initializeDemoEmployees();
     const existingIds = new Set(employees.map(e => e.id));
     const missingEmployees = demoEmployees.filter(e => !existingIds.has(e.id));
-    
+
     if (missingEmployees.length > 0) {
       console.log('🔧 Adding', missingEmployees.length, 'missing demo employees...');
       employees = [...employees, ...missingEmployees];
       this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
       console.log('✅ Added missing demo employees. Total:', employees.length);
     }
-    
+
     // Также обновляем существующих демо-пользователей если их данные изменились
     const demoIds = new Set(demoEmployees.map(e => e.id));
     employees = employees.map(emp => {
@@ -218,11 +232,11 @@ class SupabaseDataStore {
       }
       return emp;
     });
-    
+
     if (missingEmployees.length > 0) {
       this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
     }
-    
+
     console.log('📦 Loaded', employees.length, 'employees from localStorage');
     return employees;
   }
@@ -294,12 +308,12 @@ class SupabaseDataStore {
         if (!error && data) {
           const mapped = this.mapSupabaseEmployee(data);
           console.log('✅ Created employee in Supabase:', mapped.id);
-          
+
           // Также сохраняем в localStorage
           const employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
           employees.push(mapped);
           this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
-          
+
           return mapped;
         } else if (error) {
           console.error('❌ Error creating employee record:', error);
@@ -393,12 +407,12 @@ class SupabaseDataStore {
 
         if (!error) {
           console.log('✅ Deleted employee from Supabase:', id);
-          
+
           // Удаляем из localStorage
           const employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
           const filtered = employees.filter(e => e.id !== id);
           this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, filtered);
-          
+
           return true;
         }
       } catch (err) {
@@ -417,7 +431,6 @@ class SupabaseDataStore {
   // === PROJECTS ===
 
   async getProjects(): Promise<Project[]> {
-    // Используем только Supabase (без localStorage)
     try {
       const { data, error } = await supabase
         .from('projects')
@@ -425,144 +438,73 @@ class SupabaseDataStore {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      const projects = (data || []).map(proj => this.mapSupabaseProject(proj));
-      console.log('✅ Loaded projects from Supabase:', projects.length);
-      return projects;
+      return (data || []).map(proj => this.mapSupabaseProject(proj));
     } catch (err) {
       console.error('❌ Error loading projects from Supabase:', err);
-      return [];
+      return this.getFromLocalStorage<Project>(STORAGE_KEYS.PROJECTS);
     }
   }
 
   async getProject(id: string): Promise<Project | null> {
     try {
-      const { data, error } = await supabase
+      const { data: sbData, error: sbError } = await supabase
         .from('projects')
         .select('*')
         .eq('id', id)
         .single();
 
-      if (error || !data) {
-        // Fallback: search by notes id
-        const { data: byNotes, error: err2 } = await supabase
-          .from('projects')
-          .select('*')
-          .ilike('notes', `%"id":"${id}"%`)
-          .limit(1)
-          .single();
-        if (err2 || !byNotes) return null;
-        return this.mapSupabaseProject(byNotes);
+      if (!sbError && sbData) {
+        return this.mapSupabaseProject(sbData);
       }
-      return this.mapSupabaseProject(data);
+
+      return null;
     } catch (err) {
-      console.error('❌ Error getting project:', err);
+      console.error('❌ Error getting project from Supabase:', err);
       return null;
     }
   }
 
   async createProject(project: any): Promise<Project> {
-    // Сохраняем только в Supabase, со статусом черновик и полным объектом в notes
     try {
-      // Функция для нормализации даты в формат YYYY-MM-DD
       const normalizeDate = (date: any): string => {
         if (!date) return new Date().toISOString().split('T')[0];
-        if (typeof date === 'string') {
-          // Если уже в формате YYYY-MM-DD
-          if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            return date;
-          }
-          // Пробуем парсить другие форматы
-          const parsed = new Date(date);
-          if (!isNaN(parsed.getTime())) {
-            return parsed.toISOString().split('T')[0];
-          }
-        }
-        // Если это число (Excel серийный номер) - конвертируем
-        if (typeof date === 'number') {
-          const excelEpochDays = 25569;
-          const millisecondsPerDay = 86400000;
-          const jsDate = new Date((date - excelEpochDays) * millisecondsPerDay);
-          if (!isNaN(jsDate.getTime())) {
-            return jsDate.toISOString().split('T')[0];
-          }
-        }
-        return new Date().toISOString().split('T')[0];
+        if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+        const parsed = new Date(date);
+        return !isNaN(parsed.getTime()) ? parsed.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
       };
 
-      const startDate = normalizeDate(project.contract?.serviceStartDate);
-      const endDate = normalizeDate(project.contract?.serviceEndDate);
-      
-      // Логирование для отладки сохранения суммы
-      if (import.meta.env.DEV) {
-        console.log('💾 Сохраняем проект:', {
-          name: project.name,
-          finances: project.finances?.amountWithoutVAT,
-          contract: project.contract?.amountWithoutVAT,
-          amountWithoutVAT: project.amountWithoutVAT,
-          amount: project.amount
-        });
-      }
-      
-      const payload = {
+      const sbPayload = {
         name: project.name || project.client?.name || 'Без названия',
-        start_date: startDate,
-        deadline: endDate,
-        status: 'active' as any,
-        kpi_percentage: 0,
-        notes: JSON.stringify(project),
+        start_date: normalizeDate(project.contract?.serviceStartDate),
+        deadline: normalizeDate(project.contract?.serviceEndDate),
+        status: 'active',
+        kpi_percentage: project.completion || 0,
+        notes: JSON.stringify({ ...project, updated_at: new Date().toISOString() }),
       };
-      const { data, error } = await supabase.from('projects').insert([payload]).select().single();
+
+      const { data, error } = await supabase.from('projects').insert([sbPayload]).select().single();
       if (error) throw error;
-      console.log('✅ Saved project to Supabase:', data?.id);
-      
-      // Логирование сохранённых данных
-      if (import.meta.env.DEV) {
-        try {
-          const savedNotes = JSON.parse(payload.notes);
-          console.log('💾 Проверка сохранённых notes:', {
-            finances: savedNotes.finances?.amountWithoutVAT,
-            contract: savedNotes.contract?.amountWithoutVAT
-          });
-        } catch {}
-      }
+      return this.mapSupabaseProject(data);
     } catch (err) {
-      console.error('❌ Could not save project to Supabase:', err);
+      console.error('❌ Error creating project in Supabase:', err);
       throw err;
     }
-    return project;
   }
 
   async updateProject(id: string, updates: any): Promise<Project | null> {
-    // Обновляем в Supabase запись, найденную по notes/id или по id
     try {
-      // Сначала получаем текущий проект
-      const { data: currentProject, error: fetchError } = await supabase
+      const { data: currentProject } = await supabase
         .from('projects')
         .select('*')
         .eq('id', id)
         .single();
 
-      if (fetchError && !currentProject) {
-        // Пытаемся найти по notes ilike
-        const { data: projectByNotes, error: fetchError2 } = await supabase
-          .from('projects')
-          .select('*')
-          .ilike('notes', `%${id}%`)
-          .single();
+      if (currentProject) {
+        const existingNotes = typeof currentProject.notes === 'string'
+          ? JSON.parse(currentProject.notes)
+          : currentProject.notes || {};
 
-        if (fetchError2) throw fetchError2;
-        if (!projectByNotes) throw new Error('Project not found');
-
-        // Мержим существующие notes с обновлениями
-        const existingNotes = typeof projectByNotes.notes === 'string'
-          ? JSON.parse(projectByNotes.notes)
-          : projectByNotes.notes || {};
-
-        const mergedNotes = {
-          ...existingNotes,
-          ...updates,
-          updated_at: new Date().toISOString(),
-        };
+        const mergedNotes = { ...existingNotes, ...updates, updated_at: new Date().toISOString() };
 
         const { error: updateError } = await supabase
           .from('projects')
@@ -571,58 +513,24 @@ class SupabaseDataStore {
             name: updates.name || updates.client?.name || existingNotes.name || 'Без названия',
             updated_at: new Date().toISOString()
           })
-          .eq('id', projectByNotes.id);
+          .eq('id', id);
 
-        if (updateError) throw updateError;
-        return mergedNotes as Project;
+        if (!updateError) return mergedNotes as Project;
       }
 
-      // Мержим существующие notes с обновлениями
-      const existingNotes = typeof currentProject.notes === 'string'
-        ? JSON.parse(currentProject.notes)
-        : currentProject.notes || {};
-
-      const mergedNotes = {
-        ...existingNotes,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Обновляем проект
-      const { error } = await supabase
-        .from('projects')
-        .update({
-          notes: JSON.stringify(mergedNotes),
-          name: updates.name || updates.client?.name || existingNotes.name || 'Без названия',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-      return mergedNotes as Project;
+      throw new Error('Could not update project');
     } catch (err) {
-      console.error('❌ Error updating project in Supabase:', err);
+      console.error('❌ Error updating project:', err);
       throw err;
     }
   }
 
   async deleteProject(id: string): Promise<boolean> {
-    // Удаляем только из Supabase
     try {
-      // 1) по UUID id
-      let { error } = await supabase.from('projects').delete().eq('id', id);
-      if (error) {
-        // 2) по вхождению external id в notes
-        const { error: err2 } = await supabase
-          .from('projects')
-          .delete()
-          .ilike('notes', `%${id}%`);
-        if (err2) throw err2;
-      }
-      console.log('✅ Deleted project from Supabase:', id);
+      await supabase.from('projects').delete().eq('id', id);
       return true;
     } catch (err) {
-      console.error('❌ Error deleting project from Supabase:', err);
+      console.error('❌ Error deleting project:', err);
       return false;
     }
   }
@@ -670,7 +578,7 @@ class SupabaseDataStore {
       const raw: any = (proj as any).notes;
       if (raw) {
         notes = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        
+
         // Логирование для отладки (только для первых проектов)
         if (import.meta.env.DEV && Math.random() < 0.1) { // 10% проектов
           console.log('🔍 mapSupabaseProject - парсинг notes:', {
@@ -688,17 +596,21 @@ class SupabaseDataStore {
       console.error('❌ Ошибка парсинга notes:', err, 'для проекта:', proj.id);
     }
 
-    const baseStatus = proj.status === 'completed' ? 'completed' :
-                      proj.status === 'in_progress' ? 'in_progress' : 'active';
-
-    // Если в notes есть более точный статус («new»/«pending_approval»), маппим в локальные статусы
+    // Маппинг статуса из Supabase в UI
     const mappedStatus = (() => {
-      const s = notes?.status;
-      if (s === 'new' || s === 'pending_approval') return 'active';
-      if (s === 'approved') return 'in_progress';
-      // cancelled не поддерживается в enum, используем completed
-      if (s === 'cancelled') return 'completed';
-      return baseStatus;
+      // Пытаемся взять статус из notes, так как он там более точный (русский)
+      const notesStatus = notes?.status;
+      if (notesStatus && ['В работе', 'На проверке', 'Черновик', 'Завершён', 'Приостановлен'].includes(notesStatus)) {
+        return notesStatus;
+      }
+
+      // Иначе маппим из enum
+      switch (proj.status) {
+        case 'in_progress': return 'В работе';
+        case 'completed': return 'Завершён';
+        case 'active': return 'В работе';
+        default: return 'Черновик';
+      }
     })();
 
     // Важно: не сливаем notes на верхний уровень, чтобы избежать дублей
@@ -712,9 +624,9 @@ class SupabaseDataStore {
       contractNumber: notes?.contractNumber || notes?.contract?.number,
       contractDate: notes?.contractDate || notes?.contract?.date,
       amountWithoutVAT: notes?.finances?.amountWithoutVAT ||
-                       notes?.contract?.amountWithoutVAT ||
-                       notes?.amountWithoutVAT ||
-                       notes?.amount,
+        notes?.contract?.amountWithoutVAT ||
+        notes?.amountWithoutVAT ||
+        notes?.amount,
       ourCompany: notes?.ourCompany || notes?.companyName,
       companyName: notes?.companyName || notes?.ourCompany,
       currency: notes?.contract?.currency || notes?.currency || 'KZT',
@@ -733,8 +645,8 @@ class SupabaseDataStore {
         serviceEndDate: notes?.contract?.serviceEndDate || notes.serviceTerm || proj.deadline,
         serviceStartDate: notes?.contract?.serviceStartDate || proj.start_date,
         amountWithoutVAT: notes?.finances?.amountWithoutVAT ||
-                         notes?.contract?.amountWithoutVAT ||
-                         notes?.amountWithoutVAT,
+          notes?.contract?.amountWithoutVAT ||
+          notes?.amountWithoutVAT,
         currency: notes?.contract?.currency || notes?.currency || 'KZT',
       } : undefined),
       // Маппим client если есть
@@ -750,11 +662,12 @@ class SupabaseDataStore {
     return mapped;
   }
 
+
   // === PROJECT FILES ===
-  
+
   /**
-   * Загружает файл в Supabase Storage для проекта
-   */
+ * Загружает файл на локальный сервер (NAS) и сохраняет метаданные в Supabase
+ */
   async uploadProjectFile(
     projectId: string,
     file: File,
@@ -762,191 +675,231 @@ class SupabaseDataStore {
     uploadedBy: string
   ): Promise<{ id: string; storagePath: string; publicUrl: string }> {
     try {
-      // Создаем bucket если его нет (нужно сделать вручную в Supabase Dashboard)
-      const bucketName = 'project-files';
-      
-      // Генерируем уникальное имя файла
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${projectId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      
-      // Загружаем файл в Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
+      const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
+      const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
 
-      if (uploadError) {
-        console.error('❌ Error uploading file:', uploadError);
-        throw uploadError;
+      if (!seafileUrl || !seafileToken || !repoId) {
+        throw new Error('❌ Не настроены переменные VITE_SEAFILE_URL, VITE_SEAFILE_TOKEN или VITE_SEAFILE_REPO_ID.');
       }
 
-      // Получаем публичный URL
-      const { data: urlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(fileName);
+      console.log(`📡 Получение ссылки для загрузки от Seafile...`);
+      // Шаг 1: Получаем одноразовую ссылку для загрузки файла
+      const uploadLinkRes = await fetch(`${seafileUrl}/api2/repos/${repoId}/upload-link/?p=/`, {
+        headers: { 'Authorization': `Token ${seafileToken}` }
+      });
 
-      // Создаем запись файла
-      const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      if (!uploadLinkRes.ok) {
+        throw new Error(`Ошибка получения ссылки Seafile: ${uploadLinkRes.status}`);
+      }
+
+      const uploadUrlRaw = await uploadLinkRes.text();
+      let uploadUrl = uploadUrlRaw.replace(/"/g, ''); // Seafile возвращает строку в кавычках
+
+      // Заменяем оригинальный домен Seafile на наш прокси, чтобы избежать CORS
+      uploadUrl = uploadUrl.replace(/^https?:\/\/[^/]+/, seafileUrl);
+
+      // Шаг 2: Отправляем сам файл
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('parent_dir', '/');
+      formData.append('relative_path', projectId); // Создаем подпапку под проект
+
+      console.log(`📤 Загрузка файла ${file.name} в Seafile, папка: /${projectId}...`);
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Token ${seafileToken}` }, // На всякий случай
+        body: formData
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error(`Ошибка загрузки файла в Seafile: ${uploadRes.status}`);
+      }
+
+      // После успешной загрузки файл лежит по пути: /projectId/file.name
+      // Готовим записи для нашей БД (Supabase)
+      const storagePath = `/${projectId}/${file.name}`;
+      const fileId = `${Date.now()}-${Math.round(Math.random() * 100000)}`;
+
+      // Для фронтенда мы не можем сохранить постоянную ссылку на скачивание,
+      // потому что Seafile-ссылки временные. Мы будем генерировать их при скачивании по требованию.
+      // Сохраняем просто путь в Seafile и специальный флаг `isSeafile`
       const fileRecord = {
         id: fileId,
-        projectId: projectId,
         fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
+        fileType: file.type,
         fileSize: file.size,
-        storagePath: fileName,
+        storagePath: storagePath,
         category: category,
         uploadedBy: uploadedBy,
         uploadedAt: new Date().toISOString(),
-        publicUrl: urlData.publicUrl
+        isSeafile: true,
+        publicUrl: `seafile://${storagePath}` // Псевдо-ссылка
       };
 
-      // Сохраняем метаданные файла в notes.files проекта (обход RLS)
       const project = await this.getProject(projectId);
-      const existingFiles = project?.notes?.files || [];
+      const existingNotes = (project as any)?.notes || {};
+      const existingFiles = existingNotes.files || [];
       const updatedFiles = [...existingFiles, fileRecord];
 
-      // Обновляем files напрямую на верхнем уровне notes (НЕ через notes.notes.files)
-      await this.updateProject(projectId, { files: updatedFiles } as any);
-
-      // Также пробуем сохранить в отдельную таблицу (может не работать из-за RLS)
-      try {
-        await (supabase as any)
-          .from('project_files')
-          .insert({
-            project_id: projectId,
-            file_name: file.name,
-            file_type: file.type || 'application/octet-stream',
-            file_size: file.size,
-            storage_path: fileName,
-            category: category,
-            uploaded_by: uploadedBy,
-          });
-      } catch (dbError) {
-        console.warn('⚠️ RLS error saving to project_files table, file saved in notes.files:', dbError);
+      // Если это договор (contract), пропишем псевдо-ссылку еще и в contractScanUrl 
+      // для обратной совместимости со старыми компонентами
+      let updatedContract = existingNotes.contract;
+      if (category === 'contract') {
+        updatedContract = {
+          ...existingNotes.contract,
+          contractScanUrl: fileRecord.publicUrl
+        };
       }
 
+      await this.updateProject(projectId, {
+        ...existingNotes,
+        files: updatedFiles,
+        ...(category === 'contract' ? { contract: updatedContract } : {})
+      } as any);
+
       return {
-        id: fileId,
-        storagePath: fileName,
-        publicUrl: urlData.publicUrl
+        id: fileRecord.id,
+        storagePath: fileRecord.storagePath,
+        publicUrl: fileRecord.publicUrl
       };
     } catch (error) {
-      console.error('❌ Error in uploadProjectFile:', error);
+      console.error('❌ Ошибка в uploadProjectFile (Seafile):', error);
       throw error;
     }
   }
 
   /**
-   * Получает список файлов проекта (из JSON notes.files, обход RLS)
-   */
+ * Получает список файлов проекта
+ */
   async getProjectFiles(projectId: string): Promise<any[]> {
     try {
-      // Сначала пробуем получить файлы из notes.files проекта (обход RLS)
       const project = await this.getProject(projectId);
-      if (project?.notes?.files && Array.isArray(project.notes.files)) {
-        return project.notes.files;
+      let files = project?.notes?.files || [];
+
+      // Извлекаем старые файлы из contractScanUrl (Supabase Storage)
+      const oldContractUrl = project?.contract?.contractScanUrl || project?.notes?.contract?.contractScanUrl;
+      const parsedOldFiles = [];
+      if (oldContractUrl && oldContractUrl !== 'pending_upload') {
+        parsedOldFiles.push({
+          id: `old_contract_${projectId}`,
+          fileName: 'Договор (старая версия)',
+          fileType: 'application/pdf',
+          fileSize: 0,
+          storagePath: oldContractUrl,
+          category: 'contract',
+          uploadedBy: 'system',
+          uploadedAt: project?.created_at || new Date().toISOString()
+        });
       }
 
-      // Fallback: пробуем из отдельной таблицы (может не работать из-за RLS)
-      const { data, error } = await (supabase as any)
-        .from('project_files')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('uploaded_at', { ascending: false });
+      // Пересчитываем publicUrl на лету, чтобы они всегда указывали на Seafile или Supabase
+      const mappedFiles = files.map((file: any) => ({
+        ...file,
+        publicUrl: file.isSeafile
+          ? `seafile://${file.storagePath}`
+          : file.publicUrl || file.storagePath
+      }));
 
-      if (error) {
-        console.warn('⚠️ RLS error reading project_files, returning empty:', error.message);
-        return [];
-      }
-
-      // Добавляем публичные URL для каждого файла
-      const filesWithUrls = (data || []).map((file: any) => {
-        const { data: urlData } = supabase.storage
-          .from('project-files')
-          .getPublicUrl(file.storage_path);
-        
-        return {
-          ...file,
-          publicUrl: urlData.publicUrl
-        };
-      });
-
-      return filesWithUrls;
+      // Возвращаем объединенный массив
+      return [...parsedOldFiles, ...mappedFiles];
     } catch (error) {
-      console.error('❌ Error getting project files:', error);
+      console.error('❌ Ошибка при получении файлов:', error);
       return [];
     }
   }
 
   /**
-   * Удаляет файл проекта (из notes.files и Storage)
-   */
+ * Получить временную прямую ссылку на скачивание файла из Seafile
+ */
+  async getSeafileDownloadUrl(storagePath: string): Promise<string> {
+    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
+    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
+    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
+
+    if (!seafileUrl || !seafileToken || !repoId) return '';
+
+    try {
+      // storagePath у нас вида /projectId/filename.pdf
+      const encodedPath = encodeURIComponent(storagePath);
+      const res = await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}`, {
+        headers: { 'Authorization': `Token ${seafileToken}` }
+      });
+
+      if (!res.ok) throw new Error(`Ошибка получения ссылки из Seafile: ${res.status}`);
+      const rawUrl = await res.text();
+      return rawUrl.replace(/"/g, ''); // Получаем чистый URL
+    } catch (e) {
+      console.error('Ошибка в getSeafileDownloadUrl:', e);
+      return '';
+    }
+  }
+
+  /**
+ * Удаляет файл проекта (из БД и с хранилища)
+ */
   async deleteProjectFile(fileId: string, uploadedBy: string, projectId?: string): Promise<boolean> {
     try {
-      let storagePath: string | null = null;
-      let fileProjectId = projectId;
+      if (!projectId) return false;
 
-      // Сначала ищем файл в notes.files проекта
-      if (projectId) {
-        const project = await this.getProject(projectId);
-        const files = project?.notes?.files || [];
-        const file = files.find((f: any) => f.id === fileId);
+      const project = await this.getProject(projectId);
+      const files = project?.notes?.files || [];
+      const file = files.find((f: any) => f.id === fileId);
 
-        if (file) {
-          storagePath = file.storagePath;
-
-          // Удаляем из notes.files (обновляем на верхнем уровне)
-          const updatedFiles = files.filter((f: any) => f.id !== fileId);
-          await this.updateProject(projectId, { files: updatedFiles } as any);
+      if (file) {
+        // 1. Физическое удаление
+        try {
+          if (file.isSeafile) {
+            // Удаляем из Seafile API
+            const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
+            const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
+            const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
+            if (seafileUrl && seafileToken && repoId) {
+              const encodedPath = encodeURIComponent(file.storagePath);
+              await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Token ${seafileToken}` }
+              });
+            }
+          } else if (!fileId.startsWith('old_contract_') && this.fileApiUrl) {
+            // Удаляем со старого локального NAS (легаси поддержка)
+            await fetch(`${this.fileApiUrl}/files/${file.storagePath}`, {
+              method: 'DELETE'
+            });
+          }
+        } catch (e) {
+          console.warn('⚠️ Не удалось удалить файл с сервера (продолжаем удаление метаданных):', e);
         }
-      }
 
-      // Fallback: пробуем найти в отдельной таблице
-      if (!storagePath) {
-        const { data: file, error: fetchError } = await (supabase as any)
-          .from('project_files')
-          .select('*')
-          .eq('id', fileId)
-          .single();
+        // 2. Удаляем метаданные из Supabase
+        const updatedFiles = files.filter((f: any) => f.id !== fileId);
 
-        if (!fetchError && file) {
-          storagePath = file.storage_path;
-          fileProjectId = file.project_id;
+        // 3. Если это был старый контракт, удаляем contractScanUrl
+        let updatedContract = project?.notes?.contract;
+        if (fileId.startsWith('old_contract_') || file.category === 'contract') {
+          updatedContract = {
+            ...project?.notes?.contract,
+            contractScanUrl: null
+          };
         }
+
+        await this.updateProject(projectId, {
+          ...project?.notes,
+          files: updatedFiles,
+          ...(fileId.startsWith('old_contract_') || file.category === 'contract' ? { contract: updatedContract } : {})
+        } as any);
+        return true;
       }
 
-      // Удаляем из Storage если нашли путь
-      if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from('project-files')
-          .remove([storagePath]);
-
-        if (storageError) {
-          console.warn('⚠️ Error deleting from storage:', storageError);
-        }
-      }
-
-      // Пробуем удалить из отдельной таблицы (может не работать из-за RLS)
-      try {
-        await (supabase as any)
-          .from('project_files')
-          .delete()
-          .eq('id', fileId);
-      } catch (dbError) {
-        console.warn('⚠️ RLS error deleting from project_files table:', dbError);
-      }
-
-      return true;
+      return false;
     } catch (error) {
-      console.error('❌ Error deleting project file:', error);
+      console.error('❌ Ошибка при удалении файла:', error);
       throw error;
     }
   }
 
   // === PROJECT AMENDMENTS ===
-  
+
   /**
    * Создает доп соглашение для проекта
    */
@@ -1020,7 +973,7 @@ class SupabaseDataStore {
   }
 
   // === WORK PAPERS (Рабочие документы) ===
-  
+
   /**
    * Получает все рабочие документы проекта
    */
@@ -1040,16 +993,16 @@ class SupabaseDataStore {
       if (error) {
         // Если таблица не существует (404), возвращаем пустой массив
         const errorObj = error as any;
-        const isTableNotFound = 
-          errorObj.code === 'PGRST116' || 
-          errorObj.status === 404 || 
+        const isTableNotFound =
+          errorObj.code === 'PGRST116' ||
+          errorObj.status === 404 ||
           errorObj.statusCode === 404 ||
-          errorObj.message?.includes('relation') || 
+          errorObj.message?.includes('relation') ||
           errorObj.message?.includes('does not exist') ||
           errorObj.message?.includes('relation "public.work_papers" does not exist') ||
           errorObj.details?.includes('relation') ||
           errorObj.hint?.includes('relation');
-        
+
         if (isTableNotFound) {
           console.log('ℹ️ Work papers table does not exist yet. Migration may not be applied.');
           return [];
@@ -1075,7 +1028,7 @@ class SupabaseDataStore {
           .from('profiles')
           .select('user_id, display_name, email')
           .in('user_id', Array.from(userIds));
-        
+
         if (profiles) {
           profiles.forEach((p: any) => {
             profilesMap.set(p.user_id, {
@@ -1096,17 +1049,17 @@ class SupabaseDataStore {
     } catch (error: any) {
       // Обрабатываем ошибки 404 (таблица не существует)
       // Проверяем все возможные форматы ошибки
-      const isTableNotFound = 
-        error?.code === 'PGRST116' || 
-        error?.status === 404 || 
+      const isTableNotFound =
+        error?.code === 'PGRST116' ||
+        error?.status === 404 ||
         error?.statusCode === 404 ||
-        error?.message?.includes('relation') || 
+        error?.message?.includes('relation') ||
         error?.message?.includes('does not exist') ||
         error?.message?.includes('relation "public.work_papers" does not exist') ||
         error?.details?.includes('relation') ||
         error?.hint?.includes('relation') ||
         (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
-      
+
       if (isTableNotFound) {
         console.log('ℹ️ Work papers table does not exist yet. Migration may not be applied.');
         return [];
@@ -1152,7 +1105,7 @@ class SupabaseDataStore {
           .from('profiles')
           .select('user_id, display_name, email')
           .in('user_id', Array.from(userIds));
-        
+
         if (profiles) {
           profiles.forEach((p: any) => {
             profilesMap.set(p.user_id, {
@@ -1257,7 +1210,7 @@ class SupabaseDataStore {
         .from('work_papers')
         .select('id')
         .limit(1);
-      
+
       if (testQuery.error) {
         if (testQuery.error.code === 'PGRST116' || testQuery.error.status === 404 || testQuery.error.message?.includes('relation')) {
           console.log('ℹ️ Work papers table does not exist yet. Migration needs to be applied.');
@@ -1284,14 +1237,14 @@ class SupabaseDataStore {
       // Назначаем исполнителей на основе ролей команды
       if (createdCount > 0 && teamMembers.length > 0) {
         const workPapers = await this.getWorkPapers(projectId);
-        
+
         for (const wp of workPapers) {
           if (wp.template?.default_assignee_role) {
             // Ищем подходящего члена команды по роли
             const teamMember = teamMembers.find(tm => {
               const role = tm.role.toLowerCase();
               const defaultRole = wp.template.default_assignee_role.toLowerCase();
-              
+
               // Маппинг ролей
               if (defaultRole === 'assistant') {
                 return role.includes('assistant');
@@ -1379,7 +1332,7 @@ class SupabaseDataStore {
    */
   async getMethodologies(): Promise<any[]> {
     try {
-      const { data, error} = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from('methodologies')
         .select('*')
         .eq('is_active', true)

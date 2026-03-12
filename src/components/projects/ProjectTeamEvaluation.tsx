@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { Star, Lock, Users, AlertTriangle, CheckCircle } from 'lucide-react';
 import { UserRole } from '@/types/roles';
 
@@ -140,7 +142,7 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
 
     // Ассистенты/аудиторы оценивают менеджеров - анонимно
     if (['senior_auditor', 'auditor', 'junior_auditor', 'assistant'].includes(currentUserRole)
-        && member.role.startsWith('manager_')) {
+      && member.role.startsWith('manager_')) {
       return true;
     }
 
@@ -151,22 +153,32 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
     loadEvaluations();
   }, [projectId]);
 
-  const getHeaders = () => ({
-    'Content-Type': 'application/json',
-    'x-user-id': user?.id || '',
-    'x-user-name': user?.name || '',
-    'x-user-role': user?.role || '',
-  });
 
   const loadEvaluations = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/project-evaluations/${projectId}`, {
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setEvaluations(data);
+      const { data, error } = await supabase
+        .from('project_evaluations' as any)
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (error) throw error;
+
+      if (data) {
+        setEvaluations(data.map((e: any) => ({
+          id: e.id,
+          projectId: e.project_id,
+          evaluatedUserId: e.evaluated_user_id,
+          evaluatedUserName: e.evaluated_user_name || 'User', // May need join
+          evaluatedUserRole: e.evaluated_user_role,
+          evaluatorId: e.evaluator_id,
+          evaluatorName: e.evaluator_name || 'User',
+          evaluatorRole: e.evaluator_role,
+          rating: e.rating,
+          comment: e.comment,
+          isAnonymous: e.is_anonymous,
+          createdAt: e.created_at
+        })));
       }
     } catch (error) {
       console.error('Failed to load evaluations:', error);
@@ -187,24 +199,24 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
     if (!selectedMember || !user) return;
 
     try {
-      const response = await fetch('/api/project-evaluations', {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          projectId,
-          evaluatedUserId: selectedMember.userId,
-          evaluatedUserName: selectedMember.userName,
-          evaluatedUserRole: selectedMember.role,
+      const { data, error } = await supabase
+        .from('project_evaluations' as any)
+        .insert({
+          project_id: projectId,
+          evaluated_user_id: selectedMember.userId,
+          evaluator_id: user.id,
+          type: currentUserRole.startsWith('manager') ? 'manager_by_team' : 'team_by_manager', // simple logic
           rating,
           comment,
-          isAnonymous,
-        }),
-      });
+          is_anonymous: isAnonymous,
+          // We can also store names/roles for cache if needed, though better to join
+        })
+        .select()
+        .single();
 
-      if (!response.ok) throw new Error('Failed to create evaluation');
+      if (error) throw error;
 
-      const newEval = await response.json();
-      setEvaluations([...evaluations, newEval]);
+      loadEvaluations(); // Refresh
 
       toast({
         title: 'Оценка сохранена',
@@ -213,9 +225,10 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
 
       setDialogOpen(false);
     } catch (error) {
+      console.error('Submit evaluation error:', error);
       toast({
         title: 'Ошибка',
-        description: 'Не удалось сохранить оценку',
+        description: 'Не удалось сохранить оценку в базе данных',
         variant: 'destructive',
       });
     }
@@ -321,7 +334,7 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
               <div key={evaluation.id} className="p-4 border rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="flex gap-0.5">
-                    {[1,2,3,4,5].map(star => (
+                    {[1, 2, 3, 4, 5].map(star => (
                       <Star
                         key={star}
                         className={`w-4 h-4 ${star <= evaluation.rating ? 'fill-yellow-500 text-yellow-500' : 'text-gray-300'}`}
@@ -366,7 +379,7 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
                     <p className="text-xs text-muted-foreground">{ROLE_NAMES[evaluation.evaluatedUserRole]}</p>
                   </div>
                   <div className="flex gap-0.5">
-                    {[1,2,3,4,5].map(star => (
+                    {[1, 2, 3, 4, 5].map(star => (
                       <Star
                         key={star}
                         className={`w-4 h-4 ${star <= evaluation.rating ? 'fill-yellow-500 text-yellow-500' : 'text-gray-300'}`}
@@ -415,15 +428,14 @@ export function ProjectTeamEvaluation({ projectId, projectStatus, teamMembers }:
                 Оценка: {RATING_LABELS[rating]}
               </p>
               <div className="flex gap-1">
-                {[1,2,3,4,5].map(star => (
+                {[1, 2, 3, 4, 5].map(star => (
                   <button
                     key={star}
                     onClick={() => setRating(star)}
-                    className={`p-2 rounded transition ${
-                      star <= rating
+                    className={`p-2 rounded transition ${star <= rating
                         ? 'text-yellow-500 bg-yellow-500/10'
                         : 'text-gray-300 hover:text-yellow-300'
-                    }`}
+                      }`}
                   >
                     <Star className="w-8 h-8 fill-current" />
                   </button>

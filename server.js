@@ -17,10 +17,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// In-memory storage for demonstration (replace with database in production)
-let serviceMemos = [];
-let evaluations = [];
-let teamEvaluations = [];
+// In-memory storage removed (Migrated to Supabase)
 
 // Helper function to parse auth user from request
 // In production, this would validate JWT token from Authorization header
@@ -39,364 +36,315 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ========== SERVICE MEMOS API ==========
+// ========== FILE STORAGE CONFIGURATION ==========
+import fs from 'fs';
 
-// GET all service memos
-app.get('/api/service-memos', (req, res) => {
-  const user = getUserFromRequest(req);
-  const filter = req.query.filter || 'all';
+// Динамический импорт multer для предотвращения падения сервера при отсутствии пакета
+let multer;
+try {
+  // Используем специальный хак для ES-модулей, если пакет еще не установлен
+  const multerModule = await import('multer').catch(() => null);
+  multer = multerModule?.default;
+} catch (e) {
+  console.warn('⚠️ Пакет "multer" не найден. Функция загрузки файлов будет недоступна до запуска "npm install".');
+}
 
-  let filtered = serviceMemos;
+// Путь к хранилищу (NAS или локальная папка)
+// Рекомендуется задать NAS_STORAGE_PATH в .env как \\192.168.7.40\rbbb_docs
+const storagePath = process.env.NAS_STORAGE_PATH || path.join(__dirname, 'uploads');
 
-  if (filter === 'my') {
-    filtered = serviceMemos.filter(m => m.createdBy === user.id);
-  } else if (filter === 'pending') {
-    // Pending for current user - needs their approval
-    const userDept = getRoleToDepart(user.role);
-    filtered = serviceMemos.filter(m => {
-      const current = m.workflow[m.currentStage];
-      return m.overallStatus === 'in_progress' &&
-             current &&
-             current.department === userDept &&
-             current.status === 'pending';
-    });
-  } else if (filter === 'in_progress') {
-    filtered = serviceMemos.filter(m => m.overallStatus === 'in_progress');
-  } else if (filter === 'completed') {
-    filtered = serviceMemos.filter(m => m.overallStatus === 'completed');
-  } else if (filter === 'rejected') {
-    filtered = serviceMemos.filter(m => m.overallStatus === 'rejected');
+if (!fs.existsSync(storagePath)) {
+  try {
+    fs.mkdirSync(storagePath, { recursive: true });
+    console.log(`📁 Папка для загрузок создана: ${storagePath}`);
+  } catch (err) {
+    console.error('❌ Ошибка создания папки storagePath:', err.message);
   }
+}
 
-  res.json(filtered);
-});
-
-// GET single service memo
-app.get('/api/service-memos/:id', (req, res) => {
-  const memo = serviceMemos.find(m => m.id === req.params.id);
-  if (!memo) {
-    return res.status(404).json({ error: 'Service memo not found' });
-  }
-  res.json(memo);
-});
-
-// CREATE service memo
-app.post('/api/service-memos', (req, res) => {
-  const user = getUserFromRequest(req);
-  const { title, description, priority, category, customWorkflow } = req.body;
-
-  if (!title?.trim() || !description?.trim()) {
-    return res.status(400).json({ error: 'Title and description required' });
-  }
-
-  const WORKFLOW_TEMPLATES = {
-    it_support: ['initiator', 'it', 'deputy_director', 'director'],
-    purchase: ['initiator', 'procurement', 'deputy_director', 'director', 'accounting'],
-    maintenance: ['initiator', 'admin', 'deputy_director', 'director'],
-    request: ['initiator', 'hr', 'deputy_director', 'director'],
-    complaint: ['initiator', 'hr', 'deputy_director', 'director'],
-    other: ['initiator', 'admin', 'director'],
-  };
-
-  const DEPARTMENT_LABELS = {
-    initiator: 'Инициатор',
-    it: 'IT отдел',
-    procurement: 'Закупки',
-    hr: 'HR отдел',
-    deputy_director: 'Зам. директора',
-    director: 'Директор',
-    accounting: 'Бухгалтерия',
-    admin: 'Администратор',
-  };
-
-  const workflowTemplate = customWorkflow?.length > 0
-    ? customWorkflow
-    : WORKFLOW_TEMPLATES[category] || WORKFLOW_TEMPLATES.other;
-
-  const workflow = workflowTemplate.map((dept, index) => ({
-    stage: index,
-    department: dept,
-    departmentLabel: DEPARTMENT_LABELS[dept],
-    status: index === 0 ? 'approved' : 'pending',
-    approver: index === 0 ? user.id : undefined,
-    approverName: index === 0 ? user.name : undefined,
-    approvedAt: index === 0 ? new Date().toISOString() : undefined,
-    comments: undefined,
-  }));
-
-  const newMemo = {
-    id: `memo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    title,
-    description,
-    createdBy: user.id,
-    createdByName: user.name,
-    priority: priority || 'medium',
-    category: category || 'other',
-    workflow,
-    currentStage: 1,
-    overallStatus: 'in_progress',
-    attachments: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  serviceMemos.push(newMemo);
-  res.status(201).json(newMemo);
-});
-
-// APPROVE service memo
-app.put('/api/service-memos/:id/approve', (req, res) => {
-  const user = getUserFromRequest(req);
-  const { comments } = req.body;
-  const memo = serviceMemos.find(m => m.id === req.params.id);
-
-  if (!memo) {
-    return res.status(404).json({ error: 'Service memo not found' });
-  }
-
-  if (memo.overallStatus !== 'in_progress') {
-    return res.status(400).json({ error: 'Cannot approve completed or rejected memo' });
-  }
-
-  const currentStageData = memo.workflow[memo.currentStage];
-  if (!currentStageData || currentStageData.status !== 'pending') {
-    return res.status(400).json({ error: 'Invalid memo state for approval' });
-  }
-
-  const updatedWorkflow = [...memo.workflow];
-  updatedWorkflow[memo.currentStage] = {
-    ...currentStageData,
-    status: 'approved',
-    approver: user.id,
-    approverName: user.name,
-    approvedAt: new Date().toISOString(),
-    comments: comments || undefined,
-  };
-
-  const isLastStage = memo.currentStage === memo.workflow.length - 1;
-  const newStatus = isLastStage ? 'completed' : 'in_progress';
-  const newStage = isLastStage ? memo.currentStage : memo.currentStage + 1;
-
-  const updated = {
-    ...memo,
-    workflow: updatedWorkflow,
-    currentStage: newStage,
-    overallStatus: newStatus,
-    updatedAt: new Date().toISOString(),
-    completedAt: isLastStage ? new Date().toISOString() : undefined,
-  };
-
-  const index = serviceMemos.findIndex(m => m.id === req.params.id);
-  serviceMemos[index] = updated;
-
-  res.json(updated);
-});
-
-// REJECT service memo
-app.put('/api/service-memos/:id/reject', (req, res) => {
-  const user = getUserFromRequest(req);
-  const { comments } = req.body;
-
-  if (!comments?.trim()) {
-    return res.status(400).json({ error: 'Reason required for rejection' });
-  }
-
-  const memo = serviceMemos.find(m => m.id === req.params.id);
-
-  if (!memo) {
-    return res.status(404).json({ error: 'Service memo not found' });
-  }
-
-  const currentStageData = memo.workflow[memo.currentStage];
-  const updatedWorkflow = [...memo.workflow];
-  updatedWorkflow[memo.currentStage] = {
-    ...currentStageData,
-    status: 'rejected',
-    approver: user.id,
-    approverName: user.name,
-    approvedAt: new Date().toISOString(),
-    comments,
-  };
-
-  const updated = {
-    ...memo,
-    workflow: updatedWorkflow,
-    overallStatus: 'rejected',
-    updatedAt: new Date().toISOString(),
-  };
-
-  const index = serviceMemos.findIndex(m => m.id === req.params.id);
-  serviceMemos[index] = updated;
-
-  res.json(updated);
-});
-
-// DELETE service memo
-app.delete('/api/service-memos/:id', (req, res) => {
-  const user = getUserFromRequest(req);
-  const memo = serviceMemos.find(m => m.id === req.params.id);
-
-  if (!memo) {
-    return res.status(404).json({ error: 'Service memo not found' });
-  }
-
-  // Only creator or admin can delete
-  if (memo.createdBy !== user.id && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  serviceMemos = serviceMemos.filter(m => m.id !== req.params.id);
-  res.json({ success: true });
-});
-
-// ========== TEAM EVALUATION API ==========
-
-// GET project evaluations (visible to management and evaluators)
-app.get('/api/project-evaluations/:projectId', (req, res) => {
-  const user = getUserFromRequest(req);
-  const projectId = req.params.projectId;
-
-  let filtered = teamEvaluations.filter(e => e.projectId === projectId);
-
-  // Filter based on user role and visibility
-  filtered = filtered.map(eval => {
-    // Only show full details to management (ceo, admin, deputy_director) or the evaluator themselves
-    const isManagement = ['ceo', 'admin', 'deputy_director'].includes(user.role);
-    const isEvaluator = eval.evaluatorId === user.id;
-
-    if (isManagement || isEvaluator) {
-      return eval; // Full visibility
-    } else if (eval.type === 'manager_by_team' && eval.evaluatorId !== user.id) {
-      // Team members can only see their own anonymous evaluation
-      return null;
-    } else {
-      return eval;
+// Настройка хранилища (только если multer доступен)
+let storage, upload;
+if (multer) {
+  storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const projectId = req.body.projectId || 'general';
+      const projectDir = path.join(storagePath, projectId);
+      if (!fs.existsSync(projectDir)) {
+        fs.mkdirSync(projectDir, { recursive: true });
+      }
+      cb(null, projectDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      // Очистка имени файла от спецсимволов
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      cb(null, `${uniqueSuffix}-${safeName}`);
     }
-  }).filter(Boolean);
+  });
 
-  res.json(filtered);
+  upload = multer({
+    storage,
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+  });
+}
+
+// ========== API РАБОТЫ С ФАЙЛАМИ ==========
+
+// Загрузка файла
+app.post('/api/upload', (req, res, next) => {
+  if (!multer || !upload) {
+    return res.status(503).json({ error: 'Сервис загрузки временно недоступен (отсутствует зависимость multer). Запустите npm install.' });
+  }
+  upload.single('file')(req, res, (err) => {
+    if (err) return next(err);
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Файл не получен' });
+      }
+
+      const { projectId, uploadedBy } = req.body;
+
+      // Формируем относительный путь для хранения в БД
+      const relativePath = path.relative(storagePath, req.file.path).replace(/\\/g, '/');
+
+      res.json({
+        success: true,
+        file: {
+          id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          fileName: req.file.originalname,
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+          storagePath: relativePath,
+          category: req.body.category || 'other',
+          uploadedBy: uploadedBy || 'system',
+          uploadedAt: new Date().toISOString()
+        }
+      });
+    } catch (err) {
+      console.error('❌ Ошибка при загрузке:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
-// GET single evaluation
-app.get('/api/project-evaluations/:projectId/:evaluationId', (req, res) => {
-  const { projectId, evaluationId } = req.params;
-  const evaluation = teamEvaluations.find(e => e.id === evaluationId && e.projectId === projectId);
+// Скачивание/Просмотр файла
+app.get('/api/files/:projectId/:filename', (req, res) => {
+  const { projectId, filename } = req.params;
+  const filePath = path.join(storagePath, projectId, filename);
 
-  if (!evaluation) {
-    return res.status(404).json({ error: 'Evaluation not found' });
+  if (fs.existsSync(filePath)) {
+    // В будущем здесь можно добавить проверку прав доступа
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'Файл не найден' });
   }
-
-  res.json(evaluation);
 });
 
-// CREATE evaluation
-app.post('/api/project-evaluations', (req, res) => {
-  const user = getUserFromRequest(req);
-  const { projectId, evaluatedPersonId, type, rating, comment, teamMembers } = req.body;
+// Удаление файла
+app.delete('/api/files/:projectId/:filename', (req, res) => {
+  const { projectId, filename } = req.params;
+  const filePath = path.join(storagePath, projectId, filename);
 
-  if (!projectId || !evaluatedPersonId || !type || !rating) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({ success: true, message: 'Файл удален' });
+    } else {
+      res.status(404).json({ error: 'Файл не найден' });
+    }
+  } catch (err) {
+    console.error('❌ Ошибка при удалении файла:', err);
+    res.status(500).json({ error: err.message });
   }
-
-  // Validate rating between 1-5
-  if (rating < 1 || rating > 5) {
-    return res.status(400).json({ error: 'Rating must be between 1 and 5' });
-  }
-
-  // Validate evaluation type
-  const validTypes = ['partner_by_manager', 'manager_by_team', 'team_by_manager'];
-  if (!validTypes.includes(type)) {
-    return res.status(400).json({ error: 'Invalid evaluation type' });
-  }
-
-  // Check permissions based on type
-  let canEvaluate = false;
-  if (type === 'partner_by_manager' && user.role === 'manager_1') {
-    canEvaluate = true; // Manager evaluates partner
-  } else if (type === 'manager_by_team' && !['admin', 'ceo', 'deputy_director'].includes(user.role)) {
-    canEvaluate = true; // Team members evaluate manager
-  } else if (type === 'team_by_manager' && ['manager_1', 'manager_2', 'manager_3'].includes(user.role)) {
-    canEvaluate = true; // Manager evaluates team
-  } else if (user.role === 'admin' || user.role === 'ceo') {
-    canEvaluate = true; // Admin/CEO can evaluate anyone
-  }
-
-  if (!canEvaluate) {
-    return res.status(403).json({ error: 'You do not have permission to create this evaluation' });
-  }
-
-  const newEvaluation = {
-    id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    projectId,
-    evaluatedPersonId,
-    evaluatorId: user.id,
-    evaluatorName: user.name,
-    evaluatorRole: user.role,
-    type,
-    rating,
-    comment: comment || '',
-    teamMembers: type === 'team_by_manager' ? teamMembers : [],
-    isAnonymous: type === 'manager_by_team',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  teamEvaluations.push(newEvaluation);
-  res.status(201).json(newEvaluation);
 });
 
-// UPDATE evaluation
-app.put('/api/project-evaluations/:id', (req, res) => {
-  const user = getUserFromRequest(req);
-  const evaluationId = req.params.id;
-  const { rating, comment } = req.body;
+// ========== PROJECT STORAGE CONFIGURATION ==========
+const projectsFilePath = path.join(storagePath, 'projects.json');
 
-  const evaluation = teamEvaluations.find(e => e.id === evaluationId);
-
-  if (!evaluation) {
-    return res.status(404).json({ error: 'Evaluation not found' });
+// Helper to load projects
+const loadProjectsFromFile = () => {
+  try {
+    if (fs.existsSync(projectsFilePath)) {
+      const data = fs.readFileSync(projectsFilePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('❌ Ошибка при чтении projects.json:', err);
   }
+  return [];
+};
 
-  // Only the creator can update
-  if (evaluation.evaluatorId !== user.id && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden' });
+// Helper to save projects
+const saveProjectsToFile = (projects) => {
+  try {
+    fs.writeFileSync(projectsFilePath, JSON.stringify(projects, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('❌ Ошибка при записи в projects.json:', err);
+    return false;
   }
+};
 
-  if (rating && (rating < 1 || rating > 5)) {
-    return res.status(400).json({ error: 'Rating must be between 1 and 5' });
-  }
+// ========== API РАБОТЫ С ПРОЕКТАМИ ==========
 
-  const updated = {
-    ...evaluation,
-    rating: rating ?? evaluation.rating,
-    comment: comment ?? evaluation.comment,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const index = teamEvaluations.findIndex(e => e.id === evaluationId);
-  teamEvaluations[index] = updated;
-
-  res.json(updated);
+// Список проектов
+app.get('/api/projects', (req, res) => {
+  const projects = loadProjectsFromFile();
+  res.json(projects);
 });
 
-// DELETE evaluation
-app.delete('/api/project-evaluations/:id', (req, res) => {
-  const user = getUserFromRequest(req);
-  const evaluationId = req.params.id;
+// Получение одного проекта
+app.get('/api/projects/:id', (req, res) => {
+  const { id } = req.params;
+  const projects = loadProjectsFromFile();
+  const project = projects.find(p => p.id === id);
 
-  const evaluation = teamEvaluations.find(e => e.id === evaluationId);
-
-  if (!evaluation) {
-    return res.status(404).json({ error: 'Evaluation not found' });
+  if (project) {
+    res.json(project);
+  } else {
+    res.status(404).json({ error: 'Проект не найден' });
   }
+});
 
-  // Only the creator or admin can delete
-  if (evaluation.evaluatorId !== user.id && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden' });
+// Создание проекта
+app.post('/api/projects', (req, res) => {
+  try {
+    const projects = loadProjectsFromFile();
+    const newProject = {
+      ...req.body,
+      id: req.body.id || `proj_${Date.now()}`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    projects.unshift(newProject);
+    if (saveProjectsToFile(projects)) {
+      res.status(201).json(newProject);
+    } else {
+      res.status(500).json({ error: 'Не удалось сохранить проект на сервере' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  teamEvaluations = teamEvaluations.filter(e => e.id !== evaluationId);
-  res.json({ success: true });
+// Обновление проекта
+app.put('/api/projects/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const projects = loadProjectsFromFile();
+    const index = projects.findIndex(p => p.id === id);
+
+    if (index !== -1) {
+      projects[index] = {
+        ...projects[index],
+        ...req.body,
+        id: id, // Запрещаем менять ID
+        updated_at: new Date().toISOString()
+      };
+
+      if (saveProjectsToFile(projects)) {
+        res.json(projects[index]);
+      } else {
+        res.status(500).json({ error: 'Не удалось обновить проект на сервере' });
+      }
+    } else {
+      res.status(404).json({ error: 'Проект не найден' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Удаление проекта
+app.delete('/api/projects/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    let projects = loadProjectsFromFile();
+    const initialLength = projects.length;
+    projects = projects.filter(p => p.id !== id);
+
+    if (projects.length < initialLength) {
+      if (saveProjectsToFile(projects)) {
+        res.json({ success: true, message: 'Проект удален' });
+      } else {
+        res.status(500).json({ error: 'Не удалось обновить файл проектов после удаления' });
+      }
+    } else {
+      res.status(404).json({ error: 'Проект не найден' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== PROJECT DATA (TEMPLATE/STAGES) STORAGE ==========
+const projectDataDir = path.join(storagePath, 'project_data');
+if (!fs.existsSync(projectDataDir)) {
+  try {
+    fs.mkdirSync(projectDataDir, { recursive: true });
+    console.log(`📁 Папка для project_data создана: ${projectDataDir}`);
+  } catch (err) {
+    console.error('❌ Ошибка создания папки project_data:', err.message);
+  }
+}
+
+// Получить данные проекта (шаблон, этапы, паспорт)
+app.get('/api/project-data/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  const filePath = path.join(projectDataDir, `${projectId}.json`);
+
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      res.json(JSON.parse(data));
+    } else {
+      res.status(404).json({ error: 'Данные проекта не найдены' });
+    }
+  } catch (err) {
+    console.error('❌ Ошибка чтения project_data:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Сохранить/обновить данные проекта
+app.put('/api/project-data/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  const filePath = path.join(projectDataDir, `${projectId}.json`);
+
+  try {
+    const payload = {
+      ...req.body,
+      project_id: projectId,
+      updated_at: new Date().toISOString()
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+    console.log(`✅ Project data saved: ${projectId}`);
+    res.json(payload);
+  } catch (err) {
+    console.error('❌ Ошибка записи project_data:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Удалить данные проекта
+app.delete('/api/project-data/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  const filePath = path.join(projectDataDir, `${projectId}.json`);
+
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({ success: true, message: 'Данные проекта удалены' });
+    } else {
+      res.status(404).json({ error: 'Данные проекта не найдены' });
+    }
+  } catch (err) {
+    console.error('❌ Ошибка удаления project_data:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ========== HELPER FUNCTIONS ==========
@@ -417,8 +365,8 @@ function getRoleToDepart(role) {
 // Serve static files from dist
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// SPA fallback - важно для React Router
-app.get('*', (req, res) => {
+// SPA fallback - важно для React Router (Express 5 syntax)
+app.get('/{*path}', (req, res) => {
   // Если это не API запрос, отправляем index.html
   if (!req.path.startsWith('/api')) {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));

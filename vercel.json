@@ -5,6 +5,10 @@
   "installCommand": "npm install --legacy-peer-deps",
   "rewrites": [
     {
+      "source": "/seafile-proxy/(.*)",
+      "destination": "https://cloud.rbpartners.kz/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

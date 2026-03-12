@@ -366,9 +366,10 @@ export default function CreateProjectProcurement() {
       });
 
       // Загружаем файлы проекта (если есть)
-      if (projectFiles.length > 0) {
+      const allFilesToUpload = [...contractFiles, ...projectFiles];
+      if (allFilesToUpload.length > 0) {
         console.log('📎 Загружаем файлы проекта...');
-        for (const file of projectFiles) {
+        for (const file of allFilesToUpload) {
           try {
             await supabaseDataStore.uploadProjectFile(
               project.id,

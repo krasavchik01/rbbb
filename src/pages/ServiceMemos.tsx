@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { FileText, Plus, Check, Clock, AlertCircle, Trash2, User, Calendar as CalendarIcon, ArrowRight, CheckCircle, XCircle, CircleDot } from 'lucide-react';
 
 // Типы для workflow
@@ -124,29 +125,45 @@ export default function ServiceMemos() {
     loadMemos();
   }, [activeTab]);
 
-  const getHeaders = () => {
-    return {
-      'Content-Type': 'application/json',
-      'x-user-id': user?.id || 'unknown',
-      'x-user-name': user?.name || 'Unknown',
-      'x-user-role': user?.role || 'member',
-    };
-  };
 
   const loadMemos = async () => {
     try {
-      const response = await fetch(`/api/service-memos?filter=${activeTab}`, {
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setMemos(data);
-      } else {
-        // Fallback to localStorage
-        const saved = localStorage.getItem('serviceMemos_v2');
-        if (saved) {
-          setMemos(JSON.parse(saved));
-        }
+      const { data, error } = await supabase
+        .from('service_memos' as any)
+        .select(`
+          *,
+          workflow:service_memo_workflow(*)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const transformed: ServiceMemo[] = data.map((m: any) => ({
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          priority: m.priority,
+          category: m.category,
+          overallStatus: m.overall_status,
+          currentStage: m.current_stage_index,
+          createdBy: m.created_by,
+          createdByName: 'Unknown', // join with employees if possible
+          createdAt: m.created_at,
+          updatedAt: m.updated_at,
+          completedAt: m.completed_at,
+          workflow: m.workflow?.sort((a: any, b: any) => a.stage_index - b.stage_index).map((s: any) => ({
+            stage: s.stage_index,
+            department: s.department,
+            departmentLabel: s.department_label,
+            status: s.status,
+            approver: s.approver_id,
+            approvedAt: s.approved_at,
+            comments: s.comments
+          })) || [],
+          attachments: []
+        }));
+        setMemos(transformed);
       }
     } catch (error) {
       console.error('Failed to load memos:', error);
@@ -158,8 +175,7 @@ export default function ServiceMemos() {
     }
   };
 
-  const saveMemos = (updatedMemos: ServiceMemo[]) => {
-    // Also save to localStorage as backup
+  const saveToLocal = (updatedMemos: ServiceMemo[]) => {
     localStorage.setItem('serviceMemos_v2', JSON.stringify(updatedMemos));
     setMemos(updatedMemos);
   };
@@ -175,24 +191,43 @@ export default function ServiceMemos() {
     }
 
     try {
-      const response = await fetch('/api/service-memos', {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
+      const { data: memoData, error: memoError } = await supabase
+        .from('service_memos' as any)
+        .insert({
           title: formData.title,
           description: formData.description,
           priority: formData.priority,
           category: formData.category,
-          customWorkflow: formData.customWorkflow.length > 0 ? formData.customWorkflow : undefined,
-        }),
-      });
+          created_by: user?.id,
+          overall_status: 'in_progress',
+          current_stage_index: 1
+        })
+        .select()
+        .single();
 
-      if (!response.ok) {
-        throw new Error('Failed to create memo');
-      }
+      if (memoError) throw memoError;
 
-      const newMemo = await response.json();
-      saveMemos([newMemo, ...memos]);
+      const workflowTemplate = formData.customWorkflow.length > 0
+        ? formData.customWorkflow
+        : WORKFLOW_TEMPLATES[formData.category] || WORKFLOW_TEMPLATES.other;
+
+      const workflowStages = workflowTemplate.map((dept, index) => ({
+        memo_id: memoData.id,
+        stage_index: index,
+        department: dept,
+        department_label: DEPARTMENT_LABELS[dept],
+        status: index === 0 ? 'approved' : 'pending',
+        approver_id: index === 0 ? user?.id : null,
+        approved_at: index === 0 ? new Date().toISOString() : null
+      }));
+
+      const { error: workflowError } = await supabase
+        .from('service_memo_workflow' as any)
+        .insert(workflowStages);
+
+      if (workflowError) throw workflowError;
+
+      loadMemos(); // Refresh from DB
 
       toast({
         title: 'Служебная записка создана',
@@ -211,7 +246,7 @@ export default function ServiceMemos() {
       console.error('Failed to create memo:', error);
       toast({
         title: 'Ошибка',
-        description: 'Не удалось создать служебную записку',
+        description: 'Не удалось создать служебную записку в базе данных',
         variant: 'destructive',
       });
     }
@@ -219,28 +254,45 @@ export default function ServiceMemos() {
 
   const approveMemo = async (memoId: string) => {
     try {
-      const response = await fetch(`/api/service-memos/${memoId}/approve`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          comments: approvalComments || undefined,
-        }),
-      });
+      if (!selectedMemo) return;
 
-      if (!response.ok) {
-        throw new Error('Failed to approve memo');
-      }
+      const currentStage = selectedMemo.currentStage;
+      const { error: workflowUpdateError } = await supabase
+        .from('service_memo_workflow' as any)
+        .update({
+          status: 'approved',
+          approver_id: user?.id,
+          approved_at: new Date().toISOString(),
+          comments: approvalComments || null
+        })
+        .eq('memo_id', memoId)
+        .eq('stage_index', currentStage);
 
-      const updatedMemo = await response.json();
-      const updatedMemos = memos.map(m => m.id === memoId ? updatedMemo : m);
-      saveMemos(updatedMemos);
+      if (workflowUpdateError) throw workflowUpdateError;
 
-      const isLastStage = updatedMemo.currentStage === updatedMemo.workflow.length - 1;
+      const isLastStage = currentStage === selectedMemo.workflow.length - 1;
+      const nextStage = isLastStage ? currentStage : currentStage + 1;
+      const newStatus = isLastStage ? 'completed' : 'in_progress';
+
+      const { error: memoUpdateError } = await supabase
+        .from('service_memos' as any)
+        .update({
+          current_stage_index: nextStage,
+          overall_status: newStatus,
+          completed_at: isLastStage ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memoId);
+
+      if (memoUpdateError) throw memoUpdateError;
+
+      loadMemos();
+
       toast({
         title: 'Записка утверждена',
         description: isLastStage
           ? 'Служебная записка полностью утверждена'
-          : `Записка передана на этап: ${updatedMemo.workflow[updatedMemo.currentStage]?.departmentLabel}`,
+          : `Записка передана на следующий этап`,
       });
 
       setApprovalComments('');
@@ -266,21 +318,32 @@ export default function ServiceMemos() {
     }
 
     try {
-      const response = await fetch(`/api/service-memos/${memoId}/reject`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          comments: approvalComments,
-        }),
-      });
+      if (!selectedMemo) return;
 
-      if (!response.ok) {
-        throw new Error('Failed to reject memo');
-      }
+      const { error: workflowError } = await supabase
+        .from('service_memo_workflow' as any)
+        .update({
+          status: 'rejected',
+          approver_id: user?.id,
+          approved_at: new Date().toISOString(),
+          comments: approvalComments
+        })
+        .eq('memo_id', memoId)
+        .eq('stage_index', selectedMemo.currentStage);
 
-      const updatedMemo = await response.json();
-      const updatedMemos = memos.map(m => m.id === memoId ? updatedMemo : m);
-      saveMemos(updatedMemos);
+      if (workflowError) throw workflowError;
+
+      const { error: memoError } = await supabase
+        .from('service_memos' as any)
+        .update({
+          overall_status: 'rejected',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memoId);
+
+      if (memoError) throw memoError;
+
+      loadMemos();
 
       toast({
         title: 'Записка отклонена',
@@ -304,17 +367,14 @@ export default function ServiceMemos() {
     if (!confirm('Удалить служебную записку?')) return;
 
     try {
-      const response = await fetch(`/api/service-memos/${memoId}`, {
-        method: 'DELETE',
-        headers: getHeaders(),
-      });
+      const { error } = await supabase
+        .from('service_memos' as any)
+        .delete()
+        .eq('id', memoId);
 
-      if (!response.ok) {
-        throw new Error('Failed to delete memo');
-      }
+      if (error) throw error;
 
-      const updated = memos.filter(m => m.id !== memoId);
-      saveMemos(updated);
+      loadMemos();
 
       toast({
         title: 'Записка удалена',
@@ -665,12 +725,11 @@ export default function ServiceMemos() {
                       <div className="flex items-center gap-2 flex-wrap">
                         {memo.workflow.map((stage, index) => (
                           <div key={stage.stage} className="flex items-center gap-2">
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
-                              stage.status === 'approved' ? 'bg-green-500/20 border border-green-500' :
-                              stage.status === 'rejected' ? 'bg-red-500/20 border border-red-500' :
-                              index === memo.currentStage ? 'bg-orange-500/20 border border-orange-500' :
-                              'bg-gray-500/20 border border-gray-500'
-                            }`}>
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${stage.status === 'approved' ? 'bg-green-500/20 border border-green-500' :
+                                stage.status === 'rejected' ? 'bg-red-500/20 border border-red-500' :
+                                  index === memo.currentStage ? 'bg-orange-500/20 border border-orange-500' :
+                                    'bg-gray-500/20 border border-gray-500'
+                              }`}>
                               {stage.status === 'approved' ? (
                                 <CheckCircle className="w-4 h-4 text-green-500" />
                               ) : stage.status === 'rejected' ? (
@@ -743,12 +802,11 @@ export default function ServiceMemos() {
                   <Label className="mb-2 block">История согласования</Label>
                   <div className="space-y-2">
                     {selectedMemo.workflow.map((stage, index) => (
-                      <Card key={stage.stage} className={`p-4 ${
-                        stage.status === 'approved' ? 'bg-green-500/10' :
-                        stage.status === 'rejected' ? 'bg-red-500/10' :
-                        index === selectedMemo.currentStage ? 'bg-orange-500/10' :
-                        'bg-gray-500/5'
-                      }`}>
+                      <Card key={stage.stage} className={`p-4 ${stage.status === 'approved' ? 'bg-green-500/10' :
+                          stage.status === 'rejected' ? 'bg-red-500/10' :
+                            index === selectedMemo.currentStage ? 'bg-orange-500/10' :
+                              'bg-gray-500/5'
+                        }`}>
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3 flex-1">
                             {stage.status === 'approved' ? (

@@ -22,6 +22,14 @@ export default defineConfig({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/seafile-proxy': {
+        target: 'https://cloud.rbpartners.kz',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/seafile-proxy/, ''),
+      }
+    }
   },
   define: {
     __APP_VERSION__: JSON.stringify(getGitCommit()),

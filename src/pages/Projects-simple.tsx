@@ -7,14 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { TaskManager } from "@/components/tasks/TaskManager";
 import { Task, Project as ProjectType, ChecklistItem, PriorityLevel, TaskStatus } from "@/types/project";
-import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, CheckCircle, Circle, AlertCircle, XCircle, FileText, BarChart3, Trash2, Download, Upload, FileDown, Filter } from "lucide-react";
-import { useProjects, useEmployees } from "@/hooks/useSupabaseData";
+import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, Circle, AlertCircle, XCircle, BarChart3, Trash2, Download, Upload, FileDown } from "lucide-react";
+import { useProjects, useEmployees, useCompanies } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
@@ -44,6 +46,7 @@ const demoProjects: SimpleProject[] = [];
 export default function Projects() {
   const { projects: realProjects, loading, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
+  const { companies: allAppCompanies = [] } = useCompanies();
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,6 +59,7 @@ export default function Projects() {
   // State для распределения команды (только для зам. директора)
   const [projectForTeamDistribution, setProjectForTeamDistribution] = useState<any | null>(null);
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [teamDistributionRoleFilter, setTeamDistributionRoleFilter] = useState<string>('all');
   const [newProject, setNewProject] = useState({
     name: "",
     company: "",
@@ -72,7 +76,7 @@ export default function Projects() {
   const [filterCompany, setFilterCompany] = useState<string>('all'); // 'all' | конкретная компания
   const [filterLongTerm, setFilterLongTerm] = useState<boolean | 'all'>('all'); // 'all' | true | false
   const [showAmounts, setShowAmounts] = useState<boolean>(true); // Показывать ли суммы
-  
+
   // Фильтры по колонкам
   const [filterStatus, setFilterStatus] = useState<string>('all'); // 'all' | 'new' | 'pending_approval' | 'in_progress' | 'completed'
   const [filterProgressMin, setFilterProgressMin] = useState<number | ''>('');
@@ -136,7 +140,7 @@ export default function Projects() {
     setIsImporting(true);
     try {
       const { projects, errors } = await importProjectsFromExcel(file);
-      
+
       // Если есть ошибки валидации, показываем предупреждение, но продолжаем импорт
       if (errors.length > 0 && projects.length === 0) {
         // Если нет проектов для импорта из-за ошибок - критическая ошибка
@@ -162,7 +166,7 @@ export default function Projects() {
 
       if (projects.length > 0) {
         const result = await saveImportedProjects(projects);
-        
+
         if (result.success > 0) {
           // Перезагружаем список проектов
           if (refreshProjects) {
@@ -173,7 +177,7 @@ export default function Projects() {
               window.location.reload();
             }, 1000);
           }
-          
+
           toast({
             title: "✅ Импорт завершен",
             description: `Успешно импортировано: ${result.success} проектов${result.failed > 0 ? `. Не удалось: ${result.failed}` : ''}`,
@@ -222,7 +226,7 @@ export default function Projects() {
     const validProjects = filteredProjects
       .map(p => p.id || p.notes?.id)
       .filter((id): id is string => Boolean(id));
-    
+
     if (selectedProjectIds.size === validProjects.length && validProjects.length > 0) {
       setSelectedProjectIds(new Set());
     } else {
@@ -232,7 +236,7 @@ export default function Projects() {
 
   const handleBulkDelete = async () => {
     if (selectedProjectIds.size === 0) return;
-    
+
     if (!window.confirm(`Удалить ${selectedProjectIds.size} проектов? Это действие нельзя отменить.`)) {
       return;
     }
@@ -311,7 +315,7 @@ export default function Projects() {
 
             const { error } = await supabase
               .from('projects')
-              .update({ 
+              .update({
                 notes: updatedNotes,
                 status: supabaseStatus
               })
@@ -385,7 +389,7 @@ export default function Projects() {
             const year = date.getFullYear().toString();
             if (!isNaN(Number(year))) years.add(year);
           }
-        } catch {}
+        } catch { }
       }
     });
     return Array.from(years).sort((a, b) => Number(b) - Number(a));
@@ -424,7 +428,7 @@ export default function Projects() {
       return displayA.localeCompare(displayB, 'ru');
     });
   }, [realProjects]);
-  
+
   // Функция для получения красивого названия компании
   const getCompanyDisplayName = useCallback((company: string): string => {
     return companyDisplayMap[company] || company;
@@ -447,7 +451,7 @@ export default function Projects() {
               const parsed = JSON.parse(project.notes);
               return parsed?.contract?.currency || parsed?.currency;
             }
-          } catch {}
+          } catch { }
           return null;
         })()
       ];
@@ -477,7 +481,7 @@ export default function Projects() {
             const parsed = JSON.parse(project.notes);
             return parsed?.finances?.amountWithoutVAT || parsed?.contract?.amountWithoutVAT || parsed?.amountWithoutVAT || parsed?.amount;
           }
-        } catch {}
+        } catch { }
         return null;
       })()
     ];
@@ -525,7 +529,7 @@ export default function Projects() {
             const parsed = JSON.parse(project.notes);
             return parsed?.amountWithVAT || parsed?.finances?.amountWithVAT;
           }
-        } catch {}
+        } catch { }
         return null;
       })()
     ];
@@ -655,17 +659,17 @@ export default function Projects() {
   const getProjectStatusLabel = useCallback((project: any): string => {
     // Проверяем notes для точного статуса
     const notesStatus = project.notes?.status;
-    
+
     // Если статус 'new' или 'pending_approval' - партнер не утвердил
     if (notesStatus === 'new' || notesStatus === 'pending_approval') {
       return 'Партнер не утвержден';
     }
-    
+
     // Если статус 'approved' но нет команды - ожидает распределения команды
     if (notesStatus === 'approved' && (!project.team || project.team.length === 0)) {
       return 'Ожидает распределения команды';
     }
-    
+
     // Стандартные статусы
     const statusMap: Record<string, string> = {
       'active': 'Активный',
@@ -680,22 +684,22 @@ export default function Projects() {
       'closed': 'Закрыт',
       'archived': 'Архивирован'
     };
-    
+
     const status = project.status || notesStatus || 'active';
     return statusMap[status] || status;
   }, []);
 
   const getProjectStatusColor = useCallback((project: any): string => {
     const notesStatus = project.notes?.status;
-    
+
     if (notesStatus === 'new' || notesStatus === 'pending_approval') {
       return 'bg-yellow-500'; // Жёлтый для ожидания утверждения
     }
-    
+
     if (notesStatus === 'approved' && (!project.team || project.team.length === 0)) {
       return 'bg-orange-500'; // Оранжевый для ожидания команды
     }
-    
+
     const status = project.status || notesStatus || 'active';
     switch (status) {
       case 'in_progress': return 'bg-blue-500';
@@ -710,7 +714,7 @@ export default function Projects() {
     return filteredProjects.filter(project => {
       const notesStatus = project.notes?.status;
       return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
-              (!project.team || project.team.length === 0);
+        (!project.team || project.team.length === 0);
     });
   }, [filteredProjects]);
 
@@ -734,7 +738,7 @@ export default function Projects() {
     try {
       const projectId = projectForTeamDistribution.id || projectForTeamDistribution.notes?.id;
       const projectName = projectForTeamDistribution.name || projectForTeamDistribution.client?.name || 'Проект';
-      
+
       // Формируем команду с ролями для уведомлений
       const teamWithRoles = selectedTeamMembers.map((memberId: string) => {
         const employee = employees.find((e: any) => e.id === memberId);
@@ -761,7 +765,7 @@ export default function Projects() {
       // Отправляем уведомления всем участникам команды
       const deputyDirectorName = user?.name || 'Заместитель директора';
       const teamIds = teamWithRoles.map((m: any) => m.userId);
-      
+
       // Уведомляем всех участников команды
       notifyTeamAssembled({
         projectName,
@@ -792,7 +796,7 @@ export default function Projects() {
 
       setProjectForTeamDistribution(null);
       setSelectedTeamMembers([]);
-      
+
       if (refreshProjects) {
         await refreshProjects();
       }
@@ -811,15 +815,15 @@ export default function Projects() {
     const startDate = project.contract?.serviceStartDate || project.start_date || project.contract?.date;
     const endDate = project.contract?.serviceEndDate || project.deadline;
     if (!startDate || !endDate) return false;
-    
+
     try {
       const start = new Date(startDate);
       const end = new Date(endDate);
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
-      
+
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
-      
+
       return diffDays > 365; // Больше года = долгосрочный
     } catch {
       return false;
@@ -829,7 +833,7 @@ export default function Projects() {
   // Основная функция фильтрации
   useEffect(() => {
     console.log('📦 Загружены проекты:', realProjects.length);
-    
+
     // Дедупликация по уникальному ключу (UUID из Supabase или комбинация name+contractNumber)
     const uniqueProjects = realProjects.filter((project, index, self) => {
       // Если есть UUID из Supabase - используем его
@@ -843,9 +847,9 @@ export default function Projects() {
         return pKey === key && pKey !== '_';
       });
     });
-    
+
     console.log('📦 Уникальных проектов после дедупликации:', uniqueProjects.length);
-    
+
     // ИСКЛЮЧАЕМ проекты на утверждении (new/pending_approval) из общего списка
     // ФИЛЬТРАЦИЯ ПРОЕКТОВ ПО РОЛИ ПОЛЬЗОВАТЕЛЯ
     // Каждая роль видит только свои проекты
@@ -922,7 +926,7 @@ export default function Projects() {
     });
 
     console.log(`🔍 [Projects] Фильтрация для ${user?.role} (${user?.id}): показано ${filtered.length} из ${uniqueProjects.length} проектов`);
-    
+
     // 1. Поиск по тексту (существующий)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -933,7 +937,7 @@ export default function Projects() {
         return name.includes(query) || clientName.includes(query) || contractNumber.includes(query);
       });
     }
-    
+
     // 2. Фильтр по году
     if (filterYear !== 'all') {
       filtered = filtered.filter(project => {
@@ -947,7 +951,7 @@ export default function Projects() {
         }
       });
     }
-    
+
     // 3. Фильтр по компании
     if (filterCompany !== 'all') {
       filtered = filtered.filter(project => {
@@ -955,7 +959,7 @@ export default function Projects() {
         return company === filterCompany;
       });
     }
-    
+
     // 4. Фильтр по долгосрочным проектам
     if (filterLongTerm !== 'all') {
       filtered = filtered.filter(project => {
@@ -1114,13 +1118,29 @@ export default function Projects() {
   }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount]);
 
 
+  // Получаем уникальные роли сотрудников для фильтра распределения команды
+  const employeeRoles = useMemo(() => {
+    const roles = new Set<string>();
+    employees.forEach((emp: any) => {
+      const role = emp.role || emp.position;
+      if (role) roles.add(role);
+    });
+    return Array.from(roles).sort();
+  }, [employees]);
+
+  // Фильтруем сотрудников для диалога распределения
+  const filteredEmployeesForDistribution = useMemo(() => {
+    if (teamDistributionRoleFilter === 'all') return employees;
+    return employees.filter((emp: any) => (emp.role || emp.position) === teamDistributionRoleFilter);
+  }, [employees, teamDistributionRoleFilter]);
+
   // Функции для управления задачами
   const handleUpdateTask = (projectId: string, taskId: string, updates: Partial<Task>) => {
     setFilteredProjects(prev => prev.map(project => {
       if (project.id === projectId) {
         return {
           ...project,
-          tasks: project.tasks?.map(task => 
+          tasks: project.tasks?.map((task: Task) =>
             task.id === taskId ? { ...task, ...updates } : task
           ) || []
         };
@@ -1134,7 +1154,7 @@ export default function Projects() {
       if (project.id === projectId) {
         return {
           ...project,
-          tasks: project.tasks?.filter(task => task.id !== taskId) || []
+          tasks: project.tasks?.filter((task: Task) => task.id !== taskId) || []
         };
       }
       return project;
@@ -1189,11 +1209,11 @@ export default function Projects() {
   const getDocumentCompletion = useCallback((project: any) => {
     // Всего шаблонов
     const totalTemplates = ALL_AUDIT_TEMPLATES.length;
-    
+
     // Проверяем заполненные документы в projectData или notes
     const projectData = project.projectData || project.notes?.projectData;
     const completedDocuments = projectData?.completedDocuments || project.notes?.completedDocuments || [];
-    
+
     // Если есть данные о заполнении
     if (Array.isArray(completedDocuments) && completedDocuments.length > 0) {
       return {
@@ -1202,7 +1222,7 @@ export default function Projects() {
         percentage: Math.round((completedDocuments.length / totalTemplates) * 100)
       };
     }
-    
+
     // Если нет данных - возвращаем 0
     return {
       completed: 0,
@@ -1219,7 +1239,7 @@ export default function Projects() {
     const projectCompletion = project.completionPercent || project.completion || 0;
     const projectDeadline = project.contract?.serviceEndDate || project.deadline || new Date().toISOString();
     const projectTeam = project.team?.length || 1;
-    
+
     const stats = getProjectStats(project);
     const { amount, currency } = getProjectAmount(project);
 
@@ -1230,9 +1250,9 @@ export default function Projects() {
       }
       navigate(`/project/${projectId}`, { state: { project } });
     };
-    
+
     return (
-      <Card 
+      <Card
         className="p-6 hover:shadow-lg transition-all duration-200 border glass-card cursor-pointer relative"
         onClick={handleCardClick}
         data-testid="project-card"
@@ -1252,7 +1272,7 @@ export default function Projects() {
           <div className="flex-1">
             <h3 className="font-semibold text-lg mb-2 line-clamp-2">{projectName}</h3>
             <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <Badge variant="secondary" className={`text-white ${getStatusColor(projectStatus)}`}>
+              <Badge variant="secondary" className={`text-white ${getProjectStatusColor(project)}`}>
                 {projectStatus === 'new' ? 'Новый' : projectStatus}
               </Badge>
               <span className="text-sm text-muted-foreground">{projectCompany}</span>
@@ -1429,14 +1449,14 @@ export default function Projects() {
               )}
             </div>
           ) : null}
-          
+
           {/* Debug info (только в dev) */}
           {import.meta.env.DEV && (
             <div className="text-xs text-gray-400 mt-1">
               Debug: notes={!!project.notes}, amount={getProjectAmount(project).amount}
             </div>
           )}
-          
+
           <div>
             <div className="flex justify-between text-sm mb-1">
               <span>Прогресс</span>
@@ -1508,9 +1528,9 @@ export default function Projects() {
           </div>
 
           <div className="flex justify-between pt-2 gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedProject(project);
@@ -1519,9 +1539,9 @@ export default function Projects() {
               <CheckSquare className="w-4 h-4 mr-1" />
               Задачи
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 if (projectId) {
@@ -1535,23 +1555,23 @@ export default function Projects() {
               Открыть
             </Button>
             {/* Кнопка распределения команды для зам. директора */}
-            {user?.role === 'deputy_director' && 
-             getProjectsAwaitingTeam.some(p => (p.id || p.notes?.id) === projectId) && (
+            {user?.role === 'deputy_director' &&
+              getProjectsAwaitingTeam.some(p => (p.id || p.notes?.id) === projectId) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openTeamDistribution(project);
+                  }}
+                  className="mt-2"
+                >
+                  👥 Распределить команду
+                </Button>
+              )}
+            {isAdmin && (
               <Button
                 variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openTeamDistribution(project);
-                }}
-                className="mt-2"
-              >
-                👥 Распределить команду
-              </Button>
-            )}
-            {isAdmin && (
-              <Button 
-                variant="outline" 
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1573,29 +1593,26 @@ export default function Projects() {
     <div className="space-y-6">
       {/* Уведомление о срочных дедлайнах */}
       {urgentProjectsStats.total > 0 && (
-        <div className={`rounded-lg border p-4 ${
-          urgentProjectsStats.overdue > 0
-            ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
-            : urgentProjectsStats.critical > 0
-              ? 'bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800'
-              : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800'
-        }`}>
+        <div className={`rounded-lg border p-4 ${urgentProjectsStats.overdue > 0
+          ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
+          : urgentProjectsStats.critical > 0
+            ? 'bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800'
+            : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800'
+          }`}>
           <div className="flex items-start gap-3">
-            <AlertCircle className={`w-5 h-5 mt-0.5 ${
-              urgentProjectsStats.overdue > 0
-                ? 'text-red-600 dark:text-red-400'
-                : urgentProjectsStats.critical > 0
-                  ? 'text-orange-600 dark:text-orange-400'
-                  : 'text-yellow-600 dark:text-yellow-400'
-            }`} />
+            <AlertCircle className={`w-5 h-5 mt-0.5 ${urgentProjectsStats.overdue > 0
+              ? 'text-red-600 dark:text-red-400'
+              : urgentProjectsStats.critical > 0
+                ? 'text-orange-600 dark:text-orange-400'
+                : 'text-yellow-600 dark:text-yellow-400'
+              }`} />
             <div className="flex-1">
-              <h3 className={`font-semibold ${
-                urgentProjectsStats.overdue > 0
-                  ? 'text-red-800 dark:text-red-200'
-                  : urgentProjectsStats.critical > 0
-                    ? 'text-orange-800 dark:text-orange-200'
-                    : 'text-yellow-800 dark:text-yellow-200'
-              }`}>
+              <h3 className={`font-semibold ${urgentProjectsStats.overdue > 0
+                ? 'text-red-800 dark:text-red-200'
+                : urgentProjectsStats.critical > 0
+                  ? 'text-orange-800 dark:text-orange-200'
+                  : 'text-yellow-800 dark:text-yellow-200'
+                }`}>
                 Внимание! Срочные дедлайны
               </h3>
               <div className="flex flex-wrap gap-3 mt-2 text-sm">
@@ -1657,8 +1674,8 @@ export default function Projects() {
           <h1 className="text-3xl font-bold">Проекты</h1>
           <p className="text-muted-foreground">
             {user?.role === 'partner' ? 'Мои проекты' :
-             user?.role === 'procurement' ? 'Управление проектами' :
-             'Проекты'}
+              user?.role === 'procurement' ? 'Управление проектами' :
+                'Проекты'}
           </p>
         </div>
         {/* Кнопки управления - только для CEO, deputy_director и procurement */}
@@ -1731,106 +1748,106 @@ export default function Projects() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Создать новый проект</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Название
-                </Label>
-                <Input
-                  id="name"
-                  value={newProject.name}
-                  onChange={(e) => setNewProject({...newProject, name: e.target.value})}
-                  className="col-span-3"
-                  placeholder="Введите название проекта"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="company" className="text-right">
-                  Компания
-                </Label>
-                <Select value={newProject.company} onValueChange={(value) => setNewProject({...newProject, company: value})}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Выберите компанию" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="RB Partners Tax Audit">RB Partners Tax Audit</SelectItem>
-                    <SelectItem value="Russell Bedford IT Audit">Russell Bedford IT Audit</SelectItem>
-                    <SelectItem value="Parker Russell Due Diligence">Parker Russell Due Diligence</SelectItem>
-                    <SelectItem value="RB Partners FNO Audit">RB Partners FNO Audit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="deadline" className="text-right">
-                  Срок
-                </Label>
-                <Input
-                  id="deadline"
-                  type="date"
-                  value={newProject.deadline}
-                  onChange={(e) => setNewProject({...newProject, deadline: e.target.value})}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="budget" className="text-right">
-                  Бюджет
-                </Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  value={newProject.budget}
-                  onChange={(e) => setNewProject({...newProject, budget: e.target.value})}
-                  className="col-span-3"
-                  placeholder="Введите бюджет проекта"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="status" className="text-right">
-                  Статус
-                </Label>
-                <Select value={newProject.status} onValueChange={(value) => setNewProject({...newProject, status: value})}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Черновик">Черновик</SelectItem>
-                    <SelectItem value="В работе">В работе</SelectItem>
-                    <SelectItem value="На проверке">На проверке</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Отмена
-              </Button>
-              <Button 
-                className="btn-gradient"
-                onClick={() => {
-                  if (newProject.name && newProject.company && newProject.deadline) {
-                    const project: SimpleProject = {
-                      id: String(Date.now()),
-                      name: newProject.name,
-                      company: newProject.company,
-                      deadline: newProject.deadline,
-                      status: newProject.status,
-                      completion: 0,
-                      team: 1
-                    };
-                    setFilteredProjects([...filteredProjects, project]);
-                    setNewProject({ name: "", company: "", deadline: "", status: "Черновик", budget: "" });
-                    setIsDialogOpen(false);
-                  }
-                }}
-              >
-                Создать
-              </Button>
-            </div>
-          </DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Создать новый проект</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="name" className="text-right">
+                        Название
+                      </Label>
+                      <Input
+                        id="name"
+                        value={newProject.name}
+                        onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                        className="col-span-3"
+                        placeholder="Введите название проекта"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="company" className="text-right">
+                        Компания
+                      </Label>
+                      <Select value={newProject.company} onValueChange={(value) => setNewProject({ ...newProject, company: value })}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Выберите компанию" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="RB Partners Tax Audit">RB Partners Tax Audit</SelectItem>
+                          <SelectItem value="Russell Bedford IT Audit">Russell Bedford IT Audit</SelectItem>
+                          <SelectItem value="Parker Russell Due Diligence">Parker Russell Due Diligence</SelectItem>
+                          <SelectItem value="RB Partners FNO Audit">RB Partners FNO Audit</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="deadline" className="text-right">
+                        Срок
+                      </Label>
+                      <Input
+                        id="deadline"
+                        type="date"
+                        value={newProject.deadline}
+                        onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="budget" className="text-right">
+                        Бюджет
+                      </Label>
+                      <Input
+                        id="budget"
+                        type="number"
+                        value={newProject.budget}
+                        onChange={(e) => setNewProject({ ...newProject, budget: e.target.value })}
+                        className="col-span-3"
+                        placeholder="Введите бюджет проекта"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="status" className="text-right">
+                        Статус
+                      </Label>
+                      <Select value={newProject.status} onValueChange={(value) => setNewProject({ ...newProject, status: value })}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Черновик">Черновик</SelectItem>
+                          <SelectItem value="В работе">В работе</SelectItem>
+                          <SelectItem value="На проверке">На проверке</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      Отмена
+                    </Button>
+                    <Button
+                      className="btn-gradient"
+                      onClick={() => {
+                        if (newProject.name && newProject.company && newProject.deadline) {
+                          const project: SimpleProject = {
+                            id: String(Date.now()),
+                            name: newProject.name,
+                            company: newProject.company,
+                            deadline: newProject.deadline,
+                            status: newProject.status,
+                            completion: 0,
+                            team: 1
+                          };
+                          setFilteredProjects([...filteredProjects, project]);
+                          setNewProject({ name: "", company: "", deadline: "", status: "Черновик", budget: "" });
+                          setIsDialogOpen(false);
+                        }
+                      }}
+                    >
+                      Создать
+                    </Button>
+                  </div>
+                </DialogContent>
               </Dialog>
             )}
           </div>
@@ -1838,347 +1855,296 @@ export default function Projects() {
       </div>
 
       {/* Современная панель фильтров */}
-      <Card className="p-5 border-2 border-primary/20 bg-gradient-to-br from-background to-secondary/5 shadow-lg">
-        {/* Поиск с иконкой */}
-        <div className="relative mb-5">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
-          <Input
-            placeholder="🔍 Поиск по названию, клиенту, договору..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 h-11 text-base border-2 focus:border-primary transition-all"
-          />
-        </div>
+      {/* СУПЕР-СОВРЕМЕННАЯ ПАНЕЛЬ ФИЛЬТРОВ */}
+      <Card className="overflow-hidden border-0 shadow-2xl bg-gradient-to-br from-card/90 via-card to-card/50 backdrop-blur-xl relative mb-6">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-secondary/50 to-primary/50" />
 
-        {/* Фильтры в виде красивых карточек */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          {/* Год окончания */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Год окончания
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={filterYear === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterYear('all')}
-                className={filterYear === 'all' ? 'shadow-md' : ''}
-              >
-                Все
-              </Button>
-              {availableYears.slice(0, 4).map(year => (
+        <div className="p-6 space-y-8">
+          {/* Поиск */}
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl blur opacity-25 group-hover:opacity-100 transition duration-500" />
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-primary/70" />
+              <Input
+                placeholder="Поиск по названию, клиенту, договору..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-14 h-14 text-lg bg-background/80 border-primary/20 hover:border-primary/50 focus:border-primary focus:ring-2 ring-primary/20 transition-all rounded-xl shadow-inner placeholder:text-muted-foreground/70"
+              />
+            </div>
+          </div>
+
+          {/* Быстрые основные фильтры */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* Год окончания */}
+            <div className="space-y-3 p-4 rounded-xl bg-background/40 border border-white/5 shadow-sm">
+              <Label className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                <Calendar className="w-4 h-4 text-primary" /> Год окончания
+              </Label>
+              <div className="flex flex-wrap gap-2">
                 <Button
-                  key={year}
-                  variant={filterYear === year ? 'default' : 'outline'}
+                  variant={filterYear === 'all' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setFilterYear(year)}
-                  className={filterYear === year ? 'shadow-md font-bold' : ''}
+                  onClick={() => setFilterYear('all')}
+                  className={`rounded-full px-4 transition-all ${filterYear === 'all' ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25 scale-105' : 'hover:border-primary/50 border-primary/20'}`}
                 >
-                  {year}
+                  Все
                 </Button>
-              ))}
-              {availableYears.length > 4 && (
-                <Select value={filterYear} onValueChange={setFilterYear}>
-                  <SelectTrigger className="w-[90px] h-8 text-xs">
-                    <SelectValue placeholder="Ещё..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableYears.slice(4).map(year => (
-                      <SelectItem key={year} value={year}>{year}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
-
-          {/* Компания - улучшенное отображение */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Наша компания
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={filterCompany === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterCompany('all')}
-                className={filterCompany === 'all' ? 'shadow-md' : ''}
-              >
-                Все
-              </Button>
-              {availableCompanies.slice(0, 4).map(company => {
-                const displayName = getCompanyDisplayName(company);
-                return (
+                {availableYears.slice(0, 4).map(year => (
                   <Button
-                    key={company}
-                    variant={filterCompany === company ? 'default' : 'outline'}
+                    key={year}
+                    variant={filterYear === year ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setFilterCompany(company)}
-                    className={`max-w-[160px] truncate ${filterCompany === company ? 'shadow-md font-bold' : ''}`}
-                    title={company !== displayName ? `Оригинал: ${company}` : undefined}
+                    onClick={() => setFilterYear(year)}
+                    className={`rounded-full px-4 transition-all ${filterYear === year ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25 scale-105' : 'hover:border-primary/50 border-primary/20'}`}
                   >
-                    {displayName}
+                    {year}
                   </Button>
-                );
-              })}
-              {availableCompanies.length > 4 && (
-                <Select value={filterCompany} onValueChange={setFilterCompany}>
-                  <SelectTrigger className="w-[140px] h-8 text-xs">
-                    <SelectValue placeholder="Ещё..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableCompanies.slice(4).map(company => {
-                      const displayName = getCompanyDisplayName(company);
-                      return (
-                        <SelectItem key={company} value={company} title={company !== displayName ? `Оригинал: ${company}` : undefined}>
-                          {displayName}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              )}
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Тип проекта и настройки */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Тип и настройки
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={filterLongTerm === true ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterLongTerm(filterLongTerm === true ? 'all' : true)}
-                className={filterLongTerm === true ? 'shadow-md' : ''}
-              >
-                📅 Долгосрочные
-              </Button>
-              <Button
-                variant={filterLongTerm === false ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterLongTerm(filterLongTerm === false ? 'all' : false)}
-                className={filterLongTerm === false ? 'shadow-md' : ''}
-              >
-                ⚡ Краткосрочные
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Расширенные фильтры по колонкам - сворачиваемый блок */}
-        <div className="mt-4 pt-4 border-t border-border">
-          <div className="flex items-center justify-between mb-3">
-            <Label className="text-sm font-semibold flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              Фильтры по колонкам
-            </Label>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setFilterStatus('all');
-                setFilterProgressMin('');
-                setFilterProgressMax('');
-                setFilterAmountMin('');
-                setFilterAmountMax('');
-                setFilterHasTeam('all');
-                setFilterHasTasks('all');
-                setFilterDeadlineFrom('');
-                setFilterDeadlineTo('');
-              }}
-              className="text-xs"
-            >
-              Сбросить
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Фильтр по статусу */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Статус</Label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Все статусы" />
+            {/* Наша компания */}
+            <div className="space-y-3 p-4 rounded-xl bg-background/40 border border-white/5 shadow-sm">
+              <Label className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                <BarChart3 className="w-4 h-4 text-secondary" /> Наша компания
+              </Label>
+              <Select value={filterCompany} onValueChange={setFilterCompany}>
+                <SelectTrigger className="h-[36px] bg-background/50 border-secondary/20 hover:border-secondary/50 transition-colors rounded-xl shadow-sm text-secondary-foreground font-semibold">
+                  <SelectValue placeholder="Все компании" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
-                  {availableStatuses.map(status => (
-                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                  <SelectItem value="all">Все компании</SelectItem>
+                  {allAppCompanies.map(c => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* Фильтр по прогрессу */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Прогресс %</Label>
-              <div className="flex gap-1">
-                <Input
-                  type="number"
-                  placeholder="От"
-                  value={filterProgressMin}
-                  onChange={(e) => setFilterProgressMin(e.target.value ? Number(e.target.value) : '')}
-                  className="h-8 text-xs"
-                  min="0"
-                  max="100"
-                />
-                <Input
-                  type="number"
-                  placeholder="До"
-                  value={filterProgressMax}
-                  onChange={(e) => setFilterProgressMax(e.target.value ? Number(e.target.value) : '')}
-                  className="h-8 text-xs"
-                  min="0"
-                  max="100"
-                />
-              </div>
-            </div>
-            
-            {/* Фильтр по суммам */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Сумма (без НДС)</Label>
-              <div className="flex gap-1">
-                <Input
-                  type="number"
-                  placeholder="От"
-                  value={filterAmountMin}
-                  onChange={(e) => setFilterAmountMin(e.target.value ? Number(e.target.value) : '')}
-                  className="h-8 text-xs"
-                  min="0"
-                />
-                <Input
-                  type="number"
-                  placeholder="До"
-                  value={filterAmountMax}
-                  onChange={(e) => setFilterAmountMax(e.target.value ? Number(e.target.value) : '')}
-                  className="h-8 text-xs"
-                  min="0"
-                />
-              </div>
-            </div>
-            
-            {/* Фильтр по команде и задачам */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Команда / Задачи</Label>
-              <div className="flex gap-1">
-                <Select value={filterHasTeam === 'all' ? 'all' : filterHasTeam ? 'yes' : 'no'} 
-                        onValueChange={(v) => setFilterHasTeam(v === 'all' ? 'all' : v === 'yes')}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Команда: Все</SelectItem>
-                    <SelectItem value="yes">Есть команда</SelectItem>
-                    <SelectItem value="no">Нет команды</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterHasTasks === 'all' ? 'all' : filterHasTasks ? 'yes' : 'no'}
-                        onValueChange={(v) => setFilterHasTasks(v === 'all' ? 'all' : v === 'yes')}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Задачи: Все</SelectItem>
-                    <SelectItem value="yes">Есть задачи</SelectItem>
-                    <SelectItem value="no">Нет задач</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            {/* Фильтр по дедлайну */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Дедлайн</Label>
-              <div className="flex gap-1">
-                <Input
-                  type="date"
-                  placeholder="От"
-                  value={filterDeadlineFrom}
-                  onChange={(e) => setFilterDeadlineFrom(e.target.value)}
-                  className="h-8 text-xs"
-                />
-                <Input
-                  type="date"
-                  placeholder="До"
-                  value={filterDeadlineTo}
-                  onChange={(e) => setFilterDeadlineTo(e.target.value)}
-                  className="h-8 text-xs"
-                />
+
+            {/* Тип проекта */}
+            <div className="space-y-3 p-4 rounded-xl bg-background/40 border border-white/5 shadow-sm">
+              <Label className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                <Clock className="w-4 h-4 text-orange-500" /> Тип & Настройки
+              </Label>
+              <div className="flex gap-2 h-[32px]">
+                <Button
+                  variant={filterLongTerm === true ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterLongTerm(filterLongTerm === true ? 'all' : true)}
+                  className={`flex-1 rounded-xl transition-all h-[36px] ${filterLongTerm === true ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30' : 'hover:border-orange-500/50 border-orange-500/20 text-orange-600 dark:text-orange-400'}`}
+                >
+                  ⏳ Долгоср.
+                </Button>
+                <Button
+                  variant={filterLongTerm === false ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterLongTerm(filterLongTerm === false ? 'all' : false)}
+                  className={`flex-1 rounded-xl transition-all h-[36px] ${filterLongTerm === false ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'hover:border-blue-500/50 border-blue-500/20 text-blue-600 dark:text-blue-400'}`}
+                >
+                  ⚡ Краткоср.
+                </Button>
               </div>
             </div>
 
-            {/* Сортировка */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Сортировка</Label>
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                <SelectTrigger className="h-8 text-xs">
+          </div>
+
+          {/* Расширенные фильтры - Слайдеры и селекты */}
+          <div className="pt-6 border-t border-primary/10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+
+              {/* Статус проекта */}
+              <div className="space-y-3">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Статус</Label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
+                    <SelectValue placeholder="Все статусы" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все статусы</SelectItem>
+                    {availableStatuses.map((status: string) => (
+                      <SelectItem key={status} value={status}>
+                        <div className="flex items-center gap-2">
+                          <Circle className={`w-3 h-3 text-primary`} />
+                          {status}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Прогресс со слайдером */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Прогресс (%)</Label>
+                  <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    {filterProgressMin === '' ? 0 : filterProgressMin} — {filterProgressMax === '' ? 100 : filterProgressMax}
+                  </span>
+                </div>
+                <Slider
+                  defaultValue={[0, 100]}
+                  value={[Number(filterProgressMin === '' ? 0 : filterProgressMin), Number(filterProgressMax === '' ? 100 : filterProgressMax)]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={([min, max]) => {
+                    setFilterProgressMin(min);
+                    setFilterProgressMax(max);
+                  }}
+                  className="py-2"
+                />
+              </div>
+
+              {/* Сумма договора со слайдером (упрощенным) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Сумма (без НДС)</Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={showAmounts}
+                      onCheckedChange={setShowAmounts}
+                      id="showAmounts"
+                    />
+                    <Label htmlFor="showAmounts" className="text-[10px] cursor-pointer opacity-70">
+                      Показывать
+                    </Label>
+                  </div>
+                </div>
+                {showAmounts ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      placeholder="От"
+                      value={filterAmountMin}
+                      onChange={(e) => setFilterAmountMin(e.target.value ? Number(e.target.value) : '')}
+                      className="h-10 rounded-lg bg-background/50 border-primary/20 text-center font-mono text-sm"
+                    />
+                    <span className="text-muted-foreground font-bold">-</span>
+                    <Input
+                      type="number"
+                      placeholder="До"
+                      value={filterAmountMax}
+                      onChange={(e) => setFilterAmountMax(e.target.value ? Number(e.target.value) : '')}
+                      className="h-10 rounded-lg bg-background/50 border-primary/20 text-center font-mono text-sm"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-10 rounded-lg bg-muted/30 border border-primary/10 flex items-center justify-center text-xs text-muted-foreground italic">
+                    👁️ Скрыто
+                  </div>
+                )}
+              </div>
+
+              {/* Сортировка */}
+              <div className="space-y-3">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Сортировка</Label>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                  <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deadline_asc">По дедлайну (ближайшие)</SelectItem>
+                    <SelectItem value="deadline_desc">По дедлайну (дальние)</SelectItem>
+                    <SelectItem value="date_desc">По дате (новые)</SelectItem>
+                    <SelectItem value="date_asc">По дате (старые)</SelectItem>
+                    <SelectItem value="amount_desc">По сумме (большие)</SelectItem>
+                    <SelectItem value="amount_asc">По сумме (маленькие)</SelectItem>
+                    <SelectItem value="name_asc">По названию (А-Я)</SelectItem>
+                    <SelectItem value="name_desc">По названию (Я-А)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Возвращаем фильтр по команде и задачам как нижний ряд */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-4">
+            <div className="space-y-3">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие команды</Label>
+              <Select value={filterHasTeam === 'all' ? 'all' : filterHasTeam ? 'yes' : 'no'}
+                onValueChange={(v) => setFilterHasTeam(v === 'all' ? 'all' : v === 'yes')}>
+                <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="deadline_asc">По дедлайну (ближайшие)</SelectItem>
-                  <SelectItem value="deadline_desc">По дедлайну (дальние)</SelectItem>
-                  <SelectItem value="date_desc">По дате (новые)</SelectItem>
-                  <SelectItem value="date_asc">По дате (старые)</SelectItem>
-                  <SelectItem value="amount_desc">По сумме (большие)</SelectItem>
-                  <SelectItem value="amount_asc">По сумме (маленькие)</SelectItem>
-                  <SelectItem value="name_asc">По названию (А-Я)</SelectItem>
-                  <SelectItem value="name_desc">По названию (Я-А)</SelectItem>
+                  <SelectItem value="all">Команда: Все</SelectItem>
+                  <SelectItem value="yes">✅ Есть команда</SelectItem>
+                  <SelectItem value="no">❌ Нет команды</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </div>
-
-        {/* Дополнительные настройки и сброс */}
-        <div className="flex items-center justify-between pt-4 border-t border-border">
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="showAmounts"
-              checked={showAmounts}
-              onChange={(e) => setShowAmounts(e.target.checked)}
-              className="w-5 h-5 cursor-pointer rounded border-2 border-primary"
-            />
-            <Label htmlFor="showAmounts" className="text-sm font-medium cursor-pointer">
-              💰 Показывать суммы
-            </Label>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-muted-foreground">
-              Найдено: <strong className="text-foreground font-bold">{filteredProjects.length}</strong> из <strong className="text-foreground">{realProjects.length}</strong>
+            <div className="space-y-3">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие задач</Label>
+              <Select value={filterHasTasks === 'all' ? 'all' : filterHasTasks ? 'yes' : 'no'}
+                onValueChange={(v) => setFilterHasTasks(v === 'all' ? 'all' : v === 'yes')}>
+                <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Задачи: Все</SelectItem>
+                  <SelectItem value="yes">✅ Есть задачи</SelectItem>
+                  <SelectItem value="no">❌ Нет задач</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            {(filterYear !== 'all' || filterCompany !== 'all' || filterLongTerm !== 'all' || 
+            {/* Диапазон дедлайна */}
+            <div className="space-y-3 lg:col-span-2">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Срок проекта (От и До)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={filterDeadlineFrom}
+                  onChange={(e) => setFilterDeadlineFrom(e.target.value)}
+                  className="h-10 rounded-lg bg-background/50 border-primary/20"
+                />
+                <span className="text-muted-foreground font-bold">-</span>
+                <Input
+                  type="date"
+                  value={filterDeadlineTo}
+                  onChange={(e) => setFilterDeadlineTo(e.target.value)}
+                  className="h-10 rounded-lg bg-background/50 border-primary/20"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Футер фильтров (Сброс и статистика) */}
+          <div className="flex items-center justify-between pt-6 border-t border-primary/10 mt-6 !mb-0">
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-sm rounded-xl text-md">
+                Найдено: <span className="font-bold mx-1 text-xl">{filteredProjects.length}</span> из <span className="opacity-70 ml-1">{realProjects.length}</span>
+              </Badge>
+            </div>
+
+            {(filterYear !== 'all' || filterCompany !== 'all' || filterLongTerm !== 'all' ||
               filterStatus !== 'all' || filterProgressMin !== '' || filterProgressMax !== '' ||
               filterAmountMin !== '' || filterAmountMax !== '' || filterHasTeam !== 'all' ||
               filterHasTasks !== 'all' || filterDeadlineFrom || filterDeadlineTo) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFilterYear('all');
-                  setFilterCompany('all');
-                  setFilterLongTerm('all');
-                  setFilterStatus('all');
-                  setFilterProgressMin('');
-                  setFilterProgressMax('');
-                  setFilterAmountMin('');
-                  setFilterAmountMax('');
-                  setFilterHasTeam('all');
-                  setFilterHasTasks('all');
-                  setFilterDeadlineFrom('');
-                  setFilterDeadlineTo('');
-                }}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                ✕ Сбросить все фильтры
-              </Button>
-            )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-full px-5 h-10 font-bold tracking-wide transition-all shadow-sm"
+                  onClick={() => {
+                    setFilterStatus('all');
+                    setFilterProgressMin('');
+                    setFilterProgressMax('');
+                    setFilterAmountMin('');
+                    setFilterAmountMax('');
+                    setFilterHasTeam('all');
+                    setFilterHasTasks('all');
+                    setFilterDeadlineFrom('');
+                    setFilterDeadlineTo('');
+                    setFilterYear('all');
+                    setFilterCompany('all');
+                    setFilterLongTerm('all');
+                  }}
+                >
+                  <XCircle className="w-5 h-5 mr-2" /> СБРОСИТЬ ФИЛЬТРЫ
+                </Button>
+              )}
           </div>
         </div>
       </Card>
@@ -2307,9 +2273,9 @@ export default function Projects() {
         <TabsContent value="list" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project, index) => (
-              <ProjectCard 
-                key={project.id || project.notes?.id || `project-${index}`} 
-                project={project} 
+              <ProjectCard
+                key={project.id || project.notes?.id || `project-${index}`}
+                project={project}
               />
             ))}
           </div>
@@ -2346,7 +2312,7 @@ export default function Projects() {
                 </div>
               </div>
             </div>
-            
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-secondary">
@@ -2380,7 +2346,7 @@ export default function Projects() {
                     const stats = getProjectStats(project);
                     const tasks = getProjectTasks(project);
                     const projectId = project.id || project.notes?.id;
-                    
+
                     return (
                       <tr key={projectId || `project-${project.name}`} className="hover:bg-secondary/20 transition-colors">
                         {isAdmin && (
@@ -2394,7 +2360,7 @@ export default function Projects() {
                           </td>
                         )}
                         <td className="px-3 py-3">
-                          <div 
+                          <div
                             className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors group"
                             onClick={() => {
                               const projectId = project.id || project.notes?.id;
@@ -2413,15 +2379,15 @@ export default function Projects() {
                             </div>
                           </div>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <span className="text-xs">{project.companyName || project.company || project.ourCompany || '—'}</span>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           {showAmounts ? (() => {
                             const { amount, currency } = getProjectAmount(project);
-                            
+
                             // Отладочное логирование для первых проектов (всегда в проде для отладки)
                             if (filteredProjects.indexOf(project) < 3) {
                               console.log('🔍 DEBUG Сумма БЕЗ НДС для проекта:', {
@@ -2444,7 +2410,7 @@ export default function Projects() {
                                 notes_raw: typeof project.notes === 'string' ? project.notes.substring(0, 1000) : JSON.stringify(project.notes || {}).substring(0, 1000)
                               });
                             }
-                            
+
                             return amount && amount > 0 ? (
                               <span className="text-xs font-medium text-primary">
                                 {new Intl.NumberFormat('ru-RU', {
@@ -2460,7 +2426,7 @@ export default function Projects() {
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           {showAmounts ? (() => {
                             const { amount, currency } = getProjectAmountWithVAT(project);
@@ -2479,15 +2445,14 @@ export default function Projects() {
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <Badge
                             variant="secondary"
-                            className={`text-xs text-white ${getProjectStatusColor(project)} ${
-                              getProjectStatusLabel(project) === 'Ожидает распределения команды'
-                                ? 'cursor-pointer hover:opacity-80'
-                                : ''
-                            }`}
+                            className={`text-xs text-white ${getProjectStatusColor(project)} ${getProjectStatusLabel(project) === 'Ожидает распределения команды'
+                              ? 'cursor-pointer hover:opacity-80'
+                              : ''
+                              }`}
                             onClick={() => {
                               const status = getProjectStatusLabel(project);
                               if (status === 'Ожидает распределения команды') {
@@ -2504,14 +2469,14 @@ export default function Projects() {
                             {getProjectStatusLabel(project)}
                           </Badge>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <div className="space-y-1">
                             <div className="text-xs font-medium">{project.completion}%</div>
                             <Progress value={project.completion} className="h-1.5 w-16" />
                           </div>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <div className="text-xs">
                             <div className="flex items-center space-x-1">
@@ -2525,7 +2490,7 @@ export default function Projects() {
                             )}
                           </div>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <div className="space-y-1">
                             <div className="text-xs">
@@ -2559,7 +2524,7 @@ export default function Projects() {
                             )}
                           </div>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           {(() => {
                             const docCompletion = getDocumentCompletion(project);
@@ -2584,14 +2549,14 @@ export default function Projects() {
                             );
                           })()}
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <div className="flex items-center space-x-1 text-xs">
                             <span>👥</span>
                             <span>{project.team?.length || project.team || 0}</span>
                           </div>
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           {(() => {
                             const { urgency, daysLeft, deadline } = getDeadlineUrgency(project);
@@ -2641,30 +2606,30 @@ export default function Projects() {
                             );
                           })()}
                         </td>
-                        
+
                         <td className="px-3 py-3">
                           <div className="flex space-x-1 flex-wrap gap-1">
-                            {user?.role === 'deputy_director' && 
-                             getProjectsAwaitingTeam.some(p => (p.id || p.notes?.id) === projectId) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-6 px-2 text-xs"
-                                onClick={() => openTeamDistribution(project)}
-                              >
-                                👥 Распределить
-                              </Button>
-                            )}
-                            <Button 
-                              variant="outline" 
+                            {user?.role === 'deputy_director' &&
+                              getProjectsAwaitingTeam.some(p => (p.id || p.notes?.id) === projectId) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => openTeamDistribution(project)}
+                                >
+                                  👥 Распределить
+                                </Button>
+                              )}
+                            <Button
+                              variant="outline"
                               size="sm"
                               className="h-6 px-2 text-xs"
                               onClick={() => setSelectedProject(project)}
                             >
                               ✅
                             </Button>
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               className="h-6 px-2 text-xs"
                               onClick={() => navigate(`/projects/${project.id}`, { state: { project } })}
@@ -2692,7 +2657,7 @@ export default function Projects() {
                 </tbody>
               </table>
             </div>
-            
+
             {/* Сводная статистика */}
             <div className="p-4 border-t border-border bg-secondary/20">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -2740,7 +2705,7 @@ export default function Projects() {
                         maximumFractionDigits: 0,
                         notation: 'compact'
                       }).format(
-                        filteredProjects.reduce((acc, p) => 
+                        filteredProjects.reduce((acc, p) =>
                           acc + (p.contract?.amountWithoutVAT || p.amountWithoutVAT || p.amount || 0), 0
                         )
                       ) : '—'}
@@ -2784,34 +2749,88 @@ export default function Projects() {
                 Проект: {projectForTeamDistribution.name || projectForTeamDistribution.client?.name}
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               <div>
-                <Label>Выберите участников команды:</Label>
-                <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto">
-                  {employees.map((emp: any) => (
-                    <div key={emp.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={`team-${emp.id}`}
-                        checked={selectedTeamMembers.includes(emp.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedTeamMembers([...selectedTeamMembers, emp.id]);
-                          } else {
-                            setSelectedTeamMembers(selectedTeamMembers.filter(id => id !== emp.id));
-                          }
-                        }}
-                        className="w-4 h-4"
-                      />
-                      <Label htmlFor={`team-${emp.id}`} className="cursor-pointer">
-                        {emp.name} ({emp.role || 'Сотрудник'})
-                      </Label>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Выберите участников команды:</Label>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[400px]">
+                    <Button
+                      variant={teamDistributionRoleFilter === 'all' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setTeamDistributionRoleFilter('all')}
+                      className="rounded-full text-[10px] h-7 px-3"
+                    >
+                      Все
+                    </Button>
+                    {employeeRoles.map(role => (
+                      <Button
+                        key={role}
+                        variant={teamDistributionRoleFilter === role ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTeamDistributionRoleFilter(role)}
+                        className={`rounded-full text-[10px] h-7 px-3 ${teamDistributionRoleFilter === role ? 'bg-primary text-primary-foreground' : ''}`}
+                      >
+                        {role}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
+
+                <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar border rounded-lg p-3 bg-muted/20">
+                  {filteredEmployeesForDistribution.length === 0 ? (
+                    <div className="text-center py-4 text-muted-foreground text-sm italic">
+                      Нет сотрудников с такой должностью
+                    </div>
+                  ) : (
+                    filteredEmployeesForDistribution.map((emp: any) => (
+                      <div key={emp.id} className="flex items-center justify-between group hover:bg-background/50 p-2 rounded-md transition-colors">
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            id={`team-${emp.id}`}
+                            checked={selectedTeamMembers.includes(emp.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedTeamMembers([...selectedTeamMembers, emp.id]);
+                              } else {
+                                setSelectedTeamMembers(selectedTeamMembers.filter(id => id !== emp.id));
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-primary/20 text-primary focus:ring-primary shadow-sm"
+                          />
+                          <Label htmlFor={`team-${emp.id}`} className="cursor-pointer flex flex-col">
+                            <span className="font-medium">{emp.name}</span>
+                            <span className="text-[10px] text-muted-foreground">{emp.role || emp.position || 'Сотрудник'}</span>
+                          </Label>
+                        </div>
+                        {selectedTeamMembers.includes(emp.id) && (
+                          <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] h-5">Выбран</Badge>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                {filteredEmployeesForDistribution.length > 0 && teamDistributionRoleFilter !== 'all' && (
+                  <div className="mt-2 flex justify-end">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        const idsToAdd = filteredEmployeesForDistribution
+                          .map(emp => emp.id)
+                          .filter(id => !selectedTeamMembers.includes(id));
+                        setSelectedTeamMembers([...selectedTeamMembers, ...idsToAdd]);
+                      }}
+                      className="text-[10px] text-primary hover:text-primary hover:bg-primary/10"
+                    >
+                      Выбрать всех {teamDistributionRoleFilter} ({filteredEmployeesForDistribution.length})
+                    </Button>
+                  </div>
+                )}
               </div>
-              
+
               <div className="text-sm text-muted-foreground">
                 Выбрано: {selectedTeamMembers.length} участников
               </div>
@@ -2831,7 +2850,7 @@ export default function Projects() {
                 </ol>
               </div>
             </div>
-            
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setProjectForTeamDistribution(null)}>
                 Отмена
@@ -2854,7 +2873,7 @@ export default function Projects() {
                 <span>Задачи проекта: {selectedProject.name}</span>
               </DialogTitle>
             </DialogHeader>
-            
+
             <TaskManager
               project={{
                 id: selectedProject.id,

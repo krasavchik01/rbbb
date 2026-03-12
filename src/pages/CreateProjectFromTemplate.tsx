@@ -13,13 +13,15 @@ import { ProjectTemplate, CustomField } from "@/types/methodology";
 import { dataStore } from "@/store/dataStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProjects } from "@/hooks/useSupabaseData";
 
 export default function CreateProjectFromTemplate() {
   const navigate = useNavigate();
   const { templates } = useTemplates();
   const { toast } = useToast();
   const { user } = useAuth();
-  
+  const { createProject } = useProjects();
+
   const [step, setStep] = useState(1); // 1: выбор шаблона, 2: заполнение паспорта
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null);
   const [passportData, setPassportData] = useState<Record<string, any>>({});
@@ -62,47 +64,58 @@ export default function CreateProjectFromTemplate() {
     return true;
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!selectedTemplate || !validatePassport()) return;
 
-    // Создаем новый проект
-    const newProject = dataStore.addProject({
-      name: passportData['project_name'] || passportData['client_name'] || selectedTemplate.name,
-      description: selectedTemplate.description,
-      status: 'Черновик',
-      company: 'RB Partners',
-      deadline: passportData['deadline'] || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      budget: passportData['budget'] || 0,
-      team: [],
-      completion: 0
-    });
+    try {
+      // Собираем данные проекта на основе шаблона
+      const projectData = {
+        name: passportData['project_name'] || passportData['client_name'] || selectedTemplate.name,
+        description: selectedTemplate.description,
+        status: 'Черновик',
+        company: 'RB Partners',
+        deadline: passportData['deadline'] || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        budget: passportData['budget'] || 0,
+        team: [],
+        completion: 0,
+        templateId: selectedTemplate.id,
+        templateVersion: selectedTemplate.version,
+        passportData: passportData,
+        stagesData: {},
+        completionStatus: {
+          totalElements: selectedTemplate.stages.reduce((sum, stage) => sum + stage.elements.length, 0),
+          completedElements: 0,
+          percentage: 0
+        },
+        history: [{
+          date: new Date().toISOString(),
+          user: user?.name || 'Система',
+          action: 'Проект создан из шаблона',
+          details: `Шаблон: ${selectedTemplate.name}`
+        }],
+        updated_at: new Date().toISOString()
+      };
 
-    // Сохраняем данные проекта на основе шаблона
-    const projectData = {
-      projectId: newProject.id,
-      templateId: selectedTemplate.id,
-      templateVersion: selectedTemplate.version,
-      passportData: passportData,
-      stagesData: {},
-      completionStatus: {
-        totalElements: selectedTemplate.stages.reduce((sum, stage) => sum + stage.elements.length, 0),
-        completedElements: 0,
-        percentage: 0
-      },
-      history: []
-    };
+      // Создаем проект в Supabase
+      const createdProject = await createProject(projectData);
 
-    // Сохраняем в localStorage
-    const projectDataKey = `rb_project_data_${newProject.id}`;
-    localStorage.setItem(projectDataKey, JSON.stringify(projectData));
+      if (createdProject && createdProject.id) {
+        toast({
+          title: "Проект создан!",
+          description: `Проект "${projectData.name}" успешно создан. Теперь можно приступить к заполнению процедур.`
+        });
 
-    toast({
-      title: "Проект создан!",
-      description: `Проект "${newProject.name}" успешно создан. Теперь можно приступить к заполнению процедур.`
-    });
-
-    // Переходим на страницу проекта для заполнения
-    navigate(`/project/${newProject.id}`);
+        // Переходим на страницу проекта
+        navigate(`/project/${createdProject.id}`);
+      }
+    } catch (error) {
+      console.error('Failed to create project:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось создать проект в базе данных",
+        variant: "destructive"
+      });
+    }
   };
 
   const renderFieldInput = (field: CustomField) => {
@@ -229,8 +242,8 @@ export default function CreateProjectFromTemplate() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {activeTemplates.map((template) => (
-                <Card 
-                  key={template.id} 
+                <Card
+                  key={template.id}
                   className="p-6 hover:shadow-lg transition-all duration-200 cursor-pointer hover:border-primary"
                   onClick={() => handleTemplateSelect(template)}
                 >
