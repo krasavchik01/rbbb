@@ -23,6 +23,7 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate, saveImportedProjects } from "@/lib/excelExport";
 import { supabase } from "@/integrations/supabase/client";
 import { notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
+import { useAppSettings } from "@/lib/appSettings";
 import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates";
 import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
 import { ContractStagesEditor } from "@/components/projects/ContractStagesEditor";
@@ -47,6 +48,7 @@ export default function Projects() {
   const { projects: realProjects, loading, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
   const { companies: allAppCompanies = [] } = useCompanies();
+  const [appSettings] = useAppSettings();
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -1916,8 +1918,8 @@ export default function Projects() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Все компании</SelectItem>
-                  {availableCompanies.map(company => (
-                    <SelectItem key={company} value={company}>{companyDisplayMap[company] || company}</SelectItem>
+                  {(appSettings.companies?.length > 0 ? appSettings.companies.filter(c => c.isActive) : availableCompanies.map(name => ({ id: name, name }))).map(c => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
