@@ -21,24 +21,29 @@ import {
   TrendingUp,
   Building2,
   AlertTriangle,
-  Eye
+  Eye,
+  ChevronRight
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectV3 } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { supabase } from "@/integrations/supabase/client";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
 import { Contractor } from "@/types/project-v3";
 import { notifyProjectApproved, notifyProjectRejected, notifyPMAssigned, notifyTeamMemberAdded } from "@/lib/projectNotifications";
 import { getNotifications } from "@/lib/notifications";
 import { useEmployees } from "@/hooks/useSupabaseData";
+import { useAppSettings } from "@/lib/appSettings";
+import { projectMatchesAllowedCompanies } from "@/lib/userCompanyAccess";
 
 export default function ProjectApproval() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { employees: realEmployees = [], loading: employeesLoading } = useEmployees();
+  const { employees: realEmployees = [] } = useEmployees();
+  const [appSettings] = useAppSettings();
 
   const [projects, setProjects] = useState<ProjectV3[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
@@ -74,6 +79,14 @@ export default function ProjectApproval() {
   const [newContractorAmount, setNewContractorAmount] = useState("");
   const [newContractorType, setNewContractorType] = useState<'gph' | 'subcontract'>('gph');
 
+  // Добавление нового сотрудника inline
+  const [addingNewForRole, setAddingNewForRole] = useState<string | null>(null);
+  const [newEmpName, setNewEmpName] = useState("");
+
+  // Поиск в dropdown и открытый dropdown
+  const [openRoleDropdown, setOpenRoleDropdown] = useState<string | null>(null);
+  const [roleSearchQuery, setRoleSearchQuery] = useState("");
+
   // Маппинг ролей сотрудников из Supabase на роли проектов
   const mapEmployeeRoleToProjectRole = (employeeRole: string): string | null => {
     const roleMap: Record<string, string> = {
@@ -90,6 +103,7 @@ export default function ProjectApproval() {
       'assistant_3': 'assistant_3',
       'assistant_2': 'assistant_2',
       'assistant_1': 'assistant_1',
+      'academy': 'academy',
     };
     // Если роль уже в списке PROJECT_ROLES, возвращаем её как есть
     const projectRoleNames = PROJECT_ROLES.map(r => r.role);
@@ -99,24 +113,18 @@ export default function ProjectApproval() {
     return roleMap[employeeRole] || null;
   };
 
-  // Преобразуем реальных сотрудников в формат для назначения
+  // Преобразуем реальных сотрудников в универсальный формат для выбора (БЕЗ ФИЛЬТРАЦИИ)
   const availableEmployees = realEmployees.map(emp => {
-    const mappedRole = mapEmployeeRoleToProjectRole(emp.role);
-    // Если роль не замаплена, но она есть в PROJECT_ROLES, используем её
-    const projectRoleNames = PROJECT_ROLES.map(r => r.role);
-    const finalRole = mappedRole || (projectRoleNames.includes(emp.role as any) ? emp.role : null);
-
     return {
       id: emp.id,
       name: emp.name || emp.email || 'Без имени',
-      role: finalRole || emp.role, // Используем исходную роль если нет маппинга
+      role: emp.role, // Используем исходную роль напрямую
       activeProjects: 0,
       loadPercent: 0,
       location: 'office' as const,
-      originalRole: emp.role // Сохраняем исходную роль для отладки
+      originalRole: emp.role // Сохраняем исходную роль для отображения
     };
   });
-  // НЕ ФИЛЬТРУЕМ сотрудников - показываем всех реальных сотрудников из базы!
 
   // Логирование для отладки
   useEffect(() => {
@@ -141,18 +149,29 @@ export default function ProjectApproval() {
 
   // Загрузка проектов
   const loadProjects = async () => {
-    // Только Supabase
     const supaProjects = await supabaseDataStore.getProjects();
+
+    // Фильтр по allowedCompanyIds (для зам. директора и других с ограниченным доступом)
+    let filtered = supaProjects as any[];
+    if (user?.allowedCompanyIds && user.allowedCompanyIds.length > 0) {
+      const companies = appSettings.companies || [];
+      const allowedNames = user.allowedCompanyIds
+        .map((id: string) => (companies as any[]).find((c: any) => c.id === id)?.name)
+        .filter(Boolean) as string[];
+      if (allowedNames.length > 0) {
+        filtered = filtered.filter(p => projectMatchesAllowedCompanies(p, allowedNames));
+      }
+    }
+
     // Фильтруем проекты на утверждении (new или pending_approval в notes.status)
-    const pending = (supaProjects as any[])
+    const pending = filtered
       .filter(p => {
         const notesStatus = p?.notes?.status;
         return notesStatus === 'new' || notesStatus === 'pending_approval';
       })
       .map(p => {
-        // Если есть notes объект - используем его как основной проект
         if (p.notes && typeof p.notes === 'object') {
-          return { ...p, ...p.notes, id: p.id }; // Объединяем данные
+          return { ...p, ...p.notes, id: p.id };
         }
         return p;
       }) as ProjectV3[];
@@ -607,16 +626,16 @@ export default function ProjectApproval() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in p-4 md:p-0">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in p-2 sm:p-4 md:p-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
             Утверждение проектов
           </h1>
-          <p className="text-muted-foreground mt-1">Заместитель генерального директора</p>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Заместитель генерального директора</p>
         </div>
-        <Badge className="text-lg px-4 py-2">
-          {projects.length} проектов на утверждении
+        <Badge className="text-sm sm:text-lg px-3 sm:px-4 py-1 sm:py-2 self-start sm:self-auto">
+          {projects.length} на утверждении
         </Badge>
       </div>
 
@@ -803,7 +822,7 @@ export default function ProjectApproval() {
             <div className="space-y-6">
               {/* Информация о проекте */}
               <Card className="p-4 bg-secondary/20 dark:bg-secondary/30 border-l-4 border-primary">
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                   <div>
                     <Label className="text-xs">Клиент</Label>
                     <p className="font-medium">{selectedProject.client.name}</p>
@@ -834,32 +853,35 @@ export default function ProjectApproval() {
 
                 <div className="space-y-3">
                   {PROJECT_ROLES
-                    // Показываем только проектные роли (не административные)
-                    .filter(pr => !['ceo', 'deputy_director', 'hr', 'procurement', 'admin'].includes(pr.role))
+                    .filter(pr => !['ceo', 'deputy_director', 'hr', 'procurement', 'admin', 'company_director', 'contractor', 'accountant', 'admin_staff'].includes(pr.role))
                     .map(projectRole => {
-                    // Фильтруем сотрудников строго по роли
-                    // Маппинг: manager -> все manager_*, supervisor -> все supervisor_* и т.д.
-                    const employeesForRole = availableEmployees.filter(emp => {
-                      const empRole = emp.role || '';
-                      const targetRole = projectRole.role;
-
-                      // Точное совпадение (manager_1 === manager_1)
-                      if (empRole === targetRole) return true;
-
-                      // Маппинг общих ролей на конкретные уровни
-                      // Сотрудник с ролью "manager" показывается во всех manager_1/2/3
-                      if (empRole === 'manager' && targetRole.startsWith('manager_')) return true;
-                      // Сотрудник с ролью "supervisor" показывается во всех supervisor_1/2/3
-                      if (empRole === 'supervisor' && targetRole.startsWith('supervisor_')) return true;
-                      // Сотрудник с ролью "assistant" показывается во всех assistant_1/2/3
-                      if (empRole === 'assistant' && targetRole.startsWith('assistant_')) return true;
-                      // Сотрудник с ролью "tax_specialist" показывается во всех tax_specialist_1/2
-                      if (empRole === 'tax_specialist' && targetRole.startsWith('tax_specialist_')) return true;
-
-                      return false;
-                    });
                     const isRoleSelected = selectedRoles[projectRole.role];
-                    
+                    const isDropdownOpen = openRoleDropdown === projectRole.role;
+                    const selectedEmp = teamMembers[projectRole.role]
+                      ? availableEmployees.find(e => e.id === teamMembers[projectRole.role])
+                      : null;
+
+                    // ФИЛЬТРАЦИЯ: Показываем ВСЕХ сотрудников, ищем по ФИО и по Роли
+                    const q = isDropdownOpen ? roleSearchQuery.toLowerCase() : '';
+                    const filteredEmps = availableEmployees
+                      .filter(emp => {
+                        if (!q) return true;
+                        const nameMatch = emp.name.toLowerCase().includes(q);
+                        const roleLabel = (ROLE_LABELS[emp.role as UserRole] || emp.role || '').toLowerCase();
+                        return nameMatch || roleLabel.includes(q);
+                      })
+                      .sort((a, b) => {
+                        // Priority 1: Match project role (only if not searching)
+                        if (!q) {
+                          const aMatches = a.role === projectRole.role;
+                          const bMatches = b.role === projectRole.role;
+                          if (aMatches && !bMatches) return -1;
+                          if (!aMatches && bMatches) return 1;
+                        }
+                        // Priority 2: Name
+                        return a.name.localeCompare(b.name);
+                      });
+
                     return (
                       <div key={projectRole.role} className="border rounded-lg p-3">
                         {/* Чекбокс для роли */}
@@ -870,14 +892,13 @@ export default function ProjectApproval() {
                               checked={isRoleSelected || false}
                               disabled={projectRole.role === 'partner'}
                               onChange={(e) => {
-                                // Партнер всегда должен быть выбран
                                 if (projectRole.role === 'partner') return;
-                                
                                 setSelectedRoles({...selectedRoles, [projectRole.role]: e.target.checked});
                                 if (!e.target.checked) {
                                   const newTeam = {...teamMembers};
                                   delete newTeam[projectRole.role];
                                   setTeamMembers(newTeam);
+                                  setOpenRoleDropdown(null);
                                 }
                               }}
                               className="w-4 h-4 rounded border-gray-300"
@@ -887,72 +908,162 @@ export default function ProjectApproval() {
                               <Badge variant="destructive" className="text-xs">Обязательно</Badge>
                             )}
                           </label>
+                          {isRoleSelected && selectedEmp && (
+                            <span className="text-sm text-muted-foreground">{selectedEmp.name}</span>
+                          )}
                         </div>
 
-                        {/* Выпадающий список сотрудников */}
+                        {/* Выбор сотрудника */}
                         {isRoleSelected && (
-                          <div className="ml-7 space-y-2">
-                            {employeesForRole.length > 0 ? (
-                              <Select 
-                                value={teamMembers[projectRole.role] || ""} 
-                                onValueChange={(value) => setTeamMembers({...teamMembers, [projectRole.role]: value})}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Выберите сотрудника" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {employeesForRole
-                                    .sort((a, b) => a.name.localeCompare(b.name))
-                                    .map(emp => {
-                                    const empOriginalRole = (emp as any).originalRole;
-                                    const roleLabel = PROJECT_ROLES.find(r => r.role === empOriginalRole)?.label || empOriginalRole;
+                          <div className="ml-7 space-y-2 relative">
+                            {/* Кнопка-trigger */}
+                            <div
+                              className="flex items-center justify-between w-full p-2.5 rounded-lg border cursor-pointer hover:border-primary/50 transition-colors bg-card"
+                              onClick={() => {
+                                if (isDropdownOpen) {
+                                  setOpenRoleDropdown(null);
+                                  setRoleSearchQuery('');
+                                } else {
+                                  setOpenRoleDropdown(projectRole.role);
+                                  setRoleSearchQuery('');
+                                  setAddingNewForRole(null);
+                                }
+                              }}
+                            >
+                              {selectedEmp ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary">
+                                    {selectedEmp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-medium">{selectedEmp.name}</div>
+                                    <div className="text-xs text-muted-foreground">{ROLE_LABELS[(selectedEmp as any).originalRole as UserRole] || (selectedEmp as any).originalRole}</div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">Выберите сотрудника...</span>
+                              )}
+                              <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-90' : ''}`} />
+                            </div>
 
+                            {/* Выпадающий список */}
+                            {isDropdownOpen && addingNewForRole !== projectRole.role && (
+                              <div className="absolute z-20 left-0 right-0 mt-1 border rounded-xl bg-card shadow-xl overflow-hidden">
+                                <div className="p-2 border-b">
+                                  <Input
+                                    placeholder="Поиск сотрудника..."
+                                    value={roleSearchQuery}
+                                    onChange={(e) => setRoleSearchQuery(e.target.value)}
+                                    className="h-8 text-sm"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="max-h-52 overflow-y-auto">
+                                  {filteredEmps.length === 0 && (
+                                    <div className="p-3 text-center text-xs text-muted-foreground">Никого не найдено</div>
+                                  )}
+                                  {filteredEmps.map(emp => {
+                                    const roleLbl = ROLE_LABELS[(emp as any).originalRole as UserRole] || (emp as any).originalRole;
+                                    const isSelected = teamMembers[projectRole.role] === emp.id;
                                     return (
-                                      <SelectItem key={emp.id} value={emp.id}>
-                                        <div className="flex items-center justify-between w-full gap-4">
-                                          <div className="flex flex-col">
-                                            <span>{emp.name}</span>
-                                            <span className="text-xs text-muted-foreground">Роль: {roleLabel}</span>
-                                          </div>
-                                          <div className="flex items-center gap-2 text-xs">
-                                            <Badge
-                                              variant="outline"
-                                              className={
-                                                emp.loadPercent >= 80
-                                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200'
-                                                  : emp.loadPercent >= 50
-                                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-200'
-                                                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200'
-                                              }
-                                            >
-                                              Загрузка: {emp.loadPercent}%
-                                            </Badge>
-                                            <Badge variant="outline">
-                                              Проектов: {emp.activeProjects}
-                                            </Badge>
-                                            <Badge
-                                              variant="outline"
-                                              className={emp.location === 'office'
-                                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
-                                                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-200'}
-                                            >
-                                              {emp.location === 'office' ? '🏢 В офисе' : '📍 На проекте'}
-                                            </Badge>
-                                          </div>
+                                      <div
+                                        key={emp.id}
+                                        className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                                        onClick={() => {
+                                          setTeamMembers({...teamMembers, [projectRole.role]: emp.id});
+                                          setOpenRoleDropdown(null);
+                                          setRoleSearchQuery('');
+                                        }}
+                                      >
+                                        <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
+                                          {emp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
                                         </div>
-                                      </SelectItem>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-sm font-medium truncate">{emp.name}</div>
+                                          <div className="text-xs text-muted-foreground">{roleLbl}</div>
+                                        </div>
+                                        {isSelected && <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />}
+                                      </div>
                                     );
                                   })}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <div className="text-sm text-yellow-600 dark:text-yellow-400 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
-                                ⚠️ Нет сотрудников в базе данных. Добавьте сотрудников через страницу "Сотрудники" или "HR".
-                                {projectRole.role === 'partner' && (
-                                  <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
-                                    Партнер обязателен для утверждения проекта.
-                                  </div>
-                                )}
+                                </div>
+                                <div className="border-t p-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full text-xs gap-1.5 text-primary hover:text-primary"
+                                    onClick={() => {
+                                      setAddingNewForRole(projectRole.role);
+                                      setNewEmpName('');
+                                    }}
+                                  >
+                                    <UserPlus className="w-3.5 h-3.5" />
+                                    Добавить нового сотрудника
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Форма добавления нового сотрудника */}
+                            {addingNewForRole === projectRole.role && (
+                              <div className="flex gap-2 items-end p-2.5 rounded-lg border border-dashed border-primary/40 bg-primary/5">
+                                <div className="flex-1">
+                                  <Input
+                                    placeholder="ФИО нового сотрудника"
+                                    value={newEmpName}
+                                    onChange={(e) => setNewEmpName(e.target.value)}
+                                    className="h-8 text-sm"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Escape') {
+                                        setAddingNewForRole(null);
+                                        setNewEmpName('');
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs gap-1"
+                                  disabled={!newEmpName.trim()}
+                                  onClick={async () => {
+                                    try {
+                                      const empRole = projectRole.role.replace(/_\d+$/, '') || 'employee';
+                                      const { data: newEmp, error } = await supabase
+                                        .from('employees')
+                                        .insert({
+                                          name: newEmpName.trim(),
+                                          role: empRole as any,
+                                          level: '1' as any,
+                                          email: `placeholder_${Date.now()}@temp.local`,
+                                        })
+                                        .select('id')
+                                        .single();
+                                      if (error) throw error;
+                                      setTeamMembers(prev => ({ ...prev, [projectRole.role]: newEmp.id }));
+                                      setAddingNewForRole(null);
+                                      setOpenRoleDropdown(null);
+                                      setNewEmpName('');
+                                      toast({
+                                        title: 'Сотрудник создан',
+                                        description: `${newEmpName.trim()} создан и назначен на роль «${projectRole.label}»`,
+                                      });
+                                    } catch (err: any) {
+                                      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' });
+                                    }
+                                  }}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Создать
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs"
+                                  onClick={() => { setAddingNewForRole(null); setNewEmpName(''); }}
+                                >
+                                  Отмена
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -1093,7 +1204,7 @@ export default function ProjectApproval() {
                 )}
 
                 {/* Форма добавления */}
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <Select value={newContractorType} onValueChange={(v: 'gph' | 'subcontract') => setNewContractorType(v)}>
                     <SelectTrigger>
                       <SelectValue />

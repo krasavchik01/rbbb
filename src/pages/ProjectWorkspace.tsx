@@ -24,7 +24,10 @@ import {
   DollarSign,
   Target,
   X,
-  Edit
+  Edit,
+  UserPlus,
+  Search,
+  Plus
 } from "lucide-react";
 import { useTemplates, useProjects } from "@/hooks/useDataStore";
 import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
@@ -32,23 +35,23 @@ import { ProjectData, ElementData } from "@/types/methodology";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
-import { MethodologySelector, SelectedProcedure } from "@/components/projects/MethodologySelector";
+// MethodologySelector removed
 import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology";
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
-import { notifyTaskAssigned, notifyProjectClosed, notifyBonusesApproved } from "@/lib/projectNotifications";
+import { supabase } from "@/integrations/supabase/client";
+import { notifyProjectClosed, notifyBonusesApproved } from "@/lib/projectNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { calculateProjectFinances } from "@/types/project-v3";
-import { TaskManager } from "@/components/tasks/TaskManager";
-import { TaskDistribution } from "@/components/tasks/TaskDistribution";
+// TaskManager removed (using Tasks page component instead)
+// TaskDistribution removed
 import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
-import { TemplateManager } from "@/components/projects/TemplateManager";
-import { WorkPaperTree } from "@/components/projects/WorkPaperTree";
-import { WorkPaperViewer } from "@/components/projects/WorkPaperViewer";
+// TemplateManager, WorkPaperTree, WorkPaperViewer removed
 import { ContractEditor } from "@/components/projects/ContractEditor";
 import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
+import Tasks from "@/pages/Tasks";
 import { Task, ChecklistItem } from "@/types/project";
-import { WorkPaper, WorkPaperTemplate } from "@/types/workPapers";
+// WorkPaper types removed
 import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
 import { useMemo } from "react";
 
@@ -69,17 +72,27 @@ export default function ProjectWorkspace() {
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
   const [project, setProject] = useState<any>(null);
-  const [currentStageIndex, setCurrentStageIndex] = useState(0);
-  const [isPlanningMode, setIsPlanningMode] = useState(false);
+  const [currentStageIndex] = useState(0);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showTeamDialog, setShowTeamDialog] = useState(false);
-  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  // Слоты команды: роль → ID сотрудника (или null)
+  const TEAM_ROLE_SLOTS = [
+    { key: 'partner', label: 'Партнёр', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300', roles: ['partner'] },
+    { key: 'manager_1', label: 'Менеджер 1', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300', roles: ['manager_1', 'manager_2', 'manager_3'] },
+    { key: 'supervisor', label: 'Супервайзер', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300', roles: ['supervisor_1', 'supervisor_2', 'supervisor_3'] },
+    { key: 'assistant_1', label: 'Ассистент 1', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', roles: ['assistant_1', 'assistant_2', 'assistant_3'] },
+    { key: 'assistant_2', label: 'Ассистент 2', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', roles: ['assistant_1', 'assistant_2', 'assistant_3'] },
+    { key: 'tax_specialist', label: 'Налоговик', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300', roles: ['tax_specialist'] },
+    { key: 'gph_1', label: 'ГПХ / Субподряд', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300', roles: [] },
+    { key: 'gph_2', label: 'ГПХ / Субподряд 2', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300', roles: [] },
+  ] as const;
+  const [teamSlots, setTeamSlots] = useState<Record<string, string | null>>({});
+  const [openSlotDropdown, setOpenSlotDropdown] = useState<string | null>(null);
+  const [slotSearch, setSlotSearch] = useState('');
+  const [addingNewInSlot, setAddingNewInSlot] = useState<string | null>(null);
+  const [newEmployeeName, setNewEmployeeName] = useState('');
+  const [newEmployeeType, setNewEmployeeType] = useState<'staff' | 'gph' | 'subcontract'>('staff');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-
-  // Рабочие документы
-  const [workPapers, setWorkPapers] = useState<WorkPaper[]>([]);
-  const [selectedWorkPaper, setSelectedWorkPaper] = useState<WorkPaper | null>(null);
-  const [workPaperSearchQuery, setWorkPaperSearchQuery] = useState('');
 
   // Дополнительные соглашения
   const [amendments, setAmendments] = useState<ProjectAmendment[]>([]);
@@ -91,6 +104,7 @@ export default function ProjectWorkspace() {
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
+  const canSeeContracts = isProcurement || isAdmin || isPartner || isPM || isDirector;
   const projectStatus = project?.status || project?.notes?.status;
   const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
@@ -137,40 +151,26 @@ export default function ProjectWorkspace() {
     return grouped;
   }, [projectTasks]);
 
+  // Загрузить существующую команду в слоты
+  const loadTeamIntoSlots = useCallback((proj: any) => {
+    const existingTeam = proj?.team || proj?.notes?.team || [];
+    const slots: Record<string, string | null> = {};
+    existingTeam.forEach((m: any) => {
+      const slotKey = m.slotKey || m.role || '';
+      if (slotKey) {
+        slots[slotKey] = m.userId || m.id || null;
+      }
+    });
+    setTeamSlots(slots);
+  }, []);
+
   // Открыть диалог назначения команды если пришли с флагом
   useEffect(() => {
     if (openTeamAssignment && project) {
       setShowTeamDialog(true);
-      // Инициализируем уже назначенных членов команды
-      const existingTeam = project.team || project.notes?.team || [];
-      setSelectedTeamMembers(existingTeam.map((m: any) => m.userId || m.id));
+      loadTeamIntoSlots(project);
     }
-  }, [openTeamAssignment, project]);
-
-  // Функция загрузки рабочих документов - вынесена для использования в onUpdate
-  const loadWorkPapers = useCallback(async () => {
-    if (!id) return;
-    try {
-      const papers = await supabaseDataStore.getWorkPapers(id);
-      setWorkPapers(papers);
-
-      // Если есть выбранный документ, обновляем его
-      if (selectedWorkPaper) {
-        const updated = papers.find(wp => wp.id === selectedWorkPaper.id);
-        if (updated) {
-          setSelectedWorkPaper(updated);
-        }
-      }
-    } catch (error) {
-      // Ошибка уже обработана в getWorkPapers, просто устанавливаем пустой массив
-      setWorkPapers([]);
-    }
-  }, [id, selectedWorkPaper]);
-
-  // Загрузка рабочих документов проекта при монтировании
-  useEffect(() => {
-    loadWorkPapers();
-  }, [id]); // Загружаем только при смене id
+  }, [openTeamAssignment, project, loadTeamIntoSlots]);
 
   // Загрузка дополнительных соглашений из JSON проекта
   useEffect(() => {
@@ -345,130 +345,6 @@ export default function ProjectWorkspace() {
   };
 
   // Функция сохранения выбранных процедур методологии
-  const handleSaveMethodologySelection = async (procedures: SelectedProcedure[]) => {
-    if (!project || !template) return;
-
-    try {
-      // Создаём структуру методологии
-      const methodology = {
-        templateId: RUSSELL_BEDFORD_AUDIT_METHODOLOGY.id,
-        selectedProcedures: procedures,
-        stages: RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages
-          .filter(stage => procedures.some(p => p.stageId === stage.id))
-          .map(stage => ({
-            stageId: stage.id,
-            stageName: stage.name,
-            status: 'pending' as const,
-            elements: stage.elements
-              .filter(el => procedures.some(p => p.elementId === el.id && p.stageId === stage.id))
-              .map(el => {
-                const procedure = procedures.find(p => p.elementId === el.id && p.stageId === stage.id);
-                return {
-                  elementId: el.id,
-                  elementType: el.type,
-                  title: el.title,
-                  completed: false,
-                  completedAt: null,
-                  completedBy: null,
-                  responsibleRole: procedure?.responsibleRole,
-                  responsibleUserId: procedure?.responsibleUserId
-                };
-              })
-          }))
-      };
-
-      // Обновляем или создаём projectData
-      const updatedProjectData: ProjectData = projectData || {
-        projectId: project.id || id || '',
-        templateId: RUSSELL_BEDFORD_AUDIT_METHODOLOGY.id,
-        templateVersion: 1,
-        passportData: {},
-        stagesData: {},
-        completionStatus: {
-          totalElements: 0,
-          completedElements: 0,
-          percentage: 0
-        },
-        history: []
-      };
-
-      updatedProjectData.methodology = methodology;
-
-      // Инициализируем stagesData для выбранных процедур
-      methodology.stages.forEach(stage => {
-        if (!updatedProjectData.stagesData[stage.stageId]) {
-          updatedProjectData.stagesData[stage.stageId] = {};
-        }
-        stage.elements.forEach(element => {
-          if (!updatedProjectData.stagesData[stage.stageId][element.elementId]) {
-            updatedProjectData.stagesData[stage.stageId][element.elementId] = {
-              elementId: element.elementId,
-              completed: false
-            };
-          }
-        });
-      });
-
-      // Пересчитываем прогресс
-      const totalElements = methodology.stages.reduce((sum, stage) => sum + stage.elements.length, 0);
-      updatedProjectData.completionStatus = {
-        totalElements,
-        completedElements: 0,
-        percentage: 0
-      };
-
-      setProjectData(updatedProjectData);
-      saveProjectDataLocal(updatedProjectData);
-
-      // Обновляем проект в Supabase
-      const projectId = project.id || (project as any).notes?.id;
-      if (projectId) {
-        await supabaseDataStore.updateProject(projectId, {
-          ...project,
-          notes: {
-            ...project.notes,
-            methodology: methodology
-          }
-        });
-      }
-
-      // Отправляем уведомления назначенным ответственным
-      procedures.forEach(procedure => {
-        if (procedure.responsibleUserId) {
-          const employee = employees.find((e: any) => e.id === procedure.responsibleUserId);
-          if (employee) {
-            const element = RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages
-              .flatMap(s => s.elements)
-              .find(e => e.id === procedure.elementId);
-
-            notifyTaskAssigned({
-              taskName: element?.title || 'Процедура',
-              assigneeId: procedure.responsibleUserId,
-              projectName: project.name || project.client?.name || 'Проект',
-              deadline: project.contract?.serviceEndDate || project.deadline || 'Не указан',
-              creatorName: user?.name || 'Партнёр',
-              projectId: project.id || id || ''
-            });
-          }
-        }
-      });
-
-      toast({
-        title: "✅ Планирование сохранено",
-        description: `Выбрано ${procedures.length} процедур. Уведомления отправлены назначенным ответственным.`,
-      });
-
-      setIsPlanningMode(false);
-    } catch (error) {
-      console.error('Ошибка сохранения планирования:', error);
-      toast({
-        title: "❌ Ошибка",
-        description: "Не удалось сохранить планирование",
-        variant: "destructive",
-      });
-    }
-  };
-
   // displayStages определяется ниже после activeTemplate
 
   const renderElementInput = (stageId: string, element: ProcedureElement) => {
@@ -721,48 +597,48 @@ export default function ProjectWorkspace() {
     : 0;
 
   return (
-    <div className="space-y-6 animate-fade-in p-4 md:p-0">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in p-2 sm:p-4 md:p-0 w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/projects')}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+          <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate('/projects')}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{project.name || project.client?.name || 'Проект'}</h1>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-base sm:text-xl font-bold truncate max-w-full" title={project.name || project.client?.name || 'Проект'}>{project.name || project.client?.name || 'Проект'}</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               {activeTemplate?.name || project.contract?.subject || 'Проект'}
               {projectTasks.length > 0 && ` • ${projectTasks.length} задач`}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap pl-11 sm:pl-0 flex-shrink-0">
           {/* Кнопка редактирования для закупщика и админа */}
           {isProcurementOrAdmin && project && (
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
-              <Edit className="w-4 h-4 mr-2" />
-              Редактировать
+            <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
+              <Edit className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Редактировать</span>
             </Button>
           )}
           {/* Индикатор синхронизации */}
           {syncStatus.isSyncing && (
-            <Badge variant="outline" className="animate-pulse">
-              🔄 Синхронизация...
+            <Badge variant="outline" className="animate-pulse text-xs">
+              🔄 Синхр...
             </Badge>
           )}
           {!syncStatus.isSyncing && syncStatus.isOnline && (
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs hidden sm:flex">
               ✅ Синхронизировано
             </Badge>
           )}
           {!syncStatus.isSyncing && !syncStatus.isOnline && (
-            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-              💾 Только локально
+            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
+              💾 Локально
             </Badge>
           )}
           {projectData && projectData.completionStatus && (
-            <Badge className="bg-gradient-to-r from-blue-500 to-blue-700 text-lg px-4 py-2">
-              {projectData.completionStatus.percentage || 0}% выполнено
+            <Badge className="bg-gradient-to-r from-blue-500 to-blue-700 text-sm sm:text-lg px-2 sm:px-4 py-1 sm:py-2">
+              {projectData.completionStatus.percentage || 0}%
             </Badge>
           )}
         </div>
@@ -806,27 +682,22 @@ export default function ProjectWorkspace() {
 
       {/* Вкладки с информацией о проекте */}
       <Tabs defaultValue={isProcurement ? "files" : "dashboard"} className="w-full">
-        <TabsList className="flex flex-wrap gap-1">
-          {!isProcurement && <TabsTrigger value="dashboard">📊 Дашборд</TabsTrigger>}
-          {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks">✅ Задачи</TabsTrigger>}
-          {!(isDirector || isAdmin || isProcurement) && activeTemplate && <TabsTrigger value="procedures">🔧 Рабочие процедуры</TabsTrigger>}
-          {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="planning">📋 Планирование</TabsTrigger>}
-          {!(isDirector || isAdmin || isProcurement) && (isPM || isPartner) && <TabsTrigger value="task-distribution">👥 Распределение задач</TabsTrigger>}
-          {!(isDirector || isAdmin || isProcurement) && activeTemplate && <TabsTrigger value="templates">📄 Шаблоны</TabsTrigger>}
-
-          <TabsTrigger value="files">📁 Файлы</TabsTrigger>
-          <TabsTrigger value="contract">📜 Договор</TabsTrigger>
+        <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+          {!isProcurement && <TabsTrigger value="dashboard" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📊 <span className="hidden sm:inline">Дашборд</span><span className="sm:hidden">Обзор</span></TabsTrigger>}
+          {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">✅ Задачи</TabsTrigger>}
+          <TabsTrigger value="files" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📁 Файлы</TabsTrigger>
+          <TabsTrigger value="contract" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📜 Договор</TabsTrigger>
         </TabsList>
 
         {/* Главный Дашборд для всех ролей */}
         {project && (
-          <TabsContent value="dashboard" className="space-y-6 mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <TabsContent value="dashboard" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
 
               {/* Главный прогресс */}
-              <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 flex flex-col justify-center items-center text-center lg:col-span-1 shadow-sm">
-                <Target className="w-12 h-12 text-blue-600 mb-4" />
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Общий прогресс</h3>
+              <Card className="p-6 bg-primary/5 border-primary/20 flex flex-col justify-center items-center text-center lg:col-span-1 shadow-sm">
+                <Target className="w-12 h-12 text-primary mb-4" />
+                <h3 className="text-xl font-bold mb-2">Общий прогресс</h3>
                 <div className="w-full max-w-[200px] mb-2">
                   <div className="flex justify-between text-sm font-medium mb-1">
                     <span>Выполнено</span>
@@ -842,7 +713,7 @@ export default function ProjectWorkspace() {
               </Card>
 
               {/* Текущий этап и задачи */}
-              <Card className="p-6 lg:col-span-2 shadow-sm border-slate-200">
+              <Card className="p-6 lg:col-span-2 shadow-sm border-border">
                 <div className="flex items-center gap-2 mb-6">
                   <CheckCircle2 className="w-6 h-6 text-primary" />
                   <h3 className="text-xl font-bold">Статус выполнения</h3>
@@ -896,7 +767,7 @@ export default function ProjectWorkspace() {
                         </div>
                         <div className="flex gap-4">
                           <div className="flex-1 flex flex-col justify-center">
-                            <Progress value={tasksPercent} className="h-2 mb-1 bg-slate-200" />
+                            <Progress value={tasksPercent} className="h-2 mb-1" />
                           </div>
                           <div className="flex gap-3 text-sm">
                             <div className="flex items-center gap-1.5 border-l-2 border-amber-500 pl-2">
@@ -916,7 +787,7 @@ export default function ProjectWorkspace() {
               </Card>
 
               {/* Временная шкала */}
-              <Card className="p-6 lg:col-span-1 shadow-sm border-slate-200 flex flex-col justify-center">
+              <Card className="p-6 lg:col-span-1 shadow-sm border-border flex flex-col justify-center">
                 <div className="flex items-center gap-2 mb-4">
                   <Calendar className="w-6 h-6 text-primary" />
                   <h3 className="text-xl font-bold">Таймлайн</h3>
@@ -943,7 +814,7 @@ export default function ProjectWorkspace() {
                     <div className="space-y-4">
                       <div className="text-center">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Осталось дней</p>
-                        <p className={`text-4xl font-bold ${daysRemaining < 3 ? 'text-red-500' : daysRemaining < 10 ? 'text-amber-500' : 'text-slate-800'}`}>
+                        <p className={`text-4xl font-bold ${daysRemaining < 3 ? 'text-red-500' : daysRemaining < 10 ? 'text-amber-500' : 'text-foreground'}`}>
                           {daysRemaining > 0 ? daysRemaining : 0}
                         </p>
                       </div>
@@ -968,34 +839,46 @@ export default function ProjectWorkspace() {
               </Card>
 
               {/* Команда проекта */}
-              <Card className="p-6 lg:col-span-4 shadow-sm border-slate-200">
+              <Card className="p-6 lg:col-span-4 shadow-sm border-border">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Users className="w-6 h-6 text-primary" />
                     <h3 className="text-xl font-bold">Управление командой</h3>
                   </div>
-                  <Button onClick={() => setShowTeamDialog(true)} variant="outline">
+                  <Button onClick={() => {
+                    loadTeamIntoSlots(project);
+                    setShowTeamDialog(true);
+                  }} variant="outline">
                     <Edit className="w-4 h-4 mr-2" />
                     Изменить состав
                   </Button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {(project.team || project.notes?.team || []).map((member: any, index: number) => {
-                    const employee = employees.find((e: any) => e.id === (member.userId || member.id || member.employeeId));
+                    const isExternal = member.type === 'gph' || member.type === 'subcontract';
+                    const employee = !isExternal ? employees.find((e: any) => e.id === (member.userId || member.id || member.employeeId)) : null;
                     const roleLabel = member.role === 'partner' ? 'Партнер' :
                       member.role === 'manager_1' ? 'Менеджер 1' :
                         member.role === 'senior_auditor' ? 'Ст. аудитор' :
                           member.role === 'assistant' ? 'Ассистент' : member.role || 'Участник';
+                    const displayName = employee?.name || member.name || member.userName || 'Неизвестный';
                     return (
-                      <div key={index} className="flex items-center gap-3 p-3 bg-white shadow-sm rounded-xl border border-slate-100 hover:border-primary/30 transition-colors">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                          {(employee?.name || member.userName || 'Н')[0]}
+                      <div key={index} className={`flex items-center gap-3 p-3 bg-card shadow-sm rounded-xl border transition-colors ${isExternal ? 'border-orange-200 hover:border-orange-400' : 'border-border hover:border-primary/30'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${isExternal ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'bg-primary/10 text-primary'}`}>
+                          {displayName[0]}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate" title={employee?.name || member.userName || 'Неизвестный'}>
-                            {employee?.name || member.userName || 'Неизвестный'}
+                          <p className="text-sm font-semibold truncate" title={displayName}>
+                            {displayName}
                           </p>
-                          <p className="text-xs text-muted-foreground">{roleLabel}</p>
+                          <div className="flex items-center gap-1.5">
+                            {isExternal && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-orange-300 text-orange-600">
+                                {member.type === 'gph' ? 'ГПХ' : 'Субподряд'}
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground">{roleLabel}</span>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1010,29 +893,29 @@ export default function ProjectWorkspace() {
 
               {/* Финансовая сводка */}
               {((project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || '')) ||
-                !project.financialVisibility || (project.finances && (isPartner || isDirector || isAdmin))) ? (
-                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 border-slate-200">
+                !project.financialVisibility || (project.finances && (isPartner || isDirector || isAdmin || isPM))) ? (
+                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-muted/30 border-border">
                   <div className="col-span-full flex items-center gap-2 mb-2">
                     <DollarSign className="w-6 h-6 text-green-600" />
                     <h3 className="text-xl font-bold">Финансовая сводка</h3>
                   </div>
 
-                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                  <div className="bg-card p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
                     <p className="text-2xl font-bold">
                       {project.finances?.amountWithoutVAT ? Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
                     </p>
                   </div>
 
-                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                  <div className="bg-card p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">База бонусов</p>
                     <p className="text-2xl font-bold">
                       {project.finances?.bonusBase ? Number(project.finances.bonusBase).toLocaleString('ru-RU') : '0'} ₸
                     </p>
                   </div>
 
-                  {(isDirector || isAdmin || isPartner) && (
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-green-100">
+                  {(isDirector || isAdmin || isPartner || isPM) && (
+                    <div className="bg-card p-4 rounded-lg border border-green-500/20">
                       <p className="text-xs text-green-700 font-medium uppercase tracking-wider mb-1">Общие бонусы</p>
                       <p className="text-2xl font-bold text-green-600">
                         {project.finances?.totalBonusAmount ? Number(project.finances.totalBonusAmount).toLocaleString('ru-RU') : '0'} ₸
@@ -1040,8 +923,8 @@ export default function ProjectWorkspace() {
                     </div>
                   )}
 
-                  {(isDirector || isAdmin || isPartner) && (
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
+                  {(isDirector || isAdmin || isPartner || isPM) && (
+                    <div className="bg-card p-4 rounded-lg border border-blue-500/20">
                       <p className="text-xs text-blue-700 font-medium uppercase tracking-wider mb-1">Валовая прибыль</p>
                       <p className="text-2xl font-bold text-blue-600">
                         {project.finances?.grossProfit ? Number(project.finances.grossProfit).toLocaleString('ru-RU') : '0'} ₸
@@ -1050,20 +933,20 @@ export default function ProjectWorkspace() {
                   )}
                 </Card>
               ) : project.finances ? (
-                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 border-slate-200">
+                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 border-border">
                   <div className="col-span-full flex items-center gap-2 mb-2">
                     <DollarSign className="w-6 h-6 text-muted-foreground" />
                     <h3 className="text-xl font-bold text-muted-foreground">Финансовая информация</h3>
                   </div>
 
-                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                  <div className="bg-card p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
                     <p className="text-2xl font-bold">
                       {project.finances?.amountWithoutVAT ? Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
                     </p>
                   </div>
-                  <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground text-center">Детальная финансовая информация доступна руководству и партнёрам</p>
+                  <div className="bg-card p-4 rounded-lg border border-border flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground text-center">Детальная финансовая информация доступна руководству, партнёрам и менеджерам</p>
                   </div>
                 </Card>
               ) : null}
@@ -1071,402 +954,10 @@ export default function ProjectWorkspace() {
           </TabsContent>
         )}
 
-        {/* Вкладка планирования */}
-        {!(isDirector || isAdmin) && (
-          <TabsContent value="planning" className="space-y-4 mt-4">
-            <Card className="p-6">
-              {projectData?.methodology ? (
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold">Выбранные процедуры</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Планирование выполнено. Выбрано {projectData.methodology.selectedProcedures.length} процедур
-                      </p>
-                    </div>
-                    {(isPartner || isPM || isAdmin) && (
-                      <Button variant="outline" onClick={() => setIsPlanningMode(true)}>
-                        Изменить планирование
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Отображение выбранных процедур по этапам */}
-                  <div className="space-y-4">
-                    {projectData.methodology.stages.map((stage: any) => {
-                      const stageTemplate = RUSSELL_BEDFORD_AUDIT_METHODOLOGY.stages.find(s => s.id === stage.stageId);
-                      return (
-                        <Card key={stage.stageId} className="p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Badge
-                              style={{ backgroundColor: stageTemplate?.color || '#3b82f6' }}
-                              className="text-white"
-                            >
-                              Этап {stageTemplate?.order || 0}
-                            </Badge>
-                            <h4 className="font-semibold">{stage.stageName}</h4>
-                          </div>
-                          <div className="space-y-2 pl-6">
-                            {stage.elements.map((element: any) => {
-                              const responsible = employees.find((e: any) => e.id === element.responsibleUserId);
-                              const roleLabel = element.responsibleRole === 'assistant' ? 'Ассистент' :
-                                element.responsibleRole === 'senior_auditor' ? 'Старший аудитор' :
-                                  element.responsibleRole === 'manager' ? 'Менеджер' :
-                                    element.responsibleRole === 'partner' ? 'Партнёр' : element.responsibleRole;
-                              return (
-                                <div key={element.elementId} className="flex items-center justify-between p-2 bg-secondary/50 rounded">
-                                  <span className="text-sm">{element.title}</span>
-                                  <Badge variant="outline">
-                                    {responsible?.name || roleLabel}
-                                  </Badge>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">
-                    Планирование ещё не выполнено. Выберите необходимые процедуры и распределите их по ответственным.
-                  </p>
-                  {(isPartner || isPM || isAdmin) && (
-                    <Button onClick={() => setIsPlanningMode(true)}>
-                      Начать планирование
-                    </Button>
-                  )}
-                </div>
-              )}
-            </Card>
-
-            {/* Диалог выбора методологии */}
-            {isPlanningMode && (
-              <Dialog open={isPlanningMode} onOpenChange={setIsPlanningMode}>
-                <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Выбор процедур и распределение ответственности</DialogTitle>
-                    <DialogDescription>
-                      Выберите необходимые процедуры для проекта и назначьте ответственных (Ассистент, Старший аудитор, Менеджер, Партнёр)
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <MethodologySelector
-                    template={RUSSELL_BEDFORD_AUDIT_METHODOLOGY}
-                    projectId={project?.id || id || ''}
-                    employees={employees}
-                    onSave={handleSaveMethodologySelection}
-                    onCancel={() => setIsPlanningMode(false)}
-                    initialSelection={projectData?.methodology?.selectedProcedures || []}
-                  />
-                </DialogContent>
-              </Dialog>
-            )}
-          </TabsContent>
-        )}
-
         {/* Вкладка задач */}
         {!(isDirector || isAdmin) && (
-          <TabsContent value="tasks" className="space-y-4 mt-4">
-            <Card className="p-6">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold mb-2">Задачи проекта</h3>
-                <p className="text-sm text-muted-foreground">
-                  Все задачи проекта, сгруппированные по ответственным сотрудникам
-                </p>
-              </div>
-
-              {projectTasks.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">Задач пока нет</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Задачи по сотрудникам */}
-                  {Object.entries(tasksByEmployee).map(([employeeId, tasks]) => {
-                    const employee = employeeId === 'unassigned' ? null : employees.find((e: any) => e.id === employeeId);
-                    const employeeName = employee ? employee.name : 'Не назначены';
-
-                    return (
-                      <Card key={employeeId} className="p-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Users className="w-5 h-5 text-primary" />
-                          <h4 className="font-semibold">{employeeName}</h4>
-                          <Badge variant="outline">{tasks.length} задач</Badge>
-                        </div>
-
-                        <div className="space-y-3">
-                          {tasks.map((task: any) => {
-                            const completedChecklist = (task.checklist || []).filter((item: ChecklistItem) => item.done).length;
-                            const totalChecklist = (task.checklist || []).length;
-                            const checklistProgress = totalChecklist > 0 ? (completedChecklist / totalChecklist) * 100 : 0;
-
-                            return (
-                              <Card key={task.id} className="p-4 border-l-4 border-l-primary">
-                                <div className="flex items-start justify-between mb-2">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <h5 className="font-medium">{task.title}</h5>
-                                      <Badge variant={
-                                        task.priority === 'high' ? 'destructive' :
-                                          task.priority === 'med' ? 'default' : 'secondary'
-                                      }>
-                                        {task.priority === 'high' ? 'Высокий' :
-                                          task.priority === 'med' ? 'Средний' : 'Низкий'}
-                                      </Badge>
-                                      <Badge variant={
-                                        task.status === 'done' ? 'default' :
-                                          task.status === 'in_progress' ? 'secondary' : 'outline'
-                                      }>
-                                        {task.status === 'done' ? 'Выполнено' :
-                                          task.status === 'in_progress' ? 'В работе' : 'К выполнению'}
-                                      </Badge>
-                                    </div>
-
-                                    {task.description && (
-                                      <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
-                                    )}
-
-                                    {/* Чек-лист */}
-                                    {task.checklist && task.checklist.length > 0 && (
-                                      <div className="mt-3 space-y-2">
-                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                          <span>Чек-лист: {completedChecklist}/{totalChecklist}</span>
-                                          <span>{Math.round(checklistProgress)}%</span>
-                                        </div>
-                                        <Progress value={checklistProgress} className="h-1" />
-                                        <div className="space-y-1">
-                                          {task.checklist.map((item: ChecklistItem, idx: number) => (
-                                            <div key={idx} className="flex items-center gap-2 text-sm">
-                                              {item.done ? (
-                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                              ) : (
-                                                <Circle className="w-4 h-4 text-muted-foreground" />
-                                              )}
-                                              <span className={item.done ? 'line-through text-muted-foreground' : ''}>
-                                                {item.item}
-                                              </span>
-                                              {item.required && (
-                                                <Badge variant="outline" className="text-xs">Обязательно</Badge>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Время */}
-                                    {(task.estimate_h || task.spent_h) && (
-                                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                                        {task.estimate_h && (
-                                          <span>Оценка: {task.estimate_h}ч</span>
-                                        )}
-                                        {task.spent_h > 0 && (
-                                          <span>Потрачено: {task.spent_h}ч</span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-          </TabsContent>
-        )}
-
-        {/* Вкладка рабочих процедур */}
-        {!(isDirector || isAdmin) && activeTemplate && (
-          <TabsContent value="procedures" className="space-y-4 mt-4">
-            {/* Навигация по этапам */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {displayStages.map((stage, index) => {
-                const stageData = projectData?.stagesData[stage.id] || {};
-                const completedCount = Object.values(stageData).filter(e => e.completed).length;
-                const totalCount = stage.elements.length;
-                const isCompleted = completedCount === totalCount && totalCount > 0;
-                const isCurrent = index === currentStageIndex;
-
-                return (
-                  <Button
-                    key={stage.id}
-                    variant={isCurrent ? "default" : "outline"}
-                    className={`flex-shrink-0 ${isCompleted ? 'bg-green-500 hover:bg-green-600' : ''}`}
-                    onClick={() => setCurrentStageIndex(index)}
-                  >
-                    <span className="mr-2">{index + 1}.</span>
-                    {stage.name}
-                    <Badge variant="secondary" className="ml-2">
-                      {completedCount}/{totalCount}
-                    </Badge>
-                    {isCompleted && <CheckCircle2 className="w-4 h-4 ml-2" />}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {/* Содержимое текущего этапа */}
-            {(() => {
-              const currentStage = displayStages[currentStageIndex];
-              if (!currentStage) return null;
-
-              return (
-                <Card className="p-6 mt-4 border-t-4" style={{ borderTopColor: currentStage.color || '#3b82f6' }}>
-                  <div className="mb-6">
-                    <h3 className="text-xl font-bold flex items-center gap-2">
-                      <CheckCircle2 className="w-6 h-6" style={{ color: currentStage.color || '#3b82f6' }} />
-                      {currentStageIndex + 1}. {currentStage.name}
-                    </h3>
-                    {currentStage.description && (
-                      <p className="text-muted-foreground mt-2 text-sm">{currentStage.description}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    {currentStage.elements.length === 0 ? (
-                      <div className="text-center py-6 text-muted-foreground bg-secondary/20 rounded-lg">
-                        В этом этапе нет рабочих процедур
-                      </div>
-                    ) : (
-                      currentStage.elements.map((element, idx) => {
-                        const elementData = projectData?.stagesData?.[currentStage.id]?.[element.id];
-                        const isCompleted = elementData?.completed;
-                        const icon = ELEMENT_TYPE_ICONS[element.type] || <FileText className="w-4 h-4" />;
-
-                        return (
-                          <div key={element.id} className="p-4 border rounded-lg bg-card hover:bg-secondary/10 transition-colors flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                            <div className={`mt-1 sm:mt-0 p-2 rounded-full flex-shrink-0 ${isCompleted ? 'bg-green-100 text-green-600' : 'bg-secondary text-primary'}`}>
-                              {isCompleted ? <Check className="w-4 h-4" /> : icon}
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <h4 className={`font-medium text-sm sm:text-base ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
-                                {idx + 1}. {element.title}
-                              </h4>
-                              {element.description && (
-                                <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">{element.description}</p>
-                              )}
-                            </div>
-
-                            <div className="flex flex-wrap sm:flex-col items-center sm:items-end gap-2 flex-shrink-0 mt-2 sm:mt-0">
-                              <Badge variant={element.required ? 'default' : 'secondary'} className="text-xs">
-                                {element.required ? 'Обязательно' : 'Опционально'}
-                              </Badge>
-                              {isCompleted && (
-                                <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-xs">
-                                  Выполнено
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </Card>
-              );
-            })()}
-          </TabsContent>
-        )}
-
-        {/* Вкладка распределения задач */}
-        {!(isDirector || isAdmin) && (isPM || isPartner) && (
-          <TabsContent value="task-distribution" className="space-y-4 mt-4">
-            <TaskDistribution
-              projectId={project?.id || id || ''}
-              teamMembers={project?.team || project?.notes?.team || []}
-              workPapers={workPapers}
-              onUpdate={() => {
-                // Обновляем список work papers
-                loadWorkPapers();
-              }}
-            />
-          </TabsContent>
-        )}
-
-        {/* Вкладка шаблонов */}
-        {!(isDirector || isAdmin) && activeTemplate && (
-          <TabsContent value="templates" className="space-y-4 mt-4">
-            <TemplateManager
-              projectId={project?.id || id || ''}
-              stageId={currentStage?.id}
-              elementId={undefined}
-              onTemplateSelect={(template) => {
-                toast({
-                  title: "Шаблон выбран",
-                  description: `Шаблон "${template.name}" готов к использованию`,
-                });
-              }}
-            />
-          </TabsContent>
-        )}
-
-        {/* Вкладка рабочих документов */}
-        {!(isDirector || isAdmin) && workPapers.length > 0 && (
-          <TabsContent value="workpapers" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Дерево документов */}
-              <div className="lg:col-span-1">
-                <WorkPaperTree
-                  workPapers={workPapers}
-                  selectedWorkPaperId={selectedWorkPaper?.id}
-                  onSelectWorkPaper={(wp) => {
-                    setSelectedWorkPaper(wp);
-                  }}
-                  searchQuery={workPaperSearchQuery}
-                  onSearchChange={setWorkPaperSearchQuery}
-                />
-              </div>
-
-              {/* Просмотр документа */}
-              <div className="lg:col-span-2">
-                {selectedWorkPaper ? (
-                  <WorkPaperViewer
-                    workPaper={selectedWorkPaper}
-                    template={selectedWorkPaper.template as WorkPaperTemplate}
-                    onStatusChange={(status) => {
-                      // Обновляем статус в списке
-                      setWorkPapers(prev =>
-                        prev.map(wp =>
-                          wp.id === selectedWorkPaper.id
-                            ? { ...wp, status }
-                            : wp
-                        )
-                      );
-                      setSelectedWorkPaper(prev => prev ? { ...prev, status } : null);
-                    }}
-                    onSave={(data) => {
-                      // Обновляем данные в списке
-                      setWorkPapers(prev =>
-                        prev.map(wp =>
-                          wp.id === selectedWorkPaper.id
-                            ? { ...wp, data }
-                            : wp
-                        )
-                      );
-                      setSelectedWorkPaper(prev => prev ? { ...prev, data } : null);
-                    }}
-                    readOnly={false}
-                    showReviewActions={true}
-                  />
-                ) : (
-                  <Card className="p-8 text-center">
-                    <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground">
-                      Выберите документ из списка для просмотра и редактирования
-                    </p>
-                  </Card>
-                )}
-              </div>
-            </div>
+          <TabsContent value="tasks" className="mt-4">
+            <Tasks projectId={project?.id || id} embedded />
           </TabsContent>
         )}
 
@@ -1630,142 +1121,7 @@ export default function ProjectWorkspace() {
         </TabsContent>
       </Tabs>
 
-      {/* Текущий этап - только если не вкладка планирования и не директор */}
-      {!isPartner && !isDirector && currentStage && showFullDetails && (
-        <Card className="p-6">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-2xl font-bold" style={{ color: currentStage.color }}>
-                Этап {currentStageIndex + 1}: {currentStage.name}
-              </h2>
-              <Badge variant="outline" className="text-sm">
-                {Math.round(stageProgress)}% завершено
-              </Badge>
-            </div>
-            {currentStage.description && (
-              <p className="text-muted-foreground">{currentStage.description}</p>
-            )}
-            <Progress value={stageProgress} className="h-2 mt-3" />
-          </div>
-
-          <div className="space-y-6">
-            {currentStage.elements.map((element) => {
-              // Показываем информацию о назначенном ответственном
-              const elementData = projectData?.stagesData[currentStage.id]?.[element.id];
-              const responsible = elementData?.responsibleUserId ?
-                employees.find((e: any) => e.id === elementData.responsibleUserId) : null;
-
-              return (
-                <div key={element.id}>
-                  {responsible && (
-                    <div className="mb-2 text-xs text-muted-foreground">
-                      Ответственный: <strong>{responsible.name}</strong>
-                    </div>
-                  )}
-                  {renderElementInput(currentStage.id, element)}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Навигация между этапами */}
-          <div className="flex gap-4 mt-6 pt-6 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentStageIndex(Math.max(0, currentStageIndex - 1))}
-              disabled={currentStageIndex === 0}
-              className="flex-1"
-            >
-              Предыдущий этап
-            </Button>
-            <Button
-              onClick={() => setCurrentStageIndex(Math.min(displayStages.length - 1, currentStageIndex + 1))}
-              disabled={currentStageIndex === displayStages.length - 1}
-              className="flex-1"
-            >
-              Следующий этап
-              <ChevronRight className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* Текущий этап для партнёра в режиме просмотра процедур */}
-      {isPartner && currentStage && (
-        <Card className="p-6">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-2xl font-bold" style={{ color: currentStage.color }}>
-                Этап {currentStageIndex + 1}: {currentStage.name}
-              </h2>
-              <Badge variant="outline" className="text-sm">
-                {Math.round(stageProgress)}% завершено
-              </Badge>
-            </div>
-            {currentStage.description && (
-              <p className="text-muted-foreground">{currentStage.description}</p>
-            )}
-            <Progress value={stageProgress} className="h-2 mt-3" />
-          </div>
-
-          <div className="space-y-6">
-            {currentStage.elements.map((element) => {
-              const elementData = projectData?.stagesData[currentStage.id]?.[element.id];
-              const methodologyElement = projectData?.methodology?.stages
-                .find((s: any) => s.stageId === currentStage.id)
-                ?.elements.find((e: any) => e.elementId === element.id);
-              const responsible = methodologyElement?.responsibleUserId ?
-                employees.find((e: any) => e.id === methodologyElement.responsibleUserId) : null;
-
-              return (
-                <div key={element.id}>
-                  {responsible && (
-                    <div className="mb-2 text-xs text-muted-foreground">
-                      Ответственный: <strong>{responsible.name}</strong>
-                    </div>
-                  )}
-                  {renderElementInput(currentStage.id, element)}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Навигация между этапами */}
-          <div className="flex gap-4 mt-6 pt-6 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentStageIndex(Math.max(0, currentStageIndex - 1))}
-              disabled={currentStageIndex === 0}
-              className="flex-1"
-            >
-              Предыдущий этап
-            </Button>
-            <Button
-              onClick={() => setCurrentStageIndex(Math.min(displayStages.length - 1, currentStageIndex + 1))}
-              disabled={currentStageIndex === displayStages.length - 1}
-              className="flex-1"
-            >
-              Следующий этап
-              <ChevronRight className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* Информация о паспорте */}
-      {activeTemplate && projectData && (
-        <Card className="p-6">
-          <h3 className="font-semibold mb-4">Информация о проекте</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeTemplate.customFields.map(field => (
-              <div key={field.id}>
-                <Label className="text-sm text-muted-foreground">{field.label}</Label>
-                <p className="font-medium">{projectData.passportData[field.name] || '-'}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* Этапы аудита и паспорт проекта — УБРАНЫ */}
 
       {/* Кнопка завершения проекта */}
       {canCompleteProject && !isCompleted && (
@@ -1913,253 +1269,330 @@ export default function ProjectWorkspace() {
         </DialogContent>
       </Dialog>
 
-      {/* Диалог назначения команды */}
-      <Dialog open={showTeamDialog} onOpenChange={setShowTeamDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+      {/* Диалог назначения команды — слоты по ролям */}
+      <Dialog open={showTeamDialog} onOpenChange={(open) => {
+        setShowTeamDialog(open);
+        if (!open) {
+          setOpenSlotDropdown(null);
+          setAddingNewInSlot(null);
+          setNewEmployeeName('');
+          setSlotSearch('');
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
               Назначение команды проекта
             </DialogTitle>
             <DialogDescription>
-              Перетаскивайте сотрудников в команду проекта "{project?.name || project?.client}"
+              Выберите сотрудника для каждой роли или добавьте нового прямо здесь
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4 flex-1 overflow-hidden">
-            {/* Левая колонка - Доступные сотрудники */}
-            <div className="space-y-3 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Доступные сотрудники
-                </h3>
-                <Badge variant="secondary" className="text-xs">
-                  {employees?.filter(emp => emp.status === 'active' && !selectedTeamMembers.includes(emp.id)).length || 0}
-                </Badge>
-              </div>
+          <div className="space-y-3 py-4 flex-1 overflow-y-auto">
+            {TEAM_ROLE_SLOTS.map((slot) => {
+              const assignedEmpId = teamSlots[slot.key] || null;
+              const assignedEmp = assignedEmpId ? (employees || []).find((e: any) => e.id === assignedEmpId) : null;
+              const isOpen = openSlotDropdown === slot.key;
+              const isAddingNew = addingNewInSlot === slot.key;
+              const isGphSlot = slot.key.startsWith('gph');
 
-              <div className="grid grid-cols-1 gap-2 overflow-y-auto pr-2 flex-1">
-                {employees?.filter(emp => emp.status === 'active' && !selectedTeamMembers.includes(emp.id)).map((employee) => {
-                  const roleLabels: Record<string, string> = {
-                    partner: 'Партнер',
-                    manager_1: 'Менеджер 1',
-                    manager_2: 'Менеджер 2',
-                    manager_3: 'Менеджер 3',
-                    supervisor_1: 'Супервайзер 1',
-                    supervisor_2: 'Супервайзер 2',
-                    supervisor_3: 'Супервайзер 3',
-                    assistant_1: 'Ассистент 1',
-                    assistant_2: 'Ассистент 2',
-                    assistant_3: 'Ассистент 3',
-                  };
+              // Сотрудники подходящие под эту роль (или все для ГПХ слотов)
+              const availableEmps = (employees || []).filter((emp: any) => {
+                // Уже назначен в другой слот — пропускаем
+                const usedIds = Object.values(teamSlots).filter(Boolean) as string[];
+                if (usedIds.includes(emp.id) && emp.id !== assignedEmpId) return false;
+                
+                // Показываем всех сотрудников (игнорируем роль слота по просьбе пользователя)
+                return true;
+              });
 
-                  const getRoleColor = (role: string) => {
-                    if (role === 'partner') return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
-                    if (role.includes('manager')) return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-                    if (role.includes('supervisor')) return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
-                    if (role.includes('assistant')) return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300';
-                    return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
-                  };
+              const q = slotSearch.toLowerCase();
+              const filteredEmps = q
+                ? availableEmps.filter((emp: any) => emp.name.toLowerCase().includes(q))
+                : availableEmps;
 
-                  const getInitials = (name: string) => {
-                    const parts = name.split(' ');
-                    return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
-                  };
+              return (
+                <div key={slot.key} className="relative">
+                  {/* Слот — кнопка выбора */}
+                  <div
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      assignedEmp
+                        ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
+                        : 'border-dashed border-border hover:border-primary/40 hover:bg-muted/30'
+                    }`}
+                    onClick={() => {
+                      if (isOpen) {
+                        setOpenSlotDropdown(null);
+                        setSlotSearch('');
+                        setAddingNewInSlot(null);
+                      } else {
+                        setOpenSlotDropdown(slot.key);
+                        setSlotSearch('');
+                        setAddingNewInSlot(null);
+                      }
+                    }}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${slot.color}`}>
+                      {assignedEmp
+                        ? assignedEmp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()
+                        : slot.label[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{slot.label}</div>
+                      {assignedEmp ? (
+                        <div className="font-semibold text-sm truncate">{assignedEmp.name}</div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground/60">Нажмите чтобы выбрать...</div>
+                      )}
+                    </div>
+                    {assignedEmp && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 hover:bg-red-100 flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTeamSlots(prev => { const n = { ...prev }; delete n[slot.key]; return n; });
+                        }}
+                      >
+                        <X className="w-4 h-4 text-red-500" />
+                      </Button>
+                    )}
+                    <ChevronRight className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                  </div>
 
-                  return (
-                    <div
-                      key={employee.id}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('employeeId', employee.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      className="group p-3 rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-md cursor-move transition-all"
-                      onClick={() => {
-                        setSelectedTeamMembers(prev => [...prev, employee.id]);
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${getRoleColor(employee.role)}`}>
-                          {getInitials(employee.name)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{employee.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {roleLabels[employee.role] || employee.role}
-                          </div>
-                        </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  {/* Выпадающий список сотрудников */}
+                  {isOpen && !isAddingNew && (
+                    <div className="mt-1 border rounded-xl bg-card shadow-lg overflow-hidden z-10 relative">
+                      {/* Поиск внутри слота */}
+                      <div className="p-2 border-b">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                          <Input
+                            placeholder="Поиск..."
+                            value={slotSearch}
+                            onChange={(e) => setSlotSearch(e.target.value)}
+                            className="pl-8 h-8 text-sm"
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            {/* Правая колонка - Команда проекта */}
-            <div className="space-y-3 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Target className="w-4 h-4" />
-                  Команда проекта
-                </h3>
-                <Badge variant="default" className="text-xs">
-                  {selectedTeamMembers.length}
-                </Badge>
-              </div>
-
-              <div
-                className="border-2 border-dashed border-primary/30 bg-primary/5 rounded-lg p-4 flex-1 overflow-y-auto"
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.add('border-primary', 'bg-primary/10');
-                }}
-                onDragLeave={(e) => {
-                  e.currentTarget.classList.remove('border-primary', 'bg-primary/10');
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.remove('border-primary', 'bg-primary/10');
-                  const employeeId = e.dataTransfer.getData('employeeId');
-                  if (employeeId && !selectedTeamMembers.includes(employeeId)) {
-                    setSelectedTeamMembers(prev => [...prev, employeeId]);
-                  }
-                }}
-              >
-                {selectedTeamMembers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                    <Users className="w-12 h-12 mb-3 opacity-20" />
-                    <p className="text-sm">Перетащите сотрудников сюда</p>
-                    <p className="text-xs mt-1">или нажмите на них</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2">
-                    {selectedTeamMembers.map((empId) => {
-                      const employee = employees?.find(e => e.id === empId);
-                      if (!employee) return null;
-
-                      const roleLabels: Record<string, string> = {
-                        partner: 'Партнер',
-                        manager_1: 'Менеджер 1',
-                        manager_2: 'Менеджер 2',
-                        manager_3: 'Менеджер 3',
-                        supervisor_1: 'Супервайзер 1',
-                        supervisor_2: 'Супервайзер 2',
-                        supervisor_3: 'Супервайзер 3',
-                        assistant_1: 'Ассистент 1',
-                        assistant_2: 'Ассистент 2',
-                        assistant_3: 'Ассистент 3',
-                      };
-
-                      const getRoleColor = (role: string) => {
-                        if (role === 'partner') return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
-                        if (role.includes('manager')) return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-                        if (role.includes('supervisor')) return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
-                        if (role.includes('assistant')) return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300';
-                        return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
-                      };
-
-                      const getInitials = (name: string) => {
-                        const parts = name.split(' ');
-                        return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
-                      };
-
-                      return (
-                        <div
-                          key={employee.id}
-                          className="group p-3 rounded-lg border border-primary/30 bg-card shadow-sm hover:shadow-md transition-all"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${getRoleColor(employee.role)}`}>
-                              {getInitials(employee.name)}
+                      <div className="max-h-48 overflow-y-auto">
+                        {filteredEmps.length === 0 && (
+                          <div className="p-3 text-center text-xs text-muted-foreground">Нет сотрудников</div>
+                        )}
+                        {filteredEmps.map((emp: any) => (
+                          <div
+                            key={emp.id}
+                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-primary/5 cursor-pointer transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTeamSlots(prev => ({ ...prev, [slot.key]: emp.id }));
+                              setOpenSlotDropdown(null);
+                              setSlotSearch('');
+                            }}
+                          >
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${slot.color}`}>
+                              {emp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm truncate">{employee.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {roleLabels[employee.role] || employee.role}
-                              </div>
+                              <div className="text-sm font-medium truncate">{emp.name}</div>
+                              <div className="text-xs text-muted-foreground">{emp.role}</div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
-                              onClick={() => {
-                                setSelectedTeamMembers(prev => prev.filter(id => id !== employee.id));
-                              }}
-                            >
-                              <X className="w-4 h-4 text-red-500" />
-                            </Button>
+                            {emp.id === assignedEmpId && (
+                              <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+                            )}
                           </div>
+                        ))}
+                      </div>
+
+                      {/* Кнопка "Добавить нового" */}
+                      <div className="border-t p-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-xs gap-1.5 text-primary hover:text-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAddingNewInSlot(slot.key);
+                            setNewEmployeeName('');
+                            setNewEmployeeType(isGphSlot ? 'gph' : 'staff');
+                          }}
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Добавить нового сотрудника
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Форма добавления нового сотрудника inline */}
+                  {isOpen && isAddingNew && (
+                    <div className="mt-1 border rounded-xl bg-card shadow-lg p-3 space-y-2 z-10 relative">
+                      <div className="text-xs font-semibold text-muted-foreground">Новый сотрудник для роли «{slot.label}»</div>
+                      <Input
+                        placeholder="ФИО сотрудника"
+                        value={newEmployeeName}
+                        onChange={(e) => setNewEmployeeName(e.target.value)}
+                        className="h-8 text-sm"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      {isGphSlot && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant={newEmployeeType === 'gph' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1 text-xs h-7"
+                            onClick={(e) => { e.stopPropagation(); setNewEmployeeType('gph'); }}
+                          >
+                            ГПХ
+                          </Button>
+                          <Button
+                            variant={newEmployeeType === 'subcontract' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1 text-xs h-7"
+                            onClick={(e) => { e.stopPropagation(); setNewEmployeeType('subcontract'); }}
+                          >
+                            Субподряд
+                          </Button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-xs h-8"
+                          onClick={(e) => { e.stopPropagation(); setAddingNewInSlot(null); }}
+                        >
+                          Отмена
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 text-xs h-8"
+                          disabled={!newEmployeeName.trim()}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              // Определяем роль для нового сотрудника
+                              const empRole = isGphSlot
+                                ? (newEmployeeType === 'gph' ? 'employee' : 'employee')
+                                : (slot.roles[0] || 'employee');
+
+                              // Создаём placeholder-сотрудника в Supabase
+                              const { data: newEmp, error } = await supabase
+                                .from('employees')
+                                .insert({
+                                  name: newEmployeeName.trim(),
+                                  role: empRole as any,
+                                  level: '1' as any,
+                                  email: `placeholder_${Date.now()}@temp.local`,
+                                })
+                                .select('id')
+                                .single();
+
+                              if (error) throw error;
+
+                              // Назначаем в слот
+                              setTeamSlots(prev => ({ ...prev, [slot.key]: newEmp.id }));
+                              setOpenSlotDropdown(null);
+                              setAddingNewInSlot(null);
+                              setNewEmployeeName('');
+
+                              toast({
+                                title: 'Сотрудник создан',
+                                description: `${newEmployeeName.trim()} добавлен и назначен на роль «${slot.label}»`,
+                              });
+                            } catch (err: any) {
+                              toast({
+                                title: 'Ошибка',
+                                description: err.message || 'Не удалось создать сотрудника',
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-1" />
+                          Создать и назначить
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowTeamDialog(false)}>
-              Отмена
-            </Button>
-            <Button
-              onClick={async () => {
-                try {
-                  // Формируем команду из выбранных сотрудников
-                  const team = selectedTeamMembers.map(empId => {
-                    const emp = employees?.find(e => e.id === empId);
-                    return {
-                      userId: empId,
-                      name: emp?.name || '',
-                      role: emp?.role || ''
+          <div className="flex justify-between items-center pt-2 border-t">
+            <div className="text-xs text-muted-foreground">
+              Назначено: {Object.values(teamSlots).filter(Boolean).length} из {TEAM_ROLE_SLOTS.length}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowTeamDialog(false)}>
+                Отмена
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    // Формируем команду из слотов
+                    const fullTeam = TEAM_ROLE_SLOTS
+                      .filter(slot => teamSlots[slot.key])
+                      .map(slot => {
+                        const empId = teamSlots[slot.key]!;
+                        const emp = (employees || []).find((e: any) => e.id === empId);
+                        const isGph = slot.key.startsWith('gph');
+                        return {
+                          userId: empId,
+                          name: emp?.name || '',
+                          role: emp?.role || slot.label,
+                          slotKey: slot.key,
+                          type: isGph ? (newEmployeeType || 'gph') : 'staff',
+                        };
+                      });
+
+                    const projectId = project?.id || project?.notes?.id || id;
+                    const updatedNotes = {
+                      ...(project?.notes || {}),
+                      team: fullTeam,
+                      status: fullTeam.length > 0 ? 'team_assembled' : (project?.notes?.status || 'approved')
                     };
-                  });
 
-                  // Обновляем проект
-                  const projectId = project?.id || project?.notes?.id || id;
-                  const updatedNotes = {
-                    ...(project?.notes || {}),
-                    team: team,
-                    status: team.length > 0 ? 'team_assembled' : (project?.notes?.status || 'approved')
-                  };
+                    await supabaseDataStore.updateProject(projectId, {
+                      team: fullTeam,
+                      notes: updatedNotes
+                    });
 
-                  await supabaseDataStore.updateProject(projectId, {
-                    team: team,
-                    notes: updatedNotes
-                  });
+                    setProject((prev: any) => ({
+                      ...prev,
+                      team: fullTeam,
+                      notes: updatedNotes
+                    }));
 
-                  // Обновляем локальное состояние
-                  setProject((prev: any) => ({
-                    ...prev,
-                    team: team,
-                    notes: updatedNotes
-                  }));
+                    setShowTeamDialog(false);
 
-                  setShowTeamDialog(false);
-
-                  toast({
-                    title: '✅ Команда назначена',
-                    description: `${team.length} сотрудников добавлены в проект`
-                  });
-                } catch (error: any) {
-                  console.error('Ошибка назначения команды:', error);
-                  toast({
-                    title: 'Ошибка',
-                    description: error.message || 'Не удалось назначить команду',
-                    variant: 'destructive'
-                  });
-                }
-              }}
-              disabled={selectedTeamMembers.length === 0}
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Назначить команду
-            </Button>
+                    toast({
+                      title: 'Команда назначена',
+                      description: `${fullTeam.length} участников добавлены в проект`
+                    });
+                  } catch (error: any) {
+                    console.error('Ошибка назначения команды:', error);
+                    toast({
+                      title: 'Ошибка',
+                      description: error.message || 'Не удалось назначить команду',
+                      variant: 'destructive'
+                    });
+                  }
+                }}
+                disabled={Object.values(teamSlots).filter(Boolean).length === 0}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Назначить команду ({Object.values(teamSlots).filter(Boolean).length})
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
