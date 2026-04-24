@@ -188,122 +188,135 @@ export default function Notifications() {
   const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.read).length : 0;
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6 page-enter">
+
+      {/* Заголовок */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <span className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-primary" />
+            </span>
             Уведомления
             {unreadCount > 0 && (
-              <Badge className="ml-2 bg-primary">{unreadCount}</Badge>
+              <Badge className="bg-primary text-primary-foreground text-xs">{unreadCount}</Badge>
             )}
           </h1>
-          <p className="text-muted-foreground mt-1">Все события и напоминания по проектам</p>
+          <p className="text-muted-foreground mt-1 text-sm">Все события и напоминания по проектам</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={handleCheckDeadlines}
             disabled={loading}
-            className="btn-glass"
+            className="gap-2 text-xs sm:text-sm"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Проверить дедлайны
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Проверить дедлайны</span>
+            <span className="sm:hidden">Дедлайны</span>
           </Button>
-          <Button variant="outline" onClick={handleMarkAllRead} disabled={loading} className="btn-glass">
-            <Check className="w-4 h-4 mr-2" /> Прочитать все
+          <Button variant="outline" size="sm" onClick={handleMarkAllRead} disabled={loading} className="gap-2 text-xs sm:text-sm">
+            <Check className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Прочитать все</span>
           </Button>
-          <Button variant="outline" onClick={handleClearRead} disabled={loading} className="btn-glass">
-            <Trash2 className="w-4 h-4 mr-2" /> Очистить прочитанные
+          <Button variant="outline" size="sm" onClick={handleClearRead} disabled={loading} className="gap-2 text-xs sm:text-sm text-destructive hover:text-destructive">
+            <Trash2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Очистить</span>
           </Button>
         </div>
       </div>
 
-      <Card className="glass-card">
-        <div className="p-4 border-b border-glass-border flex items-center gap-3">
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <div className="p-3 sm:p-4 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
               placeholder="Поиск уведомлений..."
-              className="pl-10"
+              className="pl-9 bg-muted/40 border-0 focus-visible:ring-1"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="divide-y divide-glass-border">
+        <div className="divide-y divide-border">
           {loading && notifications.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <RefreshCw className="w-12 h-12 mx-auto mb-4 opacity-50 animate-spin" />
-              <p>Загрузка...</p>
+            <div className="p-12 text-center">
+              <RefreshCw className="w-8 h-8 mx-auto mb-3 text-muted-foreground/50 animate-spin" />
+              <p className="text-sm text-muted-foreground">Загрузка...</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Нет уведомлений</p>
-              <p className="text-sm mt-2">Нажмите "Проверить дедлайны" чтобы получить уведомления о приближающихся сроках</p>
+            <div className="p-12 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+                <Bell className="w-7 h-7 text-muted-foreground/50" />
+              </div>
+              <p className="font-medium text-muted-foreground">Нет уведомлений</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">Нажмите «Дедлайны» чтобы проверить сроки</p>
             </div>
           ) : (
             filtered.map((n) => (
               <div
                 key={n.id}
-                className={`p-4 transition-all duration-200 ${
-                  n.action_url ? 'cursor-pointer hover:bg-secondary/20' : ''
-                } ${!n.read ? 'bg-primary/5' : ''}`}
+                className={`p-3 sm:p-4 transition-all duration-150 ${
+                  n.action_url ? 'cursor-pointer active:bg-muted/50' : ''
+                } ${!n.read ? 'bg-primary/3' : 'hover:bg-muted/30'}`}
                 onClick={() => n.action_url && handleNotificationClick(n)}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      n.type === 'error' ? 'bg-red-500' :
-                      n.type === 'warning' ? 'bg-yellow-500' :
-                      n.type === 'success' ? 'bg-green-500' :
-                      'bg-gradient-to-r from-primary to-secondary'
-                    }`}>
-                      <Bell className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium">{n.title}</p>
-                        {typeBadge(n.type)}
-                        {!n.read && <Badge className="bg-primary/20 text-primary">Новое</Badge>}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">{n.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{formatDate(n.created_at)}</p>
-                      {n.action_url && (
-                        <div className="flex items-center gap-1 mt-2 text-xs text-primary">
-                          <ExternalLink className="w-3 h-3" />
-                          <span>Нажмите для перехода</span>
-                        </div>
-                      )}
-                    </div>
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    n.type === 'error' ? 'bg-red-500/15' :
+                    n.type === 'warning' ? 'bg-yellow-500/15' :
+                    n.type === 'success' ? 'bg-green-500/15' :
+                    'bg-primary/15'
+                  }`}>
+                    <Bell className={`w-4 h-4 ${
+                      n.type === 'error' ? 'text-red-500' :
+                      n.type === 'warning' ? 'text-yellow-500' :
+                      n.type === 'success' ? 'text-green-500' :
+                      'text-primary'
+                    }`} />
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="btn-glass"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleRead(n.id);
-                      }}
-                      title={n.read ? "Прочитано" : "Отметить прочитанным"}
-                    >
-                      <Check className={`w-4 h-4 ${n.read ? 'text-green-500' : ''}`} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="btn-glass text-destructive hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(n.id);
-                      }}
-                      title="Удалить"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-medium text-sm">{n.title}</p>
+                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <p className="text-xs text-muted-foreground/60">{formatDate(n.created_at)}</p>
+                          {typeBadge(n.type)}
+                          {n.action_url && (
+                            <span className="text-xs text-primary flex items-center gap-0.5">
+                              <ExternalLink className="w-3 h-3" />перейти
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-lg"
+                          onClick={(e) => { e.stopPropagation(); handleToggleRead(n.id); }}
+                          title={n.read ? "Прочитано" : "Отметить прочитанным"}
+                        >
+                          <Check className={`w-3.5 h-3.5 ${n.read ? 'text-green-500' : 'text-muted-foreground'}`} />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(n.id); }}
+                          title="Удалить"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

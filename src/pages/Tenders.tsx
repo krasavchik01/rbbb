@@ -384,7 +384,7 @@ export default function Tenders() {
           <CardTitle>Динамика тендеров</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-6 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {filteredTenders.map((tender, idx) => (
               <div key={tender.id} className="flex flex-col items-center">
                 <div 
@@ -602,25 +602,25 @@ export default function Tenders() {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in p-4 md:p-0">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in p-2 sm:p-4 md:p-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
             📋 Тендеры
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Предварительная оценка, статистика и управление тендерами
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+            Оценка, статистика и управление тендерами
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setIsEvaluationDialogOpen(true)} variant="outline">
-            <ClipboardCheck className="w-4 h-4 mr-2" />
-            Новая оценка
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setIsEvaluationDialogOpen(true)} variant="outline" size="sm">
+            <ClipboardCheck className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Новая оценка</span>
           </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)} className="bg-gradient-to-r from-blue-600 to-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Добавить тендер
+          <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="bg-gradient-to-r from-blue-600 to-blue-700">
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Добавить тендер</span>
           </Button>
         </div>
       </div>

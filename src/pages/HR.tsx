@@ -813,21 +813,21 @@ export default function HR() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">👥 Управление персоналом</h1>
-          <p className="text-muted-foreground">Центр управления сотрудниками и аналитики</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">👥 Управление персоналом</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Центр управления сотрудниками</p>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={handleDownloadTemplate}>
-            <Download className="w-4 h-4 mr-2" />
-            Шаблон
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Шаблон</span>
           </Button>
-          <Button variant="outline" onClick={() => document.getElementById('excel-import')?.click()}>
-            <Upload className="w-4 h-4 mr-2" />
-            Импорт
+          <Button variant="outline" size="sm" onClick={() => document.getElementById('excel-import')?.click()}>
+            <Upload className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Импорт</span>
           </Button>
           <input
             id="excel-import"
@@ -836,13 +836,13 @@ export default function HR() {
             onChange={handleImportExcel}
             style={{ display: 'none' }}
           />
-          <Button variant="outline" onClick={handleExportExcel}>
-            <Download className="w-4 h-4 mr-2" />
-            Экспорт
+          <Button variant="outline" size="sm" onClick={handleExportExcel}>
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Экспорт</span>
           </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Добавить сотрудника
+          <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Добавить</span>
           </Button>
         </div>
       </div>

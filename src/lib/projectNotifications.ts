@@ -532,3 +532,39 @@ export const notifyFileUploaded = async (params: {
     )
   );
 };
+
+/**
+ * Уведомление отдела закупок о массовом импорте проектов
+ */
+export const notifyBulkProjectsImported = async (params: {
+  count: number;
+  importerName: string;
+}) => {
+  try {
+    // Находим всех сотрудников отдела закупок
+    const { data: employees, error } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('role', 'procurement' as any);
+
+    if (error || !employees || employees.length === 0) {
+      console.warn('⚠️ Сотрудники отдела закупок не найдены для уведомления');
+      return null;
+    }
+
+    const promises = employees.map(emp => 
+      addNotification({
+        user_id: emp.id,
+        title: '📂 Массовый импорт проектов',
+        message: `${params.importerName} импортировал ${params.count} новых проектов. Необходимо добавить договора и сопутствующие документы.`,
+        type: 'info',
+        action_url: '/projects',
+      })
+    );
+
+    return Promise.all(promises);
+  } catch (error) {
+    console.error('❌ Ошибка уведомления отдела закупок:', error);
+    return null;
+  }
+};

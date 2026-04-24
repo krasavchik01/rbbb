@@ -4,21 +4,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProjects } from '@/hooks/useProjects-simple';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculateProjectFinances } from '@/types/project-v3';
-import { 
-  Gift, 
-  TrendingUp, 
-  DollarSign, 
-  Calendar,
-  Filter,
-  Download,
+import {
+  Gift,
+  TrendingUp,
+  DollarSign,
   Search,
   CheckCircle,
   Clock,
-  XCircle
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -154,168 +152,163 @@ export default function Bonuses() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-4 sm:space-y-6 page-enter">
+
+      {/* Заголовок */}
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Gift className="w-8 h-8" />
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <span className="w-9 h-9 rounded-xl bg-yellow-500/15 flex items-center justify-center">
+            <Gift className="w-5 h-5 text-yellow-500" />
+          </span>
           Бонусы
         </h1>
-        <p className="text-muted-foreground mt-2">Система бонусов и поощрений сотрудников</p>
+        <p className="text-muted-foreground mt-1 text-sm">Система бонусов и поощрений</p>
       </div>
 
       {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Всего бонусов</p>
-              <p className="text-2xl font-bold">{stats.count}</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Всего бонусов', value: stats.count, sub: 'записей', icon: Gift, color: 'text-primary', bg: 'bg-primary/10' },
+          { label: 'Общая сумма', value: (stats.total || 0).toLocaleString('ru-RU') + ' ₸', sub: 'начислено', icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10' },
+          { label: 'Ожидает', value: (stats.pending || 0).toLocaleString('ru-RU') + ' ₸', sub: 'на рассмотрении', icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+          { label: 'Выплачено', value: (stats.paid || 0).toLocaleString('ru-RU') + ' ₸', sub: 'итого', icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+          <Card key={label} className="p-4 border-0 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                <Icon className={`w-4 h-4 ${color}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground truncate">{label}</p>
+                <p className="font-bold text-base leading-tight mt-0.5 truncate">{value}</p>
+                <p className="text-xs text-muted-foreground/60">{sub}</p>
+              </div>
             </div>
-            <Gift className="w-8 h-8 text-primary" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Общая сумма</p>
-              <p className="text-2xl font-bold">{(stats.total || 0).toLocaleString('ru-RU')} ₸</p>
-            </div>
-            <DollarSign className="w-8 h-8 text-green-500" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Ожидает</p>
-              <p className="text-2xl font-bold">{(stats.pending || 0).toLocaleString('ru-RU')} ₸</p>
-            </div>
-            <Clock className="w-8 h-8 text-yellow-500" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Выплачено</p>
-              <p className="text-2xl font-bold">{(stats.paid || 0).toLocaleString('ru-RU')} ₸</p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-green-500" />
-          </div>
-        </Card>
+          </Card>
+        ))}
       </div>
-      
+
       <Tabs defaultValue="list" className="space-y-4">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="list">Список бонусов</TabsTrigger>
-            <TabsTrigger value="by-employee">По сотрудникам</TabsTrigger>
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <TabsList className="bg-muted/50">
+            <TabsTrigger value="list" className="gap-1.5"><Gift className="w-3.5 h-3.5" />Список</TabsTrigger>
+            <TabsTrigger value="by-employee" className="gap-1.5"><Users className="w-3.5 h-3.5" />По сотрудникам</TabsTrigger>
           </TabsList>
 
-          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-            <div className="relative flex-1 md:flex-initial md:w-64">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-52">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Поиск..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
+                className="pl-9 bg-muted/40 border-0 focus-visible:ring-1"
               />
             </div>
-            <div className="flex gap-2">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="px-3 py-2 border rounded-md bg-background"
-              >
-                <option value="all">Все статусы</option>
-                <option value="pending">Ожидает</option>
-                <option value="approved">Одобрен</option>
-                <option value="paid">Выплачен</option>
-              </select>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
-                className="px-3 py-2 border rounded-md bg-background"
-              >
-                <option value="all">Все типы</option>
-                <option value="project">Проект</option>
-                <option value="kpi">KPI</option>
-                <option value="annual">Годовой</option>
-              </select>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+                <SelectTrigger className="bg-muted/40 border-0 text-sm">
+                  <SelectValue placeholder="Статус" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все статусы</SelectItem>
+                  <SelectItem value="pending">Ожидает</SelectItem>
+                  <SelectItem value="approved">Одобрен</SelectItem>
+                  <SelectItem value="paid">Выплачен</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterType} onValueChange={(v) => setFilterType(v as any)}>
+                <SelectTrigger className="bg-muted/40 border-0 text-sm">
+                  <SelectValue placeholder="Тип" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все типы</SelectItem>
+                  <SelectItem value="project">Проект</SelectItem>
+                  <SelectItem value="kpi">KPI</SelectItem>
+                  <SelectItem value="annual">Годовой</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
 
-        <TabsContent value="list" className="space-y-4">
+        <TabsContent value="list" className="space-y-2 mt-2">
           {filteredBonuses.length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground">Бонусы не найдены</p>
+            <Card className="p-12 text-center border-0 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+                <Gift className="w-7 h-7 text-muted-foreground/50" />
+              </div>
+              <p className="font-medium text-muted-foreground">Бонусы не найдены</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">Попробуйте изменить фильтры</p>
             </Card>
           ) : (
-            <div className="space-y-2">
-              {filteredBonuses.map((bonus) => (
-                <Card key={bonus.id} className="p-4 hover:bg-secondary/50 transition-colors">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold">{bonus.employeeName}</h3>
-                        {getStatusBadge(bonus.status)}
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-1">{bonus.projectName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(bonus.date), 'dd MMMM yyyy', { locale: ru })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</p>
-                        <p className="text-xs text-muted-foreground">{bonus.percent}% от базы</p>
-                      </div>
-                    </div>
+            filteredBonuses.map((bonus) => (
+              <Card key={bonus.id} className="p-4 border-0 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
+                    <Gift className="w-5 h-5 text-yellow-500" />
                   </div>
-                </Card>
-              ))}
-            </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-semibold text-sm truncate">{bonus.employeeName}</h3>
+                      {getStatusBadge(bonus.status)}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{bonus.projectName} · {format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-bold text-base text-primary">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</p>
+                    <p className="text-xs text-muted-foreground">{bonus.percent}% от базы</p>
+                  </div>
+                </div>
+              </Card>
+            ))
           )}
         </TabsContent>
 
-        <TabsContent value="by-employee" className="space-y-4">
+        <TabsContent value="by-employee" className="space-y-3 mt-2">
           {bonusesByEmployee.length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground">Данные не найдены</p>
+            <Card className="p-12 text-center border-0 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+                <Users className="w-7 h-7 text-muted-foreground/50" />
+              </div>
+              <p className="font-medium text-muted-foreground">Данные не найдены</p>
             </Card>
           ) : (
-            <div className="space-y-4">
-              {bonusesByEmployee.map(({ employee, total, bonuses }) => (
-                <Card key={employee.id || employee.name} className="p-4">
-                  <div className="flex items-center justify-between mb-4">
+            bonusesByEmployee.map(({ employee, total, bonuses }) => (
+              <Card key={employee.id || employee.name} className="p-4 border-0 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                      {(employee.name || 'N')[0]}
+                    </div>
                     <div>
-                      <h3 className="font-semibold text-lg">{employee.name || 'Неизвестный сотрудник'}</h3>
-                      <p className="text-sm text-muted-foreground">{bonuses.length} бонусов</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-primary">{(total || 0).toLocaleString('ru-RU')} ₸</p>
-                      <p className="text-xs text-muted-foreground">Итого</p>
+                      <h3 className="font-semibold text-sm">{employee.name || 'Неизвестный сотрудник'}</h3>
+                      <p className="text-xs text-muted-foreground">{bonuses.length} бонусов</p>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    {bonuses.map((bonus) => (
-                      <div key={bonus.id} className="flex items-center justify-between p-2 bg-secondary/50 rounded">
-                        <div>
-                          <p className="text-sm font-medium">{bonus.projectName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {getStatusBadge(bonus.status)}
-                          <span className="font-semibold">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</span>
-                        </div>
+                  <div className="text-right">
+                    <p className="font-bold text-primary">{(total || 0).toLocaleString('ru-RU')} ₸</p>
+                    <p className="text-xs text-muted-foreground">Итого</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {bonuses.map((bonus) => (
+                    <div key={bonus.id} className="flex items-center justify-between p-2.5 bg-muted/40 rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{bonus.projectName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-      </Card>
-              ))}
-            </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        {getStatusBadge(bonus.status)}
+                        <span className="font-semibold text-sm">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))
           )}
         </TabsContent>
       </Tabs>

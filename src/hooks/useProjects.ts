@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAppSettings } from '@/lib/appSettings';
+import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
 
 type Company = Database['public']['Tables']['companies']['Row'];
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -24,12 +27,14 @@ type Task = Database['public']['Tables']['tasks']['Row'] & {
 type ProjectTeamMember = Database['public']['Tables']['project_team']['Row'];
 
 export function useProjects() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [appSettings] = useAppSettings();
 
   // Загрузка данных
   const fetchData = async () => {
@@ -73,7 +78,7 @@ export function useProjects() {
       // Используем базовые данные для демонстрации
       setCompanies(companiesData || []);
       setEmployees(employeesData || []);
-      setProjects(projectsData || []);
+      setAllProjects(projectsData || []);
       setTasks(tasksData || []);
 
     } catch (err) {
@@ -270,6 +275,19 @@ export function useProjects() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Фильтрация по allowedCompanyIds пользователя
+  const projects = useMemo(() => {
+    if (!user?.allowedCompanyIds || user.allowedCompanyIds.length === 0) {
+      return allProjects;
+    }
+    const settingsCompanies = appSettings.companies || [];
+    const allowedNames = user.allowedCompanyIds
+      .map((id: string) => (settingsCompanies as any[]).find((c: any) => c.id === id)?.name)
+      .filter(Boolean) as string[];
+    if (allowedNames.length === 0) return allProjects;
+    return allProjects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));
+  }, [allProjects, user?.allowedCompanyIds, appSettings.companies]);
 
   return {
     projects,

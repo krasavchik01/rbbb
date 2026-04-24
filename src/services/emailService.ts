@@ -76,9 +76,9 @@ class EmailService {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #3b82f6;">Новый проект назначен</h2>
           <p>Вам назначен новый проект: <strong>${projectName}</strong></p>
-          <p>Проверьте детали проекта в системе RB Partners Suite.</p>
+          <p>Проверьте детали проекта в системе SUITE-A.</p>
           <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
-            <p style="margin: 0; color: #6b7280;">Это автоматическое уведомление от RB Partners Suite</p>
+            <p style="margin: 0; color: #6b7280;">Это автоматическое уведомление от SUITE-A</p>
           </div>
         </div>
       `
@@ -97,9 +97,9 @@ class EmailService {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #10b981;">Новая задача назначена</h2>
           <p>Вам назначена новая задача: <strong>${taskTitle}</strong></p>
-          <p>Проверьте детали задачи в системе RB Partners Suite.</p>
+          <p>Проверьте детали задачи в системе SUITE-A.</p>
           <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
-            <p style="margin: 0; color: #6b7280;">Это автоматическое уведомление от RB Partners Suite</p>
+            <p style="margin: 0; color: #6b7280;">Это автоматическое уведомление от SUITE-A</p>
           </div>
         </div>
       `
@@ -120,7 +120,7 @@ class EmailService {
           <p>В систему добавлен новый сотрудник: <strong>${employeeName}</strong></p>
           <p>Проверьте профиль сотрудника в HR разделе системы.</p>
           <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
-            <p style="margin: 0; color: #6b7280;">Это автоматическое уведомление от RB Partners Suite</p>
+            <p style="margin: 0; color: #6b7280;">Это автоматическое уведомление от SUITE-A</p>
           </div>
         </div>
       `

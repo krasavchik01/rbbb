@@ -27,10 +27,9 @@ export default function SMTPSettings() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const saved = loadSMTPConfig();
-    if (saved) {
-      setConfig(saved);
-    }
+    loadSMTPConfig().then(saved => {
+      if (saved) setConfig(saved);
+    });
   }, []);
 
   const handleTest = async () => {
@@ -54,14 +53,14 @@ export default function SMTPSettings() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
-      saveSMTPConfig(config);
-      toast.success('Настройки сохранены!');
-      setTimeout(() => setSaving(false), 500);
+      await saveSMTPConfig(config);
+      toast.success('Настройки SMTP сохранены в базу данных!');
     } catch (error) {
       toast.error('Ошибка сохранения');
+    } finally {
       setSaving(false);
     }
   };

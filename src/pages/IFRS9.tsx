@@ -650,19 +650,20 @@ const IFRS9Page: React.FC = () => {
 
   if (!selectedProject) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               МСФО 9 - Расчёт ECL
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Профессиональный расчёт ожидаемых кредитных убытков
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+              Расчёт ожидаемых кредитных убытков
             </p>
           </div>
           <Button
             onClick={() => setShowProjectDialog(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600"
+            size="sm"
+            className="bg-gradient-to-r from-blue-600 to-purple-600 self-start sm:self-auto"
           >
             <Plus className="w-4 h-4 mr-2" />
             Новый расчёт
@@ -1557,7 +1558,7 @@ const IFRS9Page: React.FC = () => {
                   const scenarioNames = { base: 'Базовый', optimistic: 'Оптимистичный', pessimistic: 'Пессимистичный' };
 
                   return (
-                    <div key={index} className="grid grid-cols-4 gap-4 items-end pb-4 border-b last:border-0">
+                    <div key={index} className="grid grid-cols-2 sm:grid-cols-4 gap-4 items-end pb-4 border-b last:border-0">
                       <div>
                         <Label className="text-sm">{scenarioNames[scenario.scenario]}</Label>
                       </div>

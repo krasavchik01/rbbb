@@ -1,16 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployees } from '@/hooks/useSupabaseData';
-import { Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Settings, Building2, Briefcase, Home, Plane, Heart, Navigation } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Calendar, Clock, MapPin, Users, Building2, Briefcase, Home, Plane, Heart, Navigation } from 'lucide-react';
 import { useAppSettings } from '@/lib/appSettings';
+import { supabase } from '@/integrations/supabase/client';
 
 // Расширенные статусы посещаемости
 type AttendanceStatus = 'in_office' | 'on_project' | 'remote' | 'vacation' | 'sick_leave' | 'day_off';
@@ -72,20 +69,64 @@ export default function Attendance() {
     return [{ name: 'Главный офис', lat: 43.238949, lng: 76.945465, radius: 100 }];
   }, [appSettings]);
 
-  // Загружаем записи посещений
+  // Загружаем записи посещений из Supabase
   useEffect(() => {
-    const records = JSON.parse(localStorage.getItem('attendanceRecords') || '[]');
-    
-    // Обогащаем записи именами сотрудников
-    const enrichedRecords = records.map((record: any) => {
-      const employee = employees.find((emp: any) => emp.id === record.employeeId);
-      return {
-        ...record,
-        employeeName: employee?.name || 'Неизвестный сотрудник'
-      };
-    });
-    
-    setAttendanceRecords(enrichedRecords);
+    async function loadAttendance() {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('check_in', { ascending: false });
+
+      if (error) {
+        console.error('Error loading attendance:', error);
+        return;
+      }
+
+      // Маппим данные из Supabase в формат компонента
+      const records: AttendanceRecord[] = (data || []).map((row: any) => {
+        const employee = employees.find((emp: any) => emp.id === row.employee_id);
+        // Маппим location_type из БД в наши статусы
+        const statusMap: Record<string, AttendanceStatus> = {
+          'office': 'in_office',
+          'remote': 'remote',
+          'client': 'on_project',
+          'trip': 'on_project',
+        };
+        const dbStatus = row.status; // present, late, absent, vacation, sick_leave
+        let status: AttendanceStatus;
+        if (dbStatus === 'vacation') status = 'vacation';
+        else if (dbStatus === 'sick_leave') status = 'sick_leave';
+        else status = statusMap[row.location_type] || 'in_office';
+
+        const locationLabels: Record<string, string> = {
+          'office': 'В офисе',
+          'remote': 'Удалённо',
+          'client': 'У клиента',
+          'trip': 'Командировка',
+        };
+
+        return {
+          id: row.id,
+          employeeId: row.employee_id,
+          employeeName: employee?.name || 'Неизвестный сотрудник',
+          checkIn: row.check_in || '',
+          checkOut: row.check_out || undefined,
+          location: locationLabels[row.location_type] || row.location_type || '',
+          status,
+          date: new Date(row.date).toDateString(),
+          coordinates: row.check_in_lat && row.check_in_lng
+            ? { lat: Number(row.check_in_lat), lng: Number(row.check_in_lng) }
+            : undefined,
+        };
+      });
+
+      setAttendanceRecords(records);
+    }
+
+    if (employees.length > 0) {
+      loadAttendance();
+    }
   }, [employees]);
 
   // Дебаунс поиска
@@ -96,10 +137,10 @@ export default function Attendance() {
 
   // Фильтрация записей (мемоизация)
   const filteredRecords = useMemo(() => {
-    const dateStr = new Date(filterDate).toDateString();
+    const filterDateStr = new Date(filterDate + 'T00:00:00').toDateString();
     const s = debouncedSearch.toLowerCase();
     return attendanceRecords.filter(record => {
-      const matchesDate = record.date === dateStr;
+      const matchesDate = record.date === filterDateStr;
       const matchesEmployee = filterEmployee === 'all' || record.employeeId === filterEmployee;
       const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
       const matchesSearch = record.employeeName.toLowerCase().includes(s);
@@ -122,16 +163,17 @@ export default function Attendance() {
   };
 
 
-  // Вычисляем время работы
+  // Вычисляем время работы (check_in/check_out — TIME строки HH:MM:SS)
   const calculateWorkTime = (checkIn: string, checkOut?: string) => {
-    if (!checkOut) return 'В работе';
-    
-    const start = new Date(checkIn);
-    const end = new Date(checkOut);
-    const diffMs = end.getTime() - start.getTime();
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
+    if (!checkOut || !checkIn) return 'В работе';
+
+    const [h1, m1] = checkIn.split(':').map(Number);
+    const [h2, m2] = checkOut.split(':').map(Number);
+    const diffMin = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (diffMin <= 0) return 'В работе';
+
+    const hours = Math.floor(diffMin / 60);
+    const minutes = diffMin % 60;
     return `${hours}ч ${minutes}м`;
   };
 
@@ -140,22 +182,22 @@ export default function Attendance() {
   const isCEO = user?.role === 'ceo';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">📊 Посещаемость</h1>
-          <p className="text-muted-foreground">Учет рабочего времени сотрудников</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">📊 Посещаемость</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Учет рабочего времени сотрудников</p>
         </div>
         {isAdmin && (
-          <Badge variant="outline" className="text-xs">
-            Настройки офиса: Настройки → Система → Геолокация офиса
+          <Badge variant="outline" className="text-xs self-start sm:self-auto">
+            Настройки → Система → Геолокация
           </Badge>
         )}
       </div>
 
       {/* Статистика - расширенная */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
         <Card className="p-4">
           <div className="flex items-center space-x-2">
             <Users className="w-5 h-5 text-primary" />
@@ -346,12 +388,12 @@ export default function Attendance() {
                       <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                         <span className="flex items-center space-x-1">
                           <Clock className="h-3 w-3" />
-                          <span>Приход: {new Date(record.checkIn).toLocaleTimeString('ru-RU')}</span>
+                          <span>Приход: {record.checkIn?.slice(0, 5) || '—'}</span>
                         </span>
                         {record.checkOut && (
                           <span className="flex items-center space-x-1">
                             <Clock className="h-3 w-3" />
-                            <span>Уход: {new Date(record.checkOut).toLocaleTimeString('ru-RU')}</span>
+                            <span>Уход: {record.checkOut?.slice(0, 5)}</span>
                           </span>
                         )}
                         <span className="flex items-center space-x-1">

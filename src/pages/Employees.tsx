@@ -262,7 +262,7 @@ export default function Employees() {
 
   // Компонент краткого индикатора
   const EmployeeQuickStats = ({ employee }: { employee: Employee }) => (
-    <div className="grid grid-cols-4 gap-2 mt-3 p-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border border-blue-400/20">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 p-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border border-blue-400/20">
       <div className="text-center">
         <div className="text-lg font-bold text-blue-400">{employee.stats.activeProjects}</div>
         <div className="text-xs text-muted-foreground">Активных</div>
@@ -454,19 +454,19 @@ export default function Employees() {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in p-4 md:p-0">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in p-2 sm:p-4 md:p-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-warning bg-clip-text text-transparent">
             👥 Сотрудники
           </h1>
-          <p className="text-muted-foreground mt-1">
-            {isManager ? 'Загрузка сотрудников, назначение на проекты, тайм-шиты' : 'Управление командой и персоналом'}
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+            {isManager ? 'Загрузка, назначение на проекты' : 'Управление командой'}
           </p>
         </div>
-        <Badge variant="outline" className="text-lg">
-          Всего: {filteredEmployees.length} сотрудников
+        <Badge variant="outline" className="text-sm sm:text-lg">
+          Всего: {filteredEmployees.length}
         </Badge>
       </div>
 

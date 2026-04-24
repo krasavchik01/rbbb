@@ -1,6 +1,6 @@
 {
-  "name": "RB Partners Suite",
-  "short_name": "RB Partners",
+  "name": "SUITE-A",
+  "short_name": "SUITE-A",
   "description": "Система управления проектами и персоналом",
   "start_url": "/",
   "display": "standalone",

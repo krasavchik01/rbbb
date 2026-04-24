@@ -187,7 +187,7 @@ export default function DemoUsersManagement() {
       </Alert>
 
       {/* Statistics */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-4">
           <div className="flex items-center space-x-2">
             <Zap className="w-5 h-5 text-yellow-600" />

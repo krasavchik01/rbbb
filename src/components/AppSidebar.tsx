@@ -165,13 +165,12 @@ const menuItems: MenuItem[] = [
     excludeRoles: ['procurement']
   },
 
-  // МСФО 9 - расчет ECL (НЕ для procurement)
+  // МСФО 9 - расчет ECL (только для рабочего персонала проектов)
   {
     title: "МСФО 9 / ECL",
     url: "/ifrs9",
     icon: Calculator,
-    allowedRoles: ['partner', 'manager_1', 'manager_2', 'manager_3', 'deputy_director', 'ceo', 'admin'],
-    excludeRoles: ['procurement']
+    allowedRoles: ['partner', 'manager_1', 'manager_2', 'manager_3', 'supervisor_1', 'supervisor_2', 'supervisor_3', 'tax_specialist_1', 'tax_specialist_2', 'assistant_1', 'assistant_2', 'assistant_3', 'admin'],
   },
 
   // Администрирование - только для админов и партнеров
@@ -255,12 +254,12 @@ export function AppSidebar() {
         <div className="p-4 md:p-6 border-b border-glass-border">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 md:w-8 md:h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-base md:text-lg font-bold text-primary-foreground">RB</span>
+              <span className="text-base md:text-lg font-bold text-primary-foreground">SA</span>
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <h1 className="text-base md:text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
-                  RB Partners Suite
+                  SUITE-A
                 </h1>
                 <p className="text-xs text-muted-foreground hidden md:block">Group Management Platform</p>
               </div>
@@ -274,7 +273,7 @@ export function AppSidebar() {
             Основное
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-2">
+            <SidebarMenu className="space-y-1">
               {menuItems.filter(item =>
                 ['Дашборд', 'Проекты', 'Уведомления', 'Служебные записки', 'Аудит', 'МСФО 9 / ECL'].includes(item.title)
               ).map((item) => {
@@ -311,18 +310,18 @@ export function AppSidebar() {
                           }
                         }}
                         className={({ isActive }) =>
-                          `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-300 touch-manipulation min-h-[44px] md:min-h-0 ${
+                          `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-200 touch-manipulation min-h-[44px] md:min-h-0 ${
                             isActive
-                              ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
-                              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70"
+                              ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary pl-[10px]"
+                              : "text-muted-foreground hover:text-foreground hover:bg-accent/60 active:scale-[0.98]"
                           }`
                         }
                       >
                         <div className="relative flex-shrink-0">
-                          <item.icon className="w-5 h-5 md:w-5 md:h-5" />
+                          <item.icon className="w-4 h-4" />
                           {item.url === "/notifications" && unreadCount > 0 && (
-                            <Badge 
-                              variant="destructive" 
+                            <Badge
+                              variant="destructive"
                               className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
                             >
                               {unreadCount > 9 ? '9+' : unreadCount}
@@ -330,7 +329,7 @@ export function AppSidebar() {
                           )}
                         </div>
                         {!collapsed && (
-                          <span className="font-medium flex-1 text-sm md:text-base">{item.title}</span>
+                          <span className="flex-1 text-sm">{item.title}</span>
                         )}
                         {!collapsed && item.url === "/notifications" && unreadCount > 0 && (
                           <Badge variant="destructive" className="ml-auto text-xs">
@@ -359,7 +358,7 @@ export function AppSidebar() {
               Работа
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="space-y-2">
+              <SidebarMenu className="space-y-1">
                 {menuItems.filter(item =>
                   ['Создать проект', 'Тендеры', 'Утверждение проектов', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title)
                 ).map((item) => {
@@ -392,26 +391,18 @@ export function AppSidebar() {
                             }
                           }}
                           className={({ isActive }) =>
-                            `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-300 touch-manipulation min-h-[44px] md:min-h-0 ${
+                            `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-200 touch-manipulation min-h-[44px] md:min-h-0 ${
                               isActive
-                                ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
-                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70"
+                                ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary pl-[10px]"
+                                : "text-muted-foreground hover:text-foreground hover:bg-accent/60 active:scale-[0.98]"
                             }`
                           }
                         >
                           <div className="relative flex-shrink-0">
-                            <item.icon className="w-5 h-5 md:w-5 md:h-5" />
-                            {item.url === "/notifications" && unreadCount > 0 && (
-                              <Badge 
-                                variant="destructive" 
-                                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
-                              >
-                                {unreadCount > 9 ? '9+' : unreadCount}
-                              </Badge>
-                            )}
+                            <item.icon className="w-4 h-4" />
                           </div>
                           {!collapsed && (
-                            <span className="font-medium flex-1 text-sm md:text-base">{item.title}</span>
+                            <span className="flex-1 text-sm">{item.title}</span>
                           )}
                           {!collapsed && item.url === "/notifications" && unreadCount > 0 && (
                             <Badge variant="destructive" className="ml-auto text-xs">
@@ -441,7 +432,7 @@ export function AppSidebar() {
               Администрирование
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="space-y-2">
+              <SidebarMenu className="space-y-1">
                 {menuItems.filter(item =>
                   ['Управление', 'Диагностика', 'Тест БД', 'SMTP Настройки', 'Демо-пользователи', 'Настройки'].includes(item.title)
                 ).map((item) => {
@@ -474,18 +465,18 @@ export function AppSidebar() {
                             }
                           }}
                           className={({ isActive }) =>
-                            `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-300 touch-manipulation min-h-[44px] md:min-h-0 ${
+                            `flex items-center space-x-3 px-3 py-3 md:py-2 rounded-lg transition-all duration-200 touch-manipulation min-h-[44px] md:min-h-0 ${
                               isActive
-                                ? "bg-gradient-to-r from-primary/20 to-warning/20 text-primary border border-primary/30 glow-primary"
-                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 active:bg-secondary/70"
+                                ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary pl-[10px]"
+                                : "text-muted-foreground hover:text-foreground hover:bg-accent/60 active:scale-[0.98]"
                             }`
                           }
                         >
                           <div className="relative flex-shrink-0">
-                            <item.icon className="w-5 h-5 md:w-5 md:h-5" />
+                            <item.icon className="w-4 h-4" />
                           </div>
                           {!collapsed && (
-                            <span className="font-medium flex-1 text-sm md:text-base">{item.title}</span>
+                            <span className="flex-1 text-sm">{item.title}</span>
                           )}
                         </NavLink>
                       </SidebarMenuButton>
@@ -514,6 +505,16 @@ export function AppSidebar() {
               <LogOut className="w-5 h-5" />
             </button>
           </div>
+          
+          {/* Copyright Footer */}
+          {!collapsed && (
+            <div className="mt-4 pt-4 border-t border-glass-border">
+              <p className="text-[10px] text-muted-foreground text-center">
+                © 2026 Aidos Tazhbenov<br />
+                All Rights Reserved
+              </p>
+            </div>
+          )}
         </div>
       </SidebarContent>
     </Sidebar>

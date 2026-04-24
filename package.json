@@ -1,6 +1,7 @@
 {
-  "name": "rb-partners-suite",
+  "name": "suite-a",
   "version": "1.0.2",
+  "author": "Aidos Tazhbenov",
   "private": true,
   "type": "module",
   "scripts": {

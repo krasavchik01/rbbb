@@ -431,16 +431,16 @@ export default function ServiceMemos() {
   const isAdmin = user?.role === 'admin';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Служебные записки</h1>
-          <p className="text-muted-foreground">Система согласования служебных запросов</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Служебные записки</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Система согласования служебных запросов</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button size="sm" className="self-start sm:self-auto">
               <Plus className="w-4 h-4 mr-2" />
               Создать записку
             </Button>
@@ -609,16 +609,16 @@ export default function ServiceMemos() {
 
       {/* Список записок */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-6 w-full">
-          <TabsTrigger value="all">Все ({stats.total})</TabsTrigger>
-          <TabsTrigger value="my">Мои ({stats.my})</TabsTrigger>
-          <TabsTrigger value="pending">
-            <AlertCircle className="w-4 h-4 mr-1" />
-            Ожидают меня ({stats.pending})
+        <TabsList className="flex flex-wrap gap-1 h-auto p-1 w-full">
+          <TabsTrigger value="all" className="text-xs sm:text-sm flex-1 min-w-0">Все ({stats.total})</TabsTrigger>
+          <TabsTrigger value="my" className="text-xs sm:text-sm flex-1 min-w-0">Мои ({stats.my})</TabsTrigger>
+          <TabsTrigger value="pending" className="text-xs sm:text-sm flex-1 min-w-0">
+            <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+            <span className="hidden sm:inline">Ожидают</span> ({stats.pending})
           </TabsTrigger>
-          <TabsTrigger value="in_progress">В работе ({stats.inProgress})</TabsTrigger>
-          <TabsTrigger value="completed">Выполнено ({stats.completed})</TabsTrigger>
-          <TabsTrigger value="rejected">Отклонено ({stats.rejected})</TabsTrigger>
+          <TabsTrigger value="in_progress" className="text-xs sm:text-sm flex-1 min-w-0"><span className="hidden sm:inline">В работе</span><span className="sm:hidden">Раб.</span> ({stats.inProgress})</TabsTrigger>
+          <TabsTrigger value="completed" className="text-xs sm:text-sm flex-1 min-w-0"><span className="hidden sm:inline">Выполнено</span><span className="sm:hidden">Гот.</span> ({stats.completed})</TabsTrigger>
+          <TabsTrigger value="rejected" className="text-xs sm:text-sm flex-1 min-w-0"><span className="hidden sm:inline">Отклонено</span><span className="sm:hidden">Откл.</span> ({stats.rejected})</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4">

@@ -55,7 +55,7 @@ export const MobileNavigation = () => {
   const bottomNavItems = navItems.slice(0, 5);
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 safe-area-bottom">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 safe-area-bottom">
       <div className="flex justify-around items-center h-16">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
@@ -67,8 +67,8 @@ export const MobileNavigation = () => {
               to={item.to}
               className={`flex flex-col items-center justify-center flex-1 h-full space-y-1 transition-colors ${
                 isActive
-                  ? 'text-blue-500'
-                  : 'text-slate-400 hover:text-slate-300'
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Icon className={`h-5 w-5 ${isActive ? 'scale-110' : ''}`} />

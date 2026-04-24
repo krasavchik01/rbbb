@@ -2,8 +2,11 @@
  * Хуки для работы с Supabase данными
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabaseDataStore, Employee, Project, Company } from '@/lib/supabaseDataStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAppSettings } from '@/lib/appSettings';
+import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
 
 // Хук для сотрудников
 export function useEmployees() {
@@ -80,16 +83,18 @@ export function useEmployees() {
 
 // Хук для проектов
 export function useProjects() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [appSettings] = useAppSettings();
 
   const loadProjects = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await supabaseDataStore.getProjects();
-      setProjects(data);
+      setAllProjects(data);
       console.log('✅ useProjects: Loaded', data.length, 'projects');
     } catch (err: any) {
       console.error('❌ useProjects: Error loading projects:', err);
@@ -99,6 +104,19 @@ export function useProjects() {
     }
   }, []);
 
+  // Фильтрация по allowedCompanyIds пользователя
+  const projects = useMemo(() => {
+    if (!user?.allowedCompanyIds || user.allowedCompanyIds.length === 0) {
+      return allProjects;
+    }
+    const companies = appSettings.companies || [];
+    const allowedNames = user.allowedCompanyIds
+      .map((id: string) => (companies as any[]).find((c: any) => c.id === id)?.name)
+      .filter(Boolean) as string[];
+    if (allowedNames.length === 0) return allProjects;
+    return allProjects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));
+  }, [allProjects, user?.allowedCompanyIds, appSettings.companies]);
+
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
@@ -106,7 +124,7 @@ export function useProjects() {
   const createProject = useCallback(async (project: any) => {
     try {
       const newProject = await supabaseDataStore.createProject(project);
-      setProjects(prev => [newProject, ...prev]);
+      setAllProjects(prev => [newProject, ...prev]);
       return newProject;
     } catch (err: any) {
       console.error('❌ useProjects: Error creating project:', err);
@@ -118,7 +136,7 @@ export function useProjects() {
     try {
       const updated = await supabaseDataStore.updateProject(id, updates);
       if (updated) {
-        setProjects(prev => prev.map(p => p.id === id ? updated : p));
+        setAllProjects(prev => prev.map(p => p.id === id ? updated : p));
       }
       return updated;
     } catch (err: any) {
@@ -131,7 +149,7 @@ export function useProjects() {
     try {
       const success = await supabaseDataStore.deleteProject(id);
       if (success) {
-        setProjects(prev => prev.filter(p => p.id !== id));
+        setAllProjects(prev => prev.filter(p => p.id !== id));
       }
       return success;
     } catch (err: any) {

@@ -4,6 +4,16 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Company, DEFAULT_COMPANIES } from '@/types/companies';
 
+export interface SMTPConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  from: string;
+  fromName: string;
+}
+
 export interface AppSettings {
   // Показывать ли демо-пользователей на странице входа
   showDemoUsers: boolean;
@@ -12,7 +22,7 @@ export interface AppSettings {
     enabled: boolean;
     latitude: number;
     longitude: number;
-    radiusMeters: number; // Радиус в метрах для проверки присутствия
+    radiusMeters: number;
     address: string;
   };
   // Режим работы приложения
@@ -20,6 +30,8 @@ export interface AppSettings {
   maintenanceMessage: string;
   // Список компаний (управляемый администратором)
   companies: Company[];
+  // SMTP конфигурация для отправки email
+  smtp?: SMTPConfig;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {

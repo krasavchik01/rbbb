@@ -146,18 +146,61 @@
     @apply border-border;
   }
 
+  html {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
     min-height: 100vh;
+    overflow-x: hidden;
+    max-width: 100%;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
-  
+
+  h1, h2, h3 {
+    font-family: 'Syne', 'Outfit', sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* Custom scrollbar — premium thin style */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 99px;
+    transition: background 0.2s;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Text selection */
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+    color: hsl(var(--foreground));
+  }
+
   /* Notion-style clean white background for light theme */
   :root:not(.dark) body {
-    background: #ffffff;
+    background: #f8f9fb;
   }
-  
+
   .dark body {
-    background: linear-gradient(135deg, hsl(220 25% 8%), hsl(220 25% 6%));
+    background: linear-gradient(145deg, hsl(220 25% 8%), hsl(222 28% 6%));
   }
 
   /* Glass Effects */
@@ -234,7 +277,33 @@
 @layer components {
   /* Custom Components */
   .stat-card {
-    @apply glass-card rounded-xl p-6 transition-all duration-300 hover:scale-105;
+    @apply glass-card rounded-xl p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg;
+  }
+
+  /* Premium card hover lift */
+  .card-hover {
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px hsl(var(--primary) / 0.12);
+  }
+  :root:not(.dark) .card-hover:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Button active tap feedback */
+  button:active, [role="button"]:active {
+    transform: scale(0.97);
+    transition: transform 0.1s ease;
+  }
+
+  /* Focus visible — more refined ring */
+  :focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.6);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 
   .kpi-indicator {
@@ -369,19 +438,48 @@
     }
   }
 
-  /* Shimmer анимация для графиков */
+  /* Shimmer skeleton loading */
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
   @keyframes shimmer {
-    0% {
-      transform: translateX(-100%);
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Page enter animation */
+  .page-enter {
+    animation: pageEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes pageEnter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
     }
-    100% {
-      transform: translateX(100%);
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 
-  .animate-shimmer {
-    animation: shimmer 2s infinite;
+  /* Staggered children */
+  .stagger > * {
+    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger > *:nth-child(5) { animation-delay: 240ms; }
 
   /* Enhanced Glass Effects */
   .glass-enhanced {
@@ -586,9 +684,10 @@
 
   /* Улучшенная кликабельность на мобильных */
   @media (max-width: 768px) {
-    button,
-    a,
-    [role="button"] {
+    /* Только основные навигационные кнопки получают увеличенный размер */
+    nav button,
+    nav a,
+    .touch-target {
       min-height: 44px;
       min-width: 44px;
     }
@@ -604,12 +703,6 @@
       -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Убираем hover эффекты на touch устройствах */
-    @media (hover: none) {
-      *:hover {
-        background-color: inherit !important;
-      }
-    }
   }
 
   /* Плавная прокрутка */
@@ -630,5 +723,24 @@
     textarea {
       font-size: 16px !important;
     }
+  }
+
+  /* Safe area для iPhone notch/Dynamic Island */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Диалоги на мобиле — полный экран */
+  @media (max-width: 640px) {
+    [role="dialog"] > div {
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+  }
+
+  /* Горизонтальный скролл для таблиц на мобиле */
+  .table-mobile-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }

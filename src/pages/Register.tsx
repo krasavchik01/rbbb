@@ -160,7 +160,7 @@ const Register = () => {
                 <Building2 className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white">RB Partners Suite</h1>
+                <h1 className="text-4xl font-bold text-white">SUITE-A</h1>
                 <p className="text-green-300">Регистрация нового сотрудника</p>
               </div>
             </div>
@@ -205,7 +205,7 @@ const Register = () => {
               <div className="mx-auto w-14 h-14 bg-gradient-to-br from-green-500 to-green-700 rounded-2xl flex items-center justify-center shadow-lg shadow-green-500/30 mb-3">
                 <Building2 className="w-7 h-7 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-white">RB Partners Suite</h1>
+              <h1 className="text-xl font-bold text-white">SUITE-A</h1>
             </div>
 
             <Card className="border-green-500/20 bg-slate-900/80 backdrop-blur-lg">

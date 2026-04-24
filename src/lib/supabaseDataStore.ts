@@ -255,7 +255,7 @@ class SupabaseDataStore {
         if (employee.password) {
           try {
             const { data: authData, error: authError } = await supabase.auth.signUp({
-              email: newEmployee.email,
+              email: newEmployee.email!,
               password: employee.password,
               options: {
                 data: {
@@ -290,7 +290,7 @@ class SupabaseDataStore {
         await supabase
           .from('employees')
           .delete()
-          .eq('email', newEmployee.email);
+          .eq('email', newEmployee.email!);
 
         // 3. Создаем новую запись в таблице employees
         const { data, error } = await supabase
@@ -477,12 +477,12 @@ class SupabaseDataStore {
         name: project.name || project.client?.name || 'Без названия',
         start_date: normalizeDate(project.contract?.serviceStartDate),
         deadline: normalizeDate(project.contract?.serviceEndDate),
-        status: 'active',
+        status: 'active' as const,
         kpi_percentage: project.completion || 0,
         notes: JSON.stringify({ ...project, updated_at: new Date().toISOString() }),
       };
 
-      const { data, error } = await supabase.from('projects').insert([sbPayload]).select().single();
+      const { data, error } = await supabase.from('projects').insert(sbPayload).select().single();
       if (error) throw error;
       return this.mapSupabaseProject(data);
     } catch (err) {
@@ -772,10 +772,28 @@ class SupabaseDataStore {
   /**
  * Получает список файлов проекта
  */
+  // Кеш: какие проекты уже проверены в Seafile (в рамках сессии)
+  private _seafileSyncedIds = new Set<string>();
+
   async getProjectFiles(projectId: string): Promise<any[]> {
     try {
       const project = await this.getProject(projectId);
       let files = project?.notes?.files || [];
+
+      // Синхронизация из Seafile — только если files пуст И ещё не проверяли этот проект
+      if ((!files || files.length === 0) && !this._seafileSyncedIds.has(projectId)) {
+        this._seafileSyncedIds.add(projectId);
+        let synced = await this.syncProjectFilesFromSeafile(projectId);
+        if (synced.length === 0) {
+          const notesId = (project as any)?.notes?.id || (project as any)?.id;
+          if (notesId && notesId !== projectId) {
+            synced = await this.syncProjectFilesFromSeafile(notesId, projectId);
+          }
+        }
+        if (synced.length > 0) {
+          files = synced;
+        }
+      }
 
       // Извлекаем старые файлы из contractScanUrl (Supabase Storage)
       const oldContractUrl = project?.contract?.contractScanUrl || project?.notes?.contract?.contractScanUrl;
@@ -793,7 +811,7 @@ class SupabaseDataStore {
         });
       }
 
-      // Пересчитываем publicUrl на лету, чтобы они всегда указывали на Seafile или Supabase
+      // Пересчитываем publicUrl на лету
       const mappedFiles = files.map((file: any) => ({
         ...file,
         publicUrl: file.isSeafile
@@ -801,7 +819,6 @@ class SupabaseDataStore {
           : file.publicUrl || file.storagePath
       }));
 
-      // Возвращаем объединенный массив
       return [...parsedOldFiles, ...mappedFiles];
     } catch (error) {
       console.error('❌ Ошибка при получении файлов:', error);
@@ -832,6 +849,135 @@ class SupabaseDataStore {
     } catch (e) {
       console.error('Ошибка в getSeafileDownloadUrl:', e);
       return '';
+    }
+  }
+
+  /**
+   * Получить список файлов из Seafile для папки проекта и синхронизировать с notes.files
+   */
+  async syncProjectFilesFromSeafile(projectId: string, supabaseUUID?: string): Promise<any[]> {
+    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
+    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
+    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
+
+    if (!seafileUrl || !seafileToken || !repoId) return [];
+
+    try {
+      const dirPath = encodeURIComponent(`/${projectId}`);
+      const res = await fetch(`${seafileUrl}/api2/repos/${repoId}/dir/?p=${dirPath}`, {
+        headers: { 'Authorization': `Token ${seafileToken}` }
+      });
+
+      if (!res.ok) return []; // Папки нет — значит файлов нет
+
+      const entries: any[] = await res.json();
+      const seafileFiles = entries
+        .filter((e: any) => e.type === 'file')
+        .map((e: any) => ({
+          id: `sf_${e.id || Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          fileName: e.name,
+          name: e.name,
+          fileType: e.name.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+          fileSize: e.size || 0,
+          storagePath: `/${projectId}/${e.name}`,
+          category: e.name.toLowerCase().match(/договор|contract|dogovor/) ? 'contract' : 'document',
+          uploadedBy: 'seafile',
+          uploadedAt: e.mtime ? new Date(e.mtime * 1000).toISOString() : new Date().toISOString(),
+          isSeafile: true,
+          publicUrl: `seafile:///${projectId}/${e.name}`,
+        }));
+
+      if (seafileFiles.length === 0) return [];
+
+      // Синхронизируем: обновляем notes.files в Supabase
+      const saveId = supabaseUUID || projectId;
+      const project = await this.getProject(saveId);
+      const existingNotes = (project as any)?.notes || {};
+      const existingFiles: any[] = existingNotes.files || [];
+
+      // Мержим: оставляем существующие + добавляем из Seafile которых нет
+      const existingPaths = new Set(existingFiles.map((f: any) => f.storagePath || f.fileName));
+      const newFiles = seafileFiles.filter(sf => !existingPaths.has(sf.storagePath) && !existingPaths.has(sf.fileName));
+
+      if (newFiles.length > 0) {
+        const mergedFiles = [...existingFiles, ...newFiles];
+        try {
+          await this.updateProject(saveId, { files: mergedFiles });
+        } catch (e) {
+          console.error('Error syncing files to notes:', e);
+        }
+        return mergedFiles;
+      }
+
+      return existingFiles.length > 0 ? existingFiles : seafileFiles;
+    } catch (e) {
+      console.error('Error listing Seafile dir:', e);
+      return [];
+    }
+  }
+
+  /**
+ * Загружает файл задачи в Seafile (папка /tasks/{taskId}/)
+ * Возвращает метаданные файла для сохранения в task.checklist
+ */
+  async uploadTaskFile(
+    taskId: string,
+    file: File,
+    uploadedBy: string
+  ): Promise<{ id: string; name: string; size: number; storagePath: string; uploadedAt: string; uploadedBy: string }> {
+    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
+    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
+    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
+
+    if (!seafileUrl || !seafileToken || !repoId) {
+      throw new Error('Не настроены переменные Seafile (VITE_SEAFILE_URL, VITE_SEAFILE_TOKEN, VITE_SEAFILE_REPO_ID)');
+    }
+
+    const uploadLinkRes = await fetch(`${seafileUrl}/api2/repos/${repoId}/upload-link/?p=/`, {
+      headers: { 'Authorization': `Token ${seafileToken}` }
+    });
+    if (!uploadLinkRes.ok) throw new Error(`Ошибка получения ссылки Seafile: ${uploadLinkRes.status}`);
+
+    let uploadUrl = (await uploadLinkRes.text()).replace(/"/g, '');
+    uploadUrl = uploadUrl.replace(/^https?:\/\/[^/]+/, seafileUrl);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('parent_dir', '/');
+    formData.append('relative_path', `tasks/${taskId}`);
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${seafileToken}` },
+      body: formData,
+    });
+    if (!uploadRes.ok) throw new Error(`Ошибка загрузки в Seafile: ${uploadRes.status}`);
+
+    return {
+      id: `${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+      name: file.name,
+      size: file.size,
+      storagePath: `/tasks/${taskId}/${file.name}`,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy,
+    };
+  }
+
+  /**
+ * Удаляет файл задачи из Seafile (только физическое удаление)
+ */
+  async deleteTaskFileFromSeafile(storagePath: string): Promise<void> {
+    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
+    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
+    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
+    if (!seafileUrl || !seafileToken || !repoId) return;
+    try {
+      await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodeURIComponent(storagePath)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Token ${seafileToken}` },
+      });
+    } catch (e) {
+      console.warn('Не удалось удалить файл задачи из Seafile:', e);
     }
   }
 
@@ -1219,20 +1365,20 @@ class SupabaseDataStore {
       }
 
       // Вызываем SQL функцию для автоматического создания документов
-      const { data, error } = await supabase.rpc('create_work_papers_from_template', {
+      const { data, error } = await supabase.rpc('create_work_papers_from_template' as any, {
         p_project_id: projectId,
         p_methodology_id: methodologyId
       });
 
       if (error) {
-        if (error.code === 'PGRST116' || error.status === 404 || error.message?.includes('function') || error.message?.includes('does not exist')) {
+        if (error.code === 'PGRST116' || (error as any).status === 404 || error.message?.includes('function') || error.message?.includes('does not exist')) {
           console.log('ℹ️ create_work_papers_from_template function does not exist yet. Migration needs to be applied.');
           return 0;
         }
         throw error;
       }
 
-      const createdCount = data || 0;
+      const createdCount: number = typeof data === 'number' ? data : 0;
 
       // Назначаем исполнителей на основе ролей команды
       if (createdCount > 0 && teamMembers.length > 0) {
@@ -1269,7 +1415,7 @@ class SupabaseDataStore {
         }
       }
 
-      return createdCount;
+      return createdCount as number;
     } catch (error) {
       console.error('❌ Error creating work papers from template:', error);
       throw error;

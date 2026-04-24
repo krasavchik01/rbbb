@@ -1,6 +1,6 @@
-# RB Partners Suite - Deployment Guide
+# SUITE-A - Deployment Guide
 
-This guide covers deploying the RB Partners Suite with full backend support.
+This guide covers deploying the SUITE-A with full backend support.
 
 ## Architecture Overview
 

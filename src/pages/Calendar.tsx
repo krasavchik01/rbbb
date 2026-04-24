@@ -127,61 +127,56 @@ export default function Calendar() {
   }, [events]);
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-      <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <CalendarIcon className="w-8 h-8" />
+    <div className="space-y-4 sm:space-y-6 page-enter">
+
+      {/* Заголовок */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <span className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center">
+              <CalendarIcon className="w-5 h-5 text-blue-500" />
+            </span>
             Календарь
           </h1>
-          <p className="text-muted-foreground mt-2">Календарь событий и задач</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {format(currentDate, 'MMMM yyyy', { locale: ru })} · {events.filter(e => isSameMonth(e.date, currentDate)).length} событий
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-          >
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setCurrentDate(subMonths(currentDate, 1))}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => setCurrentDate(new Date())}
-          >
+          <Button variant="outline" size="sm" className="px-4" onClick={() => setCurrentDate(new Date())}>
             Сегодня
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-          >
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setCurrentDate(addMonths(currentDate, 1))}>
             <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Календарь */}
         <div className="lg:col-span-2">
-          <Card className="p-4">
-            <div className="mb-4 flex items-center justify-center gap-2">
-              <h2 className="text-xl font-semibold text-center">
+          <Card className="p-3 sm:p-4 border-0 shadow-sm">
+            <div className="mb-3 flex items-center justify-center gap-2">
+              <h2 className="text-base font-semibold capitalize">
                 {format(currentDate, 'MMMM yyyy', { locale: ru })}
               </h2>
-              {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
             </div>
 
             {/* Дни недели */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
               {weekDays.map((day, index) => (
-                <div key={index} className="text-center text-sm font-medium text-muted-foreground p-2">
+                <div key={index} className={`text-center text-xs font-semibold py-1.5 ${index >= 5 ? 'text-primary/60' : 'text-muted-foreground'}`}>
                   {day}
                 </div>
               ))}
             </div>
 
             {/* Календарная сетка */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5">
               {emptyDays.map((_, index) => (
                 <div key={`empty-${index}`} className="aspect-square" />
               ))}
@@ -189,66 +184,67 @@ export default function Calendar() {
                 const dayEvents = getEventsForDay(day);
                 const isToday = isSameDay(day, new Date());
                 const isSelected = selectedDay && isSameDay(day, selectedDay);
+                const hasDeadline = dayEvents.some(e => e.type === 'deadline');
+                const hasStart = dayEvents.some(e => e.type === 'start');
 
                 return (
                   <div
                     key={day.toISOString()}
                     onClick={() => setSelectedDay(dayEvents.length > 0 ? day : null)}
-                    className={`aspect-square border rounded p-1 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-primary/20 border-primary ring-2 ring-primary' :
-                      isToday ? 'bg-primary/10 border-primary' : 'border-border hover:bg-secondary/30'
-                    } ${!isSameMonth(day, currentDate) ? 'opacity-50' : ''}`}
+                    className={`aspect-square rounded-lg p-0.5 sm:p-1 flex flex-col cursor-pointer transition-all duration-150 ${
+                      isSelected ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1' :
+                      isToday ? 'bg-primary/15 ring-1 ring-primary/40' :
+                      dayEvents.length > 0 ? 'hover:bg-muted/60 bg-muted/20' : 'hover:bg-muted/40'
+                    } ${!isSameMonth(day, currentDate) ? 'opacity-30' : ''}`}
                   >
-                    <div className="text-sm font-medium mb-1">
+                    <div className={`text-xs sm:text-sm font-semibold text-center leading-tight ${isToday && !isSelected ? 'text-primary' : ''}`}>
                       {format(day, 'd')}
                     </div>
-                    <div className="space-y-0.5">
-                      {dayEvents.slice(0, 2).map((event) => (
-                        <div
-                          key={event.id}
-                          className={`text-xs p-0.5 rounded truncate ${getEventColor(event.type)} text-white`}
-                          title={event.title}
-                        >
-                          {event.type === 'deadline' ? '⏰' : event.type === 'start' ? '🚀' : '📌'}
-                        </div>
-                      ))}
-                      {dayEvents.length > 2 && (
-                        <div className="text-xs text-muted-foreground">
-                          +{dayEvents.length - 2}
-                        </div>
-                      )}
-                    </div>
+                    {dayEvents.length > 0 && (
+                      <div className="flex gap-0.5 justify-center mt-auto flex-wrap">
+                        {hasDeadline && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-primary-foreground' : 'bg-red-500'}`} />}
+                        {hasStart && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-primary-foreground' : 'bg-green-500'}`} />}
+                        {dayEvents.some(e => e.type === 'milestone') && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-primary-foreground' : 'bg-blue-500'}`} />}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
+            {/* Легенда */}
+            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" />Дедлайн</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" />Старт</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" />Этап</span>
+            </div>
+
             {/* Детали выбранного дня */}
             {selectedDay && (
-              <div className="mt-4 p-4 border rounded-lg bg-secondary/10">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold">
+              <div className="mt-4 p-3 rounded-xl bg-muted/40 border border-border/50">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="font-semibold text-sm capitalize">
                     {format(selectedDay, 'dd MMMM yyyy', { locale: ru })}
                   </h3>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedDay(null)}>
-                    <X className="w-4 h-4" />
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedDay(null)}>
+                    <X className="w-3.5 h-3.5" />
                   </Button>
                 </div>
                 <div className="space-y-2">
                   {getEventsForDay(selectedDay).map((event) => (
-                    <div key={event.id} className="p-3 border rounded-lg bg-background">
+                    <div key={event.id} className="p-2.5 rounded-lg bg-background border border-border/50">
                       <div className="flex items-center gap-2">
-                        <Badge className={getEventColor(event.type)}>
+                        <Badge className={`${getEventColor(event.type)} text-xs`}>
                           {event.type === 'deadline' ? 'Дедлайн' : event.type === 'start' ? 'Старт' : 'Этап'}
                         </Badge>
-                        <span className="font-medium">{event.projectName}</span>
+                        <span className="font-medium text-sm truncate">{event.projectName}</span>
                       </div>
                       {event.status && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Статус: {event.status === 'approved' ? 'Утверждён' :
-                                   event.status === 'pending' ? 'Ожидает' :
-                                   event.status === 'in_progress' ? 'В работе' :
-                                   event.status === 'completed' ? 'Завершён' : event.status}
+                          {event.status === 'approved' ? 'Утверждён' :
+                           event.status === 'pending' ? 'Ожидает' :
+                           event.status === 'in_progress' ? 'В работе' :
+                           event.status === 'completed' ? 'Завершён' : event.status}
                         </p>
                       )}
                     </div>
@@ -261,34 +257,50 @@ export default function Calendar() {
 
         {/* Предстоящие события */}
         <div className="space-y-4">
-          <Card className="p-4">
-            <h3 className="font-semibold mb-4 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
+          <Card className="p-4 border-0 shadow-sm">
+            <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
+              <span className="w-7 h-7 rounded-lg bg-orange-500/15 flex items-center justify-center">
+                <AlertCircle className="w-3.5 h-3.5 text-orange-500" />
+              </span>
               Предстоящие события
             </h3>
             {upcomingEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Нет предстоящих событий</p>
+              <div className="py-6 text-center">
+                <div className="w-10 h-10 rounded-xl bg-muted/60 flex items-center justify-center mx-auto mb-2">
+                  <CalendarIcon className="w-5 h-5 text-muted-foreground/40" />
+                </div>
+                <p className="text-xs text-muted-foreground">Нет предстоящих событий</p>
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {upcomingEvents.map((event) => (
                   <div
                     key={event.id}
-                    className="p-3 border rounded-lg hover:bg-secondary/50 transition-colors"
+                    className="p-2.5 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{event.projectName}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(event.date, 'dd MMMM yyyy', { locale: ru })}
+                    <div className="flex items-start gap-2.5">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        event.type === 'deadline' ? 'bg-red-500/15' :
+                        event.type === 'start' ? 'bg-green-500/15' : 'bg-blue-500/15'
+                      }`}>
+                        <div className={`w-2 h-2 rounded-full ${
+                          event.type === 'deadline' ? 'bg-red-500' :
+                          event.type === 'start' ? 'bg-green-500' : 'bg-blue-500'
+                        }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-xs truncate">{event.projectName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {format(event.date, 'dd MMM', { locale: ru })}
+                          <span className="mx-1 opacity-40">·</span>
+                          <span className={
+                            event.type === 'deadline' ? 'text-red-500' :
+                            event.type === 'start' ? 'text-green-600' : 'text-blue-500'
+                          }>
+                            {event.type === 'deadline' ? 'Дедлайн' : event.type === 'start' ? 'Старт' : 'Этап'}
+                          </span>
                         </p>
                       </div>
-                      <Badge className={getEventColor(event.type)}>
-                        {event.type === 'deadline' ? 'Дедлайн' : event.type === 'start' ? 'Старт' : 'Этап'}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      <span>{format(event.date, 'HH:mm')}</span>
                     </div>
                   </div>
                 ))}
@@ -297,29 +309,26 @@ export default function Calendar() {
           </Card>
 
           {/* Статистика */}
-          <Card className="p-4">
-            <h3 className="font-semibold mb-4">Статистика</h3>
+          <Card className="p-4 border-0 shadow-sm">
+            <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
+              <span className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center">
+                <Briefcase className="w-3.5 h-3.5 text-blue-500" />
+              </span>
+              {format(currentDate, 'MMMM', { locale: ru })}
+            </h3>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Событий в этом месяце</span>
-                <span className="font-medium">
-                  {events.filter(e => isSameMonth(e.date, currentDate)).length}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Дедлайнов</span>
-                <span className="font-medium text-red-500">
-                  {events.filter(e => e.type === 'deadline' && isSameMonth(e.date, currentDate)).length}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Стартов проектов</span>
-                <span className="font-medium text-green-500">
-                  {events.filter(e => e.type === 'start' && isSameMonth(e.date, currentDate)).length}
-                </span>
-              </div>
+              {[
+                { label: 'Всего событий', value: events.filter(e => isSameMonth(e.date, currentDate)).length, color: 'text-foreground' },
+                { label: 'Дедлайнов', value: events.filter(e => e.type === 'deadline' && isSameMonth(e.date, currentDate)).length, color: 'text-red-500' },
+                { label: 'Стартов', value: events.filter(e => e.type === 'start' && isSameMonth(e.date, currentDate)).length, color: 'text-green-600' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <span className={`text-sm font-bold ${color}`}>{value}</span>
+                </div>
+              ))}
             </div>
-      </Card>
+          </Card>
         </div>
       </div>
     </div>

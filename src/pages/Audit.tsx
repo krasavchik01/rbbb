@@ -211,12 +211,12 @@ export default function Audit() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <BookOpen className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 sm:gap-3">
+            <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             Аудит по МСА
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -344,7 +344,7 @@ export default function Audit() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
             Обзор

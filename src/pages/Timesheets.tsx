@@ -277,61 +277,22 @@ export default function Timesheets() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Clock className="w-8 h-8" />
-          Тайм-щиты
-        </h1>
-        <p className="text-muted-foreground mt-2">Учет рабочего времени</p>
-      </div>
-
-      {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Всего часов</p>
-              <p className="text-2xl font-bold">{(stats.total || 0).toFixed(1)}</p>
-            </div>
-            <Clock className="w-8 h-8 text-primary" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Черновики</p>
-              <p className="text-2xl font-bold">{stats.draft}</p>
-            </div>
-            <Clock className="w-8 h-8 text-gray-500" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">На проверке</p>
-              <p className="text-2xl font-bold">{stats.submitted}</p>
-            </div>
-            <Clock className="w-8 h-8 text-blue-500" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Утверждено</p>
-              <p className="text-2xl font-bold">{stats.approved}</p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-green-500" />
-          </div>
-        </Card>
-      </div>
-      
-      {/* Кнопка добавления (только для тех, кто может заполнять) */}
-      {canFillTimesheets && (
-        <div className="flex justify-end">
+    <div className="space-y-4 sm:space-y-6 page-enter">
+      {/* Заголовок */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <span className="w-9 h-9 rounded-xl bg-cyan-500/15 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-cyan-500" />
+            </span>
+            Тайм-щиты
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">Учет рабочего времени</p>
+        </div>
+        {canFillTimesheets && (
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
-              <Button onClick={() => {
+              <Button size="sm" className="gap-2" onClick={() => {
                 setEditingTimesheet(null);
                 setFormData({
                   projectId: '',
@@ -340,19 +301,19 @@ export default function Timesheets() {
                   description: ''
                 });
               }}>
-                <Plus className="w-4 h-4 mr-2" />
-                Добавить тайм-щит
+                <Plus className="w-4 h-4" />
+                Добавить
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>{editingTimesheet ? 'Редактировать тайм-щит' : 'Новый тайм-щит'}</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 mt-4">
-                <div>
-                  <Label>Проект *</Label>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Проект *</Label>
                   <Select value={formData.projectId} onValueChange={(value) => setFormData({...formData, projectId: value})}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-muted/40 border-0 focus:ring-1">
                       <SelectValue placeholder="Выберите проект" />
                     </SelectTrigger>
                     <SelectContent>
@@ -364,103 +325,137 @@ export default function Timesheets() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label>Дата *</Label>
-                  <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Дата *</Label>
+                    <Input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      className="bg-muted/40 border-0 focus-visible:ring-1"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Часы *</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="24"
+                      value={formData.hours}
+                      onChange={(e) => setFormData({...formData, hours: e.target.value})}
+                      placeholder="8.0"
+                      className="bg-muted/40 border-0 focus-visible:ring-1"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label>Количество часов *</Label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    min="0.5"
-                    max="24"
-                    value={formData.hours}
-                    onChange={(e) => setFormData({...formData, hours: e.target.value})}
-                    placeholder="8.0"
-                  />
-                </div>
-                <div>
-                  <Label>Описание работы</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Описание</Label>
                   <Textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                     placeholder="Опишите выполненную работу..."
-                    rows={4}
+                    rows={3}
+                    className="bg-muted/40 border-0 focus-visible:ring-1 resize-none"
                   />
                 </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => {
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" size="sm" onClick={() => {
                     setShowAddDialog(false);
                     setEditingTimesheet(null);
                   }}>
                     Отмена
                   </Button>
-                  <Button onClick={saveTimesheet}>
+                  <Button size="sm" onClick={saveTimesheet}>
                     {editingTimesheet ? 'Сохранить' : 'Создать'}
                   </Button>
                 </div>
               </div>
             </DialogContent>
           </Dialog>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Статистика */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Всего часов', value: (stats.total || 0).toFixed(1) + ' ч', sub: 'за день', icon: Clock, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+          { label: 'Черновики', value: stats.draft, sub: 'не отправлено', icon: Edit, color: 'text-gray-500', bg: 'bg-gray-500/10' },
+          { label: 'На проверке', value: stats.submitted, sub: 'ожидают', icon: Filter, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+          { label: 'Утверждено', value: stats.approved, sub: 'принято', icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
+        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+          <Card key={label} className="p-4 border-0 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
+                <Icon className={`w-4 h-4 ${color}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground truncate">{label}</p>
+                <p className="font-bold text-lg leading-tight">{value}</p>
+                <p className="text-xs text-muted-foreground/60">{sub}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
 
       {/* Фильтры */}
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row gap-4">
+      <Card className="p-3 sm:p-4 border-0 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Поиск..."
+              placeholder="Поиск по сотруднику, проекту..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
+              className="pl-9 bg-muted/40 border-0 focus-visible:ring-1"
             />
           </div>
-          <Input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="w-full md:w-auto"
-          />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="px-3 py-2 border rounded-md bg-background"
-          >
-            <option value="all">Все статусы</option>
-            <option value="draft">Черновик</option>
-            <option value="submitted">На проверке</option>
-            <option value="approved">Утверждено</option>
-            <option value="rejected">Отклонено</option>
-          </select>
-          <select
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            className="px-3 py-2 border rounded-md bg-background"
-          >
-            <option value="all">Все проекты</option>
-            {userProjects.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.name || p.title || 'Без названия'}
-              </option>
-            ))}
-          </select>
+          <div className="grid grid-cols-3 gap-2">
+            <Input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="bg-muted/40 border-0 focus-visible:ring-1 text-sm"
+            />
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+              <SelectTrigger className="bg-muted/40 border-0 text-sm">
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все статусы</SelectItem>
+                <SelectItem value="draft">Черновик</SelectItem>
+                <SelectItem value="submitted">На проверке</SelectItem>
+                <SelectItem value="approved">Утверждено</SelectItem>
+                <SelectItem value="rejected">Отклонено</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterProject} onValueChange={setFilterProject}>
+              <SelectTrigger className="bg-muted/40 border-0 text-sm">
+                <SelectValue placeholder="Проект" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все проекты</SelectItem>
+                {userProjects.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name || p.title || 'Без названия'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </Card>
 
       {/* Список тайм-шитов */}
       {filteredTimesheets.length === 0 ? (
-        <Card className="p-8 text-center">
-          <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">Тайм-щиты не найдены</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            {canFillTimesheets ? 'Создайте тайм-шит для учета рабочего времени' : 'У вас нет доступа к заполнению тайм-щитов'}
+        <Card className="p-12 text-center border-0 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+            <Clock className="w-7 h-7 text-muted-foreground/50" />
+          </div>
+          <p className="font-medium text-muted-foreground">Тайм-щиты не найдены</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">
+            {canFillTimesheets ? 'Нажмите «Добавить» для создания' : 'У вас нет доступа к заполнению тайм-щитов'}
           </p>
         </Card>
       ) : (
@@ -470,49 +465,61 @@ export default function Timesheets() {
             const canEdit = isOwner && timesheet.status === 'draft';
             const canDelete = isOwner && timesheet.status === 'draft';
             const canSubmit = isOwner && timesheet.status === 'draft';
-            
+
             return (
-              <Card key={timesheet.id} className="p-4 hover:bg-secondary/50 transition-colors">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="font-semibold">{timesheet.employeeName}</h3>
+              <Card key={timesheet.id} className="p-3 sm:p-4 border-0 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    timesheet.status === 'approved' ? 'bg-green-500/10' :
+                    timesheet.status === 'submitted' ? 'bg-blue-500/10' :
+                    timesheet.status === 'rejected' ? 'bg-red-500/10' : 'bg-muted/60'
+                  }`}>
+                    <Clock className={`w-5 h-5 ${
+                      timesheet.status === 'approved' ? 'text-green-500' :
+                      timesheet.status === 'submitted' ? 'text-blue-500' :
+                      timesheet.status === 'rejected' ? 'text-red-500' : 'text-muted-foreground'
+                    }`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <h3 className="font-semibold text-sm">{timesheet.employeeName}</h3>
                       {getStatusBadge(timesheet.status)}
                     </div>
-                    {timesheet.projectName && (
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
-                        <Briefcase className="w-3 h-3" />
-                        <span>{timesheet.projectName}</span>
-                      </div>
-                    )}
-                    <p className="text-sm text-muted-foreground mb-1">{timesheet.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {timesheet.projectName && (
+                        <span className="flex items-center gap-1 truncate">
+                          <Briefcase className="w-3 h-3 flex-shrink-0" />{timesheet.projectName}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 flex-shrink-0">
                         <Calendar className="w-3 h-3" />
-                        <span>{format(new Date(timesheet.date), 'dd MMM yyyy', { locale: ru })}</span>
-                      </div>
+                        {format(new Date(timesheet.date), 'dd MMM', { locale: ru })}
+                      </span>
                     </div>
+                    {timesheet.description && (
+                      <p className="text-xs text-muted-foreground/70 mt-0.5 line-clamp-1">{timesheet.description}</p>
+                    )}
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-2xl font-bold">{(timesheet.hours || 0).toFixed(1)} ч</p>
-                      <p className="text-xs text-muted-foreground">Отработано</p>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="text-right mr-1">
+                      <p className="font-bold text-lg leading-tight text-primary">{(timesheet.hours || 0).toFixed(1)}<span className="text-xs font-normal text-muted-foreground ml-0.5">ч</span></p>
                     </div>
                     {isOwner && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
+                        {canSubmit && (
+                          <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => handleSubmit(timesheet)}>
+                            <span className="hidden sm:inline">Отправить</span>
+                            <span className="sm:hidden">→</span>
+                          </Button>
+                        )}
                         {canEdit && (
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(timesheet)}>
-                            <Edit className="w-4 h-4" />
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => handleEdit(timesheet)}>
+                            <Edit className="w-3.5 h-3.5" />
                           </Button>
                         )}
                         {canDelete && (
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(timesheet)}>
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                        {canSubmit && (
-                          <Button variant="outline" size="sm" onClick={() => handleSubmit(timesheet)}>
-                            Отправить
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive" onClick={() => handleDelete(timesheet)}>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </div>

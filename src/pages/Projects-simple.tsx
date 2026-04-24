@@ -22,11 +22,12 @@ import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate, saveImportedProjects } from "@/lib/excelExport";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
+import { notifyTeamAssembled, notifyTeamMemberAdded, notifyBulkProjectsImported } from "@/lib/projectNotifications";
 import { useAppSettings } from "@/lib/appSettings";
 import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates";
 import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
 import { ContractStagesEditor } from "@/components/projects/ContractStagesEditor";
+import { CEOSummaryTable } from "@/components/projects/CEOSummaryTable";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 
 // Простые типы
@@ -42,7 +43,7 @@ interface SimpleProject {
 }
 
 // ВСЕ ДЕМО-ПРОЕКТЫ УДАЛЕНЫ - используем только реальные данные из Supabase
-const demoProjects: SimpleProject[] = [];
+// demoProjects removed
 
 export default function Projects() {
   const { projects: realProjects, loading, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
@@ -62,6 +63,7 @@ export default function Projects() {
   const [projectForTeamDistribution, setProjectForTeamDistribution] = useState<any | null>(null);
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
   const [teamDistributionRoleFilter, setTeamDistributionRoleFilter] = useState<string>('all');
+  const [teamDistributionSearch, setTeamDistributionSearch] = useState('');
   const [newProject, setNewProject] = useState({
     name: "",
     company: "",
@@ -85,14 +87,23 @@ export default function Projects() {
   const [filterProgressMax, setFilterProgressMax] = useState<number | ''>('');
   const [filterAmountMin, setFilterAmountMin] = useState<number | ''>('');
   const [filterAmountMax, setFilterAmountMax] = useState<number | ''>('');
-  const [filterHasTeam, setFilterHasTeam] = useState<boolean | 'all'>('all'); // 'all' | true | false
-  const [filterHasTasks, setFilterHasTasks] = useState<boolean | 'all'>('all'); // 'all' | true | false
+  const [filterHasTeam, setFilterHasTeam] = useState<boolean | 'all'>('all');
+  const [filterHasTasks, setFilterHasTasks] = useState<boolean | 'all'>('all');
+  const [filterHasContract, setFilterHasContract] = useState<boolean | 'all'>('all');
   const [filterDeadlineFrom, setFilterDeadlineFrom] = useState<string>('');
   const [filterDeadlineTo, setFilterDeadlineTo] = useState<string>('');
 
   // Сортировка
   type SortOption = 'deadline_asc' | 'deadline_desc' | 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc';
   const [sortBy, setSortBy] = useState<SortOption>('deadline_asc'); // По умолчанию: ближайшие дедлайны сверху
+
+  // Фильтры для вкладки "Утверждение"
+  const [approvalSearch, setApprovalSearch] = useState('');
+  const [approvalCompanyFilter, setApprovalCompanyFilter] = useState('all');
+  
+  // Новые фильтры для оптимизации (Скоро дедлайн, Период аудита)
+  const [filterUpcomingDeadlines, setFilterUpcomingDeadlines] = useState(false);
+  const [filterAuditPeriod, setFilterAuditPeriod] = useState<'all' | '6m' | '9m' | '1y'>('all');
 
   // Массовые действия (только для CEO)
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
@@ -184,6 +195,17 @@ export default function Projects() {
             title: "✅ Импорт завершен",
             description: `Успешно импортировано: ${result.success} проектов${result.failed > 0 ? `. Не удалось: ${result.failed}` : ''}`,
           });
+
+          // Отправляем уведомление отделу закупок
+          try {
+            await notifyBulkProjectsImported({
+              count: result.success,
+              importerName: user?.name || 'Пользователь'
+            });
+          } catch (notifyError) {
+            console.error('Ошибка отправки уведомления:', notifyError);
+          }
+
           setIsImportDialogOpen(false);
         } else {
           toast({
@@ -1031,7 +1053,26 @@ export default function Projects() {
       });
     }
 
-    // 10. Фильтр по дедлайну (диапазон дат)
+    // 10. Фильтр по наличию файла договора
+    if (filterHasContract !== 'all') {
+      filtered = filtered.filter(project => {
+        let files: any[] = [];
+        try {
+          const raw = project.notes?.files || project.files;
+          if (Array.isArray(raw)) files = raw;
+          else if (typeof raw === 'string') files = JSON.parse(raw);
+        } catch { /* ignore */ }
+        const contractFileExists = files.some((f: any) => {
+          const name = (f.name || f.fileName || '').toLowerCase();
+          return name.includes('договор') || name.includes('contract') || name.includes('dogovor');
+        });
+        const scanUrl = project.contract?.contractScanUrl || project.notes?.contract?.contractScanUrl || '';
+        const has = contractFileExists || (scanUrl && scanUrl !== 'pending_upload');
+        return filterHasContract === !!has;
+      });
+    }
+
+    // 11. Фильтр по дедлайну (диапазон дат)
     if (filterDeadlineFrom || filterDeadlineTo) {
       filtered = filtered.filter(project => {
         const deadline = project.contract?.serviceEndDate || project.deadline || project.notes?.contract?.serviceEndDate;
@@ -1060,7 +1101,41 @@ export default function Projects() {
       });
     }
 
-    // 11. Сортировка
+    // 12. Фильтр "Скоро дедлайн" (30 дней)
+    if (filterUpcomingDeadlines) {
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      const today = new Date();
+      
+      filtered = filtered.filter(project => {
+        const deadline = project.contract?.serviceEndDate || project.deadline || project.notes?.contract?.serviceEndDate;
+        if (!deadline) return false;
+        try {
+          const deadlineDate = new Date(deadline);
+          return deadlineDate >= today && deadlineDate <= thirtyDaysFromNow;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    // 13. Фильтр "Период аудита"
+    if (filterAuditPeriod !== 'all') {
+      filtered = filtered.filter(project => {
+        const period = project.notes?.period;
+        if (period === filterAuditPeriod) return true;
+        
+        // Поиск в названии проекта (напр. "6 мес" или "6м")
+        const name = (project.name || '').toLowerCase();
+        if (filterAuditPeriod === '6m' && (name.includes('6 мес') || name.includes('6м'))) return true;
+        if (filterAuditPeriod === '9m' && (name.includes('9 мес') || name.includes('9м'))) return true;
+        if (filterAuditPeriod === '1y' && (name.includes('год') || name.includes('1г'))) return true;
+        
+        return false;
+      });
+    }
+
+    // 14. Сортировка
     filtered.sort((a, b) => {
       const getDeadline = (p: any) => {
         const deadline = p.contract?.serviceEndDate || p.deadline || p.notes?.contract?.serviceEndDate || p.notes?.deadline;
@@ -1131,7 +1206,7 @@ export default function Projects() {
     });
 
     setFilteredProjects(filtered);
-  }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount]);
+  }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterHasContract, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount, filterUpcomingDeadlines, filterAuditPeriod]);
 
 
   // Получаем уникальные роли сотрудников для фильтра распределения команды
@@ -1144,11 +1219,65 @@ export default function Projects() {
     return Array.from(roles).sort();
   }, [employees]);
 
+  // Проекты на утверждении (для вкладки "Утверждение") - уже фильтрованы по allowedCompanyIds через useProjects
+  const pendingProjects = useMemo(() => {
+    return realProjects.filter(p => {
+      const notesStatus = p.notes?.status;
+      return notesStatus === 'new' || notesStatus === 'pending_approval';
+    });
+  }, [realProjects]);
+
+  // Отфильтрованные проекты на утверждении (с поиском и фильтром по компании)
+  const filteredPendingProjects = useMemo(() => {
+    let result = pendingProjects;
+    if (approvalSearch.trim()) {
+      const q = approvalSearch.toLowerCase();
+      result = result.filter(p => {
+        const name = p.name || p.notes?.name || '';
+        const company = p.companyName || p.company || p.ourCompany || p.notes?.companyName || p.notes?.ourCompany || '';
+        return name.toLowerCase().includes(q) || company.toLowerCase().includes(q);
+      });
+    }
+    if (approvalCompanyFilter !== 'all') {
+      result = result.filter(p => {
+        const company = p.companyName || p.company || p.ourCompany || p.notes?.companyName || p.notes?.ourCompany || '';
+        return company === approvalCompanyFilter;
+      });
+    }
+    return result;
+  }, [pendingProjects, approvalSearch, approvalCompanyFilter]);
+
+  // Уникальные компании из pendingProjects для фильтра
+  const pendingCompanies = useMemo(() => {
+    const set = new Set<string>();
+    pendingProjects.forEach(p => {
+      const company = p.companyName || p.company || p.ourCompany || p.notes?.companyName || p.notes?.ourCompany || '';
+      if (company) set.add(company);
+    });
+    return Array.from(set).sort();
+  }, [pendingProjects]);
+
   // Фильтруем сотрудников для диалога распределения
   const filteredEmployeesForDistribution = useMemo(() => {
-    if (teamDistributionRoleFilter === 'all') return employees;
-    return employees.filter((emp: any) => (emp.role || emp.position) === teamDistributionRoleFilter);
-  }, [employees, teamDistributionRoleFilter]);
+    let result = employees;
+    
+    // 1. Фильтр по роли (если выбран)
+    if (teamDistributionRoleFilter !== 'all') {
+      result = result.filter((emp: any) => (emp.role || emp.position) === teamDistributionRoleFilter);
+    }
+    
+    // 2. Поиск по имени или роли
+    if (teamDistributionSearch.trim()) {
+      const q = teamDistributionSearch.toLowerCase();
+      result = result.filter((emp: any) => {
+        const name = (emp.name || '').toLowerCase();
+        const role = (emp.role || emp.position || '').toLowerCase();
+        return name.includes(q) || role.includes(q);
+      });
+    }
+    
+    return result;
+  }, [employees, teamDistributionRoleFilter, teamDistributionSearch]);
 
   // Функции для управления задачами
   const handleUpdateTask = (projectId: string, taskId: string, updates: Partial<Task>) => {
@@ -1247,6 +1376,97 @@ export default function Projects() {
     };
   }, []);
 
+  // Обогащённая статистика проекта: читаем реальные данные из localStorage + полей проекта
+  const getEnrichedProjectStats = useCallback((project: any) => {
+    const projectId = project.id || project.notes?.id || '';
+
+    // Читаем projectData из localStorage (процедуры, прогресс)
+    let localData: any = null;
+    try {
+      const raw = localStorage.getItem(`rb_project_data_${projectId}`);
+      if (raw) localData = JSON.parse(raw);
+    } catch {}
+
+    // ── Договор (реальный файл или ссылка на скан) ──────────
+    let projectFiles: any[] = [];
+    try {
+      const raw = project.notes?.files || project.files;
+      if (Array.isArray(raw)) projectFiles = raw;
+      else if (typeof raw === 'string') projectFiles = JSON.parse(raw);
+    } catch { /* ignore */ }
+    const contractFileExists = projectFiles.some((f: any) => {
+      const name = (f.name || f.fileName || '').toLowerCase();
+      return name.includes('договор') || name.includes('contract') || name.includes('dogovor');
+    });
+    const contractScanUrl = project.contract?.contractScanUrl || project.notes?.contract?.contractScanUrl || '';
+    const hasRealScan = contractScanUrl && contractScanUrl !== 'pending_upload';
+    const hasContract = contractFileExists || !!hasRealScan;
+
+    // ── Команда ──────────────────────────────────────────────────
+    const team: any[] = project.team || project.notes?.team || [];
+    const hasTeam = team.length > 0;
+
+    // ── Задачи ───────────────────────────────────────────────────
+    const tasks = getProjectTasks(project);
+    const tasksDone = tasks.filter((t: any) => t.status === 'done').length;
+    const tasksInProgress = tasks.filter((t: any) => t.status === 'in_progress').length;
+    const tasksTotal = tasks.length;
+    const tasksPct = tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0;
+
+    // ── Процедуры (методология) ───────────────────────────────────
+    const methodology = localData?.methodology;
+    const selectedProcedures: any[] = methodology?.selectedProcedures || [];
+    const proceduresTotal = selectedProcedures.length;
+    const proceduresDone = methodology?.stages
+      ? methodology.stages.reduce((acc: number, stage: any) => {
+          return acc + (stage.elements?.filter((el: any) => el.completed).length || 0);
+        }, 0)
+      : 0;
+    const proceduresPct = proceduresTotal > 0 ? Math.round((proceduresDone / proceduresTotal) * 100) : 0;
+
+    // ── Документы/рабочие бумаги ──────────────────────────────────
+    const completionStatus = localData?.completionStatus;
+    const docPct = completionStatus?.percentage ?? 0;
+    const docCompleted = completionStatus?.completedElements ?? 0;
+    const docTotal = completionStatus?.totalElements ?? 0;
+
+    // ── Итоговый прогресс (milestone-based) ───────────────────────
+    // Взвешенная формула: договор 15%, команда 15%, процедуры выбраны 10%,
+    // задачи 20%, выполнение процедур/документов 40%
+    let progress = 0;
+    if (hasContract)   progress += 15;
+    if (hasTeam)       progress += 15;
+    if (proceduresTotal > 0) progress += 10;
+    if (tasksTotal > 0) progress += tasksPct * 0.20;
+    if (proceduresTotal > 0 || docTotal > 0) {
+      const execPct = proceduresTotal > 0 ? proceduresPct : docPct;
+      progress += execPct * 0.40;
+    }
+    // Если в Supabase есть явный completionPercent — используем его
+    if (project.completionPercent > 0 || project.completion > 0) {
+      progress = project.completionPercent || project.completion;
+    }
+    progress = Math.min(100, Math.round(progress));
+
+    return {
+      hasContract,
+      contractNumber: project.contract?.number || project.notes?.contract?.number || null,
+      team,
+      hasTeam,
+      tasksDone,
+      tasksInProgress,
+      tasksTotal,
+      tasksPct,
+      proceduresTotal,
+      proceduresDone,
+      proceduresPct,
+      docPct,
+      docCompleted,
+      docTotal,
+      progress,
+    };
+  }, [getProjectTasks]);
+
   const ProjectCard = ({ project }: { project: any }) => {
     const projectId = project.id || project.notes?.id;
     const projectName = project.name || project.client?.name || 'Без названия';
@@ -1259,6 +1479,34 @@ export default function Projects() {
     const stats = getProjectStats(project);
     const { amount, currency } = getProjectAmount(project);
 
+    // Расчет скоро ли дедлайн
+    const isUpcoming = useMemo(() => {
+      const thirtyDaysFromNow = new Date();
+      const today = new Date();
+      thirtyDaysFromNow.setDate(today.getDate() + 30);
+      try {
+        const deadlineDate = new Date(projectDeadline);
+        return deadlineDate >= today && deadlineDate <= thirtyDaysFromNow;
+      } catch {
+        return false;
+      }
+    }, [projectDeadline]);
+
+    // Определение года и периода для отображения
+    const auditYear = project.contract?.serviceEndDate 
+      ? new Date(project.contract.serviceEndDate).getFullYear().toString()
+      : new Date(projectDeadline).getFullYear().toString();
+    
+    // Пытаемся взять период из notes или названия
+    const auditPeriod = project.notes?.period || 
+      (projectName.toLowerCase().includes('6') ? '6м' : 
+       projectName.toLowerCase().includes('9') ? '9м' : 
+       projectName.toLowerCase().includes('год') ? '1г' : null);
+    
+    const isLongTerm = isLongTermProject(project);
+    const contractPeriod = isLongTerm ? 
+      `${new Date(project.contract?.serviceStartDate || "").getFullYear() || auditYear}-${auditYear}` : null;
+
     const handleCardClick = () => {
       if (!projectId) {
         navigate('/project-approval', { state: { project } });
@@ -1269,7 +1517,7 @@ export default function Projects() {
 
     return (
       <Card
-        className="p-6 hover:shadow-lg transition-all duration-200 border glass-card cursor-pointer relative"
+        className="p-3 sm:p-4 md:p-6 hover:shadow-lg transition-all duration-200 border glass-card cursor-pointer relative"
         onClick={handleCardClick}
         data-testid="project-card"
       >
@@ -1291,6 +1539,26 @@ export default function Projects() {
               <Badge variant="secondary" className={`text-white ${getProjectStatusColor(project)}`}>
                 {projectStatus === 'new' ? 'Новый' : projectStatus}
               </Badge>
+              
+              {/* Бейдж Года и Периода */}
+              <Badge variant="outline" className="border-primary/30 text-primary font-bold bg-primary/5">
+                {auditYear} {auditPeriod && `(${auditPeriod})`}
+              </Badge>
+
+              {/* Индикатор долгосрочного договора */}
+              {isLongTerm && (
+                <Badge variant="outline" className="border-orange-500/30 text-orange-600 bg-orange-50/50 dark:text-orange-400">
+                  ⏳ {contractPeriod}
+                </Badge>
+              )}
+
+              {/* Алерт дедлайна */}
+              {isUpcoming && (
+                <Badge variant="destructive" className="animate-pulse bg-red-500 shadow-lg shadow-red-500/20">
+                  🚨 СРОК!
+                </Badge>
+              )}
+
               <span className="text-sm text-muted-foreground">{projectCompany}</span>
             </div>
             {project.client?.name && (
@@ -1685,10 +1953,10 @@ export default function Projects() {
       )}
 
       {/* Заголовок */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Проекты</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Проекты</h1>
+          <p className="text-muted-foreground text-sm">
             {user?.role === 'partner' ? 'Мои проекты' :
               user?.role === 'procurement' ? 'Управление проектами' :
                 'Проекты'}
@@ -1696,20 +1964,20 @@ export default function Projects() {
         </div>
         {/* Кнопки управления - только для CEO, deputy_director и procurement */}
         {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'procurement') && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExportProjects}>
-              <Download className="w-4 h-4 mr-2" />
-              Экспорт в Excel
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportProjects}>
+              <Download className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Экспорт в Excel</span>
             </Button>
-            <Button variant="outline" onClick={handleDownloadTemplate}>
-              <FileDown className="w-4 h-4 mr-2" />
-              Шаблон
+            <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+              <FileDown className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Шаблон</span>
             </Button>
             <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Импорт из Excel
+                <Button variant="outline" size="sm">
+                  <Upload className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Импорт из Excel</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
@@ -1875,23 +2143,23 @@ export default function Projects() {
       <Card className="overflow-hidden border-0 shadow-2xl bg-gradient-to-br from-card/90 via-card to-card/50 backdrop-blur-xl relative mb-6">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-secondary/50 to-primary/50" />
 
-        <div className="p-6 space-y-8">
+        <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 md:space-y-8">
           {/* Поиск */}
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl blur opacity-25 group-hover:opacity-100 transition duration-500" />
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-primary/70" />
+              <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-5 h-5 sm:w-6 sm:h-6 text-primary/70" />
               <Input
                 placeholder="Поиск по названию, клиенту, договору..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-14 h-14 text-lg bg-background/80 border-primary/20 hover:border-primary/50 focus:border-primary focus:ring-2 ring-primary/20 transition-all rounded-xl shadow-inner placeholder:text-muted-foreground/70"
+                className="pl-10 sm:pl-14 h-11 sm:h-14 text-sm sm:text-lg bg-background/80 border-primary/20 hover:border-primary/50 focus:border-primary focus:ring-2 ring-primary/20 transition-all rounded-xl shadow-inner placeholder:text-muted-foreground/70"
               />
             </div>
           </div>
 
           {/* Быстрые основные фильтры */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
             {/* Год окончания */}
             <div className="space-y-3 p-4 rounded-xl bg-background/40 border border-white/5 shadow-sm">
@@ -1921,6 +2189,47 @@ export default function Projects() {
               </div>
             </div>
 
+            {/* Период аудита */}
+            <div className="space-y-3 p-4 rounded-xl bg-background/40 border border-white/5 shadow-sm">
+              <Label className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                <Clock className="w-4 h-4 text-primary" /> Период
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={filterAuditPeriod === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterAuditPeriod('all')}
+                  className={`rounded-full px-3 transition-all ${filterAuditPeriod === 'all' ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/25 scale-105' : 'hover:border-primary/50 border-primary/20'}`}
+                >
+                  Все
+                </Button>
+                <Button
+                  variant={filterAuditPeriod === '6m' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterAuditPeriod('6m')}
+                  className={`rounded-full px-3 transition-all ${filterAuditPeriod === '6m' ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/25 scale-105' : 'hover:border-primary/50 border-primary/20'}`}
+                >
+                  6м
+                </Button>
+                <Button
+                  variant={filterAuditPeriod === '9m' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterAuditPeriod('9m')}
+                  className={`rounded-full px-3 transition-all ${filterAuditPeriod === '9m' ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/25 scale-105' : 'hover:border-primary/50 border-primary/20'}`}
+                >
+                  9м
+                </Button>
+                <Button
+                  variant={filterAuditPeriod === '1y' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterAuditPeriod('1y')}
+                  className={`rounded-full px-3 transition-all ${filterAuditPeriod === '1y' ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/25 scale-105' : 'hover:border-primary/50 border-primary/20'}`}
+                >
+                  Год
+                </Button>
+              </div>
+            </div>
+
             {/* Наша компания */}
             <div className="space-y-3 p-4 rounded-xl bg-background/40 border border-white/5 shadow-sm">
               <Label className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wider font-semibold">
@@ -1944,7 +2253,7 @@ export default function Projects() {
               <Label className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wider font-semibold">
                 <Clock className="w-4 h-4 text-orange-500" /> Тип & Настройки
               </Label>
-              <div className="flex gap-2 h-[32px]">
+              <div className="flex gap-2 h-[32px] mb-2">
                 <Button
                   variant={filterLongTerm === true ? 'default' : 'outline'}
                   size="sm"
@@ -1962,13 +2271,23 @@ export default function Projects() {
                   ⚡ Краткоср.
                 </Button>
               </div>
+              <div>
+                <Button
+                  variant={filterUpcomingDeadlines ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterUpcomingDeadlines(!filterUpcomingDeadlines)}
+                  className={`w-full rounded-xl transition-all h-[36px] ${filterUpcomingDeadlines ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/30' : 'hover:border-red-500/50 border-red-500/20 text-red-600 dark:text-red-400'}`}
+                >
+                  🚨 Скоро дедлайн (-30дн)
+                </Button>
+              </div>
             </div>
 
           </div>
 
           {/* Расширенные фильтры - Слайдеры и селекты */}
-          <div className="pt-6 border-t border-primary/10">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="pt-4 sm:pt-6 border-t border-primary/10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
 
               {/* Статус проекта */}
               <div className="space-y-3">
@@ -2077,7 +2396,7 @@ export default function Projects() {
           </div>
 
           {/* Возвращаем фильтр по команде и задачам как нижний ряд */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8 pt-4">
             <div className="space-y-3">
               <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие команды</Label>
               <Select value={filterHasTeam === 'all' ? 'all' : filterHasTeam ? 'yes' : 'no'}
@@ -2106,8 +2425,22 @@ export default function Projects() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-3">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Файл договора</Label>
+              <Select value={filterHasContract === 'all' ? 'all' : filterHasContract ? 'yes' : 'no'}
+                onValueChange={(v) => setFilterHasContract(v === 'all' ? 'all' : v === 'yes')}>
+                <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Договор: Все</SelectItem>
+                  <SelectItem value="yes">Договор загружен</SelectItem>
+                  <SelectItem value="no">Нет файла договора</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {/* Диапазон дедлайна */}
-            <div className="space-y-3 lg:col-span-2">
+            <div className="space-y-3">
               <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Срок проекта (От и До)</Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -2128,17 +2461,18 @@ export default function Projects() {
           </div>
 
           {/* Футер фильтров (Сброс и статистика) */}
-          <div className="flex items-center justify-between pt-6 border-t border-primary/10 mt-6 !mb-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-4 sm:pt-6 border-t border-primary/10 mt-4 sm:mt-6 !mb-0">
             <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-sm rounded-xl text-md">
-                Найдено: <span className="font-bold mx-1 text-xl">{filteredProjects.length}</span> из <span className="opacity-70 ml-1">{realProjects.length}</span>
+              <Badge variant="secondary" className="px-3 sm:px-5 py-2 sm:py-2.5 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-sm rounded-xl text-sm sm:text-md">
+                Найдено: <span className="font-bold mx-1 text-lg sm:text-xl">{filteredProjects.length}</span> из <span className="opacity-70 ml-1">{realProjects.length}</span>
               </Badge>
             </div>
 
             {(filterYear !== 'all' || filterCompany !== 'all' || filterLongTerm !== 'all' ||
               filterStatus !== 'all' || filterProgressMin !== '' || filterProgressMax !== '' ||
               filterAmountMin !== '' || filterAmountMax !== '' || filterHasTeam !== 'all' ||
-              filterHasTasks !== 'all' || filterDeadlineFrom || filterDeadlineTo) && (
+              filterHasTasks !== 'all' || filterHasContract !== 'all' || filterDeadlineFrom || filterDeadlineTo ||
+              filterUpcomingDeadlines || filterAuditPeriod !== 'all') && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -2151,11 +2485,14 @@ export default function Projects() {
                     setFilterAmountMax('');
                     setFilterHasTeam('all');
                     setFilterHasTasks('all');
+                    setFilterHasContract('all');
                     setFilterDeadlineFrom('');
                     setFilterDeadlineTo('');
                     setFilterYear('all');
                     setFilterCompany('all');
                     setFilterLongTerm('all');
+                    setFilterUpcomingDeadlines(false);
+                    setFilterAuditPeriod('all');
                   }}
                 >
                   <XCircle className="w-5 h-5 mr-2" /> СБРОСИТЬ ФИЛЬТРЫ
@@ -2278,16 +2615,31 @@ export default function Projects() {
 
       {/* Контент */}
       <Tabs defaultValue="summary" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="list">Список</TabsTrigger>
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          <TabsTrigger value="gantt">Gantt</TabsTrigger>
-          <TabsTrigger value="summary">Свод</TabsTrigger>
-          <TabsTrigger value="reports">Отчёты</TabsTrigger>
+        <TabsList className="flex w-full overflow-x-auto">
+          <TabsTrigger value="list" className="flex-1 min-w-0 text-xs sm:text-sm">Список</TabsTrigger>
+          <TabsTrigger value="kanban" className="flex-1 min-w-0 text-xs sm:text-sm">Kanban</TabsTrigger>
+          <TabsTrigger value="gantt" className="flex-1 min-w-0 text-xs sm:text-sm">Gantt</TabsTrigger>
+          <TabsTrigger value="summary" className="flex-1 min-w-0 text-xs sm:text-sm">Свод</TabsTrigger>
+          <TabsTrigger value="reports" className="flex-1 min-w-0 text-xs sm:text-sm">Отчёты</TabsTrigger>
+          {user?.role === 'ceo' && (
+            <TabsTrigger value="ceo-summary" className="flex-1 min-w-0 text-xs sm:text-sm text-amber-600 dark:text-amber-400 font-semibold">
+              CEO Свод
+            </TabsTrigger>
+          )}
+          {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'admin') && (
+            <TabsTrigger value="approval" className="flex-1 min-w-0 text-xs sm:text-sm relative">
+              Утверждение
+              {pendingProjects.length > 0 && (
+                <span className="ml-1 bg-yellow-500 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
+                  {pendingProjects.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {filteredProjects.map((project, index) => (
               <ProjectCard
                 key={project.id || project.notes?.id || `project-${index}`}
@@ -2343,18 +2695,15 @@ export default function Projects() {
                         />
                       </th>
                     )}
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📋 Проект</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">🏢 Компания</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">💼 Сумма без НДС</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">💎 Сумма с НДС</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📊 Статус</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📈 Прогресс</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">✅ Задачи</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📝 Чек-лист</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📄 Документы</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">👥 Команда</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">📅 Дедлайн</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-foreground">⚡ Действия</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Проект</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Компания</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Финансы</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Статус</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Задачи</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Документы</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Команда</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Дедлайн</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -2366,7 +2715,7 @@ export default function Projects() {
                     return (
                       <tr key={projectId || `project-${project.name}`} className="hover:bg-secondary/20 transition-colors">
                         {isAdmin && (
-                          <td className="px-3 py-3">
+                          <td className="px-2 py-2">
                             <input
                               type="checkbox"
                               checked={selectedProjectIds.has(projectId)}
@@ -2375,9 +2724,9 @@ export default function Projects() {
                             />
                           </td>
                         )}
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-2 w-[260px] min-w-[200px]">
                           <div
-                            className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors group"
+                            className="flex items-start space-x-2 cursor-pointer hover:text-primary transition-colors group"
                             onClick={() => {
                               const projectId = project.id || project.notes?.id;
                               if (projectId) {
@@ -2386,194 +2735,144 @@ export default function Projects() {
                             }}
                             title="Открыть карточку проекта"
                           >
-                            <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
+                            <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded flex items-center justify-center text-xs flex-shrink-0 group-hover:scale-110 transition-transform mt-0.5">
                               📄
                             </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-sm group-hover:underline">{project.name}</div>
-                              <div className="text-xs text-muted-foreground">#{project.id}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-xs group-hover:underline leading-tight line-clamp-3">{project.name}</div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">#{String(project.id).substring(0, 8)}</div>
                             </div>
                           </div>
                         </td>
 
-                        <td className="px-3 py-3">
-                          <span className="text-xs">{project.companyName || project.company || project.ourCompany || '—'}</span>
+                        <td className="px-2 py-2 max-w-[120px]">
+                          <span className="text-xs truncate block" title={project.companyName || project.company || project.ourCompany || ''}>{project.companyName || project.company || project.ourCompany || '—'}</span>
                         </td>
 
-                        <td className="px-3 py-3">
+                        {/* ФИНАНСЫ (без НДС + с НДС в одной ячейке) */}
+                        <td className="px-2 py-2">
                           {showAmounts ? (() => {
-                            const { amount, currency } = getProjectAmount(project);
-
-                            // Отладочное логирование для первых проектов (всегда в проде для отладки)
-                            if (filteredProjects.indexOf(project) < 3) {
-                              console.log('🔍 DEBUG Сумма БЕЗ НДС для проекта:', {
-                                название: project.name,
-                                найденная_сумма: amount,
-                                currency: currency,
-                                notes_type: typeof project.notes,
-                                notes_есть: !!project.notes,
-                                notes_finances: project.notes?.finances,
-                                notes_finances_amount: project.notes?.finances?.amountWithoutVAT,
-                                notes_contract: project.notes?.contract,
-                                notes_contract_amount: project.notes?.contract?.amountWithoutVAT,
-                                notes_amountWithoutVAT: project.notes?.amountWithoutVAT,
-                                notes_amount: project.notes?.amount,
-                                project_amountWithoutVAT: project.amountWithoutVAT,
-                                project_amount: project.amount,
-                                project_contract: project.contract,
-                                project_finances: project.finances,
-                                // Первые 1000 символов notes для анализа
-                                notes_raw: typeof project.notes === 'string' ? project.notes.substring(0, 1000) : JSON.stringify(project.notes || {}).substring(0, 1000)
-                              });
-                            }
-
-                            return amount && amount > 0 ? (
-                              <span className="text-xs font-medium text-primary">
-                                {new Intl.NumberFormat('ru-RU', {
-                                  style: 'currency',
-                                  currency: currency,
-                                  maximumFractionDigits: 0
-                                }).format(amount)}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground" title="Сумма не найдена в данных проекта">—</span>
-                            );
-                          })() : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3">
-                          {showAmounts ? (() => {
-                            const { amount, currency } = getProjectAmountWithVAT(project);
-                            return amount && amount > 0 ? (
-                              <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                {new Intl.NumberFormat('ru-RU', {
-                                  style: 'currency',
-                                  currency: currency,
-                                  maximumFractionDigits: 0
-                                }).format(amount)}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground" title="Сумма с НДС не найдена">—</span>
-                            );
-                          })() : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3">
-                          <Badge
-                            variant="secondary"
-                            className={`text-xs text-white ${getProjectStatusColor(project)} ${getProjectStatusLabel(project) === 'Ожидает распределения команды'
-                              ? 'cursor-pointer hover:opacity-80'
-                              : ''
-                              }`}
-                            onClick={() => {
-                              const status = getProjectStatusLabel(project);
-                              if (status === 'Ожидает распределения команды') {
-                                const projectId = project.id || project.projectId;
-                                navigate(`/project/${projectId}`, {
-                                  state: { project, openTeamAssignment: true }
-                                });
-                              }
-                            }}
-                            title={getProjectStatusLabel(project) === 'Ожидает распределения команды'
-                              ? 'Нажмите для назначения команды'
-                              : undefined}
-                          >
-                            {getProjectStatusLabel(project)}
-                          </Badge>
-                        </td>
-
-                        <td className="px-3 py-3">
-                          <div className="space-y-1">
-                            <div className="text-xs font-medium">{project.completion}%</div>
-                            <Progress value={project.completion} className="h-1.5 w-16" />
-                          </div>
-                        </td>
-
-                        <td className="px-3 py-3">
-                          <div className="text-xs">
-                            <div className="flex items-center space-x-1">
-                              <span>✅</span>
-                              <span>{stats.completedTasks}/{stats.totalTasks}</span>
-                            </div>
-                            {tasks.filter(t => t.status === 'in_progress').length > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                🔄 {tasks.filter(t => t.status === 'in_progress').length} в работе
+                            const { amount: amtNoVat, currency } = getProjectAmount(project);
+                            const { amount: amtVat } = getProjectAmountWithVAT(project);
+                            const fmt = (v: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(v);
+                            if (!amtNoVat && !amtVat) return <span className="text-xs text-muted-foreground">—</span>;
+                            return (
+                              <div className="space-y-0.5">
+                                {amtNoVat && amtNoVat > 0 && <div className="text-xs font-medium text-primary tabular-nums">{fmt(amtNoVat)}</div>}
+                                {amtVat && amtVat > 0 && <div className="text-[10px] text-green-600 dark:text-green-400 tabular-nums">{fmt(amtVat)} с НДС</div>}
                               </div>
-                            )}
-                          </div>
+                            );
+                          })() : <span className="text-xs text-muted-foreground">—</span>}
                         </td>
 
-                        <td className="px-3 py-3">
-                          <div className="space-y-1">
-                            <div className="text-xs">
-                              📝 {stats.checklistProgress}%
-                            </div>
-                            {tasks.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {tasks.map((task, index) => {
-                                  // Проверяем что checklist существует
-                                  if (!task.checklist || !Array.isArray(task.checklist)) {
-                                    return null;
-                                  }
-                                  const completed = task.checklist.filter(item => item.done).length;
-                                  const total = task.checklist.length;
-
-                                  return (
-                                    <div key={index} className="flex items-center space-x-1 text-xs">
-                                      <span className="text-xs">{task.title.substring(0, 6)}...</span>
-                                      <div className="flex space-x-0.5">
-                                        {task.checklist.map((item, itemIndex) => (
-                                          <span key={itemIndex} className="text-xs">
-                                            {item.done ? '✅' : '⭕'}
-                                          </span>
-                                        ))}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground">({completed}/{total})</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="px-3 py-3">
+                        {/* СТАТУС + ПРОГРЕСС */}
+                        <td className="px-2 py-2">
                           {(() => {
-                            const docCompletion = getDocumentCompletion(project);
+                            const es = getEnrichedProjectStats(project);
                             return (
                               <div className="space-y-1">
-                                <div className="flex items-center space-x-1 text-xs">
-                                  <span className="font-medium">{docCompletion.completed}/{docCompletion.total}</span>
-                                  <span className="text-muted-foreground">({docCompletion.percentage}%)</span>
-                                </div>
-                                <Progress value={docCompletion.percentage} className="h-1.5 w-16" />
-                                <div className="flex flex-wrap gap-0.5 mt-1">
-                                  {Array.from({ length: Math.min(docCompletion.total, 10) }).map((_, i) => (
-                                    <span key={i} className="text-[8px]">
-                                      {i < docCompletion.completed ? '✅' : '⭕'}
-                                    </span>
-                                  ))}
-                                  {docCompletion.total > 10 && (
-                                    <span className="text-[8px] text-muted-foreground">+{docCompletion.total - 10}</span>
-                                  )}
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-[10px] text-white ${getProjectStatusColor(project)} ${getProjectStatusLabel(project) === 'Ожидает распределения команды' ? 'cursor-pointer hover:opacity-80' : ''} whitespace-nowrap`}
+                                  onClick={() => {
+                                    if (getProjectStatusLabel(project) === 'Ожидает распределения команды') {
+                                      navigate(`/project/${project.id || project.projectId}`, { state: { project, openTeamAssignment: true } });
+                                    }
+                                  }}
+                                >
+                                  {getProjectStatusLabel(project)}
+                                </Badge>
+                                <div className="flex items-center gap-1">
+                                  <Progress value={es.progress} className="h-1 w-12 flex-shrink-0" />
+                                  <span className="text-[10px] text-muted-foreground tabular-nums">{es.progress}%</span>
                                 </div>
                               </div>
                             );
                           })()}
                         </td>
 
-                        <td className="px-3 py-3">
-                          <div className="flex items-center space-x-1 text-xs">
-                            <span>👥</span>
-                            <span>{project.team?.length || project.team || 0}</span>
-                          </div>
-                        </td>
+                        {/* ЗАДАЧИ + ПРОЦЕДУРЫ */}
+                        {(() => {
+                          const es = getEnrichedProjectStats(project);
+                          return (
+                            <td className="px-2 py-2">
+                              <div className="space-y-1">
+                                {es.tasksTotal > 0 ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs tabular-nums font-medium">{es.tasksDone}/{es.tasksTotal}</span>
+                                    <span className="text-[10px] text-muted-foreground">зад.</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">Нет задач</span>
+                                )}
+                                {es.proceduresTotal > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs tabular-nums">{es.proceduresDone}/{es.proceduresTotal}</span>
+                                    <span className="text-[10px] text-muted-foreground">проц.</span>
+                                    <Progress value={es.proceduresPct} className="h-1 w-8" />
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })()}
 
-                        <td className="px-3 py-3">
+                        {/* ДОКУМЕНТЫ */}
+                        {(() => {
+                          const es = getEnrichedProjectStats(project);
+                          return (
+                            <td className="px-2 py-2">
+                              <div className="space-y-0.5">
+                                {es.hasContract ? (
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-green-500/15 text-green-700 dark:text-green-400 font-medium leading-none block w-fit">
+                                    Договор
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium leading-none block w-fit">
+                                    Нет договора
+                                  </span>
+                                )}
+                                {es.docTotal > 0 && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-xs tabular-nums text-muted-foreground">{es.docCompleted}/{es.docTotal}</span>
+                                    <Progress value={es.docPct} className="h-1 w-10" />
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })()}
+
+                        {/* КОМАНДА */}
+                        {(() => {
+                          const es = getEnrichedProjectStats(project);
+                          return (
+                            <td className="px-2 py-2">
+                              {es.team.length === 0 ? (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <div className="flex -space-x-1">
+                                    {es.team.slice(0, 3).map((member: any, i: number) => {
+                                      const name = member.name || member.employee?.name || member;
+                                      const initials = typeof name === 'string'
+                                        ? name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+                                        : '?';
+                                      return (
+                                        <div key={i} className="w-5 h-5 rounded-full bg-primary/20 border border-background flex items-center justify-center text-[8px] font-bold text-primary" title={typeof name === 'string' ? name : ''}>
+                                          {initials}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{es.team.length}</span>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })()}
+
+                        <td className="px-2 py-2">
                           {(() => {
                             const { urgency, daysLeft, deadline } = getDeadlineUrgency(project);
                             const bgColor = urgency === 'overdue'
@@ -2623,7 +2922,7 @@ export default function Projects() {
                           })()}
                         </td>
 
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-2">
                           <div className="flex space-x-1 flex-wrap gap-1">
                             {user?.role === 'deputy_director' &&
                               getProjectsAwaitingTeam.some(p => (p.id || p.notes?.id) === projectId) && (
@@ -2734,6 +3033,23 @@ export default function Projects() {
           </Card>
         </TabsContent>
 
+        {user?.role === 'ceo' && (
+          <TabsContent value="ceo-summary" className="space-y-4">
+            <CEOSummaryTable
+              projects={filteredProjects}
+              employees={employees}
+              getProjectAmount={getProjectAmount}
+              getCompanyDisplayName={getCompanyDisplayName}
+              onProjectClick={(project) => {
+                const projectId = project.id || project.notes?.id;
+                if (projectId) {
+                  navigate(`/project/${projectId}`, { state: { project } });
+                }
+              }}
+            />
+          </TabsContent>
+        )}
+
         <TabsContent value="reports" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card className="p-6 glass-card">
@@ -2753,6 +3069,101 @@ export default function Projects() {
             </Card>
           </div>
         </TabsContent>
+
+        {/* Вкладка Утверждение - только для CEO, зам. директора, admin */}
+        {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'admin') && (
+          <TabsContent value="approval" className="space-y-4">
+            <Card className="glass-card">
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h3 className="font-semibold">Проекты на утверждении</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {filteredPendingProjects.length} из {pendingProjects.length} проектов ожидают утверждения
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => navigate('/project-approval')}>
+                    Полный режим утверждения
+                  </Button>
+                </div>
+                {/* Поиск и фильтры */}
+                <div className="mt-3 flex gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[180px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Поиск по названию или компании..."
+                      value={approvalSearch}
+                      onChange={e => setApprovalSearch(e.target.value)}
+                      className="pl-9 h-9 text-sm"
+                    />
+                  </div>
+                  {pendingCompanies.length > 1 && (
+                    <Select value={approvalCompanyFilter} onValueChange={setApprovalCompanyFilter}>
+                      <SelectTrigger className="w-[200px] h-9 text-sm">
+                        <SelectValue placeholder="Все компании" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Все компании</SelectItem>
+                        {pendingCompanies.map(c => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+
+              {filteredPendingProjects.length === 0 ? (
+                <div className="p-10 text-center text-muted-foreground">
+                  <div className="text-4xl mb-3">✅</div>
+                  <p className="font-medium">Нет проектов на утверждении</p>
+                  <p className="text-sm mt-1">Все проекты утверждены или отфильтрованы</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filteredPendingProjects.map(project => {
+                    const name = project.name || project.notes?.name || 'Без названия';
+                    const company = project.companyName || project.company || project.ourCompany || project.notes?.companyName || project.notes?.ourCompany || '—';
+                    const notesStatus = project.notes?.status;
+                    const statusLabel = notesStatus === 'new' ? 'Новый' : 'На согласовании';
+                    const statusColor = notesStatus === 'new' ? 'bg-blue-500/10 text-blue-600 border-blue-500/30' : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30';
+                    const createdAt = project.created_at ? new Date(project.created_at).toLocaleDateString('ru-RU') : '—';
+                    const { amount, currency } = getProjectAmount(project);
+                    const amountStr = amount !== null ? `${amount.toLocaleString('ru-RU')} ${currency}` : '—';
+
+                    return (
+                      <div key={project.id} className="p-4 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${statusColor}`}>
+                                {statusLabel}
+                              </span>
+                              <span className="text-xs text-muted-foreground">{createdAt}</span>
+                            </div>
+                            <p className="font-medium text-sm leading-snug line-clamp-2" title={name}>{name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{company}</p>
+                            {amount !== null && (
+                              <p className="text-xs font-medium text-primary mt-0.5">{amountStr}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => navigate('/project-approval')}
+                          >
+                            Открыть
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Диалог распределения команды - только для зам. директора */}
@@ -2768,28 +3179,39 @@ export default function Projects() {
 
             <div className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                   <Label>Выберите участников команды:</Label>
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[400px]">
-                    <Button
-                      variant={teamDistributionRoleFilter === 'all' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setTeamDistributionRoleFilter('all')}
-                      className="rounded-full text-[10px] h-7 px-3"
-                    >
-                      Все
-                    </Button>
-                    {employeeRoles.map(role => (
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Поиск..."
+                        value={teamDistributionSearch}
+                        onChange={(e) => setTeamDistributionSearch(e.target.value)}
+                        className="pl-8 h-8 text-[11px] w-[150px] sm:w-[200px]"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[200px] sm:max-w-[300px]">
                       <Button
-                        key={role}
-                        variant={teamDistributionRoleFilter === role ? 'default' : 'outline'}
+                        variant={teamDistributionRoleFilter === 'all' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => setTeamDistributionRoleFilter(role)}
-                        className={`rounded-full text-[10px] h-7 px-3 ${teamDistributionRoleFilter === role ? 'bg-primary text-primary-foreground' : ''}`}
+                        onClick={() => setTeamDistributionRoleFilter('all')}
+                        className="rounded-full text-[10px] h-7 px-3"
                       >
-                        {role}
+                        Все
                       </Button>
-                    ))}
+                      {employeeRoles.map(role => (
+                        <Button
+                          key={role}
+                          variant={teamDistributionRoleFilter === role ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setTeamDistributionRoleFilter(role)}
+                          className={`rounded-full text-[10px] h-7 px-3 ${teamDistributionRoleFilter === role ? 'bg-primary text-primary-foreground' : ''}`}
+                        >
+                          {role}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

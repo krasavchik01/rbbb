@@ -9,6 +9,7 @@ export type UserRole =
   | 'company_director'       // Директор компании (для HR, информационно)
   | 'procurement'            // Отдел закупок
   | 'partner'                // Партнер (руководитель проекта)
+  | 'project_leader'         // Руководитель проекта
   | 'manager_1'             // Менеджер 1
   | 'manager_2'             // Менеджер 2
   | 'manager_3'             // Менеджер 3
@@ -21,8 +22,10 @@ export type UserRole =
   | 'assistant_2'            // Ассистент 2
   | 'assistant_1'            // Ассистент 1
   | 'contractor'             // ГПХ (подрядчик)
+  | 'academy'                // Сотрудник академии (обучение)
   | 'hr'                     // HR специалист
   | 'accountant'             // Бухгалтер
+  | 'admin_staff'            // Административный персонал
   | 'admin';                 // Администратор системы
 
 // Названия ролей на русском
@@ -32,6 +35,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   company_director: 'Директор компании',
   procurement: 'Отдел закупок',
   partner: 'Партнер',
+  project_leader: 'Руководитель проекта',
   manager_1: 'Менеджер 1',
   manager_2: 'Менеджер 2',
   manager_3: 'Менеджер 3',
@@ -44,8 +48,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   assistant_2: 'Ассистент 2',
   assistant_1: 'Ассистент 1',
   contractor: 'ГПХ (Подрядчик)',
+  academy: 'Сотрудник академии',
   hr: 'HR специалист',
   accountant: 'Бухгалтер',
+  admin_staff: 'Административный персонал',
   admin: 'Администратор',
 };
 
@@ -61,8 +67,14 @@ export const PROJECT_ROLES: ProjectRole[] = [
   {
     role: 'partner',
     label: 'Партнер',
-    bonusPercent: 29,
-    description: 'Руководитель проекта, отвечает за планирование и результат'
+    bonusPercent: 25,
+    description: 'Партнёр, отвечает за клиента и результат'
+  },
+  {
+    role: 'project_leader',
+    label: 'Руководитель проекта',
+    bonusPercent: 4,
+    description: 'Руководитель проекта, координирует команду'
   },
   {
     role: 'manager_1',
@@ -129,6 +141,13 @@ export const PROJECT_ROLES: ProjectRole[] = [
     label: 'Ассистент 1',
     bonusPercent: 2,
     description: 'Младший ассистент'
+  },
+  // Академия (обучение, не связано с аудитом)
+  {
+    role: 'academy',
+    label: 'Сотрудник академии',
+    bonusPercent: 0,
+    description: 'Обучение, повышение квалификации'
   },
   // Административные роли (могут быть назначены на проекты, но не получают бонусы автоматически)
   {
@@ -203,7 +222,7 @@ export const PERMISSIONS = {
   
   // Документы
   UPLOAD_CONTRACT: ['procurement', 'admin'],
-  VIEW_CONTRACT: ['partner', 'manager_1', 'manager_2', 'manager_3', 'supervisor_3', 'supervisor_2', 'supervisor_1', 'tax_specialist_1', 'tax_specialist_2', 'assistant_3', 'assistant_2', 'assistant_1'],
+  VIEW_CONTRACT: ['partner', 'manager_1', 'manager_2', 'manager_3', 'supervisor_3', 'supervisor_2', 'supervisor_1', 'tax_specialist_1', 'tax_specialist_2', 'assistant_3', 'assistant_2', 'assistant_1', 'academy'],
 };
 
 // Проверка разрешения

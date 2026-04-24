@@ -200,17 +200,17 @@ export default function Analytics() {
   }, [projects, employees]);
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-4 sm:space-y-6 p-2 sm:p-4 md:p-6">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <BarChart3 className="w-8 h-8" />
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8" />
           Аналитика
         </h1>
-        <p className="text-muted-foreground mt-2">Детальная аналитика по проектам и сотрудникам</p>
+        <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Детальная аналитика по проектам и сотрудникам</p>
       </div>
 
       {/* Основные метрики */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>

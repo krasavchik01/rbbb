@@ -30,7 +30,7 @@ test.describe('Menu Navigation Tests', () => {
     
     // Проверяем, что мы залогинены
     const isLoggedIn = await page.locator('aside, nav, [role="navigation"]').first().isVisible({ timeout: 5000 }).catch(() => false) ||
-                       await page.locator('text=RB Partners Suite').isVisible({ timeout: 2000 }).catch(() => false);
+                       await page.locator('text=SUITE-A').isVisible({ timeout: 2000 }).catch(() => false);
     
     if (!isLoggedIn) {
       // Пробуем через форму входа

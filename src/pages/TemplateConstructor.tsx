@@ -809,7 +809,7 @@ export default function TemplateConstructor() {
 
             <div>
               <Label>Цвет этапа</Label>
-              <div className="grid grid-cols-8 gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 {STAGE_COLORS.map(color => (
                   <button
                     key={color}

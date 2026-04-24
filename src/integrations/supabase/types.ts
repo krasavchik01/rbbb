@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          id: string
+          employee_id: string | null
+          date: string
+          check_in: string | null
+          check_in_lat: number | null
+          check_in_lng: number | null
+          check_in_accuracy: number | null
+          check_out: string | null
+          check_out_lat: number | null
+          check_out_lng: number | null
+          check_out_accuracy: number | null
+          location_type: string | null
+          office_id: string | null
+          work_duration: number | null
+          status: string | null
+          notes: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          employee_id?: string | null
+          date: string
+          check_in?: string | null
+          check_in_lat?: number | null
+          check_in_lng?: number | null
+          check_in_accuracy?: number | null
+          check_out?: string | null
+          check_out_lat?: number | null
+          check_out_lng?: number | null
+          check_out_accuracy?: number | null
+          location_type?: string | null
+          office_id?: string | null
+          work_duration?: number | null
+          status?: string | null
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          employee_id?: string | null
+          date?: string
+          check_in?: string | null
+          check_in_lat?: number | null
+          check_in_lng?: number | null
+          check_in_accuracy?: number | null
+          check_out?: string | null
+          check_out_lat?: number | null
+          check_out_lng?: number | null
+          check_out_accuracy?: number | null
+          location_type?: string | null
+          office_id?: string | null
+          work_duration?: number | null
+          status?: string | null
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bonuses: {
         Row: {
           bonus_amount: number
@@ -452,6 +523,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_company_access: {
+        Row: {
+          id: string
+          user_id: string
+          company_ids: string[]
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          company_ids?: string[]
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          company_ids?: string[]
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {

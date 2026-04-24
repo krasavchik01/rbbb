@@ -22,7 +22,6 @@ const ProjectApproval = lazy(() => import('@/pages/ProjectApproval'));
 const ProjectWorkspace = lazy(() => import('@/pages/ProjectWorkspace'));
 const SupabaseDiagnostics = lazy(() => import('@/pages/SupabaseDiagnostics'));
 const DatabaseTest = lazy(() => import('@/pages/DatabaseTest'));
-const TeamManagement = lazy(() => import('@/pages/TeamManagement'));
 const Tenders = lazy(() => import('@/pages/Tenders'));
 const Calendar = lazy(() => import('@/pages/Calendar'));
 const Tasks = lazy(() => import('@/pages/Tasks'));

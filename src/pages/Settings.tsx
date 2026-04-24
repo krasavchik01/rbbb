@@ -6,9 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAppSettings } from '@/lib/appSettings';
 import { CompaniesManagement } from '@/components/settings/CompaniesManagement';
+import { UserCompanyAssignment } from '@/components/settings/UserCompanyAssignment';
 import {
   User,
   Bell,
@@ -26,7 +28,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 export default function Settings() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [appSettings, updateAppSettings] = useAppSettings();
   const [isSaving, setIsSaving] = useState(false);
@@ -157,47 +159,80 @@ export default function Settings() {
     }
   };
 
+  // Пароль
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Здесь должна быть логика сохранения
-      // await updateUser(profileData);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Имитация запроса
-      
-      toast({
-        title: "Настройки сохранены",
-        description: "Ваши настройки успешно обновлены.",
-      });
-    } catch (error) {
-      toast({
-        title: "Ошибка",
-        description: "Не удалось сохранить настройки.",
-        variant: "destructive",
-      });
+      toast({ title: "Настройки сохранены", description: "Ваши настройки успешно обновлены." });
+    } catch {
+      toast({ title: "Ошибка", description: "Не удалось сохранить.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword.trim()) {
+      toast({ title: 'Ошибка', description: 'Введите новый пароль', variant: 'destructive' });
+      return;
+    }
+    if (newPassword.length < 4) {
+      toast({ title: 'Ошибка', description: 'Пароль должен быть минимум 4 символа', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Ошибка', description: 'Пароли не совпадают', variant: 'destructive' });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Обновляем пароль в таблице employees
+      const { error } = await supabase
+        .from('employees')
+        .update({ password: newPassword } as any)
+        .eq('id', user!.id);
+
+      if (error) throw error;
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
+      toast({ title: 'Пароль изменён', description: 'Новый пароль сохранён. Используйте его при следующем входе.' });
+    } catch (err: any) {
+      toast({ title: 'Ошибка', description: err.message || 'Не удалось сменить пароль', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-4 sm:space-y-6 p-2 sm:p-4 md:p-6">
         <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Shield className="w-8 h-8" />
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <Shield className="w-6 h-6 sm:w-8 sm:h-8" />
           Настройки
         </h1>
-        <p className="text-muted-foreground mt-2">Настройки системы и профиля</p>
+        <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Настройки системы и профиля</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="profile">Профиль</TabsTrigger>
-          <TabsTrigger value="notifications">Уведомления</TabsTrigger>
-          <TabsTrigger value="appearance">Внешний вид</TabsTrigger>
-          <TabsTrigger value="security">Безопасность</TabsTrigger>
-          {isAdmin && <TabsTrigger value="system">Система</TabsTrigger>}
+        <TabsList className="flex flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="profile" className="text-xs sm:text-sm">Профиль</TabsTrigger>
+          <TabsTrigger value="notifications" className="text-xs sm:text-sm">Уведомления</TabsTrigger>
+          <TabsTrigger value="appearance" className="text-xs sm:text-sm">Внешний вид</TabsTrigger>
+          <TabsTrigger value="security" className="text-xs sm:text-sm">Безопасность</TabsTrigger>
+          {isAdmin && <TabsTrigger value="system" className="text-xs sm:text-sm">Система</TabsTrigger>}
           {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo' || user?.role === 'deputy_director') && (
-            <TabsTrigger value="companies">Компании</TabsTrigger>
+            <TabsTrigger value="companies" className="text-xs sm:text-sm">Компании</TabsTrigger>
+          )}
+          {(user?.role === 'admin' || user?.role === 'ceo') && (
+            <TabsTrigger value="access" className="text-xs sm:text-sm">Доступ к проектам</TabsTrigger>
           )}
         </TabsList>
 
@@ -377,6 +412,8 @@ export default function Settings() {
                   type="password"
                   className="mt-1"
                   placeholder="Введите текущий пароль"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
                 />
               </div>
               <div>
@@ -385,6 +422,8 @@ export default function Settings() {
                   type="password"
                   className="mt-1"
                   placeholder="Введите новый пароль"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div>
@@ -393,9 +432,11 @@ export default function Settings() {
                   type="password"
                   className="mt-1"
                   placeholder="Повторите новый пароль"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
-              <Button onClick={handleSave} disabled={isSaving}>
+              <Button onClick={handleChangePassword} disabled={isSaving || !newPassword}>
                 <Save className="w-4 h-4 mr-2" />
                 {isSaving ? 'Сохранение...' : 'Изменить пароль'}
               </Button>
@@ -593,6 +634,14 @@ export default function Settings() {
                   <span className="font-mono">1.0.2</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-muted-foreground">Разработчик:</span>
+                  <span className="font-medium text-primary">Aidos Tazhbenov</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Copyright:</span>
+                  <span className="text-muted-foreground">© 2026 All Rights Reserved</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Демо-режим:</span>
                   <span className={appSettings.showDemoUsers ? 'text-green-500' : 'text-muted-foreground'}>
                     {appSettings.showDemoUsers ? 'Включен' : 'Выключен'}
@@ -635,6 +684,22 @@ export default function Settings() {
                   }
                 }}
               />
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* Вкладка Доступ к проектам */}
+        {(user?.role === 'admin' || user?.role === 'ceo') && (
+          <TabsContent value="access" className="space-y-4">
+            <Card className="p-4 sm:p-6 border-0 shadow-sm">
+              <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                Доступ к проектам по компаниям
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Настройте какие компании видит каждый пользователь. Перетаскивайте компании в зону «Назначено».
+              </p>
+              <UserCompanyAssignment />
             </Card>
           </TabsContent>
         )}

@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { CheckInWidget } from '@/components/CheckInWidget';
+import { supabase } from '@/integrations/supabase/client';
 import {
   TrendingUp,
   Users,
@@ -137,7 +138,7 @@ const MetricCard = React.memo(({
   const navigate = useNavigate();
 
   return (
-    <Card className="p-6 relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-all duration-300 border-2 border-transparent hover:border-primary/30 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+    <Card className="p-4 sm:p-6 relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-all duration-300 border-2 border-transparent hover:border-primary/30 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
       {/* Градиентный фон при наведении */}
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
 
@@ -146,9 +147,9 @@ const MetricCard = React.memo(({
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-secondary/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
 
       <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className={`p-3 rounded-xl bg-gradient-to-br ${gradient} shadow-lg shadow-primary/20`}>
-            <Icon className="h-6 w-6 text-white" />
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <div className={`p-2 sm:p-3 rounded-xl bg-gradient-to-br ${gradient} shadow-lg shadow-primary/20`}>
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
           </div>
           {trend && (
             <Badge
@@ -165,12 +166,12 @@ const MetricCard = React.memo(({
           )}
         </div>
         <div>
-          <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-          <p className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+          <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">{title}</p>
+          <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             {value}
           </p>
           {subtitle && (
-            <p className="text-xs text-muted-foreground mt-2">{subtitle}</p>
+            <p className="text-xs text-muted-foreground mt-1 sm:mt-2">{subtitle}</p>
           )}
         </div>
       </div>
@@ -187,13 +188,28 @@ export default function Dashboard() {
   // Состояние для фильтра проектов по компании
   const [showOtherCompanies, setShowOtherCompanies] = useState(false);
 
-  // Загружаем записи посещений с мемоизацией
-  const attendanceRecords = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('attendanceRecords') || '[]');
-    } catch {
-      return [];
-    }
+  // Загружаем записи посещений из Supabase
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    supabase
+      .from('attendance')
+      .select('*')
+      .eq('date', today)
+      .then(({ data }) => {
+        if (data) {
+          // Маппим в формат, совместимый с остальным кодом Dashboard
+          const mapped = data.map((row: any) => ({
+            id: row.id,
+            employeeId: row.employee_id,
+            checkIn: row.check_in || '',
+            checkOut: row.check_out || undefined,
+            status: row.location_type === 'office' ? 'in_office' : 'remote',
+            date: new Date(row.date).toDateString(),
+          }));
+          setAttendanceRecords(mapped);
+        }
+      });
   }, []);
 
   // Безопасные вычисления
@@ -256,39 +272,49 @@ export default function Dashboard() {
     return baseProjects;
   }, [projects, user, showOtherCompanies]);
 
+  // Хелпер: парсит notes (строка или объект)
+  const parseNotes = (p: any): any => {
+    if (!p.notes) return null;
+    if (typeof p.notes === 'object') return p.notes;
+    try { return JSON.parse(p.notes); } catch { return null; }
+  };
+
   // Статистика проектов по реальным данным
   const projectStats = useMemo(() => {
     const total = userProjects.length;
 
-    // Проекты ожидающие утверждения партнером (только для CEO/deputy)
+    // Проекты ожидающие утверждения партнером (по доступным проектам)
     const pendingPartnerApproval = (user?.role === 'ceo' || user?.role === 'deputy_director')
       ? projects.filter((p: any) => {
-        const notesStatus = p.notes?.status;
-        return notesStatus === 'new' || notesStatus === 'pending_approval';
+        const ns = parseNotes(p)?.status;
+        return ns === 'new' || ns === 'pending_approval';
       }).length
       : 0;
 
-    // Проекты ожидающие распределения команды (только для CEO/deputy)
+    // Проекты ожидающие распределения команды
     const awaitingTeam = (user?.role === 'ceo' || user?.role === 'deputy_director')
       ? projects.filter((p: any) => {
-        const notesStatus = p.notes?.status;
-        return (notesStatus === 'approved' || notesStatus === 'pending_approval') &&
-          (!p.team || p.team.length === 0);
+        const notes = parseNotes(p);
+        const ns = notes?.status;
+        const team = notes?.team || p.team || [];
+        return ns === 'approved' && team.length === 0;
       }).length
       : 0;
 
-    // Активные проекты
+    // Активные проекты (не pending, не completed)
     const active = userProjects.filter((p: any) => {
-      const notesStatus = p.notes?.status;
-      if (notesStatus === 'new' || notesStatus === 'pending_approval') return false;
-      const status = p.status || p.notes?.status;
-      return status === 'in_progress' || status === 'active';
+      const notes = parseNotes(p);
+      const ns = notes?.status;
+      if (ns === 'new' || ns === 'pending_approval') return false;
+      const status = p.status || ns;
+      return status === 'in_progress' || status === 'active' || status === 'В работе' || status === 'Активный';
     }).length;
 
     // Завершённые
     const completed = userProjects.filter((p: any) => {
-      const status = p.status || p.notes?.status;
-      return status === 'completed' || status === 'closed';
+      const ns = parseNotes(p)?.status;
+      const status = p.status || ns;
+      return status === 'completed' || status === 'closed' || status === 'Завершён';
     }).length;
 
     // Общая сумма проектов пользователя
@@ -460,6 +486,48 @@ export default function Dashboard() {
     }));
   }, [projects, user]);
 
+  // Последние добавленные проекты (активность)
+  const recentProjects = useMemo(() => {
+    return [...projects]
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 5)
+      .map((p: any) => {
+        const notes = parseNotes(p);
+        const ns = notes?.status;
+        let statusLabel = 'Черновик';
+        let statusColor = 'text-muted-foreground bg-muted/50';
+        if (ns === 'new' || ns === 'pending_approval') {
+          statusLabel = 'На утверждении';
+          statusColor = 'text-yellow-700 bg-yellow-500/15';
+        } else if (ns === 'approved' && (notes?.team || p.team || []).length === 0) {
+          statusLabel = 'Ожидает команду';
+          statusColor = 'text-orange-700 bg-orange-500/15';
+        } else if (p.status === 'in_progress' || p.status === 'active') {
+          statusLabel = 'В работе';
+          statusColor = 'text-green-700 bg-green-500/15';
+        } else if (p.status === 'completed') {
+          statusLabel = 'Завершён';
+          statusColor = 'text-blue-700 bg-blue-500/15';
+        }
+        const company = notes?.companyName || notes?.ourCompany || notes?.client?.name || p.companyName || p.ourCompany || '—';
+        const createdAt = p.created_at ? new Date(p.created_at) : null;
+        const daysAgo = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / 86400000) : null;
+        return {
+          id: p.id,
+          name: p.name || notes?.name || 'Без названия',
+          company,
+          statusLabel,
+          statusColor,
+          createdAt,
+          daysAgo,
+        };
+      });
+  }, [projects]);
+
   // Подсчёт срочных дедлайнов
   const urgentDeadlines = useMemo(() => {
     let overdue = 0;
@@ -522,14 +590,17 @@ export default function Dashboard() {
   const isProcurement = user?.role === 'procurement';
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header с футуристичным дизайном */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 page-enter">
+      {/* Заголовок */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-gradient">
-            📊 Дашборд
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <span className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-primary" />
+            </span>
+            Дашборд
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm">
             {isDirector
               ? 'Обзор деятельности компании'
               : isPartner
@@ -541,19 +612,19 @@ export default function Dashboard() {
                     : 'Моя деятельность'}
           </p>
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center space-x-2 bg-secondary/20 p-2 rounded-lg backdrop-blur-sm border border-primary/10">
             <Switch
               id="show-other-companies"
               checked={showOtherCompanies}
               onCheckedChange={setShowOtherCompanies}
             />
-            <Label htmlFor="show-other-companies" className="text-sm font-medium cursor-pointer">
-              Показать другие компании
+            <Label htmlFor="show-other-companies" className="text-xs sm:text-sm font-medium cursor-pointer">
+              Другие компании
             </Label>
           </div>
 
-          <Badge variant="outline" className="flex items-center space-x-2 px-4 py-2 backdrop-blur-sm border-primary/20">
+          <Badge variant="outline" className="hidden sm:flex items-center space-x-2 px-4 py-2 backdrop-blur-sm border-primary/20">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <Activity className="h-4 w-4" />
             <span>Обновлено: {new Date().toLocaleTimeString('ru-RU')}</span>
@@ -563,82 +634,63 @@ export default function Dashboard() {
 
       {/* Уведомление о срочных дедлайнах */}
       {urgentDeadlines.total > 0 && (
-        <Card className={`p-4 border-2 ${urgentDeadlines.overdue > 0
-          ? 'bg-red-50 border-red-300 dark:bg-red-950/50 dark:border-red-800'
+        <Card className={`p-4 border-0 shadow-sm border-l-4 ${urgentDeadlines.overdue > 0
+          ? 'border-l-red-500'
           : urgentDeadlines.critical > 0
-            ? 'bg-orange-50 border-orange-300 dark:bg-orange-950/50 dark:border-orange-800'
-            : 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/50 dark:border-yellow-800'
+            ? 'border-l-orange-500'
+            : 'border-l-yellow-500'
           }`}>
           <div className="flex items-start gap-3">
-            <AlertCircle className={`w-6 h-6 mt-0.5 ${urgentDeadlines.overdue > 0
-              ? 'text-red-600 dark:text-red-400'
-              : urgentDeadlines.critical > 0
-                ? 'text-orange-600 dark:text-orange-400'
-                : 'text-yellow-600 dark:text-yellow-400'
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              urgentDeadlines.overdue > 0 ? 'bg-red-500/15' :
+              urgentDeadlines.critical > 0 ? 'bg-orange-500/15' : 'bg-yellow-500/15'
+            }`}>
+              <AlertCircle className={`w-5 h-5 ${
+                urgentDeadlines.overdue > 0 ? 'text-red-500' :
+                urgentDeadlines.critical > 0 ? 'text-orange-500' : 'text-yellow-500'
               }`} />
-            <div className="flex-1">
-              <h3 className={`font-semibold text-lg ${urgentDeadlines.overdue > 0
-                ? 'text-red-800 dark:text-red-200'
-                : urgentDeadlines.critical > 0
-                  ? 'text-orange-800 dark:text-orange-200'
-                  : 'text-yellow-800 dark:text-yellow-200'
-                }`}>
-                ⚠️ Внимание! Срочные дедлайны
-              </h3>
-              <div className="flex flex-wrap gap-4 mt-2">
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-sm">Срочные дедлайны</h3>
+              <div className="flex flex-wrap gap-3 mt-1.5">
                 {urgentDeadlines.overdue > 0 && (
-                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300 font-medium">
-                    <span className="text-lg">🔴</span>
-                    <span>Просрочено: {urgentDeadlines.overdue}</span>
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    Просрочено: {urgentDeadlines.overdue}
+                  </span>
                 )}
                 {urgentDeadlines.critical > 0 && (
-                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-medium">
-                    <span className="text-lg">🟠</span>
-                    <span>До 3 дней: {urgentDeadlines.critical}</span>
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                    До 3 дней: {urgentDeadlines.critical}
+                  </span>
                 )}
                 {urgentDeadlines.warning > 0 && (
-                  <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300 font-medium">
-                    <span className="text-lg">🟡</span>
-                    <span>До 7 дней: {urgentDeadlines.warning}</span>
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-yellow-600 bg-yellow-500/10 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                    До 7 дней: {urgentDeadlines.warning}
+                  </span>
                 )}
               </div>
-              {/* Список срочных проектов */}
               {urgentDeadlines.urgentList.length > 0 && (
-                <div className="mt-3">
-                  <details>
-                    <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                      Показать проекты ({urgentDeadlines.urgentList.length})
-                    </summary>
-                    <ul className="mt-2 space-y-1 ml-4">
-                      {urgentDeadlines.urgentList.slice(0, 5).map(({ project, daysLeft, urgency }) => (
-                        <li key={project.id || project.notes?.id} className="flex items-center gap-2 text-sm">
-                          <span className={urgency === 'overdue' ? 'text-red-600' : urgency === 'critical' ? 'text-orange-600' : 'text-yellow-600'}>
-                            {urgency === 'overdue' ? '🔴' : urgency === 'critical' ? '🟠' : '🟡'}
-                          </span>
-                          <span className="font-medium truncate max-w-[250px]">
-                            {project.name || project.client?.name || 'Без названия'}
-                          </span>
-                          <span className="text-muted-foreground">
-                            ({daysLeft < 0 ? `просрочен на ${Math.abs(daysLeft)} дн.` : daysLeft === 0 ? 'сегодня!' : `осталось ${daysLeft} дн.`})
-                          </span>
-                        </li>
-                      ))}
-                      {urgentDeadlines.urgentList.length > 5 && (
-                        <li className="text-muted-foreground">... и ещё {urgentDeadlines.urgentList.length - 5}</li>
-                      )}
-                    </ul>
-                  </details>
+                <div className="mt-2.5 space-y-1">
+                  {urgentDeadlines.urgentList.slice(0, 3).map(({ project, daysLeft, urgency }) => (
+                    <div key={project.id || project.notes?.id} className="flex items-center gap-2 text-xs">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        urgency === 'overdue' ? 'bg-red-500' : urgency === 'critical' ? 'bg-orange-500' : 'bg-yellow-500'
+                      }`} />
+                      <span className="font-medium truncate">{project.name || project.client?.name || 'Без названия'}</span>
+                      <span className="text-muted-foreground flex-shrink-0">
+                        {daysLeft < 0 ? `−${Math.abs(daysLeft)} дн.` : daysLeft === 0 ? 'сегодня' : `${daysLeft} дн.`}
+                      </span>
+                    </div>
+                  ))}
+                  {urgentDeadlines.urgentList.length > 3 && (
+                    <p className="text-xs text-muted-foreground pl-3.5">+{urgentDeadlines.urgentList.length - 3} ещё</p>
+                  )}
                 </div>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => navigate('/projects')}
-              >
+              <Button variant="ghost" size="sm" className="mt-2 h-7 text-xs px-2 -ml-2" onClick={() => navigate('/projects')}>
                 Перейти к проектам →
               </Button>
             </div>
@@ -713,11 +765,11 @@ export default function Dashboard() {
       </div>
 
       {/* Графики и аналитика - адаптивные */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
 
         {/* Прогресс выполнения (новый виджет) */}
         {projectStats.active > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-1 flex flex-col justify-center">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-1 flex flex-col justify-center">
             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
             <div className="relative z-10 text-center">
               <h3 className="text-lg font-semibold mb-6 flex items-center justify-center gap-2">
@@ -748,7 +800,7 @@ export default function Dashboard() {
 
         {/* Статус проектов */}
         {projectStatusData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-2">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-2">
             <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
@@ -762,9 +814,52 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/* Последняя активность */}
+        {recentProjects.length > 0 && (
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-3">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl" />
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600">
+                    <Clock className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Последняя активность</h3>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>Все проекты →</Button>
+              </div>
+              <div className="space-y-2">
+                {recentProjects.map((proj, idx) => (
+                  <div
+                    key={proj.id || idx}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group"
+                    onClick={() => navigate(`/project/${proj.id}`)}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors" title={proj.name}>{proj.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{proj.company}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${proj.statusColor}`}>
+                        {proj.statusLabel}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {proj.daysAgo === 0 ? 'сегодня' : proj.daysAgo === 1 ? 'вчера' : proj.daysAgo !== null ? `${proj.daysAgo}д. назад` : ''}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Распределение по компаниям */}
         {companyDistributionData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-40 h-40 bg-secondary/10 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
@@ -782,7 +877,7 @@ export default function Dashboard() {
 
         {/* Распределение по ролям - только для директоров (теперь красивый PieChart) */}
         {isDirector && roleDistributionPieData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-1">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-1">
             <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/5 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
@@ -798,7 +893,7 @@ export default function Dashboard() {
 
         {/* Топ 5 проектов по бюджету (НОВЫЙ ВИДЖЕТ) */}
         {isDirector && topProjectsData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-2">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-2">
             <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-6">
@@ -841,7 +936,7 @@ export default function Dashboard() {
 
         {/* Месячная выручка - только для директоров */}
         {isDirector && monthlyRevenueData.length > 0 && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/5 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
@@ -857,7 +952,7 @@ export default function Dashboard() {
 
         {/* Посещаемость - только для директоров */}
         {isDirector && (
-          <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+          <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center space-x-2 mb-6">
@@ -914,7 +1009,7 @@ export default function Dashboard() {
         {/* Последние активности - только для директоров */}
         {isDirector && (
           <div className="lg:col-span-2">
-            <Card className="p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
+            <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
               <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
               <div className="relative z-10">
                 <div className="flex items-center space-x-2 mb-6">
@@ -945,7 +1040,7 @@ export default function Dashboard() {
                             {employees.find((emp: any) => emp.id === record.employeeId)?.name || 'Сотрудник'}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {new Date(record.checkIn).toLocaleTimeString('ru-RU')}
+                            {record.checkOut ? 'Завершил работу' : 'Начал работу'} в {record.checkIn?.slice(0, 5) || '—'}
                           </p>
                         </div>
                         <Badge variant="outline" className="text-xs backdrop-blur-sm">

@@ -1,20 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, CheckCircle, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+import { MapPin, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAppSettings, isWithinOfficeRadius } from '@/lib/appSettings';
+import { supabase } from '@/integrations/supabase/client';
 
-interface AttendanceRecord {
+interface TodayRecord {
   id: string;
-  employeeId: string;
   checkIn: string;
   checkOut?: string;
   location: string;
-  status: 'in_office' | 'remote' | 'client';
-  date: string;
 }
 
 export function CheckInWidget() {
@@ -24,50 +22,55 @@ export function CheckInWidget() {
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<string>('');
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  const [todayRecord, setTodayRecord] = useState<TodayRecord | null>(null);
 
-  // Загружаем записи посещений из localStorage
+  // Загружаем запись на сегодня из Supabase
   useEffect(() => {
-    const records = JSON.parse(localStorage.getItem('attendanceRecords') || '[]');
-    setAttendanceRecords(records);
-    
-    // Находим запись на сегодня
-    const today = new Date().toDateString();
-    const todayRec = records.find((r: AttendanceRecord) => 
-      new Date(r.date).toDateString() === today && r.employeeId === user?.id
-    );
-    setTodayRecord(todayRec);
+    if (!user?.id) return;
+
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    supabase
+      .from('attendance')
+      .select('id, check_in, check_out, location_type')
+      .eq('employee_id', user.id)
+      .eq('date', today)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setTodayRecord({
+            id: data.id,
+            checkIn: data.check_in || '',
+            checkOut: data.check_out || undefined,
+            location: data.location_type === 'office' ? 'В офисе' : 'Удалённо',
+          });
+          setCurrentLocation(data.location_type === 'office' ? 'В офисе' : 'Удалённо');
+        }
+      });
   }, [user?.id]);
 
   // Получаем геолокацию
-  const getCurrentLocation = async (): Promise<{ location: string; coords: { lat: number; lng: number } }> => {
-    return new Promise((resolve, reject) => {
+  const getCurrentLocation = async (): Promise<{ location: string; locationType: string; coords: { lat: number; lng: number } }> => {
+    return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        resolve({ location: 'Геолокация недоступна', coords: { lat: 0, lng: 0 } });
+        resolve({ location: 'Геолокация недоступна', locationType: 'remote', coords: { lat: 0, lng: 0 } });
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-
-          // Используем настройки из appSettings вместо хардкода
           if (appSettings.officeLocation.enabled) {
             const inOffice = isWithinOfficeRadius(latitude, longitude);
-
-            if (inOffice) {
-              resolve({ location: 'В офисе', coords: { lat: latitude, lng: longitude } });
-            } else {
-              // Пользователь вне офиса - отмечаем как удаленно
-              resolve({ location: 'Удалённо', coords: { lat: latitude, lng: longitude } });
-            }
+            resolve({
+              location: inOffice ? 'В офисе' : 'Удалённо',
+              locationType: inOffice ? 'office' : 'remote',
+              coords: { lat: latitude, lng: longitude },
+            });
           } else {
-            // Проверка геолокации отключена - разрешаем любое местоположение
-            resolve({ location: 'Удалённо', coords: { lat: latitude, lng: longitude } });
+            resolve({ location: 'Удалённо', locationType: 'remote', coords: { lat: latitude, lng: longitude } });
           }
         },
-        () => resolve({ location: 'Геолокация недоступна', coords: { lat: 0, lng: 0 } }),
+        () => resolve({ location: 'Геолокация недоступна', locationType: 'remote', coords: { lat: 0, lng: 0 } }),
         { timeout: 5000 }
       );
     });
@@ -79,35 +82,46 @@ export function CheckInWidget() {
 
     setIsCheckingIn(true);
     try {
-      const result = await getCurrentLocation();
-      const { location, coords } = result;
+      const { location, locationType, coords } = await getCurrentLocation();
       setCurrentLocation(location);
 
       const now = new Date();
-      const newRecord: AttendanceRecord = {
-        id: Date.now().toString(),
-        employeeId: user.id,
-        checkIn: now.toISOString(),
-        location,
-        status: location === 'В офисе' ? 'in_office' : 'remote',
-        date: now.toDateString()
-      };
+      const today = now.toISOString().split('T')[0];
+      const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
 
-      const updatedRecords = [...attendanceRecords, newRecord];
-      setAttendanceRecords(updatedRecords);
-      setTodayRecord(newRecord);
-      localStorage.setItem('attendanceRecords', JSON.stringify(updatedRecords));
+      const { data, error } = await supabase
+        .from('attendance')
+        .upsert(
+          {
+            employee_id: user.id,
+            date: today,
+            check_in: timeStr,
+            check_in_lat: coords.lat || null,
+            check_in_lng: coords.lng || null,
+            location_type: locationType,
+            status: 'present',
+          },
+          { onConflict: 'employee_id,date' }
+        )
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      setTodayRecord({
+        id: data.id,
+        checkIn: timeStr,
+        location,
+      });
 
       toast({
-        title: "✅ Приход отмечен",
+        title: "Приход отмечен",
         description: `Время: ${now.toLocaleTimeString('ru-RU')}\nМестоположение: ${location}`,
       });
     } catch (error) {
-      // Ошибка от reject() в getCurrentLocation - пользователь вне офиса
       const errorMessage = error instanceof Error ? error.message : "Не удалось отметить приход";
-
       toast({
-        title: "❌ Отметка невозможна",
+        title: "Ошибка",
         description: errorMessage,
         variant: "destructive",
       });
@@ -119,22 +133,34 @@ export function CheckInWidget() {
   // Отметка ухода
   const handleCheckOut = async () => {
     if (!user || !todayRecord) return;
-    
+
     setIsCheckingOut(true);
     try {
       const now = new Date();
-      const updatedRecord = { ...todayRecord, checkOut: now.toISOString() };
-      
-      const updatedRecords = attendanceRecords.map(r => 
-        r.id === todayRecord.id ? updatedRecord : r
-      );
-      
-      setAttendanceRecords(updatedRecords);
-      setTodayRecord(updatedRecord);
-      localStorage.setItem('attendanceRecords', JSON.stringify(updatedRecords));
+      const timeStr = now.toTimeString().split(' ')[0];
+
+      // Рассчитываем продолжительность работы в минутах
+      let workDuration: number | null = null;
+      if (todayRecord.checkIn) {
+        const [h1, m1] = todayRecord.checkIn.split(':').map(Number);
+        const [h2, m2] = timeStr.split(':').map(Number);
+        workDuration = (h2 * 60 + m2) - (h1 * 60 + m1);
+      }
+
+      const { error } = await supabase
+        .from('attendance')
+        .update({
+          check_out: timeStr,
+          work_duration: workDuration,
+        })
+        .eq('id', todayRecord.id);
+
+      if (error) throw error;
+
+      setTodayRecord({ ...todayRecord, checkOut: timeStr });
 
       toast({
-        title: "✅ Уход отмечен",
+        title: "Уход отмечен",
         description: `Время: ${now.toLocaleTimeString('ru-RU')}`,
       });
     } catch (error) {
@@ -167,16 +193,16 @@ export function CheckInWidget() {
         <div className="space-y-4">
           <div className="flex items-center space-x-2">
             <CheckCircle className="h-5 w-5 text-success" />
-            <span className="text-sm">Приход: {new Date(todayRecord.checkIn).toLocaleTimeString('ru-RU')}</span>
+            <span className="text-sm">Приход: {todayRecord.checkIn}</span>
           </div>
-          
+
           {todayRecord.checkOut ? (
             <div className="flex items-center space-x-2">
               <XCircle className="h-5 w-5 text-destructive" />
-              <span className="text-sm">Уход: {new Date(todayRecord.checkOut).toLocaleTimeString('ru-RU')}</span>
+              <span className="text-sm">Уход: {todayRecord.checkOut}</span>
             </div>
           ) : (
-            <Button 
+            <Button
               onClick={handleCheckOut}
               disabled={isCheckingOut}
               variant="outline"
@@ -197,7 +223,7 @@ export function CheckInWidget() {
           )}
         </div>
       ) : (
-        <Button 
+        <Button
           onClick={handleCheckIn}
           disabled={isCheckingIn}
           className="w-full"

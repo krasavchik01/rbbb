@@ -1,4 +1,4 @@
-# 🚀 RB Partners Suite
+# 🚀 SUITE-A
 
 **Мощная платформа управления профессиональными услугами**
 
@@ -191,7 +191,7 @@ lsof -ti:8080 | xargs kill
 
 ## 📄 Лицензия
 
-© 2025 RB Partners. Все права защищены.
+© 2025 RB Partners. Developed by Aidos Tazhbenov. Все права защищены.
 
 ---
 

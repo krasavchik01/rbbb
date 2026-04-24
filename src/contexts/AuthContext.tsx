@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserRole, hasPermission } from '@/types/roles';
 import { supabase } from '@/integrations/supabase/client';
+import { getUserAllowedCompanyIds } from '@/lib/userCompanyAccess';
 
 interface User {
   id: string;
@@ -11,12 +12,14 @@ interface User {
   department?: string;
   position?: string;
   avatar?: string;
+  allowedCompanyIds?: string[] | null; // null = без ограничений
 }
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
   isLoading: boolean;
   checkPermission: (permission: string) => boolean;
   hasRole: (role: UserRole) => boolean;
@@ -117,6 +120,19 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
     },
   },
   
+  // Академия
+  'academy@rbpartners.com': {
+    password: 'academy',
+    user: {
+      id: 'academy_1',
+      email: 'academy@rbpartners.com',
+      name: 'Сотрудник Академии',
+      role: 'academy',
+      department: 'Академия',
+      position: 'Сотрудник академии',
+    },
+  },
+
   // Старый admin для совместимости
   'admin': {
     password: 'admin',
@@ -224,6 +240,12 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
   },
 };
 
+// Обогащает пользователя данными о доступе к компаниям из Supabase
+async function enrichUserWithAccess(user: User): Promise<User> {
+  const allowedIds = await getUserAllowedCompanyIds(user.id);
+  return { ...user, allowedCompanyIds: allowedIds };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -233,13 +255,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        // Загружаем доступ к компаниям из Supabase
+        enrichUserWithAccess(parsed).then(enriched => {
+          setUser(enriched);
+          setIsLoading(false);
+        });
       } catch (error) {
         console.error('Error parsing saved user:', error);
         localStorage.removeItem('user');
+        setIsLoading(false);
       }
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -247,7 +276,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userRecord = DEMO_USERS[email];
     
     if (userRecord && userRecord.password === password) {
-      setUser(userRecord.user);
+      const enriched = await enrichUserWithAccess(userRecord.user);
+      setUser(enriched);
       localStorage.setItem('user', JSON.stringify(userRecord.user));
       return true;
     }
@@ -273,8 +303,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
 
-      // Проверяем пароль (пока что просто проверяем что сотрудник существует)
-      // TODO: Добавить хеширование паролей в будущем
+      // Проверяем пароль если он установлен в БД
+      if ((employeeData as any).password && (employeeData as any).password !== password) {
+        console.error('❌ Wrong password for:', employeeData.email);
+        return false;
+      }
       console.log('✅ Employee found:', employeeData.name);
       
       // Создаем объект пользователя из данных сотрудника
@@ -289,19 +322,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         avatar: employeeData.name ? employeeData.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'UN'
       };
 
-      setUser(user);
+      const enriched = await enrichUserWithAccess(user);
+      setUser(enriched);
       localStorage.setItem('user', JSON.stringify(user));
       return true;
     } catch (error) {
       console.error('❌ Database error:', error);
     }
-    
+
     return false;
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+  };
+
+  const updateUser = async (updates: Partial<User>) => {
+    if (!user) return;
+    const merged = { ...user, ...updates };
+    // Если allowedCompanyIds передали явно — используем их, иначе подгружаем из Supabase
+    const updated = updates.allowedCompanyIds !== undefined
+      ? merged
+      : await enrichUserWithAccess(merged);
+    setUser(updated);
+    // Сохраняем базовые поля (без allowedCompanyIds — они берутся из Supabase)
+    const { allowedCompanyIds: _, ...baseUser } = updated;
+    localStorage.setItem('user', JSON.stringify(baseUser));
   };
 
   const checkPermission = (permission: string): boolean => {
@@ -323,7 +370,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, checkPermission, hasRole, hasAnyRole }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, checkPermission, hasRole, hasAnyRole }}>
       {children}
     </AuthContext.Provider>
   );

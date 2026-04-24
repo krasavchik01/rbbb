@@ -245,7 +245,7 @@ const x = useProjects();
 
 ## 📞 КОНТАКТЫ
 
-- Project: RB Partners Suite
+- Project: SUITE-A
 - Supabase Project ID: `mknvqsnitzaurpwnhzwn`
 - Supabase URL: https://mknvqsnitzaurpwnhzwn.supabase.co
 - Vercel: projectbeastx-suite-main
