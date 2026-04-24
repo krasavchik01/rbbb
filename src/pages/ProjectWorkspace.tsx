@@ -37,6 +37,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
 // MethodologySelector removed
 import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology";
+import { ProjectV3 } from "@/types/project-v3";
+import { PROJECT_ROLES, ROLE_LABELS, UserRole, TEAM_ROLE_SLOTS } from "@/types/roles";
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +55,7 @@ import Tasks from "@/pages/Tasks";
 import { Task, ChecklistItem } from "@/types/project";
 // WorkPaper types removed
 import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
+import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { useMemo } from "react";
 
 export default function ProjectWorkspace() {
@@ -76,16 +79,6 @@ export default function ProjectWorkspace() {
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showTeamDialog, setShowTeamDialog] = useState(false);
   // Слоты команды: роль → ID сотрудника (или null)
-  const TEAM_ROLE_SLOTS = [
-    { key: 'partner', label: 'Партнёр', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300', roles: ['partner'] },
-    { key: 'manager_1', label: 'Менеджер 1', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300', roles: ['manager_1', 'manager_2', 'manager_3'] },
-    { key: 'supervisor', label: 'Супервайзер', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300', roles: ['supervisor_1', 'supervisor_2', 'supervisor_3'] },
-    { key: 'assistant_1', label: 'Ассистент 1', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', roles: ['assistant_1', 'assistant_2', 'assistant_3'] },
-    { key: 'assistant_2', label: 'Ассистент 2', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', roles: ['assistant_1', 'assistant_2', 'assistant_3'] },
-    { key: 'tax_specialist', label: 'Налоговик', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300', roles: ['tax_specialist'] },
-    { key: 'gph_1', label: 'ГПХ / Субподряд', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300', roles: [] },
-    { key: 'gph_2', label: 'ГПХ / Субподряд 2', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300', roles: [] },
-  ] as const;
   const [teamSlots, setTeamSlots] = useState<Record<string, string | null>>({});
   const [openSlotDropdown, setOpenSlotDropdown] = useState<string | null>(null);
   const [slotSearch, setSlotSearch] = useState('');
@@ -1291,241 +1284,108 @@ export default function ProjectWorkspace() {
           </DialogHeader>
 
           <div className="space-y-3 py-4 flex-1 overflow-y-auto">
-            {TEAM_ROLE_SLOTS.map((slot) => {
-              const assignedEmpId = teamSlots[slot.key] || null;
-              const assignedEmp = assignedEmpId ? (employees || []).find((e: any) => e.id === assignedEmpId) : null;
-              const isOpen = openSlotDropdown === slot.key;
-              const isAddingNew = addingNewInSlot === slot.key;
-              const isGphSlot = slot.key.startsWith('gph');
+            <TeamAssignment
+              employees={employees || []}
+              teamSlots={teamSlots}
+              slots={TEAM_ROLE_SLOTS as any}
+              onChange={setTeamSlots}
+              onAddNewEmployee={(slotKey) => {
+                setAddingNewInSlot(slotKey);
+                setNewEmployeeName('');
+                setNewEmployeeType(slotKey.startsWith('gph') ? 'gph' : 'staff');
+              }}
+            />
 
-              // Сотрудники подходящие под эту роль (или все для ГПХ слотов)
-              const availableEmps = (employees || []).filter((emp: any) => {
-                // Уже назначен в другой слот — пропускаем
-                const usedIds = Object.values(teamSlots).filter(Boolean) as string[];
-                if (usedIds.includes(emp.id) && emp.id !== assignedEmpId) return false;
-                
-                // Показываем всех сотрудников (игнорируем роль слота по просьбе пользователя)
-                return true;
-              });
+            {addingNewInSlot && (
+              <div className="mt-4 p-4 border rounded-xl bg-muted/30 space-y-3">
+                <div className="text-xs font-semibold text-muted-foreground uppercase">
+                  Новый сотрудник для роли «{TEAM_ROLE_SLOTS.find(s => s.key === addingNewInSlot)?.label}»
+                </div>
+                <Input
+                  placeholder="ФИО сотрудника"
+                  value={newEmployeeName}
+                  onChange={(e) => setNewEmployeeName(e.target.value)}
+                  className="h-10 text-sm"
+                  autoFocus
+                />
+                {addingNewInSlot.startsWith('gph') && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant={newEmployeeType === 'gph' ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => setNewEmployeeType('gph')}
+                    >
+                      ГПХ
+                    </Button>
+                    <Button
+                      variant={newEmployeeType === 'subcontract' ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => setNewEmployeeType('subcontract')}
+                    >
+                      Субподряд
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs h-9"
+                    onClick={() => setAddingNewInSlot(null)}
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 text-xs h-9"
+                    disabled={!newEmployeeName.trim()}
+                    onClick={async () => {
+                      try {
+                        const slot = TEAM_ROLE_SLOTS.find(s => s.key === addingNewInSlot)!;
+                        const empRole = addingNewInSlot.startsWith('gph')
+                          ? (newEmployeeType === 'gph' ? 'employee' : 'employee')
+                          : (slot.roles[0] || 'employee');
 
-              const q = slotSearch.toLowerCase();
-              const filteredEmps = q
-                ? availableEmps.filter((emp: any) => emp.name.toLowerCase().includes(q))
-                : availableEmps;
+                        const { data: newEmp, error } = await supabase
+                          .from('employees')
+                          .insert({
+                            name: newEmployeeName.trim(),
+                            role: empRole as any,
+                            level: '1' as any,
+                            email: `placeholder_${Date.now()}@temp.local`,
+                          })
+                          .select('id')
+                          .single();
 
-              return (
-                <div key={slot.key} className="relative">
-                  {/* Слот — кнопка выбора */}
-                  <div
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                      assignedEmp
-                        ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
-                        : 'border-dashed border-border hover:border-primary/40 hover:bg-muted/30'
-                    }`}
-                    onClick={() => {
-                      if (isOpen) {
-                        setOpenSlotDropdown(null);
-                        setSlotSearch('');
+                        if (error) throw error;
+
+                        setTeamSlots(prev => ({ ...prev, [addingNewInSlot]: newEmp.id }));
                         setAddingNewInSlot(null);
-                      } else {
-                        setOpenSlotDropdown(slot.key);
-                        setSlotSearch('');
-                        setAddingNewInSlot(null);
+                        setNewEmployeeName('');
+
+                        toast({
+                          title: 'Сотрудник создан',
+                          description: `${newEmployeeName.trim()} добавлен и назначен на роль`,
+                        });
+                      } catch (err: any) {
+                        toast({
+                          title: 'Ошибка',
+                          description: err.message || 'Не удалось создать сотрудника',
+                          variant: 'destructive',
+                        });
                       }
                     }}
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${slot.color}`}>
-                      {assignedEmp
-                        ? assignedEmp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()
-                        : slot.label[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{slot.label}</div>
-                      {assignedEmp ? (
-                        <div className="font-semibold text-sm truncate">{assignedEmp.name}</div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground/60">Нажмите чтобы выбрать...</div>
-                      )}
-                    </div>
-                    {assignedEmp && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 hover:bg-red-100 flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTeamSlots(prev => { const n = { ...prev }; delete n[slot.key]; return n; });
-                        }}
-                      >
-                        <X className="w-4 h-4 text-red-500" />
-                      </Button>
-                    )}
-                    <ChevronRight className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  </div>
-
-                  {/* Выпадающий список сотрудников */}
-                  {isOpen && !isAddingNew && (
-                    <div className="mt-1 border rounded-xl bg-card shadow-lg overflow-hidden z-10 relative">
-                      {/* Поиск внутри слота */}
-                      <div className="p-2 border-b">
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                          <Input
-                            placeholder="Поиск..."
-                            value={slotSearch}
-                            onChange={(e) => setSlotSearch(e.target.value)}
-                            className="pl-8 h-8 text-sm"
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="max-h-48 overflow-y-auto">
-                        {filteredEmps.length === 0 && (
-                          <div className="p-3 text-center text-xs text-muted-foreground">Нет сотрудников</div>
-                        )}
-                        {filteredEmps.map((emp: any) => (
-                          <div
-                            key={emp.id}
-                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-primary/5 cursor-pointer transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setTeamSlots(prev => ({ ...prev, [slot.key]: emp.id }));
-                              setOpenSlotDropdown(null);
-                              setSlotSearch('');
-                            }}
-                          >
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${slot.color}`}>
-                              {emp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium truncate">{emp.name}</div>
-                              <div className="text-xs text-muted-foreground">{emp.role}</div>
-                            </div>
-                            {emp.id === assignedEmpId && (
-                              <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Кнопка "Добавить нового" */}
-                      <div className="border-t p-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full text-xs gap-1.5 text-primary hover:text-primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAddingNewInSlot(slot.key);
-                            setNewEmployeeName('');
-                            setNewEmployeeType(isGphSlot ? 'gph' : 'staff');
-                          }}
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Добавить нового сотрудника
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Форма добавления нового сотрудника inline */}
-                  {isOpen && isAddingNew && (
-                    <div className="mt-1 border rounded-xl bg-card shadow-lg p-3 space-y-2 z-10 relative">
-                      <div className="text-xs font-semibold text-muted-foreground">Новый сотрудник для роли «{slot.label}»</div>
-                      <Input
-                        placeholder="ФИО сотрудника"
-                        value={newEmployeeName}
-                        onChange={(e) => setNewEmployeeName(e.target.value)}
-                        className="h-8 text-sm"
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      {isGphSlot && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant={newEmployeeType === 'gph' ? 'default' : 'outline'}
-                            size="sm"
-                            className="flex-1 text-xs h-7"
-                            onClick={(e) => { e.stopPropagation(); setNewEmployeeType('gph'); }}
-                          >
-                            ГПХ
-                          </Button>
-                          <Button
-                            variant={newEmployeeType === 'subcontract' ? 'default' : 'outline'}
-                            size="sm"
-                            className="flex-1 text-xs h-7"
-                            onClick={(e) => { e.stopPropagation(); setNewEmployeeType('subcontract'); }}
-                          >
-                            Субподряд
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-xs h-8"
-                          onClick={(e) => { e.stopPropagation(); setAddingNewInSlot(null); }}
-                        >
-                          Отмена
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1 text-xs h-8"
-                          disabled={!newEmployeeName.trim()}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              // Определяем роль для нового сотрудника
-                              const empRole = isGphSlot
-                                ? (newEmployeeType === 'gph' ? 'employee' : 'employee')
-                                : (slot.roles[0] || 'employee');
-
-                              // Создаём placeholder-сотрудника в Supabase
-                              const { data: newEmp, error } = await supabase
-                                .from('employees')
-                                .insert({
-                                  name: newEmployeeName.trim(),
-                                  role: empRole as any,
-                                  level: '1' as any,
-                                  email: `placeholder_${Date.now()}@temp.local`,
-                                })
-                                .select('id')
-                                .single();
-
-                              if (error) throw error;
-
-                              // Назначаем в слот
-                              setTeamSlots(prev => ({ ...prev, [slot.key]: newEmp.id }));
-                              setOpenSlotDropdown(null);
-                              setAddingNewInSlot(null);
-                              setNewEmployeeName('');
-
-                              toast({
-                                title: 'Сотрудник создан',
-                                description: `${newEmployeeName.trim()} добавлен и назначен на роль «${slot.label}»`,
-                              });
-                            } catch (err: any) {
-                              toast({
-                                title: 'Ошибка',
-                                description: err.message || 'Не удалось создать сотрудника',
-                                variant: 'destructive',
-                              });
-                            }
-                          }}
-                        >
-                          <Plus className="w-3.5 h-3.5 mr-1" />
-                          Создать и назначить
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Создать и назначить
+                  </Button>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
+
 
           <div className="flex justify-between items-center pt-2 border-t">
             <div className="text-xs text-muted-foreground">

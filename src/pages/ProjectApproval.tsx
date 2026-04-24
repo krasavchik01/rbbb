@@ -31,6 +31,7 @@ import { ProjectV3 } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { supabase } from "@/integrations/supabase/client";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
+import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { Contractor } from "@/types/project-v3";
 import { notifyProjectApproved, notifyProjectRejected, notifyPMAssigned, notifyTeamMemberAdded } from "@/lib/projectNotifications";
 import { getNotifications } from "@/lib/notifications";
@@ -852,229 +853,39 @@ export default function ProjectApproval() {
                 </h3>
 
                 <div className="space-y-3">
-                  {PROJECT_ROLES
-                    .filter(pr => !['ceo', 'deputy_director', 'hr', 'procurement', 'admin', 'company_director', 'contractor', 'accountant', 'admin_staff'].includes(pr.role))
-                    .map(projectRole => {
-                    const isRoleSelected = selectedRoles[projectRole.role];
-                    const isDropdownOpen = openRoleDropdown === projectRole.role;
-                    const selectedEmp = teamMembers[projectRole.role]
-                      ? availableEmployees.find(e => e.id === teamMembers[projectRole.role])
-                      : null;
-
-                    // ФИЛЬТРАЦИЯ: Показываем ВСЕХ сотрудников, ищем по ФИО и по Роли
-                    const q = isDropdownOpen ? roleSearchQuery.toLowerCase() : '';
-                    const filteredEmps = availableEmployees
-                      .filter(emp => {
-                        if (!q) return true;
-                        const nameMatch = emp.name.toLowerCase().includes(q);
-                        const roleLabel = (ROLE_LABELS[emp.role as UserRole] || emp.role || '').toLowerCase();
-                        return nameMatch || roleLabel.includes(q);
-                      })
-                      .sort((a, b) => {
-                        // Priority 1: Match project role (only if not searching)
-                        if (!q) {
-                          const aMatches = a.role === projectRole.role;
-                          const bMatches = b.role === projectRole.role;
-                          if (aMatches && !bMatches) return -1;
-                          if (!aMatches && bMatches) return 1;
-                        }
-                        // Priority 2: Name
-                        return a.name.localeCompare(b.name);
-                      });
-
-                    return (
-                      <div key={projectRole.role} className="border rounded-lg p-3">
-                        {/* Чекбокс для роли */}
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isRoleSelected || false}
-                              disabled={projectRole.role === 'partner'}
-                              onChange={(e) => {
-                                if (projectRole.role === 'partner') return;
-                                setSelectedRoles({...selectedRoles, [projectRole.role]: e.target.checked});
-                                if (!e.target.checked) {
-                                  const newTeam = {...teamMembers};
-                                  delete newTeam[projectRole.role];
-                                  setTeamMembers(newTeam);
-                                  setOpenRoleDropdown(null);
-                                }
-                              }}
-                              className="w-4 h-4 rounded border-gray-300"
-                            />
-                            <span className="font-medium">{projectRole.label}</span>
-                            {projectRole.role === 'partner' && (
-                              <Badge variant="destructive" className="text-xs">Обязательно</Badge>
-                            )}
-                          </label>
-                          {isRoleSelected && selectedEmp && (
-                            <span className="text-sm text-muted-foreground">{selectedEmp.name}</span>
-                          )}
-                        </div>
-
-                        {/* Выбор сотрудника */}
-                        {isRoleSelected && (
-                          <div className="ml-7 space-y-2 relative">
-                            {/* Кнопка-trigger */}
-                            <div
-                              className="flex items-center justify-between w-full p-2.5 rounded-lg border cursor-pointer hover:border-primary/50 transition-colors bg-card"
-                              onClick={() => {
-                                if (isDropdownOpen) {
-                                  setOpenRoleDropdown(null);
-                                  setRoleSearchQuery('');
-                                } else {
-                                  setOpenRoleDropdown(projectRole.role);
-                                  setRoleSearchQuery('');
-                                  setAddingNewForRole(null);
-                                }
-                              }}
-                            >
-                              {selectedEmp ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary">
-                                    {selectedEmp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-medium">{selectedEmp.name}</div>
-                                    <div className="text-xs text-muted-foreground">{ROLE_LABELS[(selectedEmp as any).originalRole as UserRole] || (selectedEmp as any).originalRole}</div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-sm text-muted-foreground">Выберите сотрудника...</span>
-                              )}
-                              <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-90' : ''}`} />
-                            </div>
-
-                            {/* Выпадающий список */}
-                            {isDropdownOpen && addingNewForRole !== projectRole.role && (
-                              <div className="absolute z-20 left-0 right-0 mt-1 border rounded-xl bg-card shadow-xl overflow-hidden">
-                                <div className="p-2 border-b">
-                                  <Input
-                                    placeholder="Поиск сотрудника..."
-                                    value={roleSearchQuery}
-                                    onChange={(e) => setRoleSearchQuery(e.target.value)}
-                                    className="h-8 text-sm"
-                                    autoFocus
-                                  />
-                                </div>
-                                <div className="max-h-52 overflow-y-auto">
-                                  {filteredEmps.length === 0 && (
-                                    <div className="p-3 text-center text-xs text-muted-foreground">Никого не найдено</div>
-                                  )}
-                                  {filteredEmps.map(emp => {
-                                    const roleLbl = ROLE_LABELS[(emp as any).originalRole as UserRole] || (emp as any).originalRole;
-                                    const isSelected = teamMembers[projectRole.role] === emp.id;
-                                    return (
-                                      <div
-                                        key={emp.id}
-                                        className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
-                                        onClick={() => {
-                                          setTeamMembers({...teamMembers, [projectRole.role]: emp.id});
-                                          setOpenRoleDropdown(null);
-                                          setRoleSearchQuery('');
-                                        }}
-                                      >
-                                        <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                                          {emp.name.split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase()}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="text-sm font-medium truncate">{emp.name}</div>
-                                          <div className="text-xs text-muted-foreground">{roleLbl}</div>
-                                        </div>
-                                        {isSelected && <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                <div className="border-t p-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full text-xs gap-1.5 text-primary hover:text-primary"
-                                    onClick={() => {
-                                      setAddingNewForRole(projectRole.role);
-                                      setNewEmpName('');
-                                    }}
-                                  >
-                                    <UserPlus className="w-3.5 h-3.5" />
-                                    Добавить нового сотрудника
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Форма добавления нового сотрудника */}
-                            {addingNewForRole === projectRole.role && (
-                              <div className="flex gap-2 items-end p-2.5 rounded-lg border border-dashed border-primary/40 bg-primary/5">
-                                <div className="flex-1">
-                                  <Input
-                                    placeholder="ФИО нового сотрудника"
-                                    value={newEmpName}
-                                    onChange={(e) => setNewEmpName(e.target.value)}
-                                    className="h-8 text-sm"
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Escape') {
-                                        setAddingNewForRole(null);
-                                        setNewEmpName('');
-                                      }
-                                    }}
-                                  />
-                                </div>
-                                <Button
-                                  size="sm"
-                                  className="h-8 text-xs gap-1"
-                                  disabled={!newEmpName.trim()}
-                                  onClick={async () => {
-                                    try {
-                                      const empRole = projectRole.role.replace(/_\d+$/, '') || 'employee';
-                                      const { data: newEmp, error } = await supabase
-                                        .from('employees')
-                                        .insert({
-                                          name: newEmpName.trim(),
-                                          role: empRole as any,
-                                          level: '1' as any,
-                                          email: `placeholder_${Date.now()}@temp.local`,
-                                        })
-                                        .select('id')
-                                        .single();
-                                      if (error) throw error;
-                                      setTeamMembers(prev => ({ ...prev, [projectRole.role]: newEmp.id }));
-                                      setAddingNewForRole(null);
-                                      setOpenRoleDropdown(null);
-                                      setNewEmpName('');
-                                      toast({
-                                        title: 'Сотрудник создан',
-                                        description: `${newEmpName.trim()} создан и назначен на роль «${projectRole.label}»`,
-                                      });
-                                    } catch (err: any) {
-                                      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' });
-                                    }
-                                  }}
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  Создать
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-xs"
-                                  onClick={() => { setAddingNewForRole(null); setNewEmpName(''); }}
-                                >
-                                  Отмена
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <TeamAssignment
+                    employees={realEmployees}
+                    teamSlots={teamMembers}
+                    slots={PROJECT_ROLES
+                      .filter(pr => !['ceo', 'deputy_director', 'hr', 'procurement', 'admin', 'company_director', 'contractor', 'accountant', 'admin_staff'].includes(pr.role))
+                      .map(pr => ({
+                        key: pr.role,
+                        label: pr.label,
+                        roles: [pr.role]
+                      }))
+                    }
+                    onChange={(newTeam) => {
+                      setTeamMembers(newTeam as any);
+                    }}
+                    selectedSlots={selectedRoles}
+                    onToggleSlot={(role, checked) => {
+                      if (role === 'partner') return;
+                      setSelectedRoles({...selectedRoles, [role]: checked});
+                      if (!checked) {
+                        const newTeam = {...teamMembers};
+                        delete newTeam[role];
+                        setTeamMembers(newTeam);
+                      }
+                    }}
+                    disabledSlots={['partner']}
+                    onAddNewEmployee={(role) => {
+                      setAddingNewForRole(role);
+                      setNewEmpName('');
+                    }}
+                  />
                 </div>
               </div>
-
-              {/* Настройки видимости финансовой информации */}
+{/* Настройки видимости финансовой информации */}
               <Card className="p-4 border-l-4 border-blue-500">
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">

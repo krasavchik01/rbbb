@@ -182,6 +182,30 @@ export const PROJECT_ROLES: ProjectRole[] = [
   },
 ];
 
+export interface TeamMemberSlot {
+  key: string;
+  label: string;
+  roles: UserRole[];
+  color: string;
+}
+
+export const TEAM_ROLE_SLOTS: TeamMemberSlot[] = [
+  { key: 'partner', label: 'Партнер', roles: ['partner'], color: 'bg-blue-100 text-blue-700' },
+  { key: 'manager_1', label: 'Менеджер 1', roles: ['manager_1'], color: 'bg-indigo-100 text-indigo-700' },
+  { key: 'manager_2', label: 'Менеджер 2', roles: ['manager_2'], color: 'bg-indigo-100 text-indigo-700' },
+  { key: 'manager_3', label: 'Менеджер 3', roles: ['manager_3'], color: 'bg-indigo-100 text-indigo-700' },
+  { key: 'supervisor_3', label: 'Супервайзер 3', roles: ['supervisor_3'], color: 'bg-amber-100 text-amber-700' },
+  { key: 'supervisor_2', label: 'Супервайзер 2', roles: ['supervisor_2'], color: 'bg-amber-100 text-amber-700' },
+  { key: 'supervisor_1', label: 'Супервайзер 1', roles: ['supervisor_1'], color: 'bg-amber-100 text-amber-700' },
+  { key: 'tax_specialist_1', label: 'Налоговый специалист 1', roles: ['tax_specialist_1'], color: 'bg-emerald-100 text-emerald-700' },
+  { key: 'tax_specialist_2', label: 'Налоговый специалист 2', roles: ['tax_specialist_2'], color: 'bg-emerald-100 text-emerald-700' },
+  { key: 'assistant_3', label: 'Ассистент 3', roles: ['assistant_3'], color: 'bg-slate-100 text-slate-700' },
+  { key: 'assistant_2', label: 'Ассистент 2', roles: ['assistant_2'], color: 'bg-slate-100 text-slate-700' },
+  { key: 'assistant_1', label: 'Ассистент 1', roles: ['assistant_1'], color: 'bg-slate-100 text-slate-700' },
+  { key: 'gph_1', label: 'ГПХ / Субподряд 1', roles: ['contractor'], color: 'bg-purple-100 text-purple-700' },
+  { key: 'gph_2', label: 'ГПХ / Субподряд 2', roles: ['contractor'], color: 'bg-purple-100 text-purple-700' },
+];
+
 // Общая сумма процентов = 100%
 export const TOTAL_BONUS_PERCENT = PROJECT_ROLES.reduce(
   (sum, role) => sum + role.bonusPercent, 
