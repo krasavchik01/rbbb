@@ -5,32 +5,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useProjects } from '@/hooks/useProjects-simple';
 import { useEmployees } from '@/hooks/useSupabaseData';
+import { useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { calculateProjectFinances } from '@/types/project-v3';
+import { notifyBonusesApproved, notifyProjectClosed } from '@/lib/projectNotifications';
 import {
   Gift,
   TrendingUp,
-  DollarSign,
   Search,
   CheckCircle,
   Clock,
-  Users
+  Users,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 export default function Bonuses() {
   const { user, checkPermission } = useAuth();
-  const { projects = [] } = useProjects();
+  const { projects = [], updateProject: updateProjectRecord, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'paid'>('all');
   const [filterType, setFilterType] = useState<'all' | 'project' | 'kpi' | 'annual'>('all');
+  const [draftAdjustments, setDraftAdjustments] = useState<Record<string, Record<string, string>>>({});
 
   // Проверка прав доступа - только CEO и deputy_director могут видеть бонусы
   const canViewBonuses = checkPermission('VIEW_ALL_BONUSES');
+  const canApproveBonusPayout = user?.role === 'ceo' || user?.role === 'admin';
   
   if (!canViewBonuses) {
     return (
@@ -49,6 +55,107 @@ export default function Bonuses() {
       </div>
     );
   }
+
+  const projectsAwaitingApproval = useMemo(() => {
+    return projects.filter((project: any) => (project?.notes?.status || project?.status) === 'pending_payment_approval');
+  }, [projects]);
+
+  const updateDraftAmount = (projectId: string, employeeId: string, amount: string) => {
+    setDraftAdjustments((prev) => ({
+      ...prev,
+      [projectId]: {
+        ...(prev[projectId] || {}),
+        [employeeId]: amount,
+      },
+    }));
+  };
+
+  const approveProjectBonuses = async (project: any) => {
+    if (!user || !canApproveBonusPayout) return;
+
+    try {
+      const finances = calculateProjectFinances(project);
+      const adjustments = draftAdjustments[project.id] || {};
+      const adjustedTeamBonuses = { ...finances.teamBonuses };
+
+      Object.entries(adjustments).forEach(([employeeId, rawAmount]) => {
+        if (!adjustedTeamBonuses[employeeId]) return;
+        const parsedAmount = Number(rawAmount);
+        if (!Number.isFinite(parsedAmount) || parsedAmount < 0) return;
+
+        adjustedTeamBonuses[employeeId] = {
+          ...adjustedTeamBonuses[employeeId],
+          amount: parsedAmount,
+          percent: finances.totalBonusAmount > 0 ? Number(((parsedAmount / finances.totalBonusAmount) * 100).toFixed(2)) : adjustedTeamBonuses[employeeId].percent,
+          manuallyAdjusted: true,
+        };
+      });
+
+      const totalPaidBonuses = Object.values(adjustedTeamBonuses).reduce((sum, bonus) => sum + (bonus.amount || 0), 0);
+      const totalCosts = totalPaidBonuses + finances.totalContractorsAmount + finances.preExpenseAmount;
+      const grossProfit = finances.amountWithoutVAT - totalCosts;
+      const profitMargin = finances.amountWithoutVAT > 0 ? (grossProfit / finances.amountWithoutVAT) * 100 : 0;
+
+      const updatedFinances = {
+        ...finances,
+        teamBonuses: adjustedTeamBonuses,
+        totalPaidBonuses,
+        totalCosts,
+        grossProfit,
+        profitMargin,
+      };
+
+      await updateProjectRecord(project.id, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        approvedBy: user.id,
+        approvedByName: user.name,
+        finances: updatedFinances,
+      });
+
+      const team = project.team || project.notes?.team || [];
+      const teamIds = team.map((member: any) => member.userId || member.id).filter(Boolean);
+      const partner = team.find((member: any) => member.role === 'partner');
+      const pm = team.find((member: any) => ['manager_1', 'manager_2', 'manager_3'].includes(member.role));
+
+      await notifyBonusesApproved({
+        projectName: project.name || project.title || 'Проект',
+        teamIds,
+        ceoName: user.name,
+        projectId: project.id,
+      });
+
+      await notifyProjectClosed({
+        projectName: project.name || project.title || 'Проект',
+        partnerId: partner?.userId || user.id,
+        pmId: pm?.userId || user.id,
+        teamIds,
+        totalAmount: updatedFinances.totalPaidBonuses.toLocaleString('ru-RU'),
+        currency: '₸',
+        projectId: project.id,
+      });
+
+      setDraftAdjustments((prev) => {
+        const next = { ...prev };
+        delete next[project.id];
+        return next;
+      });
+
+      await refreshProjects();
+
+      toast({
+        title: 'Проект закрыт',
+        description: `${project.name || project.title || 'Проект'} утверждён, бонусы сохранены.`,
+      });
+    } catch (error: any) {
+      console.error('Ошибка утверждения бонусов:', error);
+      toast({
+        title: 'Ошибка',
+        description: error?.message || 'Не удалось утвердить бонусы и закрыть проект',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Получаем все бонусы из проектов
   const allBonuses = useMemo(() => {
@@ -69,6 +176,7 @@ export default function Bonuses() {
     projects.forEach((project: any) => {
       if (project.finances && project.finances.teamBonuses) {
         const finances = calculateProjectFinances(project);
+        const projectStatus = project?.notes?.status || project?.status;
         Object.entries(finances.teamBonuses).forEach(([userId, bonus]: [string, any]) => {
           const employee = employees.find((e: any) => e.id === userId);
           if (employee) {
@@ -77,12 +185,12 @@ export default function Bonuses() {
               projectId: project.id,
               projectName: project.name || project.title || 'Без названия',
               employeeId: userId,
-              employeeName: employee.name || employee.email,
+              employeeName: employee.name || employee.email || 'Сотрудник',
               amount: bonus.amount || 0,
               percent: bonus.percent || 0,
               type: 'project',
-              status: project.status === 'completed' ? 'approved' : 'pending',
-              date: project.updated_at || project.created_at,
+              status: projectStatus === 'completed' ? 'approved' : 'pending',
+              date: project.updated_at || project.created_at || new Date().toISOString(),
               description: `Бонус за проект "${project.name || project.title}"`
             });
           }
@@ -187,6 +295,71 @@ export default function Bonuses() {
           </Card>
         ))}
       </div>
+
+      {projectsAwaitingApproval.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Ожидают финального утверждения CEO</h2>
+            <p className="text-sm text-muted-foreground">Проверьте суммы, при необходимости скорректируйте их и закройте проект.</p>
+          </div>
+
+          {projectsAwaitingApproval.map((project: any) => {
+            const finances = calculateProjectFinances(project);
+            const team = project.team || project.notes?.team || [];
+
+            return (
+              <Card key={project.id} className="p-5 border border-blue-200 shadow-sm">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-base">{project.name || project.title || 'Проект'}</h3>
+                      <Badge className="bg-blue-500">Ждёт CEO</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      База бонусов: {(finances.bonusBase || 0).toLocaleString('ru-RU')} ₸ · Общий пул: {(finances.totalBonusAmount || 0).toLocaleString('ru-RU')} ₸
+                    </p>
+                  </div>
+                  {canApproveBonusPayout && (
+                    <Button onClick={() => approveProjectBonuses(project)} className="gap-2 self-start">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Утвердить и закрыть
+                    </Button>
+                  )}
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  {team.map((member: any) => {
+                    const userId = member.userId || member.id;
+                    const bonus = finances.teamBonuses[userId];
+                    const employee = employees.find((item: any) => item.id === userId);
+                    const inputValue = draftAdjustments[project.id]?.[userId] ?? (bonus?.amount != null ? String(bonus.amount) : '0');
+
+                    return (
+                      <div key={userId} className="grid grid-cols-1 md:grid-cols-[1.4fr_0.7fr_0.9fr] gap-3 items-center p-3 rounded-lg bg-muted/30">
+                        <div>
+                          <p className="font-medium text-sm">{employee?.name || member.userName || member.name || 'Участник проекта'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {member.role} · {bonus?.percent || 0}% {bonus?.manuallyAdjusted ? '· скорректировано вручную' : ''}
+                          </p>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Расчёт: {(bonus?.amount || 0).toLocaleString('ru-RU')} ₸
+                        </div>
+                        <Input
+                          value={inputValue}
+                          onChange={(e) => updateDraftAmount(project.id, userId, e.target.value)}
+                          inputMode="decimal"
+                          disabled={!canApproveBonusPayout}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <Tabs defaultValue="list" className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">

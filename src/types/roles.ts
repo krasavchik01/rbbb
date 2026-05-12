@@ -29,6 +29,150 @@ export type UserRole =
   | 'admin';                 // Администратор системы
 
 // Названия ролей на русском
+const USER_ROLES: UserRole[] = [
+  'ceo',
+  'deputy_director',
+  'company_director',
+  'procurement',
+  'partner',
+  'project_leader',
+  'manager_1',
+  'manager_2',
+  'manager_3',
+  'supervisor_3',
+  'supervisor_2',
+  'supervisor_1',
+  'tax_specialist_1',
+  'tax_specialist_2',
+  'assistant_3',
+  'assistant_2',
+  'assistant_1',
+  'contractor',
+  'academy',
+  'hr',
+  'accountant',
+  'admin_staff',
+  'admin',
+];
+
+export function isUserRole(value: string | null | undefined): value is UserRole {
+  return !!value && USER_ROLES.includes(value as UserRole);
+}
+
+function normalizeLevel(level: string | null | undefined): '1' | '2' | '3' {
+  if (level === '2' || level === '3') {
+    return level;
+  }
+  return '1';
+}
+
+export function normalizeUserRole(
+  role: string | null | undefined,
+  level?: string | null,
+  fallback: UserRole = 'assistant_1'
+): UserRole {
+  if (isUserRole(role)) {
+    return role;
+  }
+
+  const normalizedLevel = normalizeLevel(level);
+
+  switch (role) {
+    case 'assistant':
+      return `assistant_${normalizedLevel}` as UserRole;
+    case 'manager':
+      return `manager_${normalizedLevel}` as UserRole;
+    case 'supervisor':
+      return `supervisor_${normalizedLevel}` as UserRole;
+    case 'tax_specialist':
+      return `tax_specialist_${normalizedLevel}` as UserRole;
+    case 'project_manager':
+      return 'project_leader';
+    case 'employee':
+      return 'assistant_1';
+    case 'it_admin':
+      return 'admin';
+    default:
+      return fallback;
+  }
+}
+
+export function getDbRoleForUserRole(role: UserRole): string {
+  switch (role) {
+    case 'assistant_1':
+    case 'assistant_2':
+    case 'assistant_3':
+      return 'assistant';
+    case 'supervisor_1':
+    case 'supervisor_2':
+    case 'supervisor_3':
+    case 'manager_1':
+    case 'manager_2':
+    case 'manager_3':
+      return 'manager';
+    case 'tax_specialist_1':
+    case 'tax_specialist_2':
+      return 'tax_specialist';
+    case 'accountant':
+    case 'contractor':
+      return 'employee';
+    case 'project_leader':
+      return 'project_manager';
+    default:
+      return role;
+  }
+}
+
+export function getLevelForUserRole(role: UserRole): '1' | '2' | '3' {
+  if (role.includes('_2')) {
+    return '2';
+  }
+  if (role.includes('_3')) {
+    return '3';
+  }
+  return '1';
+}
+
+export function getEmployeeDbRoleForUserRole(role: UserRole): string {
+  switch (role) {
+    case 'ceo':
+      return 'ceo';
+    case 'deputy_director':
+      return 'deputy_director';
+    case 'company_director':
+      return 'partner';
+    case 'procurement':
+      return 'procurement';
+    case 'partner':
+      return 'partner';
+    case 'hr':
+      return 'hr';
+    case 'admin':
+      return 'admin';
+    case 'manager_1':
+    case 'manager_2':
+    case 'manager_3':
+      return 'manager';
+    case 'supervisor_1':
+    case 'supervisor_2':
+    case 'supervisor_3':
+      return 'supervisor';
+    case 'assistant_1':
+    case 'assistant_2':
+    case 'assistant_3':
+      return 'assistant';
+    case 'tax_specialist_1':
+    case 'tax_specialist_2':
+      return 'tax_specialist';
+    case 'accountant':
+      return 'accountant';
+    case 'contractor':
+      return 'contractor';
+    default:
+      return role;
+  }
+}
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   ceo: 'Генеральный директор (CEO)',
   deputy_director: 'Заместитель генерального директора',

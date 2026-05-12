@@ -348,17 +348,25 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
   const bonusBase = amountWithoutVAT - totalContractorsAmount - preExpenseAmount;
   const bonusPercent = project.finances?.bonusPercent || 10; // По умолчанию 10%
   const totalBonusAmount = bonusBase * (bonusPercent / 100);
+  const existingTeamBonuses = project.finances?.teamBonuses || {};
   
   // Рассчитываем бонусы команды
   const teamBonuses: ProjectFinances['teamBonuses'] = {};
   const team = project.team || [];
   
   team.forEach(member => {
-    const amount = totalBonusAmount * (member.bonusPercent / 100);
+    const existingBonus = existingTeamBonuses[member.userId];
+    const calculatedAmount = totalBonusAmount * (member.bonusPercent / 100);
+    const amount = existingBonus?.manuallyAdjusted ? existingBonus.amount : calculatedAmount;
+    const percent = existingBonus?.manuallyAdjusted
+      ? (totalBonusAmount > 0 ? Number(((amount / totalBonusAmount) * 100).toFixed(2)) : existingBonus.percent || member.bonusPercent)
+      : member.bonusPercent;
+
     teamBonuses[member.userId] = {
       role: member.role,
-      percent: member.bonusPercent,
+      percent,
       amount: amount,
+      manuallyAdjusted: existingBonus?.manuallyAdjusted || false,
     };
   });
   

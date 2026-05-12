@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useProjects } from '@/hooks/useProjects-simple';
 import { useEmployees } from '@/hooks/useSupabaseData';
+import { useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -24,7 +24,8 @@ import {
   Download,
   Plus,
   Edit,
-  Trash2
+  Trash2,
+  Check
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -39,7 +40,11 @@ interface TimesheetEntry {
   hours: number;
   description: string;
   status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
+
+const getProjectName = (project: any) => project?.name || project?.title || 'Без проекта';
 
 export default function Timesheets() {
   const { user } = useAuth();
@@ -64,6 +69,7 @@ export default function Timesheets() {
 
   // Проверяем, может ли пользователь заполнять тайм-щиты
   const canFillTimesheets = user && user.role !== 'ceo' && user.role !== 'deputy_director';
+  const canReviewTimesheets = !!user && ['ceo', 'admin', 'deputy_director', 'partner', 'manager_1', 'manager_2', 'manager_3'].includes(user.role);
   
   // Получаем проекты пользователя (где он в команде)
   const userProjects = useMemo(() => {
@@ -77,7 +83,10 @@ export default function Timesheets() {
 
     // Если нет проектов в команде, показываем все активные проекты
     if (filteredProjects.length === 0) {
-      return projects.filter((p: any) => p.status === 'active' || p.status === 'in_progress');
+      return projects.filter((p: any) => {
+        const status = p?.notes?.status || p?.status;
+        return ['approved', 'team_assembled', 'planning', 'in_progress', 'pending_payment_approval'].includes(status);
+      });
     }
 
     return filteredProjects;
@@ -92,7 +101,7 @@ export default function Timesheets() {
       return {
         ...ts,
         employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: project?.name || project?.title || 'Без проекта'
+        projectName: getProjectName(project)
       };
     });
     setTimesheets(enriched);
@@ -101,11 +110,11 @@ export default function Timesheets() {
   // Фильтруем тайм-щиты по текущему пользователю (если не админ/CEO)
   const visibleTimesheets = useMemo(() => {
     if (!user) return [];
-    if (user.role === 'ceo' || user.role === 'admin' || user.role === 'deputy_director') {
+    if (canReviewTimesheets) {
       return timesheets;
     }
     return timesheets.filter(ts => ts.employeeId === user.id);
-  }, [timesheets, user]);
+  }, [timesheets, user, canReviewTimesheets]);
 
   // Фильтрация
   const filteredTimesheets = useMemo(() => {
@@ -142,7 +151,7 @@ export default function Timesheets() {
       employeeId: user.id,
       employeeName: user.name,
       projectId: formData.projectId,
-      projectName: projects.find((p: any) => p.id === formData.projectId)?.name || projects.find((p: any) => p.id === formData.projectId)?.title || 'Без проекта',
+      projectName: getProjectName(projects.find((p: any) => p.id === formData.projectId)),
       date: formData.date,
       hours: parseFloat(formData.hours),
       description: formData.description || 'Работа над проектом',
@@ -168,7 +177,7 @@ export default function Timesheets() {
       return {
         ...ts,
         employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: project?.name || project?.title || 'Без проекта'
+        projectName: getProjectName(project)
       };
     });
     setTimesheets(enriched);
@@ -219,7 +228,7 @@ export default function Timesheets() {
       return {
         ...ts,
         employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: project?.name || project?.title || 'Без проекта'
+        projectName: getProjectName(project)
       };
     });
     setTimesheets(enriched);
@@ -242,12 +251,41 @@ export default function Timesheets() {
         return {
           ...ts,
           employeeName: employee?.name || 'Неизвестный сотрудник',
-          projectName: project?.name || project?.title || 'Без проекта'
+          projectName: getProjectName(project)
         };
       });
       setTimesheets(enriched);
       toast({ title: 'Успешно', description: 'Тайм-щит отправлен на проверку' });
     }
+  };
+
+  const handleReview = (timesheet: TimesheetEntry, status: 'approved' | 'rejected') => {
+    if (!user || !canReviewTimesheets || timesheet.status !== 'submitted') return;
+
+    const saved = JSON.parse(localStorage.getItem('timesheets') || '[]');
+    const index = saved.findIndex((ts: any) => ts.id === timesheet.id);
+    if (index < 0) return;
+
+    saved[index].status = status;
+    saved[index].reviewedBy = user.name;
+    saved[index].reviewedAt = new Date().toISOString();
+    localStorage.setItem('timesheets', JSON.stringify(saved));
+
+    const enriched = saved.map((ts: any) => {
+      const employee = employees.find((e: any) => e.id === ts.employeeId);
+      const project = ts.projectId ? projects.find((p: any) => p.id === ts.projectId) : null;
+      return {
+        ...ts,
+        employeeName: employee?.name || 'Неизвестный сотрудник',
+        projectName: getProjectName(project)
+      };
+    });
+    setTimesheets(enriched);
+
+    toast({
+      title: status === 'approved' ? 'Тайм-щит утверждён' : 'Тайм-щит отклонён',
+      description: `${timesheet.employeeName}: ${(timesheet.hours || 0).toFixed(1)} ч`,
+    });
   };
 
   // Статистика
@@ -319,7 +357,7 @@ export default function Timesheets() {
                     <SelectContent>
                       {userProjects.map((p: any) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.name || p.title || 'Без названия'}
+                          {getProjectName(p)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -438,7 +476,7 @@ export default function Timesheets() {
                 <SelectItem value="all">Все проекты</SelectItem>
                 {userProjects.map((p: any) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name || p.title || 'Без названия'}
+                    {getProjectName(p)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -465,6 +503,7 @@ export default function Timesheets() {
             const canEdit = isOwner && timesheet.status === 'draft';
             const canDelete = isOwner && timesheet.status === 'draft';
             const canSubmit = isOwner && timesheet.status === 'draft';
+            const canApprove = canReviewTimesheets && timesheet.status === 'submitted';
 
             return (
               <Card key={timesheet.id} className="p-3 sm:p-4 border-0 shadow-sm hover:shadow-md transition-shadow">
@@ -504,7 +543,7 @@ export default function Timesheets() {
                     <div className="text-right mr-1">
                       <p className="font-bold text-lg leading-tight text-primary">{(timesheet.hours || 0).toFixed(1)}<span className="text-xs font-normal text-muted-foreground ml-0.5">ч</span></p>
                     </div>
-                    {isOwner && (
+                    {(isOwner || canApprove) && (
                       <div className="flex gap-1">
                         {canSubmit && (
                           <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => handleSubmit(timesheet)}>
@@ -521,6 +560,18 @@ export default function Timesheets() {
                           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive" onClick={() => handleDelete(timesheet)}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
+                        )}
+                        {canApprove && (
+                          <>
+                            <Button variant="outline" size="sm" className="text-xs h-8 border-green-200 text-green-700 hover:bg-green-50" onClick={() => handleReview(timesheet, 'approved')}>
+                              <Check className="w-3.5 h-3.5 sm:mr-1" />
+                              <span className="hidden sm:inline">Утвердить</span>
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-xs h-8 border-red-200 text-red-700 hover:bg-red-50" onClick={() => handleReview(timesheet, 'rejected')}>
+                              <XCircle className="w-3.5 h-3.5 sm:mr-1" />
+                              <span className="hidden sm:inline">Отклонить</span>
+                            </Button>
+                          </>
                         )}
                       </div>
                     )}

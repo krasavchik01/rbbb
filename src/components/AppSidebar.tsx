@@ -21,7 +21,8 @@ import {
   ClipboardList,
   BookOpen,
   Zap,
-  Calculator
+  Calculator,
+  ClipboardCheck
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -146,6 +147,25 @@ const menuItems: MenuItem[] = [
     title: "Уведомления",
     url: "/notifications",
     icon: Bell
+  },
+
+  // Опросы — сотрудники видят свой список, руководство управляет кампаниями
+  {
+    title: "Мои опросы",
+    url: "/my-surveys",
+    icon: ClipboardCheck,
+  },
+  {
+    title: "Опросы (управление)",
+    url: "/surveys",
+    icon: ClipboardCheck,
+    allowedRoles: ['deputy_director', 'ceo', 'admin', 'partner']
+  },
+  {
+    title: "Предложения по проектам",
+    url: "/survey-approval",
+    icon: ClipboardCheck,
+    allowedRoles: ['deputy_director', 'ceo', 'admin', 'partner']
   },
 
   // Служебные записки - НЕ для отдела закупок
@@ -351,7 +371,7 @@ export function AppSidebar() {
           const hasRoleAccess = item.allowedRoles ? hasAnyRole(item.allowedRoles) : true;
           const isExcluded = item.excludeRoles ? item.excludeRoles.includes(user.role) : false;
           return hasPermission && hasRoleAccess && !isExcluded &&
-                 ['Создать проект', 'Тендеры', 'Утверждение проектов', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title);
+                 ['Создать проект', 'Тендеры', 'Утверждение проектов', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи', 'Мои опросы', 'Опросы (управление)', 'Предложения по проектам'].includes(item.title);
         }) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-muted-foreground uppercase text-xs font-semibold tracking-wider">
@@ -360,7 +380,7 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="space-y-1">
                 {menuItems.filter(item =>
-                  ['Создать проект', 'Тендеры', 'Утверждение проектов', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи'].includes(item.title)
+                  ['Создать проект', 'Тендеры', 'Утверждение проектов', 'HR', 'Тайм-щиты', 'Посещаемость', 'Бонусы', 'Аналитика', 'Календарь', 'Задачи', 'Мои опросы', 'Опросы (управление)', 'Предложения по проектам'].includes(item.title)
                 ).map((item) => {
                   let hasPermission = true;
                   if (item.permission) {

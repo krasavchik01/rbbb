@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { UserRole, hasPermission } from '@/types/roles';
+import { UserRole, hasPermission, normalizeUserRole } from '@/types/roles';
 import { supabase } from '@/integrations/supabase/client';
 import { getUserAllowedCompanyIds } from '@/lib/userCompanyAccess';
 
@@ -233,7 +233,7 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
       id: 'tax_1',
       email: 'tax@rbpartners.com',
       name: 'Налоговик Орлов',
-      role: 'tax_specialist',
+      role: 'tax_specialist_1',
       department: 'Налоги',
       position: 'Налоговый специалист',
     },
@@ -246,6 +246,13 @@ async function enrichUserWithAccess(user: User): Promise<User> {
   return { ...user, allowedCompanyIds: allowedIds };
 }
 
+function normalizeAuthUser(user: User): User {
+  return {
+    ...user,
+    role: normalizeUserRole(user.role),
+  };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -255,7 +262,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
-        const parsed = JSON.parse(savedUser);
+        const parsed = normalizeAuthUser(JSON.parse(savedUser));
         // Загружаем доступ к компаниям из Supabase
         enrichUserWithAccess(parsed).then(enriched => {
           setUser(enriched);
@@ -276,9 +283,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userRecord = DEMO_USERS[email];
     
     if (userRecord && userRecord.password === password) {
-      const enriched = await enrichUserWithAccess(userRecord.user);
+      const normalizedUser = normalizeAuthUser(userRecord.user);
+      const enriched = await enrichUserWithAccess(normalizedUser);
       setUser(enriched);
-      localStorage.setItem('user', JSON.stringify(userRecord.user));
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
       return true;
     }
     
@@ -311,14 +319,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('✅ Employee found:', employeeData.name);
       
       // Создаем объект пользователя из данных сотрудника
+      const employee = employeeData as typeof employeeData & {
+        company_id?: string | null;
+        position?: string | null;
+        department?: string | null;
+      };
+
       const user: User = {
         id: employeeData.id,
         name: employeeData.name,
-        email: employeeData.email,
-        role: employeeData.role as UserRole,
-        companyId: employeeData.company_id || undefined,
-        position: employeeData.position || '',
-        department: employeeData.department || '',
+        email: employeeData.email || '',
+        role: normalizeUserRole(employeeData.role, employeeData.level),
+        companyId: employee.company_id || undefined,
+        position: employee.position || '',
+        department: employee.department || '',
         avatar: employeeData.name ? employeeData.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'UN'
       };
 
@@ -340,7 +354,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateUser = async (updates: Partial<User>) => {
     if (!user) return;
-    const merged = { ...user, ...updates };
+    const merged = normalizeAuthUser({ ...user, ...updates } as User);
     // Если allowedCompanyIds передали явно — используем их, иначе подгружаем из Supabase
     const updated = updates.allowedCompanyIds !== undefined
       ? merged
