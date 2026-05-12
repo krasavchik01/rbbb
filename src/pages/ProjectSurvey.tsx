@@ -30,9 +30,6 @@ const STATUS_OPTIONS: { value: SurveyProjectStatusVote; label: string }[] = [
   { value: 'cancelled',   label: 'Отменён / отказ' },
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_QUICK = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRENT_YEAR - 3];
-
 function newAnswer(projectId: string, projectName: string): SurveyProjectAnswer {
   return {
     projectId,
@@ -40,6 +37,65 @@ function newAnswer(projectId: string, projectName: string): SurveyProjectAnswer 
     participated: true,
     statusVote: 'in_progress',
   };
+}
+
+/**
+ * Создать записи в таймщитах (localStorage 'timesheets') по результатам опроса.
+ * Одна запись на проект: дата = начало периода, часы = totalHours, описание
+ * содержит весь период.
+ */
+function createTimesheetsFromAnswers(
+  user: { id: string; name: string },
+  answers: SurveyProjectAnswer[],
+): number {
+  if (answers.length === 0) return 0;
+  const saved = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('timesheets') || '[]');
+    } catch {
+      return [];
+    }
+  })();
+
+  let created = 0;
+  const today = new Date().toISOString().split('T')[0];
+  for (const a of answers) {
+    if (!a.participated) continue;
+    if (!a.totalHours || a.totalHours <= 0) continue;
+
+    // Дедуп: не создаём повторно от того же пользователя на тот же проект
+    // с тегом из опроса (хранится в description).
+    const tag = `[опрос:${a.projectId}]`;
+    const already = saved.some(
+      (ts: any) => ts.employeeId === user.id && typeof ts.description === 'string' && ts.description.includes(tag),
+    );
+    if (already) continue;
+
+    const description = [
+      `Период: с ${a.periodFrom || '—'} по ${a.periodTo || 'сейчас'}`,
+      a.roleOnProject ? `Роль: ${ROLE_LABELS[a.roleOnProject]}` : null,
+      a.comment ? a.comment : null,
+      tag,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    saved.push({
+      id: `ts_survey_${user.id}_${a.projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      employeeId: user.id,
+      employeeName: user.name,
+      projectId: a.projectId,
+      projectName: a.projectName,
+      date: a.periodFrom || today,
+      hours: a.totalHours,
+      description,
+      status: 'submitted',
+    });
+    created += 1;
+  }
+
+  localStorage.setItem('timesheets', JSON.stringify(saved));
+  return created;
 }
 
 export default function ProjectSurvey() {
@@ -76,7 +132,6 @@ export default function ProjectSurvey() {
     };
   }, [user]);
 
-  // Закрывать выпадашку при клике вне
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (!searchBoxRef.current) return;
@@ -101,6 +156,11 @@ export default function ProjectSurvey() {
       .slice(0, 12);
   }, [projects, query, alreadyAddedIds]);
 
+  const totalHours = useMemo(
+    () => myAnswers.reduce((s, a) => s + (a.totalHours || 0), 0),
+    [myAnswers],
+  );
+
   const addProject = (project: { id: string; name: string }) => {
     if (alreadyAddedIds.has(project.id)) return;
     setMyAnswers((prev) => [newAnswer(project.id, project.name), ...prev]);
@@ -116,25 +176,16 @@ export default function ProjectSurvey() {
     setMyAnswers((prev) => prev.filter((a) => a.projectId !== projectId));
   };
 
-  const applyYear = (projectId: string, year: number) => {
-    updateAnswer(projectId, {
-      periodFrom: `${year}-01-01`,
-      periodTo: `${year}-12-31`,
-    });
-  };
-
-  const buildResponse = (status: 'draft' | 'submitted'): SurveyResponse => {
-    return {
-      id: existingResponse?.id || `srv_${user!.id}_${Date.now()}`,
-      userId: user!.id,
-      userName: user!.name,
-      userRole: user!.role,
-      answers: myAnswers.map((a) => ({ ...a, participated: true })),
-      status,
-      updatedAt: new Date().toISOString(),
-      submittedAt: existingResponse?.submittedAt,
-    };
-  };
+  const buildResponse = (status: 'draft' | 'submitted'): SurveyResponse => ({
+    id: existingResponse?.id || `srv_${user!.id}_${Date.now()}`,
+    userId: user!.id,
+    userName: user!.name,
+    userRole: user!.role,
+    answers: myAnswers.map((a) => ({ ...a, participated: true })),
+    status,
+    updatedAt: new Date().toISOString(),
+    submittedAt: existingResponse?.submittedAt,
+  });
 
   const handleSaveDraft = async () => {
     if (!user) return;
@@ -142,7 +193,7 @@ export default function ProjectSurvey() {
     try {
       const next = await saveResponse(buildResponse('draft'));
       setExistingResponse(next);
-      toast({ title: 'Черновик сохранён', description: 'Можно вернуться и дополнить позже.' });
+      toast({ title: 'Черновик сохранён' });
     } finally {
       setBusy(false);
     }
@@ -156,11 +207,12 @@ export default function ProjectSurvey() {
       );
       if (!ok) return;
     }
-    // Валидация — нужны роль и год хотя бы
-    const missing = myAnswers.filter((a) => !a.roleOnProject || !a.periodFrom);
+    const missing = myAnswers.filter(
+      (a) => !a.roleOnProject || !a.periodFrom || !a.periodTo || !a.totalHours,
+    );
     if (missing.length > 0) {
       const ok = window.confirm(
-        `У ${missing.length} проектов не указаны роль или период. Всё равно отправить?`,
+        `У ${missing.length} проектов не указаны роль, период или часы. Всё равно отправить?`,
       );
       if (!ok) return;
     }
@@ -168,9 +220,13 @@ export default function ProjectSurvey() {
     try {
       const next = await submitResponse(buildResponse('submitted'));
       setExistingResponse(next);
+      const tsCreated = createTimesheetsFromAnswers({ id: user.id, name: user.name }, myAnswers);
       toast({
         title: 'Спасибо!',
-        description: 'Ответ отправлен. Система передаст его зам.директору на утверждение.',
+        description:
+          tsCreated > 0
+            ? `Ответ отправлен. В таймщиты добавлено ${tsCreated} запис(и/ей) по проектам.`
+            : 'Ответ отправлен. Зам.директор увидит ваши данные в результатах опроса.',
       });
     } finally {
       setBusy(false);
@@ -209,8 +265,8 @@ export default function ProjectSurvey() {
                 <ClipboardList className="w-5 h-5" /> {config.title}
               </CardTitle>
               <CardDescription className="mt-2">
-                Вспомните по памяти проекты, в которых вы участвовали. Начните печатать название
-                клиента или проекта — система найдёт его в базе. Не нужно листать сотни проектов.
+                Найдите ваш проект, укажите период с-по, сколько часов вы на нём отработали, роль и
+                статус. После отправки эти часы автоматически появятся в ваших таймщитах.
               </CardDescription>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -230,9 +286,7 @@ export default function ProjectSurvey() {
           </div>
         </CardHeader>
         <CardContent>
-          <Label className="text-sm font-medium mb-2 block">
-            Найти и добавить проект
-          </Label>
+          <Label className="text-sm font-medium mb-2 block">Найти и добавить проект</Label>
           <div ref={searchBoxRef} className="relative">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -261,7 +315,7 @@ export default function ProjectSurvey() {
               <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md max-h-80 overflow-y-auto">
                 {suggestions.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">
-                    Ничего не нашлось. Попробуйте другие буквы — название клиента или проекта.
+                    Ничего не нашлось. Попробуйте другие буквы.
                   </div>
                 ) : (
                   suggestions.map((p) => {
@@ -289,16 +343,21 @@ export default function ProjectSurvey() {
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
-            Подсказка: достаточно 2-3 первых букв. Можно искать по названию клиента.
+            Достаточно 2-3 букв названия проекта или клиента.
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base">
               Мои проекты ({myAnswers.length})
+              {totalHours > 0 && (
+                <span className="ml-3 text-sm font-normal text-muted-foreground">
+                  всего: <b className="text-foreground">{totalHours} ч.</b>
+                </span>
+              )}
             </CardTitle>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleSaveDraft} disabled={busy}>
@@ -313,7 +372,7 @@ export default function ProjectSurvey() {
         <CardContent>
           {myAnswers.length === 0 ? (
             <div className="py-10 text-center text-muted-foreground text-sm">
-              Пока пусто. Найдите и добавьте сверху проект, в котором вы участвовали.
+              Пока пусто. Найдите и добавьте сверху ваш проект.
             </div>
           ) : (
             <div className="space-y-3">
@@ -325,7 +384,7 @@ export default function ProjectSurvey() {
                       variant="ghost"
                       size="sm"
                       onClick={() => removeAnswer(a.projectId)}
-                      title="Убрать из моего списка"
+                      title="Убрать из списка"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -333,12 +392,12 @@ export default function ProjectSurvey() {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <Label className="text-xs">Моя роль на проекте</Label>
+                      <Label className="text-xs">
+                        Моя роль на проекте <span className="text-destructive">*</span>
+                      </Label>
                       <Select
                         value={a.roleOnProject || ''}
-                        onValueChange={(v) =>
-                          updateAnswer(a.projectId, { roleOnProject: v as UserRole })
-                        }
+                        onValueChange={(v) => updateAnswer(a.projectId, { roleOnProject: v as UserRole })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Выберите роль…" />
@@ -354,7 +413,9 @@ export default function ProjectSurvey() {
                     </div>
 
                     <div>
-                      <Label className="text-xs">Что с проектом сейчас?</Label>
+                      <Label className="text-xs">
+                        Что с проектом сейчас? <span className="text-destructive">*</span>
+                      </Label>
                       <RadioGroup
                         value={a.statusVote}
                         onValueChange={(v) =>
@@ -375,40 +436,46 @@ export default function ProjectSurvey() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label className="text-xs">В каком году вы это сдавали?</Label>
-                    <div className="flex flex-wrap gap-2 mt-1 items-center">
-                      {YEAR_QUICK.map((y) => {
-                        const active = a.periodFrom?.startsWith(String(y));
-                        return (
-                          <button
-                            key={y}
-                            onClick={() => applyYear(a.projectId, y)}
-                            className={
-                              'px-3 py-1.5 rounded-md border text-xs ' +
-                              (active
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'hover:bg-accent')
-                            }
-                          >
-                            {y}
-                          </button>
-                        );
-                      })}
-                      <span className="text-xs text-muted-foreground">или точные даты:</span>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <Label className="text-xs">
+                        Период с <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         type="date"
                         value={a.periodFrom || ''}
                         onChange={(e) => updateAnswer(a.projectId, { periodFrom: e.target.value })}
-                        className="w-auto"
                       />
-                      <span className="text-xs text-muted-foreground">—</span>
+                    </div>
+                    <div>
+                      <Label className="text-xs">
+                        Период по <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         type="date"
                         value={a.periodTo || ''}
                         onChange={(e) => updateAnswer(a.projectId, { periodTo: e.target.value })}
-                        className="w-auto"
                       />
+                    </div>
+                    <div>
+                      <Label className="text-xs">
+                        Часов за весь период <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={a.totalHours ?? ''}
+                        onChange={(e) =>
+                          updateAnswer(a.projectId, {
+                            totalHours: e.target.value === '' ? undefined : Number(e.target.value),
+                          })
+                        }
+                        placeholder="напр., 120"
+                      />
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Эти часы попадут в ваши таймщиты.
+                      </div>
                     </div>
                   </div>
 

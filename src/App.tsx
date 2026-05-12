@@ -39,11 +39,6 @@ const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
 const ProjectSurvey = lazy(() => import('@/pages/ProjectSurvey'));
 const ProjectSurveyResults = lazy(() => import('@/pages/ProjectSurveyResults'));
-const SurveyCampaigns = lazy(() => import('@/pages/SurveyCampaigns'));
-const SurveyCampaignEdit = lazy(() => import('@/pages/SurveyCampaignEdit'));
-const SurveyTake = lazy(() => import('@/pages/SurveyTake'));
-const MySurveys = lazy(() => import('@/pages/MySurveys'));
-const SurveyApproval = lazy(() => import('@/pages/SurveyApproval'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -369,66 +364,6 @@ function App() {
                 <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
                   <Layout>
                     <ProjectSurveyResults />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/my-surveys"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <MySurveys />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/surveys"
-              element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
-                  <Layout>
-                    <SurveyCampaigns />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/surveys/:id"
-              element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
-                  <Layout>
-                    <SurveyCampaignEdit />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/surveys/:id/take"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <SurveyTake />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/surveys/:id/results"
-              element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
-                  <Layout>
-                    <SurveyApproval />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/survey-approval"
-              element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
-                  <Layout>
-                    <SurveyApproval />
                   </Layout>
                 </ProtectedRoute>
               }

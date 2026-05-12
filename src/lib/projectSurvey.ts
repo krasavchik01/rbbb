@@ -30,8 +30,9 @@ export interface SurveyProjectAnswer {
   projectName: string;
   participated: boolean;
   roleOnProject?: UserRole;
-  periodFrom?: string;
-  periodTo?: string;
+  periodFrom?: string;       // ISO date — пользователь вводит вручную
+  periodTo?: string;         // ISO date
+  totalHours?: number;       // суммарно часов на проект за период (для таймщитов)
   statusVote: SurveyProjectStatusVote;
   comment?: string;
 }
