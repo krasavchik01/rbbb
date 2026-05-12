@@ -5,6 +5,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import { mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
 
 // Типы из Supabase
 type SupabaseEmployee = Database['public']['Tables']['employees']['Row'];
@@ -477,7 +478,7 @@ class SupabaseDataStore {
         name: project.name || project.client?.name || 'Без названия',
         start_date: normalizeDate(project.contract?.serviceStartDate),
         deadline: normalizeDate(project.contract?.serviceEndDate),
-        status: 'active' as const,
+        status: mapWorkflowStatusToSupabaseStatus(project.status || project.notes?.status || 'pending_approval'),
         kpi_percentage: project.completion || 0,
         notes: JSON.stringify({ ...project, updated_at: new Date().toISOString() }),
       };
@@ -504,18 +505,38 @@ class SupabaseDataStore {
           ? JSON.parse(currentProject.notes)
           : currentProject.notes || {};
 
-        const mergedNotes = { ...existingNotes, ...updates, updated_at: new Date().toISOString() };
+        const nextWorkflowStatus = updates.status || updates.notes?.status || existingNotes.status || currentProject.status;
+        const nextCompletion = updates.completionPercent ?? updates.completion ?? existingNotes.completionPercent ?? currentProject.kpi_percentage ?? 0;
+        const mergedNotes = {
+          ...existingNotes,
+          ...updates,
+          status: nextWorkflowStatus,
+          completionPercent: nextCompletion,
+          updated_at: new Date().toISOString()
+        };
 
+        const supabaseStatus = mapWorkflowStatusToSupabaseStatus(nextWorkflowStatus);
         const { error: updateError } = await supabase
           .from('projects')
           .update({
             notes: JSON.stringify(mergedNotes),
             name: updates.name || updates.client?.name || existingNotes.name || 'Без названия',
+            status: supabaseStatus,
+            kpi_percentage: nextCompletion,
             updated_at: new Date().toISOString()
           })
           .eq('id', id);
 
-        if (!updateError) return mergedNotes as Project;
+        if (!updateError) {
+          return this.mapSupabaseProject({
+            ...currentProject,
+            name: updates.name || updates.client?.name || existingNotes.name || currentProject.name,
+            notes: JSON.stringify(mergedNotes),
+            status: supabaseStatus,
+            kpi_percentage: nextCompletion,
+            updated_at: new Date().toISOString()
+          } as SupabaseProject);
+        }
       }
 
       throw new Error('Could not update project');
@@ -600,7 +621,7 @@ class SupabaseDataStore {
     const mappedStatus = (() => {
       // Пытаемся взять статус из notes, так как он там более точный (русский)
       const notesStatus = notes?.status;
-      if (notesStatus && ['В работе', 'На проверке', 'Черновик', 'Завершён', 'Приостановлен'].includes(notesStatus)) {
+      if (notesStatus) {
         return notesStatus;
       }
 

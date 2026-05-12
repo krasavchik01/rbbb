@@ -18,7 +18,7 @@ import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { addNotification } from '@/lib/notifications';
-import { supabaseDataStore } from '@/lib/supabaseDataStore';
+import { deriveProjectStatusFromTasks, isTaskDoneStatus } from '@/lib/projectWorkflow';
 import {
   CheckSquare, Search, Clock, User, CheckCircle2, Circle,
   Briefcase, ListChecks, Plus, Trash2, Edit, Kanban,
@@ -345,7 +345,7 @@ export default function Tasks({ projectId, embedded }: { projectId?: string; emb
   const { toast } = useToast();
   const { tasks, loading, createTask, updateTask, deleteTask } = useTasks();
   const { employees = [] } = useEmployees();
-  const { projects = [] } = useProjects();
+  const { projects = [], updateProject: updateProjectRecord } = useProjects();
 
   const [searchTerm, setSearchTerm]         = useState('');
   const [filterStatus, setFilterStatus]     = useState('all');
@@ -429,6 +429,10 @@ export default function Tasks({ projectId, embedded }: { projectId?: string; emb
     setDialogOpen(true);
   }, []);
 
+  const getTaskActionUrl = useCallback((targetProjectId?: string | null) => (
+    targetProjectId ? `/project/${targetProjectId}` : '/tasks'
+  ), []);
+
   const handleSave = async () => {
     if (!form.title.trim()) { toast({ title: '❌ Укажите название задачи', variant: 'destructive' }); return; }
     setSaving(true);
@@ -453,18 +457,20 @@ export default function Tasks({ projectId, embedded }: { projectId?: string; emb
       };
 
       if (editingTask) {
-        await updateTask(editingTask.id, payload);
+        const updatedTask = await updateTask(editingTask.id, payload);
         const prev = new Set([...(editingTask.assignees || []), getReviewerId(editingTask)].filter(Boolean));
         for (const id of [...allAssignees, form.reviewer].filter(id => id && !prev.has(id))) {
-          if (id !== myEmployee?.id) await addNotification({ user_id: id, title: '📝 Вас назначили на задачу', message: `${user?.name} назначил вас на задачу «${form.title}»`, type: 'info', action_url: '/tasks' });
+          if (id !== myEmployee?.id) await addNotification({ user_id: id, title: '📝 Вас назначили на задачу', message: `${user?.name} назначил вас на задачу «${form.title}»`, type: 'info', action_url: getTaskActionUrl(updatedTask.project_id) });
         }
+        await syncProjectStatus(updatedTask.project_id, tasks.map((task) => task.id === updatedTask.id ? updatedTask : task));
         toast({ title: '✅ Задача обновлена' });
       } else {
-        await createTask(payload);
+        const createdTask = await createTask(payload);
         const dl = form.due_at ? `. Дедлайн: ${format(new Date(form.due_at), 'dd MMM yyyy', { locale: ru })}` : '';
         for (const id of [...allAssignees, form.wantReviewer ? form.reviewer : ''].filter(id => id && id !== myEmployee?.id)) {
-          await addNotification({ user_id: id, title: '📋 Вам назначена задача', message: `${user?.name} назначил вам задачу «${form.title}»${dl}`, type: 'info', action_url: '/tasks' });
+          await addNotification({ user_id: id, title: '📋 Вам назначена задача', message: `${user?.name} назначил вам задачу «${form.title}»${dl}`, type: 'info', action_url: getTaskActionUrl(createdTask.project_id) });
         }
+        await syncProjectStatus(createdTask.project_id, [createdTask, ...tasks]);
         toast({ title: '✅ Задача создана' });
       }
       setDialogOpen(false);
@@ -475,23 +481,62 @@ export default function Tasks({ projectId, embedded }: { projectId?: string; emb
 
   const handleDelete = async () => {
     if (!taskToDelete) return;
-    try { await deleteTask(taskToDelete.id); setTaskToDelete(null); toast({ title: '✅ Задача удалена' }); }
+    try {
+      await deleteTask(taskToDelete.id);
+      await syncProjectStatus(taskToDelete.project_id, tasks.filter((task) => task.id !== taskToDelete.id));
+      setTaskToDelete(null);
+      toast({ title: '✅ Задача удалена' });
+    }
     catch (err: any) { toast({ title: '❌ Ошибка', description: err.message, variant: 'destructive' }); }
   };
 
   const canDeleteTask = (task: Task) => !!canDeleteAnyTask || task.reporter === myEmployee?.id;
 
   const handleDragStart = ({ active }: DragStartEvent) => setActiveTaskId(active.id as string);
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
     setActiveTaskId(null);
     if (!over) return;
     const s = over.id as Task['status'];
     if (!['todo','in_progress','in_review','done'].includes(s)) return;
     const task = tasks.find(t => t.id === (active.id as string));
-    if (task && task.status !== s) updateTask(task.id, { status: s });
+    if (task && task.status !== s) {
+      const updatedTask = await updateTask(task.id, { status: s });
+      await syncProjectStatus(updatedTask.project_id, tasks.map((item) => item.id === updatedTask.id ? updatedTask : item));
+    }
   };
   const activeTask = activeTaskId ? tasks.find(t => t.id === activeTaskId) : null;
   const currentPL = PRIORITY_LEVELS.find(p => p.val === form.priorityVal) || PRIORITY_LEVELS[1];
+
+  const syncProjectStatus = useCallback(async (targetProjectId: string | null | undefined, nextTasks: Task[]) => {
+    if (!targetProjectId) return;
+
+    const project = (projects as any[]).find((item) => item.id === targetProjectId);
+    if (!project) return;
+
+    const projectTasks = nextTasks.filter((task) => task.project_id === targetProjectId);
+    const currentStatus = project?.notes?.status || project?.status;
+    const derivedStatus = deriveProjectStatusFromTasks(currentStatus, projectTasks);
+
+    if (derivedStatus === currentStatus) return;
+
+    await updateProjectRecord(targetProjectId, {
+      status: derivedStatus,
+      completionPercent: projectTasks.length > 0
+        ? Math.round((projectTasks.filter((task) => isTaskDoneStatus(task.status)).length / projectTasks.length) * 100)
+        : 0,
+    });
+
+    if (derivedStatus === 'pending_payment_approval') {
+      const approvers = (employees as any[]).filter((employee) => ['ceo', 'admin'].includes(employee.role));
+      await Promise.all(approvers.map((employee) => addNotification({
+        user_id: employee.id,
+        title: 'Проект готов к финальному утверждению',
+        message: `Все задачи по проекту «${project.name || 'Без названия'}» выполнены. Проверьте бонусы и закройте проект.`,
+        type: 'success',
+        action_url: '/bonuses',
+      })));
+    }
+  }, [employees, projects, updateProjectRecord]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (

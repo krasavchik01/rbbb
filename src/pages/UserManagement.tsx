@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Pencil, UserPlus, Users, Shield, Eye, EyeOff, Key, Copy, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { UserRole, ROLE_LABELS } from "@/types/roles";
+import { UserRole, ROLE_LABELS, normalizeUserRole, getLevelForUserRole, getEmployeeDbRoleForUserRole } from "@/types/roles";
 import { Database } from "@/integrations/supabase/types";
 
 type DbAppRole = Database['public']['Enums']['app_role'];
@@ -65,31 +65,6 @@ const ALL_ROLES: { value: UserRole; label: string; adminOnly?: boolean }[] = [
   { value: 'accountant', label: ROLE_LABELS.accountant },
   { value: 'contractor', label: ROLE_LABELS.contractor },
 ];
-
-// Маппинг ролей приложения на роли БД (теперь сохраняем точные роли)
-const roleToDbRole: Record<string, DbAppRole> = {
-  'ceo': 'ceo' as DbAppRole,
-  'deputy_director': 'deputy_director' as DbAppRole,
-  'company_director': 'partner',
-  'procurement': 'procurement' as DbAppRole,
-  'partner': 'partner',
-  'hr': 'hr' as DbAppRole,
-  'admin': 'admin',
-  'manager_1': 'manager',
-  'manager_2': 'manager',
-  'manager_3': 'manager',
-  'supervisor_1': 'supervisor' as DbAppRole,
-  'supervisor_2': 'supervisor' as DbAppRole,
-  'supervisor_3': 'supervisor' as DbAppRole,
-  'assistant_1': 'assistant',
-  'assistant_2': 'assistant',
-  'assistant_3': 'assistant',
-  'tax_specialist_1': 'tax_specialist',
-  'tax_specialist_2': 'tax_specialist',
-  'accountant': 'accountant' as DbAppRole,
-  'contractor': 'contractor' as DbAppRole,
-};
-
 
 export default function UserManagement() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -200,12 +175,9 @@ export default function UserManagement() {
       }
 
       // Определяем уровень из роли
-      let level: DbEmployeeLevel = '1';
-      if (formData.role.includes('_1')) level = '1';
-      else if (formData.role.includes('_2')) level = '2';
-      else if (formData.role.includes('_3')) level = '3';
+      const level = getLevelForUserRole(formData.role) as DbEmployeeLevel;
 
-      const dbRole = roleToDbRole[formData.role] || 'employee';
+      const dbRole = getEmployeeDbRoleForUserRole(formData.role) as DbAppRole;
 
       const { error: insertError } = await supabase
         .from('employees')
@@ -250,12 +222,9 @@ export default function UserManagement() {
       setError("");
 
       // Определяем уровень из роли
-      let level: DbEmployeeLevel = '1';
-      if (formData.role.includes('_1')) level = '1';
-      else if (formData.role.includes('_2')) level = '2';
-      else if (formData.role.includes('_3')) level = '3';
+      const level = getLevelForUserRole(formData.role) as DbEmployeeLevel;
 
-      const dbRole = roleToDbRole[formData.role] || 'employee';
+      const dbRole = getEmployeeDbRoleForUserRole(formData.role) as DbAppRole;
 
       const { error } = await supabase
         .from('employees')
@@ -391,8 +360,8 @@ export default function UserManagement() {
     setEditingEmployee(employee);
 
     // Пытаемся определить роль из БД роли и уровня
-    let appRole: UserRole = 'assistant_1';
-    const dbRole = employee.role;
+    let appRole: UserRole = normalizeUserRole(employee.role, employee.level);
+    const dbRole = employee.role as string;
 
     // Прямые роли (сохраняются как есть)
     if (dbRole === 'ceo') {

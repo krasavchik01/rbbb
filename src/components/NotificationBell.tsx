@@ -26,13 +26,14 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
 
-  const loadNotifications = () => {
+  const loadNotifications = async () => {
     if (!user) return;
-    const userNotifications = getNotifications(user.id);
+    const userNotifications = await getNotifications(user.id);
+    const unread = await getUnreadCount(user.id);
     console.log('📬 Загрузка уведомлений для пользователя:', user.id, 'Найдено:', userNotifications.length);
     setNotifications(userNotifications.slice(0, 10)); // Показываем последние 10
-    setUnreadCount(getUnreadCount(user.id));
-    console.log('🔔 Непрочитанных:', getUnreadCount(user.id));
+    setUnreadCount(unread);
+    console.log('🔔 Непрочитанных:', unread);
   };
 
   useEffect(() => {
@@ -46,13 +47,13 @@ export function NotificationBell() {
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read) {
-      markAsRead(notification.id);
-      loadNotifications();
+      await markAsRead(notification.id);
+      await loadNotifications();
     }
     
-    if (notification.actionUrl) {
+    if (notification.action_url) {
       // Если это ссылка на проект, загружаем проект и передаем в state
-      const projectMatch = notification.actionUrl.match(/^\/project\/([^\/]+)/);
+      const projectMatch = notification.action_url.match(/^\/project\/([^\/]+)/);
       if (projectMatch) {
         const projectId = projectMatch[1];
         
@@ -76,19 +77,19 @@ export function NotificationBell() {
         }
         
         // Переходим с проектом в state
-        navigate(notification.actionUrl, { state: project ? { project } : undefined });
+        navigate(notification.action_url, { state: project ? { project } : undefined });
       } else {
         // Для других ссылок просто переходим
-        navigate(notification.actionUrl);
+        navigate(notification.action_url);
       }
       setIsOpen(false);
     }
   };
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     if (user) {
-      markAllAsRead(user.id);
-      loadNotifications();
+      await markAllAsRead(user.id);
+      await loadNotifications();
     }
   };
 
@@ -170,7 +171,7 @@ export function NotificationBell() {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className={`p-4 cursor-pointer transition-colors hover:bg-muted/50 ${
+                  className={`p-4 cursor-pointer transition-colors hover:bg-muted/50 ${getNotificationColor(notification.type)} ${
                     !notification.read ? 'bg-primary/5' : ''
                   }`}
                 >
@@ -191,7 +192,7 @@ export function NotificationBell() {
                         {notification.message}
                       </p>
                       <p className="text-xs text-muted-foreground mt-2">
-                        {formatTime(notification.timestamp)}
+                        {formatTime(notification.created_at)}
                       </p>
                     </div>
                   </div>

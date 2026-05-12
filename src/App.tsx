@@ -37,6 +37,8 @@ const IFRS9 = lazy(() => import('@/pages/IFRS9'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
+const ProjectSurvey = lazy(() => import('@/pages/ProjectSurvey'));
+const ProjectSurveyResults = lazy(() => import('@/pages/ProjectSurveyResults'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -342,6 +344,26 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <IFRS9 />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/project-survey"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ProjectSurvey />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/project-survey-results"
+              element={
+                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
+                  <Layout>
+                    <ProjectSurveyResults />
                   </Layout>
                 </ProtectedRoute>
               }

@@ -2,6 +2,7 @@ import React from 'react';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { MobileNavigation } from './MobileNavigation';
+import { ProjectSurveyBanner } from './ProjectSurveyBanner';
 import { useDeadlineNotifications } from '@/hooks/useDeadlineNotifications';
 
 interface LayoutProps {
@@ -18,6 +19,7 @@ export default function Layout({ children }: LayoutProps) {
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader />
+          <ProjectSurveyBanner />
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
             <div className="w-full">
               {children}

@@ -57,6 +57,7 @@ import { Task, ChecklistItem } from "@/types/project";
 import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
 import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { useMemo } from "react";
+import { getProjectStatusLabel, isTaskDoneStatus } from "@/lib/projectWorkflow";
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -98,10 +99,11 @@ export default function ProjectWorkspace() {
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
   const canSeeContracts = isProcurement || isAdmin || isPartner || isPM || isDirector;
-  const projectStatus = project?.status || project?.notes?.status;
+  const projectStatus = project?.notes?.status || project?.status;
   const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
-  const canCompleteProject = (isPartner || isPM) && isInProgress;
+  const isPendingPaymentApproval = projectStatus === 'pending_payment_approval';
+  const canCompleteProject = (isPartner || isPM) && (isInProgress || projectStatus === 'ready_to_complete');
   // Директор/зам видят только общую информацию, без деталей методологии
   const showFullDetails = !isDirector;
 
@@ -659,12 +661,12 @@ export default function ProjectWorkspace() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Задачи проекта</span>
               <span className="text-sm text-muted-foreground">
-                {projectTasks.filter((t: any) => t.status === 'done').length} из {projectTasks.length} выполнено
+                {projectTasks.filter((t: any) => isTaskDoneStatus(t.status)).length} из {projectTasks.length} выполнено
               </span>
             </div>
             <Progress
               value={projectTasks.length > 0 ?
-                (projectTasks.filter((t: any) => t.status === 'done').length / projectTasks.length) * 100 : 0}
+                (projectTasks.filter((t: any) => isTaskDoneStatus(t.status)).length / projectTasks.length) * 100 : 0}
               className="h-3"
             />
           </div>
@@ -698,10 +700,8 @@ export default function ProjectWorkspace() {
                   </div>
                   <Progress value={project.completionPercent || project.completion || 0} className="h-3" />
                 </div>
-                <Badge variant={project.status === 'completed' ? 'default' : 'secondary'} className="mt-4 text-sm px-4 py-1">
-                  {project.status === 'approved' ? 'Утвержден' :
-                    project.status === 'in_progress' ? 'В работе' :
-                      project.status === 'completed' ? 'Завершен' : 'В работе'}
+                <Badge variant={projectStatus === 'completed' ? 'default' : 'secondary'} className="mt-4 text-sm px-4 py-1">
+                  {getProjectStatusLabel(projectStatus)}
                 </Badge>
               </Card>
 
@@ -748,7 +748,7 @@ export default function ProjectWorkspace() {
                   {/* Сводка по задачам */}
                   {(() => {
                     const total = projectTasks.length;
-                    const completed = projectTasks.filter(t => t.status === 'completed').length;
+                    const completed = projectTasks.filter(t => isTaskDoneStatus(t.status)).length;
                     const inProgress = projectTasks.filter(t => t.status === 'in_progress').length;
                     const tasksPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -1117,7 +1117,7 @@ export default function ProjectWorkspace() {
       {/* Этапы аудита и паспорт проекта — УБРАНЫ */}
 
       {/* Кнопка завершения проекта */}
-      {canCompleteProject && !isCompleted && (
+      {canCompleteProject && projectTasks.length === 0 && !isCompleted && !isPendingPaymentApproval && (
         <Card className="p-6 border-green-200 bg-green-50">
           <div className="flex items-center justify-between">
             <div>
@@ -1138,6 +1138,20 @@ export default function ProjectWorkspace() {
       )}
 
       {/* Статус завершенного проекта */}
+      {isPendingPaymentApproval && (
+        <Card className="p-6 border-blue-200 bg-blue-50">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-6 h-6 text-blue-600" />
+            <div>
+              <h3 className="font-semibold text-blue-900">Ожидает утверждения CEO</h3>
+              <p className="text-sm text-blue-700">
+                Проект уже передан на финальную проверку. CEO может скорректировать бонусы и закрыть его в разделе "Бонусы".
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {isCompleted && (
         <Card className="p-6 border-green-200 bg-green-50">
           <div className="flex items-center gap-3">
