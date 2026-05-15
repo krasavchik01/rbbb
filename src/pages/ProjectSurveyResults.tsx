@@ -261,12 +261,8 @@ export default function ProjectSurveyResults() {
     }
   };
 
-  const handleApproveSelected = async () => {
-    const targets = pendingProposals.filter((p) => selected[p.projectId]);
-    if (targets.length === 0) {
-      toast({ title: 'Ничего не выбрано', description: 'Отметьте предложения галочками.' });
-      return;
-    }
+  const approveBatch = async (targets: SurveyProposal[], label: string) => {
+    if (targets.length === 0) return;
     setBusy(true);
     try {
       let ok = 0;
@@ -281,13 +277,28 @@ export default function ProjectSurveyResults() {
       await reload();
       await refreshProjects();
       setSelected({});
-      toast({
-        title: `Принято ${ok} из ${targets.length}`,
-        description: 'Команды и статусы обновлены в проектах.',
-      });
+      toast({ title: `${label}: принято ${ok} из ${targets.length}`, description: 'Команды и статусы обновлены в проектах.' });
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleApproveSelected = () => {
+    const targets = pendingProposals.filter((p) => selected[p.projectId]);
+    if (targets.length === 0) {
+      toast({ title: 'Ничего не выбрано', description: 'Отметьте предложения галочками.' });
+      return;
+    }
+    return approveBatch(targets, 'Выделенные');
+  };
+
+  const handleApproveAllHighConfidence = () => {
+    const targets = pendingProposals.filter((p) => p.confidence === 'high');
+    if (targets.length === 0) {
+      toast({ title: 'Нет предложений с высокой уверенностью' });
+      return;
+    }
+    return approveBatch(targets, 'High confidence');
   };
 
   const projectStatusFromSystem = (projectId: string) => {
@@ -426,12 +437,20 @@ export default function ProjectSurveyResults() {
                     Система автоматически распределила команды и статус по ответам сотрудников.
                     Подтвердите массово или по одному.
                   </div>
+                  <Button size="sm" variant="default" onClick={handleApproveAllHighConfidence} disabled={busy}>
+                    <Sparkles className="w-4 h-4 mr-2" /> Принять все с высокой уверенностью
+                    {pendingProposals.filter((p) => p.confidence === 'high').length > 0 && (
+                      <span className="ml-2 text-xs opacity-90">
+                        ({pendingProposals.filter((p) => p.confidence === 'high').length})
+                      </span>
+                    )}
+                  </Button>
                   <Button size="sm" variant="outline" onClick={toggleSelectAll}>
                     {pendingProposals.every((p) => selected[p.projectId])
                       ? 'Снять выделение'
                       : 'Выбрать все'}
                   </Button>
-                  <Button size="sm" onClick={handleApproveSelected} disabled={busy}>
+                  <Button size="sm" variant="outline" onClick={handleApproveSelected} disabled={busy}>
                     <CheckCheck className="w-4 h-4 mr-2" /> Принять выделенные
                   </Button>
                 </CardContent>

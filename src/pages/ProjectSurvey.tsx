@@ -199,22 +199,18 @@ export default function ProjectSurvey() {
     }
   };
 
-  const handleSubmit = async () => {
+  const submitInternal = async (skipValidation: boolean) => {
     if (!user) return;
-    if (myAnswers.length === 0) {
-      const ok = window.confirm(
-        'Вы не добавили ни одного проекта. Отправить ответ как «я не участвовал ни в одном проекте»?',
+    if (!skipValidation) {
+      const missing = myAnswers.filter(
+        (a) => !a.roleOnProject || !a.periodFrom || !a.periodTo || !a.totalHours,
       );
-      if (!ok) return;
-    }
-    const missing = myAnswers.filter(
-      (a) => !a.roleOnProject || !a.periodFrom || !a.periodTo || !a.totalHours,
-    );
-    if (missing.length > 0) {
-      const ok = window.confirm(
-        `У ${missing.length} проектов не указаны роль, период или часы. Всё равно отправить?`,
-      );
-      if (!ok) return;
+      if (missing.length > 0) {
+        const ok = window.confirm(
+          `У ${missing.length} проектов не указаны роль, период или часы. Всё равно отправить?`,
+        );
+        if (!ok) return;
+      }
     }
     setBusy(true);
     try {
@@ -224,14 +220,19 @@ export default function ProjectSurvey() {
       toast({
         title: 'Спасибо!',
         description:
-          tsCreated > 0
-            ? `Ответ отправлен. В таймщиты добавлено ${tsCreated} запис(и/ей) по проектам.`
-            : 'Ответ отправлен. Зам.директор увидит ваши данные в результатах опроса.',
+          myAnswers.length === 0
+            ? 'Ответ отправлен — отметили, что вы ни в одном проекте не участвовали.'
+            : tsCreated > 0
+              ? `Ответ отправлен. В таймщиты добавлено ${tsCreated} запис(и/ей) по проектам.`
+              : 'Ответ отправлен. Зам.директор увидит ваши данные в результатах опроса.',
       });
     } finally {
       setBusy(false);
     }
   };
+
+  const handleSubmit = () => submitInternal(false);
+  const handleSubmitNothing = () => submitInternal(true);
 
   if (!user) return <div className="p-6 text-muted-foreground">Войдите, чтобы пройти опрос.</div>;
   if (!config) return <div className="p-6 text-muted-foreground">Загрузка…</div>;
@@ -371,8 +372,14 @@ export default function ProjectSurvey() {
         </CardHeader>
         <CardContent>
           {myAnswers.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground text-sm">
-              Пока пусто. Найдите и добавьте сверху ваш проект.
+            <div className="py-8 text-center space-y-4">
+              <div className="text-muted-foreground text-sm">
+                Пока пусто. Найдите и добавьте сверху ваш проект.
+              </div>
+              <div className="text-xs text-muted-foreground">или</div>
+              <Button variant="outline" onClick={handleSubmitNothing} disabled={busy}>
+                Я не участвовал ни в одном проекте — отправить пустой ответ
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
