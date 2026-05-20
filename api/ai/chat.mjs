@@ -148,26 +148,65 @@ const TOOLS = [
 
 // ─── Tool executors (server-side, read from Supabase) ──────────────────────
 
+function safeParse(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 async function execTool(supabase, ctx, name, input) {
   try {
     switch (name) {
       case 'list_projects': {
-        let q = supabase.from('projects').select('id, name, status, clientName:client_name, updated_at').limit(Math.min(input.limit || 20, 100));
+        // Схема: projects(id, name, status, updated_at, notes). Имя клиента и
+        // прочие поля сидят в JSONB-колонке notes. Достаём их в JS, чтобы
+        // не зависеть от названий колонок.
+        let q = supabase.from('projects').select('id, name, status, updated_at, notes').limit(Math.min(input.limit || 20, 100));
         if (input.status) q = q.eq('status', input.status);
-        if (input.search) q = q.or(`name.ilike.%${input.search}%,client_name.ilike.%${input.search}%`);
+        if (input.search) q = q.ilike('name', `%${input.search}%`);
         const { data, error } = await q;
         if (error) return { error: error.message };
-        return { projects: data || [] };
+        const parsed = (data || []).map((p) => {
+          const notes = typeof p.notes === 'string' ? safeParse(p.notes) : p.notes;
+          return {
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            updated_at: p.updated_at,
+            clientName: notes?.clientName || notes?.client?.name || null,
+            periodFrom: notes?.periodFrom || notes?.startDate || null,
+            periodTo: notes?.periodTo || notes?.endDate || null,
+            teamSize: Array.isArray(notes?.team) ? notes.team.length : (Array.isArray(notes?.teamIds) ? notes.teamIds.length : null),
+          };
+        });
+        // Если был поиск по client — дофильтруем в JS (т.к. он в JSONB)
+        const filtered = input.search
+          ? parsed.filter((p) =>
+              (p.name && p.name.toLowerCase().includes(input.search.toLowerCase())) ||
+              (p.clientName && p.clientName.toLowerCase().includes(input.search.toLowerCase())),
+            )
+          : parsed;
+        return { projects: filtered };
       }
       case 'get_project': {
-        const { data, error } = await supabase.from('projects').select('*').eq('id', input.projectId).maybeSingle();
+        const { data, error } = await supabase.from('projects').select('id, name, status, updated_at, notes').eq('id', input.projectId).maybeSingle();
         if (error) return { error: error.message };
         if (!data) return { error: 'Project not found' };
-        // Чистим тяжёлые поля
-        const slim = { ...data };
-        delete slim.documents;
-        delete slim.files;
-        return { project: slim };
+        const notes = typeof data.notes === 'string' ? safeParse(data.notes) : data.notes;
+        return {
+          project: {
+            id: data.id,
+            name: data.name,
+            status: data.status,
+            updated_at: data.updated_at,
+            clientName: notes?.clientName || notes?.client?.name || null,
+            periodFrom: notes?.periodFrom || notes?.startDate || null,
+            periodTo: notes?.periodTo || notes?.endDate || null,
+            team: Array.isArray(notes?.team) ? notes.team.map((m) => ({ id: m.userId || m.id, name: m.name, role: m.role })) : [],
+            description: notes?.description || null,
+            manager: notes?.managerName || notes?.manager || null,
+            partner: notes?.partnerName || notes?.partner || null,
+            budget: notes?.finances?.amountWithoutVAT || notes?.budget || null,
+          },
+        };
       }
       case 'list_employees': {
         let q = supabase.from('employees').select('id, name, role, email').limit(200);
