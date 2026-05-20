@@ -86,7 +86,7 @@ export default async (req, res) => {
       .then((r) => r.data),
     supabase.from('projects').select('id, name, status').then((r) => r.data || []),
     supabase
-      .from('users')
+      .from('employees')
       .select('id, name, role')
       .eq('id', userId)
       .maybeSingle()
