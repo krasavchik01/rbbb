@@ -44,8 +44,12 @@ const PRICE_INPUT_PER_M = 1.0;
 const PRICE_OUTPUT_PER_M = 5.0;
 const PRICE_CACHE_READ_PER_M = 0.1;
 const PRICE_CACHE_WRITE_PER_M = 1.25;
-const MAX_TOOL_ITERATIONS = 5;
-const MAX_HISTORY_MESSAGES = 30;  // последние N сообщений из БД в контекст
+const MAX_TOOL_ITERATIONS = 8;        // увеличено: write-flow тратит больше итераций (dry_run → confirm → apply)
+const MAX_HISTORY_MESSAGES = 30;      // последние N сообщений из БД в контекст
+
+// Роли которые могут вызывать write-tools. Остальные — только read.
+// Проверяется server-side по employees.role (не доверяем клиенту).
+const WRITE_ROLES = new Set(['ceo', 'admin', 'deputy_director']);
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -144,6 +148,108 @@ const TOOLS = [
       required: ['key', 'content', 'scope'],
     },
   },
+  // ─── DIAGNOSTIC / REPORT (read-only) ─────────────────────────────────────
+  {
+    name: 'find_gaps',
+    description: 'Найти «дыры» в данных: проекты без команды, протухшие proposals, сотрудники без активных проектов, неподанные опросы. Полезно когда юзер просит «найди недоработки» / «что не так в системе».',
+    input_schema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['all', 'projects_no_team', 'pending_proposals', 'employees_no_projects', 'missing_surveys', 'stale_projects'],
+          description: 'Что искать. all = всё сразу.',
+        },
+      },
+    },
+  },
+  {
+    name: 'generate_report',
+    description: 'Сводный отчёт по системе. Используй когда юзер спрашивает «сколько …» или «дай сводку».',
+    input_schema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['projects_by_status', 'projects_started_completed', 'employees_workload', 'survey_completion', 'ai_spending'],
+        },
+      },
+      required: ['type'],
+    },
+  },
+  // ─── WRITE TOOLS (двухфазный confirm: dry_run → подтверждение пользователя → apply) ──
+  // Все write tools имеют параметр dry_run (default true). В dry_run возвращают
+  // «что было бы сделано», не меняют БД. Только когда юзер явно подтвердил
+  // в чате — AI вызывает повторно с dry_run=false.
+  // Доступны только для ролей в WRITE_ROLES (проверяется server-side).
+  {
+    name: 'approve_proposal',
+    description: 'Утвердить авто-предложение по составу команды проекта. Двухфазный confirm: первый раз вызывай с dry_run=true чтобы увидеть что будет сделано, покажи юзеру и спроси согласия, потом — с dry_run=false.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        dry_run: { type: 'boolean', description: 'true (default) = только показать что будет, false = применить' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'reject_proposal',
+    description: 'Отклонить авто-предложение по составу команды. Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        reason: { type: 'string', description: 'Короткая причина отклонения' },
+        dry_run: { type: 'boolean' },
+      },
+      required: ['projectId', 'reason'],
+    },
+  },
+  {
+    name: 'update_project_status',
+    description: 'Изменить статус проекта. Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        newStatus: { type: 'string', enum: ['new', 'planning', 'pending_approval', 'approved', 'in_progress', 'ready_to_complete', 'completed', 'cancelled'] },
+        reason: { type: 'string' },
+        dry_run: { type: 'boolean' },
+      },
+      required: ['projectId', 'newStatus'],
+    },
+  },
+  {
+    name: 'create_task',
+    description: 'Создать задачу для сотрудника. Используй когда CEO/зам.дир говорит «передай X», «скажи Y сделать Z». Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        assignedToEmployeeId: { type: 'string', description: 'employee.id кому' },
+        title: { type: 'string', description: 'Краткое название задачи ≤ 100 символов' },
+        description: { type: 'string', description: 'Подробности' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        relatedProjectId: { type: 'string', description: 'Опционально: ID проекта к которому привязана' },
+        dueDate: { type: 'string', description: 'ISO дата дедлайна, опционально' },
+        dry_run: { type: 'boolean' },
+      },
+      required: ['assignedToEmployeeId', 'title'],
+    },
+  },
+  {
+    name: 'list_tasks',
+    description: 'Список задач (созданных через AI). Фильтр по сотруднику или статусу.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        assignedTo: { type: 'string', description: 'employee.id, опционально' },
+        status: { type: 'string', enum: ['pending', 'in_progress', 'done', 'cancelled'] },
+        limit: { type: 'integer' },
+      },
+    },
+  },
 ];
 
 // ─── Tool executors (server-side, read from Supabase) ──────────────────────
@@ -152,7 +258,27 @@ function safeParse(s) {
   try { return JSON.parse(s); } catch { return null; }
 }
 
+// Проверка прав на write-tool. Возвращает true/false; если false — возвращаем
+// в AI стандартизированную ошибку, чтобы он попросил юзера-админа.
+function canWrite(ctx) {
+  return WRITE_ROLES.has(ctx.serverVerifiedRole || '');
+}
+
+const WRITE_TOOLS = new Set([
+  'approve_proposal',
+  'reject_proposal',
+  'update_project_status',
+  'create_task',
+]);
+
 async function execTool(supabase, ctx, name, input) {
+  // Сначала gate по ролям для write-tools
+  if (WRITE_TOOLS.has(name) && input?.dry_run !== true && !canWrite(ctx)) {
+    return {
+      error: 'PERMISSION_DENIED',
+      message: `У роли ${ctx.serverVerifiedRole || 'unknown'} нет прав на write-действия. Может выполнить только ceo/admin/deputy_director.`,
+    };
+  }
   try {
     switch (name) {
       case 'list_projects': {
@@ -276,6 +402,321 @@ async function execTool(supabase, ctx, name, input) {
         if (error) return { error: error.message };
         return { saved: true, key: input.key, scope };
       }
+
+      // ─── DIAGNOSTIC ────────────────────────────────────────────────────
+      case 'find_gaps': {
+        const category = input.category || 'all';
+        const gaps = {};
+        const wants = (c) => category === 'all' || category === c;
+
+        if (wants('projects_no_team')) {
+          const { data } = await supabase.from('projects').select('id, name, status, notes').limit(500);
+          gaps.projects_no_team = (data || [])
+            .map((p) => {
+              const notes = typeof p.notes === 'string' ? safeParse(p.notes) : p.notes;
+              const teamSize = Array.isArray(notes?.team) ? notes.team.length : (Array.isArray(notes?.teamIds) ? notes.teamIds.length : 0);
+              return { id: p.id, name: p.name, status: p.status, teamSize };
+            })
+            .filter((p) => p.teamSize === 0 && !['completed', 'cancelled'].includes(p.status));
+        }
+
+        if (wants('pending_proposals')) {
+          const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+          const { data } = await supabase
+            .from('project_survey_proposals')
+            .select('project_id, project_name, status, updated_at, confidence, participants_count')
+            .eq('status', 'pending')
+            .lt('updated_at', cutoff)
+            .order('updated_at', { ascending: true });
+          gaps.stale_pending_proposals = data || [];
+        }
+
+        if (wants('employees_no_projects')) {
+          const [employees, projects] = await Promise.all([
+            supabase.from('employees').select('id, name, role').limit(500).then((r) => r.data || []),
+            supabase.from('projects').select('id, status, notes').limit(500).then((r) => r.data || []),
+          ]);
+          const activeMembers = new Set();
+          for (const p of projects) {
+            if (['completed', 'cancelled'].includes(p.status)) continue;
+            const notes = typeof p.notes === 'string' ? safeParse(p.notes) : p.notes;
+            const ids = Array.isArray(notes?.teamIds) ? notes.teamIds : (Array.isArray(notes?.team) ? notes.team.map((m) => m.userId || m.id) : []);
+            for (const id of ids) activeMembers.add(id);
+          }
+          gaps.employees_no_projects = employees
+            .filter((e) => !activeMembers.has(e.id) && !['admin', 'hr'].includes(e.role))
+            .map((e) => ({ id: e.id, name: e.name, role: e.role }));
+        }
+
+        if (wants('missing_surveys')) {
+          const [employees, responses] = await Promise.all([
+            supabase.from('employees').select('id, name, role').limit(500).then((r) => r.data || []),
+            supabase.from('project_survey_responses').select('user_id, status').then((r) => r.data || []),
+          ]);
+          const submitted = new Set(responses.filter((r) => r.status === 'submitted').map((r) => r.user_id));
+          gaps.employees_no_survey = employees
+            .filter((e) => !submitted.has(e.id) && !['admin'].includes(e.role))
+            .map((e) => ({ id: e.id, name: e.name, role: e.role }));
+        }
+
+        if (wants('stale_projects')) {
+          const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+          const { data } = await supabase
+            .from('projects')
+            .select('id, name, status, updated_at')
+            .in('status', ['in_progress', 'planning', 'approved'])
+            .lt('updated_at', cutoff)
+            .order('updated_at', { ascending: true })
+            .limit(50);
+          gaps.stale_projects = data || [];
+        }
+
+        return gaps;
+      }
+
+      case 'generate_report': {
+        switch (input.type) {
+          case 'projects_by_status': {
+            const { data } = await supabase.from('projects').select('status');
+            const counts = {};
+            for (const p of data || []) counts[p.status || 'unknown'] = (counts[p.status || 'unknown'] || 0) + 1;
+            return { type: 'projects_by_status', counts, total: (data || []).length };
+          }
+          case 'projects_started_completed': {
+            const { data } = await supabase.from('projects').select('status, updated_at');
+            const all = data || [];
+            return {
+              type: 'projects_started_completed',
+              total: all.length,
+              started: all.filter((p) => ['in_progress', 'planning', 'approved'].includes(p.status)).length,
+              completed: all.filter((p) => p.status === 'completed').length,
+              cancelled: all.filter((p) => p.status === 'cancelled').length,
+              new_or_pending: all.filter((p) => ['new', 'pending_approval'].includes(p.status)).length,
+              ready_to_complete: all.filter((p) => p.status === 'ready_to_complete').length,
+            };
+          }
+          case 'survey_completion': {
+            const [emps, resps] = await Promise.all([
+              supabase.from('employees').select('id, role').then((r) => r.data || []),
+              supabase.from('project_survey_responses').select('user_id, status').then((r) => r.data || []),
+            ]);
+            const submitted = resps.filter((r) => r.status === 'submitted').length;
+            const drafts = resps.filter((r) => r.status === 'draft').length;
+            return {
+              type: 'survey_completion',
+              employees_total: emps.length,
+              submitted,
+              drafts,
+              not_started: emps.length - submitted - drafts,
+              percent_submitted: emps.length === 0 ? 0 : Math.round((submitted / emps.length) * 100),
+            };
+          }
+          case 'ai_spending': {
+            const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+            const { data } = await supabase
+              .from('ai_audit_log')
+              .select('action, model, cost_estimate_usd, input_tokens, output_tokens, created_at, status')
+              .gte('created_at', cutoff);
+            const ok = (data || []).filter((r) => r.status === 'success');
+            const totalUsd = ok.reduce((s, r) => s + Number(r.cost_estimate_usd || 0), 0);
+            const byAction = {};
+            for (const r of ok) {
+              byAction[r.action] = (byAction[r.action] || 0) + Number(r.cost_estimate_usd || 0);
+            }
+            return {
+              type: 'ai_spending',
+              period_days: 30,
+              total_calls: ok.length,
+              total_usd: Number(totalUsd.toFixed(4)),
+              by_action: byAction,
+              total_input_tokens: ok.reduce((s, r) => s + (r.input_tokens || 0), 0),
+              total_output_tokens: ok.reduce((s, r) => s + (r.output_tokens || 0), 0),
+              errors_count: (data || []).filter((r) => r.status === 'error').length,
+            };
+          }
+          case 'employees_workload': {
+            const resps = await supabase
+              .from('project_survey_responses')
+              .select('user_id, user_name, user_role, answers, status')
+              .eq('status', 'submitted')
+              .then((r) => r.data || []);
+            const rows = resps.map((r) => {
+              const ans = Array.isArray(r.answers) ? r.answers : [];
+              const hours = ans.reduce((s, a) => s + (a.totalHours || 0), 0);
+              return {
+                userId: r.user_id,
+                name: r.user_name,
+                role: r.user_role,
+                projects: ans.filter((a) => a.participated).length,
+                hours,
+              };
+            });
+            rows.sort((a, b) => b.hours - a.hours);
+            return { type: 'employees_workload', top: rows.slice(0, 30), total: rows.length };
+          }
+          default:
+            return { error: `Unknown report type: ${input.type}` };
+        }
+      }
+
+      // ─── WRITE TOOLS (dry_run flow) ────────────────────────────────────
+      case 'approve_proposal': {
+        const dry = input.dry_run !== false;
+        const { data: prop, error } = await supabase
+          .from('project_survey_proposals')
+          .select('*')
+          .eq('project_id', input.projectId)
+          .maybeSingle();
+        if (error) return { error: error.message };
+        if (!prop) return { error: 'Proposal not found' };
+        if (prop.status === 'approved') return { error: 'Already approved' };
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            project_id: prop.project_id,
+            project_name: prop.project_name,
+            from_status: prop.status,
+            to_status: 'approved',
+            proposed_team_size: Array.isArray(prop.proposed_team) ? prop.proposed_team.length : 0,
+            proposed_status: prop.proposed_status,
+            confidence: prop.confidence,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру что будет сделано и спроси «подтверждаешь?». Только после явного «да» вызывай повторно с dry_run=false.' };
+        const { error: updErr } = await supabase
+          .from('project_survey_proposals')
+          .update({
+            status: 'approved',
+            reviewed_by: ctx.userId,
+            reviewed_by_name: ctx.userName || null,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('project_id', input.projectId);
+        if (updErr) return { error: updErr.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'reject_proposal': {
+        const dry = input.dry_run !== false;
+        const { data: prop, error } = await supabase
+          .from('project_survey_proposals')
+          .select('*')
+          .eq('project_id', input.projectId)
+          .maybeSingle();
+        if (error) return { error: error.message };
+        if (!prop) return { error: 'Proposal not found' };
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            project_id: prop.project_id,
+            project_name: prop.project_name,
+            from_status: prop.status,
+            to_status: 'rejected',
+            reason: input.reason,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру что будет сделано и спроси «подтверждаешь?». Только после явного «да» вызывай повторно с dry_run=false.' };
+        const { error: updErr } = await supabase
+          .from('project_survey_proposals')
+          .update({
+            status: 'rejected',
+            reviewed_by: ctx.userId,
+            reviewed_by_name: ctx.userName || null,
+            reviewed_at: new Date().toISOString(),
+            override_notes: input.reason,
+          })
+          .eq('project_id', input.projectId);
+        if (updErr) return { error: updErr.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'update_project_status': {
+        const dry = input.dry_run !== false;
+        const { data: proj, error } = await supabase
+          .from('projects')
+          .select('id, name, status, notes')
+          .eq('id', input.projectId)
+          .maybeSingle();
+        if (error) return { error: error.message };
+        if (!proj) return { error: 'Project not found' };
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            project_id: proj.id,
+            project_name: proj.name,
+            from_status: proj.status,
+            to_status: input.newStatus,
+            reason: input.reason || null,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру что будет сделано и спроси «подтверждаешь?». Только после явного «да» вызывай повторно с dry_run=false.' };
+        // Обновляем status + дублируем в notes для UI совместимости
+        const notes = typeof proj.notes === 'string' ? safeParse(proj.notes) : proj.notes;
+        const nextNotes = { ...(notes || {}), status: input.newStatus, ai_status_change: { from: proj.status, to: input.newStatus, by: ctx.userId, reason: input.reason || null, at: new Date().toISOString() } };
+        const { error: updErr } = await supabase
+          .from('projects')
+          .update({ status: input.newStatus, notes: JSON.stringify(nextNotes), updated_at: new Date().toISOString() })
+          .eq('id', input.projectId);
+        if (updErr) return { error: updErr.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'create_task': {
+        const dry = input.dry_run !== false;
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('id, name, role')
+          .eq('id', input.assignedToEmployeeId)
+          .maybeSingle();
+        if (!emp) return { error: 'Employee not found' };
+        const preview = {
+          dry_run: dry,
+          will_create: {
+            assigned_to: emp.id,
+            assigned_to_name: emp.name,
+            title: String(input.title).slice(0, 100),
+            description: input.description || null,
+            priority: input.priority || 'medium',
+            due_date: input.dueDate || null,
+            related_project_id: input.relatedProjectId || null,
+            created_by: ctx.userId,
+            created_by_name: ctx.userName || null,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру что будет создано и спроси «подтверждаешь?». Только после явного «да» вызывай повторно с dry_run=false. Напомни юзеру что канал доставки (Telegram/email) пока не подключён — задача создастся, но автоматическое уведомление не уйдёт.' };
+        const { data, error } = await supabase
+          .from('ai_tasks')
+          .insert({
+            assigned_to: preview.will_create.assigned_to,
+            assigned_to_name: preview.will_create.assigned_to_name,
+            title: preview.will_create.title,
+            description: preview.will_create.description,
+            priority: preview.will_create.priority,
+            related_project_id: preview.will_create.related_project_id,
+            due_date: preview.will_create.due_date,
+            created_by: preview.will_create.created_by,
+            created_by_name: preview.will_create.created_by_name,
+            created_via: 'ai_chat',
+          })
+          .select('id, created_at')
+          .single();
+        if (error) return { error: error.message };
+        return { ...preview, applied: true, task_id: data.id, created_at: data.created_at };
+      }
+
+      case 'list_tasks': {
+        let q = supabase
+          .from('ai_tasks')
+          .select('id, title, assigned_to, assigned_to_name, status, priority, due_date, created_at, related_project_id')
+          .order('created_at', { ascending: false })
+          .limit(Math.min(input.limit || 30, 100));
+        if (input.assignedTo) q = q.eq('assigned_to', input.assignedTo);
+        if (input.status) q = q.eq('status', input.status);
+        const { data, error } = await q;
+        if (error) return { error: error.message };
+        return { tasks: data || [] };
+      }
+
       default:
         return { error: `Unknown tool: ${name}` };
     }
@@ -286,7 +727,7 @@ async function execTool(supabase, ctx, name, input) {
 
 // ─── System prompt (стабильный, для prompt caching) ────────────────────────
 
-function buildSystemPrompt(memorySnippets) {
+function buildSystemPrompt(memorySnippets, verifiedRole) {
   // Кешируем большой стабильный prefix. Минимум 4096 токенов для Haiku 4.5,
   // иначе caching не сработает — поэтому делаем его подробным.
   return `Ты — AI-ассистент аудиторской фирмы RBBB Partners в Казахстане. Твоё имя — «RB». Ты работаешь напрямую с CEO, директорами, партнёрами, HR и админами.
@@ -321,14 +762,37 @@ function buildSystemPrompt(memorySnippets) {
    - ai_memory — твоя долговременная память.
 
 ТВОИ ТУЛЫ
+ЧТЕНИЕ (доступно всегда):
 - list_projects: список проектов с фильтрами.
-- get_project: детали проекта.
-- list_employees: список сотрудников с фильтрами.
-- get_employee_workload: загрузка сотрудника (опрос, часы, проекты).
+- get_project: детали проекта (команда, клиент, период, бюджет).
+- list_employees: список сотрудников.
+- get_employee_workload: загрузка сотрудника.
 - list_survey_responses: статистика по опросу.
 - list_survey_proposals: авто-предложения по командам.
-- recent_ai_activity: твой audit log за последнее время.
-- save_memory: сохранить важный факт в долговременную память.
+- list_tasks: задачи в системе.
+- recent_ai_activity: твой audit log.
+- save_memory: запись в долговременную память.
+
+ДИАГНОСТИКА (read-only):
+- find_gaps(category): «дыры» в данных — проекты без команды, протухшие proposals (>7 дней), сотрудники без активных проектов, неподанные опросы, проекты без обновлений >30 дней. category='all' = всё сразу.
+- generate_report(type): сводные отчёты — projects_by_status, projects_started_completed, survey_completion, employees_workload, ai_spending.
+
+ЗАПИСЬ (только для роли ceo/admin/deputy_director — текущая роль: ${verifiedRole || '???'}):
+- approve_proposal(projectId): утвердить состав команды из опроса.
+- reject_proposal(projectId, reason): отклонить предложение.
+- update_project_status(projectId, newStatus, reason): изменить статус проекта.
+- create_task(assignedToEmployeeId, title, description, priority, dueDate, relatedProjectId): создать задачу сотруднику.
+
+КРИТИЧНЫЕ ПРАВИЛА WRITE-FLOW (обязательны!):
+1. ВСЕ write-tools (approve_proposal, reject_proposal, update_project_status, create_task) обязаны вызываться ДВАЖДЫ:
+   - Первый раз: с dry_run=true (default). Tool вернёт will_change/will_create — что БУДЕТ сделано.
+   - Покажи юзеру в чате что именно изменится: «Я собираюсь: <описание>. Подтверждаешь? (да/нет)»
+   - Жди явного подтверждения пользователя в следующем сообщении.
+   - Только после явного «да», «yes», «ок», «давай», «утверждаю» — вызови tool ПОВТОРНО с dry_run=false.
+2. Если юзер сказал «отмени», «нет», «не надо», «стоп» — НЕ вызывай tool второй раз. Подтверди отмену.
+3. Если ты не уверен в намерении — переспроси, не делай.
+4. Один write per turn. Не пакуй несколько изменений в одно сообщение AI — пользователь должен видеть каждое.
+5. Никогда не вызывай write-tool сразу с dry_run=false без предварительного dry_run=true в том же диалоге.
 
 ИНСТРУКЦИИ ПО ИСПОЛЬЗОВАНИЮ ТУЛОВ
 - Прежде чем отвечать «не знаю» — попробуй вызвать tool. Многие вопросы решаются 1-2 вызовами.
@@ -350,9 +814,10 @@ function buildSystemPrompt(memorySnippets) {
 - Если задача сложная и нужно несколько действий — сначала кратко перечисли план, потом выполняй.
 
 БЕЗОПАСНОСТЬ
-- Ты НЕ можешь менять данные (только читать). Если пользователь просит «измени X», объясни что это будет в следующем релизе и предложи альтернативу (например, ссылку на UI).
-- Ты НЕ можешь отправлять уведомления другим сотрудникам — этого канала пока нет.
-- Если пользователь даёт «задание для другого сотрудника» — сохрани его в память с importance 8-9, скажи что напомнишь когда сможешь (это будет в следующей итерации).
+- У тебя ЕСТЬ права менять данные (если роль пользователя ceo/admin/deputy_director), но ТОЛЬКО через двухфазный confirm-flow (см. правила выше).
+- Если у пользователя другая роль — write-tools вернут PERMISSION_DENIED. Скажи юзеру что это сделает только ceo/admin/зам.дир.
+- Канал доставки уведомлений (Telegram/email) пока НЕ подключён. Когда создаёшь задачу через create_task — задача появится в БД, но автоматическое уведомление сотруднику не уйдёт. Предупреди юзера об этом.
+- При диагностике (find_gaps) или отчётах НЕ вызывай больше 1-2 tools — find_gaps уже агрегирует.
 
 ТВОЯ ДОЛГОВРЕМЕННАЯ ПАМЯТЬ (на текущий момент)
 ${memorySnippets.length === 0 ? '(пока пусто — узнавай и сохраняй важное)' : memorySnippets.map((m) => `- [${m.scope}|${m.memory_key}, важность ${m.importance}/10] ${m.content}`).join('\n')}
@@ -379,6 +844,25 @@ export default async (req, res) => {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
   const client = new Anthropic({ apiKey: anthropicKey });
+
+  // ─── 0. Server-side проверка роли (не доверяем клиенту) ────────────────
+  // Клиент шлёт userRole, но мы ВЕРИФИЦИРУЕМ его по employees.role в БД.
+  // Если расходится — берём роль из БД. Если юзера в employees нет —
+  // отказываем в чате (для smoke-тестов разрешим через env флаг).
+  const { data: empRow } = await supabase
+    .from('employees')
+    .select('id, name, role')
+    .eq('id', userId)
+    .maybeSingle();
+  const verifiedRole = empRow?.role || null;
+  const allowSmokeTest = process.env.AI_CHAT_ALLOW_UNKNOWN_USER === 'true';
+  if (!empRow && !allowSmokeTest) {
+    return res.status(403).json({
+      error: 'USER_NOT_FOUND',
+      message: 'Пользователь не найден в системе. Чат доступен только зарегистрированным сотрудникам.',
+    });
+  }
+  // verifiedRole может быть null для smoke-теста — тогда write-tools будут отказывать.
 
   // ─── 1. Получаем или создаём conversation ───────────────────────────────
   let conversationId = convoIdInput || null;
@@ -422,7 +906,7 @@ export default async (req, res) => {
   messages.push({ role: 'user', content: [{ type: 'text', text: message }] });
 
   // ─── 5. Системный промпт + caching ──────────────────────────────────────
-  const systemPrompt = buildSystemPrompt(memoryRows || []);
+  const systemPrompt = buildSystemPrompt(memoryRows || [], verifiedRole);
   const systemBlocks = [
     {
       type: 'text',
@@ -501,7 +985,7 @@ export default async (req, res) => {
     const toolResults = [];
     for (const block of resp.content) {
       if (block.type !== 'tool_use') continue;
-      const out = await execTool(supabase, { userId, userName, userRole }, block.name, block.input);
+      const out = await execTool(supabase, { userId, userName, userRole, serverVerifiedRole: verifiedRole }, block.name, block.input);
       toolsUsed.push({ name: block.name, input: block.input, output: out });
       toolResults.push({
         type: 'tool_result',
