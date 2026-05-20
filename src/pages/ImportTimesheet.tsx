@@ -44,6 +44,7 @@ export default function ImportTimesheet() {
   const [fileName, setFileName] = useState<string>('');
   const [result, setResult] = useState<ParseResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const [includeUnmatched, setIncludeUnmatched] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,13 +131,16 @@ export default function ImportTimesheet() {
       return;
     }
     setBusy(true);
+    setProgress({ done: 0, total: targets.length });
     let okCount = 0;
     let errCount = 0;
     try {
-      for (const emp of targets) {
+      for (let idx = 0; idx < targets.length; idx++) {
+        const emp = targets[idx];
         const answers = buildAnswers(emp);
         if (answers.length === 0) {
           errCount += 1;
+          setProgress({ done: idx + 1, total: targets.length });
           continue;
         }
         try {
@@ -154,6 +158,7 @@ export default function ImportTimesheet() {
         } catch {
           errCount += 1;
         }
+        setProgress({ done: idx + 1, total: targets.length });
       }
       toast({
         title: `Импортировано ${okCount} сотрудник(ов)`,
@@ -161,6 +166,7 @@ export default function ImportTimesheet() {
       });
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -268,7 +274,7 @@ export default function ImportTimesheet() {
                 <CardTitle className="text-base">Сотрудники в файле</CardTitle>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <Checkbox checked={includeUnmatched} onCheckedChange={(v) => setIncludeUnmatched(!!v)} />
-                  Включать проекты, которых нет в системе (impоrt as-is)
+                  Включать проекты, которых нет в системе (импортировать как есть)
                 </label>
                 <Button size="sm" variant="outline" onClick={toggleAll} className="ml-auto">
                   {result.employees.length > 0 && result.employees.every((e) => selectedEmployees.has(e.employee))
@@ -333,6 +339,11 @@ export default function ImportTimesheet() {
                                 <Icon className="w-3 h-3 mr-1" />
                                 {tone.label}
                               </Badge>
+                              {pg.fromNotes && (
+                                <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">
+                                  из примечания
+                                </Badge>
+                              )}
                             </div>
                             {pg.matchedProjectId && pg.matchedProjectName !== pg.projectName && (
                               <div className="text-xs text-muted-foreground mt-1 pl-6">
@@ -342,7 +353,11 @@ export default function ImportTimesheet() {
                           </div>
                           <div className="text-right text-sm font-mono shrink-0">
                             <div className="font-bold">{pg.totalHours} ч.</div>
-                            <div className="text-xs text-muted-foreground">{pg.rowsCount} стр.</div>
+                            <div className="text-xs text-muted-foreground">
+                              {pg.uniqueDays > 0
+                                ? `за ${pg.uniqueDays} дн.${pg.rowsCount > pg.uniqueDays ? ` (${pg.rowsCount} зап.)` : ''}`
+                                : `${pg.rowsCount} зап.`}
+                            </div>
                           </div>
                         </div>
 
@@ -383,10 +398,15 @@ export default function ImportTimesheet() {
             );
           })}
 
-          <div className="sticky bottom-4 z-10 flex justify-end">
+          <div className="sticky bottom-4 z-10 flex justify-end items-center gap-3">
+            {progress && (
+              <div className="bg-background border rounded-md px-3 py-2 text-sm shadow-lg">
+                Импорт: <b>{progress.done}</b> / {progress.total}
+              </div>
+            )}
             <Button size="lg" onClick={handleImport} disabled={busy || selectedEmployees.size === 0} className="shadow-xl px-8">
               <Sparkles className="w-4 h-4 mr-2" />
-              Импортировать выбранных ({selectedEmployees.size})
+              {busy && progress ? `Импортирую… ${progress.done}/${progress.total}` : `Импортировать выбранных (${selectedEmployees.size})`}
             </Button>
           </div>
         </>

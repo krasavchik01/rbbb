@@ -36,6 +36,10 @@ export interface ParsedRow {
   partner: string;
   notes: string;
   kind: 'project' | 'admin' | 'absence';
+  /** Имя для проекта пришло из «Примечание», а не из колонки «Проект» */
+  fromNotes: boolean;
+  /** Если admin-строку удалось сопоставить с реальным проектом ещё на этапе парсинга — пара (id, имя) */
+  preMatchFromNotes: { id: string; name: string } | null;
 }
 
 export interface ProjectAggregate {
@@ -43,6 +47,7 @@ export interface ProjectAggregate {
   projectName: string;
   totalHours: number;
   rowsCount: number;
+  uniqueDays: number;               // сколько уникальных дат у этого сотрудника по этому проекту
   periodFrom: string | null;
   periodTo: string | null;
   sections: string[];
@@ -54,6 +59,7 @@ export interface ProjectAggregate {
   matchedProjectId: string | null;
   matchedProjectName: string | null;
   matchScore: 'high' | 'medium' | 'none';
+  fromNotes: boolean;               // строка была «---Административная работа---», проект восстановлен из примечания
 }
 
 export interface EmployeeAggregate {
@@ -160,15 +166,63 @@ function detectKind(project: string): 'project' | 'admin' | 'absence' {
 }
 
 /**
- * Если строка административная, но в примечании упоминается реальный проект
- * (например «Аудит ЧК Karaton Operating Ltd. удалённо с офиса»), вытаскиваем
- * фрагмент с юр.формой и используем как effectiveProject.
+ * Резервный извлекатель «по юр.форме» — на случай, если в системе нет
+ * подходящего проекта, но в примечании виден кандидат с юр.формой.
+ * Используется только если matchProjectInText ничего не нашёл.
  */
 function extractProjectFromNotes(notes: string): string {
   if (!notes) return '';
   const re = /((?:ТОО|АО|ЧК|ИП|ПОО|ЗАО)\s+[«"]?[А-ЯA-Z][^«"\n,;]{2,60}[»"]?)/;
   const m = notes.match(re);
   return m ? m[1].trim() : '';
+}
+
+/**
+ * Ищет упоминание реального проекта в свободном тексте (например в «Примечание»).
+ * Отличие от matchProject: там вход — это название проекта, тут — длинный текст,
+ * внутри которого надо найти название из списка системных проектов.
+ *
+ * Стратегия:
+ *  1. Нормализованное название проекта целиком встречается в нормализованном тексте.
+ *     При нескольких кандидатах выбираем самое длинное (наиболее специфичное).
+ *  2. Иначе — перекрытие длинных токенов имени проекта в тексте ≥ 60%.
+ */
+export function matchProjectInText(
+  text: string,
+  projects: Array<{ id: string; name: string }>,
+): { id: string | null; name: string | null; score: 'high' | 'medium' | 'none' } {
+  const normText = normalizeProjectName(text);
+  if (!normText) return { id: null, name: null, score: 'none' };
+
+  let bestSub: { id: string; name: string; len: number } | null = null;
+  for (const p of projects) {
+    const pn = normalizeProjectName(p.name);
+    if (!pn || pn.length < 3) continue;
+    if (normText.includes(pn)) {
+      if (!bestSub || pn.length > bestSub.len) {
+        bestSub = { id: p.id, name: p.name, len: pn.length };
+      }
+    }
+  }
+  if (bestSub) return { id: bestSub.id, name: bestSub.name, score: 'medium' };
+
+  let bestRatio = 0;
+  let bestId: string | null = null;
+  let bestName: string | null = null;
+  for (const p of projects) {
+    const pn = normalizeProjectName(p.name);
+    const tokens = pn.split(' ').filter((t) => t.length >= 4);
+    if (tokens.length === 0) continue;
+    const hits = tokens.filter((t) => normText.includes(t)).length;
+    const ratio = hits / tokens.length;
+    if (ratio >= 0.6 && ratio > bestRatio) {
+      bestRatio = ratio;
+      bestId = p.id;
+      bestName = p.name;
+    }
+  }
+  if (bestId) return { id: bestId, name: bestName, score: 'medium' };
+  return { id: null, name: null, score: 'none' };
 }
 
 // ─── project matching ──────────────────────────────────────────────────────
@@ -301,9 +355,26 @@ export function parseTimesheetFile(
 
     const kind = detectKind(rawProject);
     let effectiveProject = rawProject;
+    let fromNotesFlag = false;
+    let preMatchedFromNotes: { id: string; name: string } | null = null;
     if (kind === 'admin') {
-      const fromNotes = extractProjectFromNotes(notes);
-      if (fromNotes) effectiveProject = fromNotes;
+      // Сначала пытаемся узнать в примечании реальный системный проект.
+      // «Административная работа» в файле — это не оверхед, а маркер
+      // «проекта не было в выпадающем списке Google Sheet, я написал в примечании».
+      const m = matchProjectInText(notes, projects);
+      if (m.id && m.name) {
+        effectiveProject = m.name;       // нормализованное имя проекта из системы
+        preMatchedFromNotes = { id: m.id, name: m.name };
+        fromNotesFlag = true;
+      } else {
+        // Запасной путь: вытащить кандидата по юр.форме, даже если в системе его нет —
+        // покажем в UI как «не найден» вместо молчаливого скидывания в adminHours.
+        const fromNotes = extractProjectFromNotes(notes);
+        if (fromNotes) {
+          effectiveProject = fromNotes;
+          fromNotesFlag = true;
+        }
+      }
     }
 
     rows.push({
@@ -322,11 +393,15 @@ export function parseTimesheetFile(
       partner: String(r[cols.partner] ?? '').trim(),
       notes,
       kind,
+      fromNotes: fromNotesFlag,
+      preMatchFromNotes: preMatchedFromNotes,
     });
   }
 
   // ─── агрегация ───────────────────────────────────────────────────────────
   const byEmp = new Map<string, EmployeeAggregate>();
+  // Для подсчёта уникальных дней по каждому (сотрудник, проект)
+  const daysIndex = new Map<ProjectAggregate, Set<string>>();
 
   for (const r of rows) {
     if (!r.employee) continue;
@@ -353,12 +428,7 @@ export function parseTimesheetFile(
     }
 
     if (!r.effectiveProject) {
-      // административная без проекта в примечании
-      emp.adminHours += r.hours;
-      continue;
-    }
-
-    if (r.kind === 'admin' && !r.effectiveProject) {
+      // административная без узнаваемого проекта в примечании
       emp.adminHours += r.hours;
       continue;
     }
@@ -366,11 +436,16 @@ export function parseTimesheetFile(
     const key = normalizeProjectName(r.effectiveProject) || r.effectiveProject.toLowerCase();
     let pg = emp.projects.find((p) => (normalizeProjectName(p.projectName) || p.projectName.toLowerCase()) === key);
     if (!pg) {
-      const match = matchProject(r.effectiveProject, projects);
+      // Если admin-строку мы уже сматчили в фазе парсинга — переиспользуем,
+      // не гоняем matchProject повторно (на длинном тексте он бы ничего не нашёл).
+      const match = r.preMatchFromNotes
+        ? { id: r.preMatchFromNotes.id, name: r.preMatchFromNotes.name, score: 'medium' as const }
+        : matchProject(r.effectiveProject, projects);
       pg = {
         projectName: r.effectiveProject,
         totalHours: 0,
         rowsCount: 0,
+        uniqueDays: 0,
         periodFrom: null,
         periodTo: null,
         sections: [],
@@ -382,17 +457,21 @@ export function parseTimesheetFile(
         matchedProjectId: match.id,
         matchedProjectName: match.name,
         matchScore: match.score,
+        fromNotes: r.fromNotes,
       };
       emp.projects.push(pg);
+      daysIndex.set(pg, new Set<string>());
     }
 
     pg.totalHours += r.hours;
     pg.rowsCount += 1;
     emp.totalProjectHours += r.hours;
+    if (r.fromNotes) pg.fromNotes = true;
 
     if (r.isoDate) {
       if (!pg.periodFrom || r.isoDate < pg.periodFrom) pg.periodFrom = r.isoDate;
       if (!pg.periodTo   || r.isoDate > pg.periodTo)   pg.periodTo   = r.isoDate;
+      daysIndex.get(pg)!.add(r.isoDate);
     }
     if (r.section && !pg.sections.includes(r.section)) pg.sections.push(r.section);
     // Руководитель и партнёр МЕНЯЮТСЯ от строки к строке — собираем все уникальные
@@ -400,6 +479,11 @@ export function parseTimesheetFile(
     if (r.partner && !pg.partners.includes(r.partner)) pg.partners.push(r.partner);
     if (r.location && !pg.locations.includes(r.location)) pg.locations.push(r.location);
     if (r.city && !pg.cities.includes(r.city)) pg.cities.push(r.city);
+  }
+
+  // Финализируем uniqueDays
+  for (const [pg, set] of daysIndex.entries()) {
+    pg.uniqueDays = set.size;
   }
 
   // Сортируем проекты у каждого сотрудника по часам убыванию — самые «весомые» сверху
