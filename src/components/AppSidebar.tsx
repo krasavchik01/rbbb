@@ -20,6 +20,7 @@ import {
   Zap,
   Calculator,
   ClipboardCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -80,6 +81,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
       { title: 'Задачи',               url: '/tasks',                      icon: CheckSquare, excludeRoles: ['procurement'] },
       { title: 'Опрос по проектам',    url: '/project-survey',             icon: ClipboardCheck, excludeRoles: ['deputy_director','ceo','admin'] },
       { title: 'Опрос: результаты',    url: '/project-survey-results',     icon: ClipboardCheck, allowedRoles: ['deputy_director','ceo','admin','partner'] },
+      { title: 'Импорт таймщитов',     url: '/import-timesheet',           icon: FileSpreadsheet, allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
     ],
   },
   {

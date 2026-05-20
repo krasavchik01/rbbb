@@ -39,6 +39,7 @@ const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
 const ProjectSurvey = lazy(() => import('@/pages/ProjectSurvey'));
 const ProjectSurveyResults = lazy(() => import('@/pages/ProjectSurveyResults'));
+const ImportTimesheet = lazy(() => import('@/pages/ImportTimesheet'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -364,6 +365,16 @@ function App() {
                 <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
                   <Layout>
                     <ProjectSurveyResults />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/import-timesheet"
+              element={
+                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner', 'hr']}>
+                  <Layout>
+                    <ImportTimesheet />
                   </Layout>
                 </ProtectedRoute>
               }
