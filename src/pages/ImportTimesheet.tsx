@@ -13,7 +13,12 @@ import {
   type EmployeeAggregate,
   type ProjectAggregate,
 } from '@/lib/timesheetImport';
-import { submitResponse, type SurveyProjectAnswer, type SurveyResponse } from '@/lib/projectSurvey';
+import {
+  submitResponse,
+  getAllResponses,
+  type SurveyProjectAnswer,
+  type SurveyResponse,
+} from '@/lib/projectSurvey';
 import { normalizeUserRole } from '@/types/roles';
 import {
   Upload,
@@ -47,6 +52,10 @@ export default function ImportTimesheet() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const [includeUnmatched, setIncludeUnmatched] = useState(false);
+  // userId → краткая сводка по уже существующему ответу (для бейджа «уже загружен»)
+  const [existingResponses, setExistingResponses] = useState<
+    Map<string, { hours: number; projects: number; updatedAt: string }>
+  >(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectList = useMemo(
@@ -67,9 +76,34 @@ export default function ImportTimesheet() {
       setResult(r);
       // По умолчанию выбираем всех сотрудников с найденным user_id
       setSelectedEmployees(new Set(r.employees.filter((e) => e.matchedUserId).map((e) => e.employee)));
+
+      // Идемпотентность: подтягиваем уже сохранённые ответы и помечаем,
+      // у кого из найденных в файле сотрудников импорт ПЕРЕЗАПИШЕТ существующий
+      // ответ (UNIQUE user_id на уровне БД, см. migration 20260512000000).
+      const matchedUserIds = new Set(r.employees.map((e) => e.matchedUserId).filter(Boolean) as string[]);
+      const map = new Map<string, { hours: number; projects: number; updatedAt: string }>();
+      if (matchedUserIds.size > 0) {
+        try {
+          const all = await getAllResponses();
+          for (const resp of all) {
+            if (!matchedUserIds.has(resp.userId)) continue;
+            const hours = resp.answers.reduce((s, a) => s + (a.totalHours || 0), 0);
+            map.set(resp.userId, {
+              hours,
+              projects: resp.answers.filter((a) => a.participated).length,
+              updatedAt: resp.updatedAt,
+            });
+          }
+        } catch {
+          // не критично — просто не покажем бейдж
+        }
+      }
+      setExistingResponses(map);
+
       toast({
         title: 'Файл прочитан',
-        description: `Строк: ${r.rows.length}, сотрудников: ${r.employees.length}`,
+        description: `Строк: ${r.rows.length}, сотрудников: ${r.employees.length}` +
+          (map.size > 0 ? ` · ${map.size} уже загружены ранее (будут перезаписаны)` : ''),
       });
     } catch (err: any) {
       toast({ title: 'Ошибка чтения файла', description: err?.message || String(err), variant: 'destructive' });
@@ -312,6 +346,15 @@ export default function ImportTimesheet() {
                         ) : (
                           <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                             <XCircle className="w-3 h-3 mr-1" /> в системе нет — будет пропущен
+                          </Badge>
+                        )}
+                        {matched && existingResponses.has(emp.matchedUserId!) && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-violet-50 text-violet-700 border-violet-200"
+                            title={`Прошлая загрузка: ${existingResponses.get(emp.matchedUserId!)!.hours} ч., ${existingResponses.get(emp.matchedUserId!)!.projects} проект(ов), ${new Date(existingResponses.get(emp.matchedUserId!)!.updatedAt).toLocaleString('ru')}`}
+                          >
+                            уже загружен — будет перезаписан
                           </Badge>
                         )}
                       </CardTitle>

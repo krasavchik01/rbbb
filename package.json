@@ -13,7 +13,9 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -58,6 +60,7 @@
     "express": "^5.2.1",
     "input-otp": "^1.4.1",
     "lucide-react": "^0.468.0",
+    "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.15",
     "pdfmake": "^0.2.20",
     "react": "^18.3.1",
@@ -70,17 +73,17 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.1",
-    "xlsx": "^0.18.5",
-    "multer": "^1.4.5-lts.1"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@playwright/test": "^1.56.1",
+    "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
-    "@types/multer": "^1.4.12",
+    "@vitest/ui": "^4.1.7",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.0.0",
@@ -90,6 +93,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.18.1",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^4.1.7"
   }
 }
