@@ -316,6 +316,54 @@ describe('parseTimesheetFile — отсутствия и смена руково
   });
 });
 
+describe('parseTimesheetFile — детект колонок не дублирует индексы', () => {
+  it('если колонки «Город» нет в файле — city остаётся -1, не подставляется в индекс manager', () => {
+    // Реальный формат: «Сотрудник, Дата, Проект, Должность, Категория Секция,
+    // Часы, Локация, Руководитель, Партнер, Примечание» (без «Город»).
+    const realHeaders = [
+      'Сотрудник', 'Дата', 'Проект', 'Должность', 'Категория Секция',
+      'Часы', 'Локация', 'Руководитель', 'Партнер', 'Примечание',
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([
+      realHeaders,
+      ['Иванов Иван Иванович', '01.10.2024', 'ТОО Karaton Operating', 'ассистент', 'Денежные средства', 8, 'Офис', 'Менеджер А', 'Партнёр X', ''],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Лист1');
+    const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const res = parseTimesheetFile(buf as ArrayBuffer, PROJECTS, EMPLOYEES);
+
+    // city и manager НЕ должны совпадать (был баг с fallback на индекс 7)
+    expect(res.detectedColumns.manager).toBe(7);
+    expect(res.detectedColumns.city).toBe(-1);
+    // partner должен быть на индексе 8, а не на 9 (как в шаблоне с «Город»)
+    expect(res.detectedColumns.partner).toBe(8);
+    expect(res.detectedColumns.notes).toBe(9);
+
+    // И собранные managers/partners — реальные, не запутаны
+    const proj = res.employees[0].projects[0];
+    expect(proj.managers).toEqual(['Менеджер А']);
+    expect(proj.partners).toEqual(['Партнёр X']);
+  });
+});
+
+describe('parseTimesheetFile — 0-часовые строки', () => {
+  it('считает rowsCount, uniqueDays, но totalHours остаётся 0', () => {
+    const rows = [
+      // Календарные маркеры «начало аудита»: даты есть, часов нет
+      ['Иванов Иван Иванович', '01.10.2024', 'ТОО Karaton Operating', '', '', 0, '', '', '', '', 'начало аудита'],
+      ['Иванов Иван Иванович', '05.10.2024', 'ТОО Karaton Operating', '', '', 0, '', '', '', '', 'выпуск письма'],
+    ];
+    const res = parseTimesheetFile(toXlsx(rows), PROJECTS, EMPLOYEES);
+    const proj = res.employees[0].projects[0];
+    expect(proj.totalHours).toBe(0);
+    expect(proj.rowsCount).toBe(2);
+    expect(proj.uniqueDays).toBe(2);
+    // emp.totalProjectHours тоже 0 — это и есть сигнал «не было реального вклада»
+    expect(res.employees[0].totalProjectHours).toBe(0);
+  });
+});
+
 describe('parseTimesheetFile — идемпотентность парсера', () => {
   it('один и тот же входной файл даёт идентичный результат', () => {
     const rows = [

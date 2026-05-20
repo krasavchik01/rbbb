@@ -52,6 +52,10 @@ export default function ImportTimesheet() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const [includeUnmatched, setIncludeUnmatched] = useState(false);
+  // 0-часовые проекты — это календарные маркеры («начало аудита», «выпуск
+  // письма»). По умолчанию не считаем их за участие, чтобы не зачислить
+  // людей в команды проектов, по которым они реально не работали.
+  const [includeZeroHours, setIncludeZeroHours] = useState(false);
   // userId → краткая сводка по уже существующему ответу (для бейджа «уже загружен»)
   const [existingResponses, setExistingResponses] = useState<
     Map<string, { hours: number; projects: number; updatedAt: string }>
@@ -134,6 +138,7 @@ export default function ImportTimesheet() {
   const buildAnswers = (emp: EmployeeAggregate): SurveyProjectAnswer[] => {
     return emp.projects
       .filter((pg) => includeUnmatched || pg.matchScore !== 'none')
+      .filter((pg) => includeZeroHours || pg.totalHours > 0)
       .map((pg) => {
         const projectId =
           pg.matchedProjectId ||
@@ -310,6 +315,10 @@ export default function ImportTimesheet() {
                   <Checkbox checked={includeUnmatched} onCheckedChange={(v) => setIncludeUnmatched(!!v)} />
                   Включать проекты, которых нет в системе (импортировать как есть)
                 </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox checked={includeZeroHours} onCheckedChange={(v) => setIncludeZeroHours(!!v)} />
+                  Включать проекты с 0 часов (маркеры событий)
+                </label>
                 <Button size="sm" variant="outline" onClick={toggleAll} className="ml-auto">
                   {result.employees.length > 0 && result.employees.every((e) => selectedEmployees.has(e.employee))
                     ? 'Снять выделение'
@@ -385,6 +394,11 @@ export default function ImportTimesheet() {
                               {pg.fromNotes && (
                                 <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">
                                   из примечания
+                                </Badge>
+                              )}
+                              {pg.totalHours === 0 && (
+                                <Badge variant="outline" className="text-xs bg-slate-100 text-slate-600 border-slate-200" title="Только календарные маркеры (начало аудита / выпуск письма), часов нет">
+                                  0 ч.
                                 </Badge>
                               )}
                             </div>

@@ -106,12 +106,30 @@ function findColumn(headers: string[], aliases: string[]): number {
   return -1;
 }
 
+/**
+ * Конверсия Excel serial date в ISO-строку (YYYY-MM-DD) без зависимости от
+ * XLSX.SSF (он не всегда доступен в Node ESM-сборке xlsx).
+ *
+ * Excel считает 1900-01-01 за день 1, но включает фантомный 1900-02-29 —
+ * это легаси-баг от Lotus 1-2-3. Поэтому константа 25569 это «дни между
+ * 1900-01-01 и 1970-01-01 минус 2».
+ */
+function excelSerialToIso(serial: number): string | null {
+  if (!Number.isFinite(serial)) return null;
+  const ms = Math.round((serial - 25569) * 86400 * 1000);
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
 export function parseDate(raw: any): string | null {
   if (raw == null || raw === '') return null;
-  // Excel serial number
+  // Excel serial number (45597 ≈ 2024-10-01, 45200 ≈ 2023-09-01, …)
   if (typeof raw === 'number' && raw > 30000 && raw < 90000) {
-    const d = XLSX.SSF.parse_date_code(raw);
-    if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+    return excelSerialToIso(raw);
   }
   const s = String(raw).trim();
   // 1.10.2024 / 02.10.24 / 23.10.2024 / 2024-10-01
@@ -125,6 +143,11 @@ export function parseDate(raw: any): string | null {
   }
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  // Если число в текстовой форме («45597»)
+  if (/^\d{5,6}$/.test(s)) {
+    const n = Number(s);
+    if (n > 30000 && n < 90000) return excelSerialToIso(n);
+  }
   return null;
 }
 
@@ -364,22 +387,38 @@ export function parseTimesheetFile(
   }
 
   const required: Array<keyof typeof COLUMN_ALIASES> = ['employee', 'date', 'project', 'hours'];
-  for (const r of required) {
-    if (cols[r] === -1) warnings.push(`Не нашёл колонку «${r}» — попробую угадать или пропустить`);
-  }
+  const missingRequired = required.filter((k) => cols[k] === -1);
 
-  // fallback: если ничего не нашли — берём первые 11 колонок по порядку как в шаблоне
-  if (cols.employee === -1) cols.employee = 0;
-  if (cols.date === -1) cols.date = 1;
-  if (cols.project === -1) cols.project = 2;
-  if (cols.position === -1) cols.position = 3;
-  if (cols.section === -1) cols.section = 4;
-  if (cols.hours === -1) cols.hours = 5;
-  if (cols.location === -1) cols.location = 6;
-  if (cols.city === -1) cols.city = 7;
-  if (cols.manager === -1) cols.manager = 8;
-  if (cols.partner === -1) cols.partner = 9;
-  if (cols.notes === -1) cols.notes = 10;
+  // Fallback на позиционные индексы шаблона: ТОЛЬКО если заголовок «не похож на
+  // таймщит» (не нашёл ни одной из обязательных колонок). Если хотя бы одна
+  // основная колонка найдена по алиасу — значит заголовок осмысленный, и
+  // подставлять «-1» в индексы 7/8/9 опасно: можно случайно прочитать данные
+  // не той колонки.
+  //
+  // Ранее был баг: в реальном файле без колонки «Город» fallback всё равно
+  // выставлял cols.city = 7, что совпадало с индексом «Руководитель». В итоге
+  // city и manager читали один столбец.
+  const useFallback = missingRequired.length === required.length;
+  if (useFallback) {
+    warnings.push(
+      'Заголовок не распознан — использую позиционный шаблон (первые 11 колонок). Проверьте результаты вручную.',
+    );
+    if (cols.employee === -1) cols.employee = 0;
+    if (cols.date === -1) cols.date = 1;
+    if (cols.project === -1) cols.project = 2;
+    if (cols.position === -1) cols.position = 3;
+    if (cols.section === -1) cols.section = 4;
+    if (cols.hours === -1) cols.hours = 5;
+    if (cols.location === -1) cols.location = 6;
+    if (cols.city === -1) cols.city = 7;
+    if (cols.manager === -1) cols.manager = 8;
+    if (cols.partner === -1) cols.partner = 9;
+    if (cols.notes === -1) cols.notes = 10;
+  } else if (missingRequired.length > 0) {
+    warnings.push(
+      `Не нашёл обязательные колонки: ${missingRequired.join(', ')}. Эти данные будут пропущены.`,
+    );
+  }
 
   const rows: ParsedRow[] = [];
   for (let i = 1; i < arr.length; i++) {
