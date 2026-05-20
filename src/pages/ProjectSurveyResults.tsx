@@ -82,6 +82,7 @@ export default function ProjectSurveyResults() {
   const [description, setDescription] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [flatQuery, setFlatQuery] = useState('');
 
   const reload = async () => {
     setLoading(true);
@@ -415,6 +416,7 @@ export default function ProjectSurveyResults() {
           <TabsTrigger value="proposals">
             На утверждение ({pendingProposals.length})
           </TabsTrigger>
+          <TabsTrigger value="flat">Кто-где-когда</TabsTrigger>
           <TabsTrigger value="reviewed">История ({reviewedProposals.length})</TabsTrigger>
           <TabsTrigger value="users">По сотрудникам</TabsTrigger>
           <TabsTrigger value="pending">Не ответили ({pendingEmployees.length})</TabsTrigger>
@@ -549,6 +551,136 @@ export default function ProjectSurveyResults() {
               })}
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="flat" className="space-y-3 mt-4">
+          {(() => {
+            const rows = submitted
+              .flatMap((r) =>
+                r.answers
+                  .filter((a) => a.participated)
+                  .map((a) => ({
+                    employee: r.userName,
+                    employeeRole: r.userRole,
+                    project: a.projectName,
+                    role: a.roleOnProject,
+                    from: a.periodFrom || '',
+                    to: a.periodTo || '',
+                    hours: a.totalHours || 0,
+                    comment: a.comment || '',
+                  })),
+              )
+              .sort((x, y) => x.employee.localeCompare(y.employee, 'ru') || x.project.localeCompare(y.project, 'ru'));
+
+            const filtered = flatQuery.trim()
+              ? rows.filter((r) => {
+                  const q = flatQuery.trim().toLowerCase();
+                  return (
+                    r.employee.toLowerCase().includes(q) ||
+                    r.project.toLowerCase().includes(q) ||
+                    (r.role && ROLE_LABELS[r.role].toLowerCase().includes(q))
+                  );
+                })
+              : rows;
+
+            const totalHours = filtered.reduce((s, r) => s + r.hours, 0);
+
+            const downloadCsv = () => {
+              const header = ['Сотрудник', 'Роль (общая)', 'Проект', 'Роль на проекте', 'С', 'По', 'Часов', 'Комментарий'];
+              const csv = [
+                header.join(';'),
+                ...filtered.map((r) =>
+                  [
+                    r.employee,
+                    ROLE_LABELS[r.employeeRole] || r.employeeRole,
+                    r.project,
+                    r.role ? ROLE_LABELS[r.role] : '',
+                    r.from,
+                    r.to,
+                    String(r.hours),
+                    (r.comment || '').replace(/[;\n]/g, ' '),
+                  ]
+                    .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                    .join(';'),
+                ),
+              ].join('\n');
+              const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `who-where-when-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            };
+
+            return (
+              <>
+                <Card>
+                  <CardContent className="p-3 flex flex-wrap items-center gap-3">
+                    <Input
+                      placeholder="Поиск по сотруднику, проекту или роли…"
+                      value={flatQuery}
+                      onChange={(e) => setFlatQuery(e.target.value)}
+                      className="max-w-md"
+                    />
+                    <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
+                      <span>Записей: <b className="text-foreground">{filtered.length}</b></span>
+                      <span>Часов всего: <b className="text-foreground">{totalHours}</b></span>
+                      <Button size="sm" variant="outline" onClick={downloadCsv} disabled={filtered.length === 0}>
+                        <Download className="w-4 h-4 mr-1" /> CSV
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {filtered.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-10 text-center text-muted-foreground">
+                      {rows.length === 0
+                        ? 'Ответов пока нет. Когда сотрудники отправят опрос, здесь появится сводка «кто где когда».'
+                        : 'По вашему запросу ничего не найдено.'}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="p-0 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                          <tr>
+                            <th className="text-left p-2 font-semibold">Сотрудник</th>
+                            <th className="text-left p-2 font-semibold">Проект</th>
+                            <th className="text-left p-2 font-semibold">Роль</th>
+                            <th className="text-left p-2 font-semibold">Период</th>
+                            <th className="text-right p-2 font-semibold">Часов</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((r, i) => (
+                            <tr key={i} className="border-t hover:bg-accent/40">
+                              <td className="p-2">
+                                <div className="font-medium">{r.employee}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {ROLE_LABELS[r.employeeRole] || r.employeeRole}
+                                </div>
+                              </td>
+                              <td className="p-2">{r.project}</td>
+                              <td className="p-2 text-muted-foreground">
+                                {r.role ? ROLE_LABELS[r.role] : '—'}
+                              </td>
+                              <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">
+                                {r.from || '—'} → {r.to || 'сейчас'}
+                              </td>
+                              <td className="p-2 text-right font-mono">{r.hours || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            );
+          })()}
         </TabsContent>
 
         <TabsContent value="reviewed" className="space-y-2 mt-4">

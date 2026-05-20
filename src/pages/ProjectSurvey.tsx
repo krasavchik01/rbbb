@@ -22,7 +22,7 @@ import {
   type SurveyResponse,
 } from '@/lib/projectSurvey';
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from '@/types/roles';
-import { CheckCircle2, ClipboardList, Save, Send, Search, X, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Save, Send, Search, X, Plus, Trash2, Users, Sparkles } from 'lucide-react';
 
 const STATUS_OPTIONS: { value: SurveyProjectStatusVote; label: string }[] = [
   { value: 'in_progress', label: 'Ещё в работе' },
@@ -142,6 +142,69 @@ export default function ProjectSurvey() {
   }, []);
 
   const alreadyAddedIds = useMemo(() => new Set(myAnswers.map((a) => a.projectId)), [myAnswers]);
+
+  // Проекты, где сотрудник уже числится в команде (из карточки проекта)
+  const myProjectsInSystem = useMemo(() => {
+    if (!user) return [];
+    return projects
+      .filter((p: any) => {
+        const team = p.team || [];
+        const teamIds = p.teamIds || [];
+        return (
+          teamIds.includes(user.id) ||
+          team.some((m: any) => (m.userId || m.id) === user.id)
+        );
+      })
+      .map((p: any) => {
+        const team = p.team || [];
+        const me = team.find((m: any) => (m.userId || m.id) === user.id);
+        return {
+          id: p.id,
+          name: p.name,
+          team,
+          myRoleInSystem: me?.role as UserRole | undefined,
+        };
+      });
+  }, [projects, user]);
+
+  // Команда проекта по id (для показа в карточке)
+  const teamByProjectId = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const p of projects as any[]) map.set(p.id, p.team || []);
+    return map;
+  }, [projects]);
+
+  // Авто-предзаполнение при первом открытии (если ответа ещё нет)
+  const autoFilledRef = useRef(false);
+  useEffect(() => {
+    if (autoFilledRef.current) return;
+    if (existingResponse) return; // уже есть ответ — не трогаем
+    if (loading) return;
+    if (myProjectsInSystem.length === 0) return;
+    autoFilledRef.current = true;
+    setMyAnswers(
+      myProjectsInSystem.map((p) => ({
+        ...newAnswer(p.id, p.name),
+        roleOnProject: p.myRoleInSystem || user!.role,
+      })),
+    );
+  }, [existingResponse, loading, myProjectsInSystem, user]);
+
+  const addAllMyProjects = () => {
+    const missing = myProjectsInSystem.filter((p) => !alreadyAddedIds.has(p.id));
+    if (missing.length === 0) {
+      toast({ title: 'Все ваши проекты уже добавлены' });
+      return;
+    }
+    setMyAnswers((prev) => [
+      ...missing.map((p) => ({
+        ...newAnswer(p.id, p.name),
+        roleOnProject: p.myRoleInSystem || user!.role,
+      })),
+      ...prev,
+    ]);
+    toast({ title: `Добавлено ${missing.length} проектов из вашей команды` });
+  };
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -346,6 +409,24 @@ export default function ProjectSurvey() {
           <div className="text-xs text-muted-foreground mt-2">
             Достаточно 2-3 букв названия проекта или клиента.
           </div>
+
+          {myProjectsInSystem.length > 0 && (
+            <div className="mt-4 rounded-md border bg-primary/5 p-3 flex flex-wrap items-center gap-3">
+              <Sparkles className="w-4 h-4 text-primary shrink-0" />
+              <div className="flex-1 text-sm">
+                В системе вы числитесь в команде{' '}
+                <b>{myProjectsInSystem.length}</b> проект(ов).{' '}
+                {myProjectsInSystem.every((p) => alreadyAddedIds.has(p.id))
+                  ? 'Все уже добавлены ниже.'
+                  : 'Можно добавить их одним кликом и доуточнить периоды/часы.'}
+              </div>
+              {!myProjectsInSystem.every((p) => alreadyAddedIds.has(p.id)) && (
+                <Button size="sm" variant="outline" onClick={addAllMyProjects}>
+                  <Plus className="w-4 h-4 mr-1" /> Добавить мои проекты
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -386,7 +467,33 @@ export default function ProjectSurvey() {
               {myAnswers.map((a) => (
                 <div key={a.projectId} className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="font-semibold">{a.projectName}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold">{a.projectName}</div>
+                      {(() => {
+                        const team = teamByProjectId.get(a.projectId) || [];
+                        if (team.length === 0) return null;
+                        return (
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <Users className="w-3 h-3" />
+                            <span>В системе:</span>
+                            {team.map((m: any, i: number) => {
+                              const id = m.userId || m.id;
+                              const name = m.userName || m.name || '—';
+                              const role = m.role ? ` (${ROLE_LABELS[m.role as UserRole] || m.role})` : '';
+                              const isMe = id === user.id;
+                              return (
+                                <span
+                                  key={`${id}_${i}`}
+                                  className={`px-1.5 py-0.5 rounded ${isMe ? 'bg-primary/15 text-primary font-medium' : 'bg-muted/60'}`}
+                                >
+                                  {isMe ? 'вы' : name}{role}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
                     <Button
                       variant="ghost"
                       size="sm"
