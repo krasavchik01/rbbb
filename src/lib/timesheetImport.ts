@@ -196,6 +196,10 @@ const YEAR_RE = /\b20\d{2}\b/g;
 export function normalizeProjectName(s: string): string {
   if (!s) return '';
   const cleaned = s
+    // Сначала разделить camelCase ДО lowercase: «ШалкияЦинк» → «Шалкия Цинк».
+    // В таймщитах одни пишут слитно («ШалкияЦинк»), другие раздельно («Шалкия
+    // Цинк»). Без этого шага substring/token-matching не сработает.
+    .replace(/([а-яёa-z])([А-ЯЁA-Z])/g, '$1 $2')
     .toLowerCase()
     .replace(/[«»"'„""]/g, ' ')
     .replace(/\(.*?\)/g, ' ')
@@ -420,7 +424,30 @@ export function parseTimesheetFile(
     );
   }
 
-  const rows: ParsedRow[] = [];
+  // Pass 1: сырое чтение всех строк + сбор «self-projects» — проектов,
+  // которые встретились явно в колонке «Проект». Они будут использованы как
+  // словарь для строк, где колонка «Проект» пуста или равна
+  // «---Административная работа---», но в «Примечание» виден тот же проект.
+  // Это закрывает реальный кейс из таймщитов аудиторов: например, строка
+  // с пустым «Проект» и notes="АО Шалкия Цинк" — у того же сотрудника
+  // в файле есть явный проект «АО ШалкияЦинк ЛТД Аудит ФО за 2025», и
+  // эти часы должны попасть туда, а не в adminHours.
+  interface RawRow {
+    rowIndex: number;
+    employee: string;
+    rawProject: string;
+    notes: string;
+    rawDate: any;
+    position: string;
+    section: string;
+    hours: number;
+    location: string;
+    city: string;
+    manager: string;
+    partner: string;
+    kind: 'project' | 'admin' | 'absence';
+  }
+  const raw: RawRow[] = [];
   for (let i = 1; i < arr.length; i++) {
     const r = arr[i];
     const employee = String(r[cols.employee] ?? '').trim();
@@ -428,52 +455,96 @@ export function parseTimesheetFile(
     const notes = String(r[cols.notes] ?? '').trim();
     if (!employee && !rawProject && !notes) continue;
 
-    const kind = detectKind(rawProject);
-    let effectiveProject = rawProject;
-    let fromNotesFlag = false;
-    let preMatchedFromNotes: { id: string; name: string } | null = null;
-    if (kind === 'admin') {
-      // Сначала пытаемся узнать в примечании реальный системный проект.
-      // «Административная работа» в файле — это не оверхед, а маркер
-      // «проекта не было в выпадающем списке Google Sheet, я написал в примечании».
-      const m = matchProjectInText(notes, projects);
-      if (m.id && m.name) {
-        effectiveProject = m.name;       // нормализованное имя проекта из системы
-        preMatchedFromNotes = { id: m.id, name: m.name };
-        fromNotesFlag = true;
-      } else {
-        // Запасной путь: вытащить кандидата по юр.форме, даже если в системе его нет —
-        // покажем в UI как «не найден» вместо молчаливого скидывания в adminHours.
-        const fromNotes = extractProjectFromNotes(notes);
-        if (fromNotes) {
-          effectiveProject = fromNotes;
-          fromNotesFlag = true;
-        } else {
-          // Ни matchProjectInText, ни regex-извлекатель ничего не нашли —
-          // это настоящий админ-час без проекта. Сбрасываем effectiveProject,
-          // чтобы агрегация скинула эти часы в adminHours, а не создавала
-          // фантомный проект «---Административная работа---».
-          effectiveProject = '';
-        }
-      }
-    }
-
-    rows.push({
+    raw.push({
       rowIndex: i + 1,
       employee,
-      rawDate: String(r[cols.date] ?? '').trim(),
-      isoDate: parseDate(r[cols.date]),
       rawProject,
-      effectiveProject,
+      notes,
+      rawDate: r[cols.date],
       position: String(r[cols.position] ?? '').trim(),
       section: String(r[cols.section] ?? '').trim(),
       hours: parseHours(r[cols.hours]),
       location: String(r[cols.location] ?? '').trim(),
-      city: String(r[cols.city] ?? '').trim(),
+      city: cols.city >= 0 ? String(r[cols.city] ?? '').trim() : '',
       manager: String(r[cols.manager] ?? '').trim(),
       partner: String(r[cols.partner] ?? '').trim(),
-      notes,
-      kind,
+      kind: detectKind(rawProject),
+    });
+  }
+
+  // Собираем self-projects: уникальные явные имена проектов из самого файла.
+  // ID синтетический — `self:<нормализованное имя>`. UI потом покажет их как
+  // «не найден» (если в системе нет), а матчер использует для группировки.
+  const selfProjectsMap = new Map<string, { id: string; name: string }>();
+  for (const r of raw) {
+    if (r.kind !== 'project' || !r.rawProject) continue;
+    const norm = normalizeProjectName(r.rawProject);
+    if (!norm || selfProjectsMap.has(norm)) continue;
+    selfProjectsMap.set(norm, { id: `self:${norm}`, name: r.rawProject });
+  }
+  const selfProjects = Array.from(selfProjectsMap.values());
+
+  // Pass 2: разрешаем effectiveProject для каждой строки.
+  const rows: ParsedRow[] = [];
+  for (const r of raw) {
+    let effectiveProject = r.rawProject;
+    let fromNotesFlag = false;
+    let preMatchedFromNotes: { id: string; name: string } | null = null;
+
+    // Случаи, когда смотрим в примечание:
+    //  - kind='admin' (явный «---Административная работа---»)
+    //  - kind='project' с ПУСТОЙ колонкой «Проект» (аудитор не нашёл проект в дропдауне и оставил поле пустым)
+    const lookInNotes = r.kind === 'admin' || (r.kind === 'project' && !r.rawProject);
+
+    if (lookInNotes) {
+      // Сначала пробуем сматчить с внешним списком (проекты в системе).
+      let m = matchProjectInText(r.notes, projects);
+      // Затем — с self-projects, найденными в самом файле. Это закрывает кейс,
+      // когда проекта в системе нет, но он уже фигурирует в файле как явный.
+      if (!m.id && selfProjects.length > 0) {
+        m = matchProjectInText(r.notes, selfProjects);
+      }
+      if (m.id && m.name) {
+        effectiveProject = m.name;
+        // preMatch ставим только для проектов из ВНЕШНЕЙ системы (id не начинается с self:).
+        // Self-проекты — это синтетический агрегатор, для них matchProject в фазе
+        // агрегации даст score=none или medium в зависимости от того, есть ли
+        // соответствие во внешнем списке.
+        if (!m.id.startsWith('self:')) {
+          preMatchedFromNotes = { id: m.id, name: m.name };
+        }
+        fromNotesFlag = true;
+      } else if (r.kind === 'admin') {
+        // Запасной regex-извлекатель по юр.форме — только для admin-строк.
+        const fromNotes = extractProjectFromNotes(r.notes);
+        if (fromNotes) {
+          effectiveProject = fromNotes;
+          fromNotesFlag = true;
+        } else {
+          effectiveProject = '';
+        }
+      } else {
+        // Пустой проект + ничего не вытащили из notes — это hidden admin (без проекта).
+        effectiveProject = '';
+      }
+    }
+
+    rows.push({
+      rowIndex: r.rowIndex,
+      employee: r.employee,
+      rawDate: String(r.rawDate ?? '').trim(),
+      isoDate: parseDate(r.rawDate),
+      rawProject: r.rawProject,
+      effectiveProject,
+      position: r.position,
+      section: r.section,
+      hours: r.hours,
+      location: r.location,
+      city: r.city,
+      manager: r.manager,
+      partner: r.partner,
+      notes: r.notes,
+      kind: r.kind,
       fromNotes: fromNotesFlag,
       preMatchFromNotes: preMatchedFromNotes,
     });

@@ -131,7 +131,23 @@ for (const r of absenceRows.slice(0, 10)) {
 
 console.log(`\n=== Rows with UNPARSED date (${datelessRows.length}) ===`);
 for (const r of datelessRows.slice(0, 10)) {
-  console.log(`  [row ${r.rowIndex}] rawDate="${r.rawDate}" employee="${r.employee}" project="${r.rawProject}"`);
+  console.log(`  [row ${r.rowIndex}] rawDate="${r.rawDate}" employee="${r.employee}" project="${r.rawProject}" notes="${r.notes.slice(0, 60)}"`);
+}
+
+// Строки которые ушли в adminHours, но НЕ kind='admin' — то есть пустой проект
+// с заполненными часами. Это «загадочный admin» — часто это пробел в шаблоне
+// Google Sheets, который аудитор не заметил.
+const hiddenAdmin = result.rows.filter(
+  (r) => r.kind === 'project' && !r.effectiveProject && r.hours > 0,
+);
+console.log(`\n=== Hidden admin (kind='project', пустой проект, часы > 0): ${hiddenAdmin.length} ===`);
+const sumHidden = hiddenAdmin.reduce((s, r) => s + r.hours, 0);
+console.log(`Сумма часов: ${sumHidden}h`);
+for (const r of hiddenAdmin.slice(0, 15)) {
+  console.log(
+    `  [row ${r.rowIndex}] date=${r.isoDate} hours=${r.hours} ` +
+      `rawProject="${r.rawProject}" notes="${r.notes.slice(0, 80)}"`,
+  );
 }
 
 console.log('\n=== Done ===\n');

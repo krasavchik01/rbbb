@@ -364,6 +364,60 @@ describe('parseTimesheetFile — 0-часовые строки', () => {
   });
 });
 
+describe('parseTimesheetFile — пустая колонка «Проект» с проектом в примечании', () => {
+  it('подтягивает проект из примечания, если колонка «Проект» пустая (не только admin)', () => {
+    // Реальный кейс из таймщита Сартаевой Гаухар: аудитор оставлял колонку
+    // «Проект» пустой и писал проект в примечании. Раньше эти часы уходили
+    // в adminHours, хотя в системе/файле уже есть подходящий проект.
+    const projectsInSystem = [
+      { id: 'shalkia', name: 'АО «ШалкияЦинк ЛТД» Аудит ФО по МСФО за 2025 год' },
+    ];
+    // HEADERS у helper'а: [Сотрудник, Дата, Проект, Должность, Категория Секция,
+    // Часы, Локация, Город, Руководитель, Партнер, Примечание] — 11 колонок.
+    const rows = [
+      ['Сартаева Гаухар', '01.06.2025', '', 'Руководитель', '', 8, 'Офис', '', '', '', 'АО Шалкия Цинк'],
+      ['Сартаева Гаухар', '02.06.2025', '', 'Руководитель', '', 8, 'Офис', '', '', '', 'АО Шалкия Цинк'],
+      ['Сартаева Гаухар', '03.06.2025', '', 'Руководитель', '', 5, 'Офис', '', '', '', 'АО Шалкия Цинк раскрытие для консолидаторов'],
+    ];
+    const res = parseTimesheetFile(toXlsx(rows), projectsInSystem, EMPLOYEES);
+    const emp = res.employees.find((e) => e.employee === 'Сартаева Гаухар')!;
+    expect(emp).toBeDefined();
+    expect(emp.adminHours).toBe(0);  // НЕ должны были уйти в admin
+    expect(emp.projects).toHaveLength(1);
+    const proj = emp.projects[0];
+    expect(proj.matchedProjectId).toBe('shalkia');
+    expect(proj.totalHours).toBe(21);
+    expect(proj.fromNotes).toBe(true);
+  });
+
+  it('self-projects fallback: если внешний список не помог, использует проекты из самого файла', () => {
+    // Никаких внешних проектов. В файле явно есть «АО Экспортно-кредитное
+    // агентство Казахстана» в одной строке + пустые строки с упоминанием в notes.
+    const rows = [
+      ['Иванов Иван Иванович', '01.10.2024', 'АО Экспортно-кредитное агентство Казахстана', '', '', 8, '', '', '', '', ''],
+      ['Иванов Иван Иванович', '02.10.2024', '',                                              '', '', 8, '', '', '', '', 'АО Экспортно-кредитное агентство Казахстана'],
+      ['Иванов Иван Иванович', '03.10.2024', '',                                              '', '', 8, '', '', '', '', 'продолжение по Экспортно-кредитное агентство'],
+    ];
+    const res = parseTimesheetFile(toXlsx(rows), /* пустой внешний список */ [], EMPLOYEES);
+    const emp = res.employees[0];
+    expect(emp.adminHours).toBe(0);
+    expect(emp.projects).toHaveLength(1);
+    expect(emp.projects[0].totalHours).toBe(24);
+    // matchScore = 'none' потому что в системе проекта нет, но строки агрегированы вместе
+    expect(emp.projects[0].matchedProjectId).toBeNull();
+  });
+
+  it('пустая колонка «Проект» И пустое примечание → adminHours', () => {
+    const rows = [
+      ['Иванов Иван Иванович', '01.10.2024', '', '', '', 8, '', '', '', '', ''],
+    ];
+    const res = parseTimesheetFile(toXlsx(rows), PROJECTS, EMPLOYEES);
+    const emp = res.employees[0];
+    expect(emp.adminHours).toBe(8);
+    expect(emp.projects).toHaveLength(0);
+  });
+});
+
 describe('parseTimesheetFile — идемпотентность парсера', () => {
   it('один и тот же входной файл даёт идентичный результат', () => {
     const rows = [
