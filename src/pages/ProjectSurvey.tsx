@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,86 +14,108 @@ import { useProjects } from '@/hooks/useSupabaseData';
 import {
   getResponseForUser,
   getSurveyConfig,
-  saveResponse,
   submitResponse,
   type SurveyConfig,
   type SurveyProjectAnswer,
-  type SurveyProjectStatusVote,
   type SurveyResponse,
 } from '@/lib/projectSurvey';
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from '@/types/roles';
-import { CheckCircle2, ClipboardList, Save, Send, Search, X, Plus, Trash2, Users, Sparkles } from 'lucide-react';
+import { PROJECT_STATUS_LABELS, type ProjectStatus } from '@/types/project-v3';
+import { CheckCircle2, ClipboardList, Send, Search, X, Plus, Trash2, Users, Building2, Clock, Sparkles } from 'lucide-react';
 
-const STATUS_OPTIONS: { value: SurveyProjectStatusVote; label: string }[] = [
-  { value: 'in_progress', label: 'Ещё в работе' },
-  { value: 'completed',   label: 'Фактически завершён' },
-  { value: 'cancelled',   label: 'Отменён / отказ' },
-];
+const STATUS_TONE: Partial<Record<ProjectStatus, string>> = {
+  in_progress: 'bg-blue-100 text-blue-700 border-blue-200',
+  planning: 'bg-purple-100 text-purple-700 border-purple-200',
+  approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  new: 'bg-slate-100 text-slate-700 border-slate-200',
+  pending_approval: 'bg-amber-100 text-amber-700 border-amber-200',
+  ready_to_complete: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  completed: 'bg-green-100 text-green-700 border-green-200',
+  cancelled: 'bg-red-100 text-red-700 border-red-200',
+};
 
-function newAnswer(projectId: string, projectName: string): SurveyProjectAnswer {
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return '';
+  const d = Math.floor(ms / 86_400_000);
+  if (d === 0) return 'сегодня';
+  if (d === 1) return 'вчера';
+  if (d < 7) return `${d} дн. назад`;
+  if (d < 30) return `${Math.floor(d / 7)} нед. назад`;
+  if (d < 365) return `${Math.floor(d / 30)} мес. назад`;
+  return `${Math.floor(d / 365)} г. назад`;
+}
+
+// Активные статусы — для них «вы в команде» = автоподтверждение без вопросов
+const ACTIVE_STATUSES = new Set(['in_progress', 'planning', 'approved', 'new', 'pending_approval', 'ready_to_complete']);
+
+interface ManualAnswer {
+  projectId: string;
+  projectName: string;
+  roleOnProject?: UserRole;
+  periodFrom?: string;
+  periodTo?: string;
+  totalHours?: number;
+  comment?: string;
+}
+
+function buildAnswerFromSystem(p: { id: string; name: string; myRole?: UserRole; status?: string }): SurveyProjectAnswer {
   return {
-    projectId,
-    projectName,
+    projectId: p.id,
+    projectName: p.name,
     participated: true,
+    roleOnProject: p.myRole,
     statusVote: 'in_progress',
   };
 }
 
-/**
- * Создать записи в таймщитах (localStorage 'timesheets') по результатам опроса.
- * Одна запись на проект: дата = начало периода, часы = totalHours, описание
- * содержит весь период.
- */
-function createTimesheetsFromAnswers(
-  user: { id: string; name: string },
-  answers: SurveyProjectAnswer[],
-): number {
-  if (answers.length === 0) return 0;
-  const saved = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('timesheets') || '[]');
-    } catch {
-      return [];
-    }
-  })();
+function buildAnswerFromManual(m: ManualAnswer): SurveyProjectAnswer {
+  return {
+    projectId: m.projectId,
+    projectName: m.projectName,
+    participated: true,
+    roleOnProject: m.roleOnProject,
+    periodFrom: m.periodFrom,
+    periodTo: m.periodTo,
+    totalHours: m.totalHours,
+    comment: m.comment,
+    statusVote: 'in_progress',
+  };
+}
 
+function appendTimesheetsForManual(user: { id: string; name: string }, items: ManualAnswer[]): number {
+  if (items.length === 0) return 0;
+  const saved = (() => {
+    try { return JSON.parse(localStorage.getItem('timesheets') || '[]'); } catch { return []; }
+  })();
   let created = 0;
   const today = new Date().toISOString().split('T')[0];
-  for (const a of answers) {
-    if (!a.participated) continue;
-    if (!a.totalHours || a.totalHours <= 0) continue;
-
-    // Дедуп: не создаём повторно от того же пользователя на тот же проект
-    // с тегом из опроса (хранится в description).
-    const tag = `[опрос:${a.projectId}]`;
+  for (const m of items) {
+    if (!m.totalHours || m.totalHours <= 0) continue;
+    const tag = `[опрос:${m.projectId}]`;
     const already = saved.some(
       (ts: any) => ts.employeeId === user.id && typeof ts.description === 'string' && ts.description.includes(tag),
     );
     if (already) continue;
-
-    const description = [
-      `Период: с ${a.periodFrom || '—'} по ${a.periodTo || 'сейчас'}`,
-      a.roleOnProject ? `Роль: ${ROLE_LABELS[a.roleOnProject]}` : null,
-      a.comment ? a.comment : null,
-      tag,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-
     saved.push({
-      id: `ts_survey_${user.id}_${a.projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: `ts_survey_${user.id}_${m.projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       employeeId: user.id,
       employeeName: user.name,
-      projectId: a.projectId,
-      projectName: a.projectName,
-      date: a.periodFrom || today,
-      hours: a.totalHours,
-      description,
+      projectId: m.projectId,
+      projectName: m.projectName,
+      date: m.periodFrom || today,
+      hours: m.totalHours,
+      description: [
+        `Период: ${m.periodFrom || '—'} → ${m.periodTo || 'сейчас'}`,
+        m.roleOnProject ? `Роль: ${ROLE_LABELS[m.roleOnProject]}` : null,
+        m.comment || null,
+        tag,
+      ].filter(Boolean).join(' · '),
       status: 'submitted',
     });
     created += 1;
   }
-
   localStorage.setItem('timesheets', JSON.stringify(saved));
   return created;
 }
@@ -106,9 +128,14 @@ export default function ProjectSurvey() {
 
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [existingResponse, setExistingResponse] = useState<SurveyResponse | null>(null);
-  const [myAnswers, setMyAnswers] = useState<SurveyProjectAnswer[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // Состояние формы (всё локально, никаких черновиков)
+  const [systemConfirmed, setSystemConfirmed] = useState<Set<string>>(new Set());
+  const [systemInitialized, setSystemInitialized] = useState(false);
+  const [manualAnswers, setManualAnswers] = useState<ManualAnswer[]>([]);
+
+  // Поиск
   const [query, setQuery] = useState('');
   const [showSuggest, setShowSuggest] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
@@ -122,14 +149,9 @@ export default function ProjectSurvey() {
       ]);
       if (!active) return;
       setConfig(cfg);
-      if (existing) {
-        setExistingResponse(existing);
-        setMyAnswers(existing.answers);
-      }
+      if (existing) setExistingResponse(existing);
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [user]);
 
   useEffect(() => {
@@ -141,161 +163,145 @@ export default function ProjectSurvey() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const alreadyAddedIds = useMemo(() => new Set(myAnswers.map((a) => a.projectId)), [myAnswers]);
-
-  // Проекты, где сотрудник уже числится в команде (из карточки проекта)
-  const myProjectsInSystem = useMemo(() => {
+  // Активные проекты, где сотрудник уже в team — ВОПРОСОВ НЕТ, только подтверждение
+  const mySystemProjects = useMemo(() => {
     if (!user) return [];
-    return projects
-      .filter((p: any) => {
+    return (projects as any[])
+      .filter((p) => {
+        if (p.status && !ACTIVE_STATUSES.has(p.status)) return false;
         const team = p.team || [];
         const teamIds = p.teamIds || [];
-        return (
-          teamIds.includes(user.id) ||
-          team.some((m: any) => (m.userId || m.id) === user.id)
-        );
+        return teamIds.includes(user.id) || team.some((m: any) => (m.userId || m.id) === user.id);
       })
-      .map((p: any) => {
-        const team = p.team || [];
-        const me = team.find((m: any) => (m.userId || m.id) === user.id);
+      .map((p) => {
+        const me = (p.team || []).find((m: any) => (m.userId || m.id) === user.id);
         return {
           id: p.id,
           name: p.name,
-          team,
-          myRoleInSystem: me?.role as UserRole | undefined,
+          status: (p.status || 'in_progress') as ProjectStatus,
+          clientName: p.clientName || p.client?.name || '',
+          updatedAt: p.updated_at as string | null,
+          myRole: me?.role as UserRole | undefined,
+          myAssignedAt: me?.assignedAt as string | undefined,
+          team: p.team || [],
         };
-      });
+      })
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   }, [projects, user]);
 
-  // Команда проекта по id (для показа в карточке)
-  const teamByProjectId = useMemo(() => {
-    const map = new Map<string, any[]>();
-    for (const p of projects as any[]) map.set(p.id, p.team || []);
-    return map;
-  }, [projects]);
-
-  // Авто-предзаполнение при первом открытии (если ответа ещё нет)
-  const autoFilledRef = useRef(false);
+  // На первом рендере — все системные проекты подтверждены (один клик — отправить)
   useEffect(() => {
-    if (autoFilledRef.current) return;
-    if (existingResponse) return; // уже есть ответ — не трогаем
+    if (systemInitialized) return;
     if (loading) return;
-    if (myProjectsInSystem.length === 0) return;
-    autoFilledRef.current = true;
-    setMyAnswers(
-      myProjectsInSystem.map((p) => ({
-        ...newAnswer(p.id, p.name),
-        roleOnProject: p.myRoleInSystem || user!.role,
-      })),
-    );
-  }, [existingResponse, loading, myProjectsInSystem, user]);
+    setSystemConfirmed(new Set(mySystemProjects.map((p) => p.id)));
+    setSystemInitialized(true);
+  }, [mySystemProjects, loading, systemInitialized]);
 
-  const addAllMyProjects = () => {
-    const missing = myProjectsInSystem.filter((p) => !alreadyAddedIds.has(p.id));
-    if (missing.length === 0) {
-      toast({ title: 'Все ваши проекты уже добавлены' });
-      return;
+  // Если опрос уже отправлен — восстановим, какие проекты были подтверждены и что добавлено вручную
+  useEffect(() => {
+    if (!existingResponse) return;
+    const systemIds = new Set(mySystemProjects.map((p) => p.id));
+    const confirmed = new Set<string>();
+    const manual: ManualAnswer[] = [];
+    for (const a of existingResponse.answers) {
+      if (!a.participated) continue;
+      if (systemIds.has(a.projectId)) {
+        confirmed.add(a.projectId);
+      } else {
+        manual.push({
+          projectId: a.projectId,
+          projectName: a.projectName,
+          roleOnProject: a.roleOnProject,
+          periodFrom: a.periodFrom,
+          periodTo: a.periodTo,
+          totalHours: a.totalHours,
+          comment: a.comment,
+        });
+      }
     }
-    setMyAnswers((prev) => [
-      ...missing.map((p) => ({
-        ...newAnswer(p.id, p.name),
-        roleOnProject: p.myRoleInSystem || user!.role,
-      })),
-      ...prev,
-    ]);
-    toast({ title: `Добавлено ${missing.length} проектов из вашей команды` });
-  };
+    setSystemConfirmed(confirmed);
+    setManualAnswers(manual);
+    setSystemInitialized(true);
+  }, [existingResponse, mySystemProjects]);
+
+  const manualIds = useMemo(() => new Set(manualAnswers.map((m) => m.projectId)), [manualAnswers]);
+  const systemIds = useMemo(() => new Set(mySystemProjects.map((p) => p.id)), [mySystemProjects]);
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (q.length < 2) return [];
-    return projects
+    return (projects as any[])
       .filter((p) => {
-        if (alreadyAddedIds.has(p.id)) return false;
+        if (systemIds.has(p.id) || manualIds.has(p.id)) return false;
         const name = (p.name || '').toLowerCase();
-        const client = ((p as any).clientName || (p as any).client?.name || '').toLowerCase();
+        const client = (p.clientName || p.client?.name || '').toLowerCase();
         return name.includes(q) || client.includes(q);
       })
       .slice(0, 12);
-  }, [projects, query, alreadyAddedIds]);
+  }, [projects, query, systemIds, manualIds]);
 
-  const totalHours = useMemo(
-    () => myAnswers.reduce((s, a) => s + (a.totalHours || 0), 0),
-    [myAnswers],
-  );
+  const toggleSystem = (id: string) => {
+    setSystemConfirmed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
-  const addProject = (project: { id: string; name: string }) => {
-    if (alreadyAddedIds.has(project.id)) return;
-    setMyAnswers((prev) => [newAnswer(project.id, project.name), ...prev]);
+  const addManual = (p: { id: string; name: string }) => {
+    setManualAnswers((prev) => [{ projectId: p.id, projectName: p.name }, ...prev]);
     setQuery('');
     setShowSuggest(false);
   };
 
-  const updateAnswer = (projectId: string, patch: Partial<SurveyProjectAnswer>) => {
-    setMyAnswers((prev) => prev.map((a) => (a.projectId === projectId ? { ...a, ...patch } : a)));
+  const updateManual = (id: string, patch: Partial<ManualAnswer>) => {
+    setManualAnswers((prev) => prev.map((m) => (m.projectId === id ? { ...m, ...patch } : m)));
   };
 
-  const removeAnswer = (projectId: string) => {
-    setMyAnswers((prev) => prev.filter((a) => a.projectId !== projectId));
+  const removeManual = (id: string) => {
+    setManualAnswers((prev) => prev.filter((m) => m.projectId !== id));
   };
 
-  const buildResponse = (status: 'draft' | 'submitted'): SurveyResponse => ({
-    id: existingResponse?.id || `srv_${user!.id}_${Date.now()}`,
-    userId: user!.id,
-    userName: user!.name,
-    userRole: user!.role,
-    answers: myAnswers.map((a) => ({ ...a, participated: true })),
-    status,
-    updatedAt: new Date().toISOString(),
-    submittedAt: existingResponse?.submittedAt,
-  });
-
-  const handleSaveDraft = async () => {
+  const handleSubmit = async () => {
     if (!user) return;
-    setBusy(true);
-    try {
-      const next = await saveResponse(buildResponse('draft'));
-      setExistingResponse(next);
-      toast({ title: 'Черновик сохранён' });
-    } finally {
-      setBusy(false);
-    }
-  };
+    const confirmedSystem = mySystemProjects.filter((p) => systemConfirmed.has(p.id));
+    const totalSelected = confirmedSystem.length + manualAnswers.length;
 
-  const submitInternal = async (skipValidation: boolean) => {
-    if (!user) return;
-    if (!skipValidation) {
-      const missing = myAnswers.filter(
-        (a) => !a.roleOnProject || !a.periodFrom || !a.periodTo || !a.totalHours,
+    if (totalSelected === 0) {
+      const ok = window.confirm(
+        'Вы сняли все галочки и ничего не добавили. Отправить ответ как «я не участвовал ни в одном проекте»?',
       );
-      if (missing.length > 0) {
-        const ok = window.confirm(
-          `У ${missing.length} проектов не указаны роль, период или часы. Всё равно отправить?`,
-        );
-        if (!ok) return;
-      }
+      if (!ok) return;
     }
+
     setBusy(true);
     try {
-      const next = await submitResponse(buildResponse('submitted'));
+      const answers: SurveyProjectAnswer[] = [
+        ...confirmedSystem.map((p) => buildAnswerFromSystem(p)),
+        ...manualAnswers.map(buildAnswerFromManual),
+      ];
+      const next = await submitResponse({
+        id: existingResponse?.id || `srv_${user.id}_${Date.now()}`,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        answers,
+        status: 'submitted',
+        updatedAt: new Date().toISOString(),
+        submittedAt: existingResponse?.submittedAt,
+      });
       setExistingResponse(next);
-      const tsCreated = createTimesheetsFromAnswers({ id: user.id, name: user.name }, myAnswers);
+      const tsCreated = appendTimesheetsForManual({ id: user.id, name: user.name }, manualAnswers);
       toast({
         title: 'Спасибо!',
-        description:
-          myAnswers.length === 0
-            ? 'Ответ отправлен — отметили, что вы ни в одном проекте не участвовали.'
-            : tsCreated > 0
-              ? `Ответ отправлен. В таймщиты добавлено ${tsCreated} запис(и/ей) по проектам.`
-              : 'Ответ отправлен. Зам.директор увидит ваши данные в результатах опроса.',
+        description: tsCreated > 0
+          ? `Отправлено. По добавленным проектам в таймщиты записано ${tsCreated} запис(и/ей).`
+          : 'Отправлено. Зам.директор увидит ваши данные в результатах опроса.',
       });
     } finally {
       setBusy(false);
     }
   };
-
-  const handleSubmit = () => submitInternal(false);
-  const handleSubmitNothing = () => submitInternal(true);
 
   if (!user) return <div className="p-6 text-muted-foreground">Войдите, чтобы пройти опрос.</div>;
   if (!config) return <div className="p-6 text-muted-foreground">Загрузка…</div>;
@@ -308,8 +314,7 @@ export default function ProjectSurvey() {
             <ClipboardList className="w-5 h-5" /> Опрос недоступен
           </CardTitle>
           <CardDescription>
-            Опрос по участию в проектах сейчас не запущен. Обратитесь к заместителю директора, если
-            считаете, что должны были его пройти.
+            Опрос сейчас не запущен. Обратитесь к заместителю директора.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -319,49 +324,209 @@ export default function ProjectSurvey() {
     );
   }
 
+  const isSubmitted = existingResponse?.status === 'submitted';
+  const confirmedCount = mySystemProjects.filter((p) => systemConfirmed.has(p.id)).length;
+  const uncheckedCount = mySystemProjects.length - confirmedCount;
+  const manualHoursTotal = manualAnswers.reduce((s, m) => s + (m.totalHours || 0), 0);
+  const totalToSubmit = confirmedCount + manualAnswers.length;
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-3xl mx-auto pb-24">
+      {/* Заголовок + большая шпаргалка «что делать» */}
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="w-5 h-5" /> {config.title}
+            <div className="flex-1 min-w-0">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <ClipboardList className="w-6 h-6 text-primary" /> {config.title}
               </CardTitle>
-              <CardDescription className="mt-2">
-                Найдите ваш проект, укажите период с-по, сколько часов вы на нём отработали, роль и
-                статус. После отправки эти часы автоматически появятся в ваших таймщитах.
+              <CardDescription className="mt-2 text-sm">
+                {config.description || 'Помогите восстановить реальную картину: подтвердите свои проекты и добавьте те, которых нет в системе. Это займёт 1–2 минуты.'}
               </CardDescription>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {existingResponse?.status === 'submitted' ? (
+              {isSubmitted && (
                 <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                  <CheckCircle2 className="w-3 h-3 mr-1" /> Отправлено
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> Отправлено — можно править
                 </Badge>
-              ) : existingResponse?.status === 'draft' ? (
-                <Badge variant="secondary">Черновик</Badge>
-              ) : null}
+              )}
               {config.deadline && (
                 <span className="text-xs text-muted-foreground">
-                  Срок: {new Date(config.deadline).toLocaleDateString('ru')}
+                  Срок: <b>{new Date(config.deadline).toLocaleDateString('ru')}</b>
                 </span>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Label className="text-sm font-medium mb-2 block">Найти и добавить проект</Label>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div className="rounded-lg border p-3 bg-blue-50/50">
+              <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
+                <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</span>
+                Проверить
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Снять галочки с проектов, где вас на самом деле не было.
+              </div>
+            </div>
+            <div className="rounded-lg border p-3 bg-violet-50/50">
+              <div className="flex items-center gap-2 text-violet-700 font-semibold text-sm">
+                <span className="w-6 h-6 rounded-full bg-violet-600 text-white text-xs flex items-center justify-center">2</span>
+                Добавить
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Если работали где-то ещё — найдите и добавьте этот проект.
+              </div>
+            </div>
+            <div className="rounded-lg border p-3 bg-emerald-50/50">
+              <div className="flex items-center gap-2 text-emerald-700 font-semibold text-sm">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">3</span>
+                Отправить
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Один клик — данные уйдут зам.директору на утверждение.
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Блок 1 — Системные проекты: только галочки, никаких полей */}
+      {mySystemProjects.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</span>
+                  Ваши проекты в системе
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  По умолчанию все отмечены ✓ — это значит «да, я тут работал». Просто снимите галочку, если на самом деле вы тут <b>не</b> были.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                Отмечено {confirmedCount} из {mySystemProjects.length}
+                {uncheckedCount > 0 && <span className="ml-1 text-amber-600">• {uncheckedCount} сняли</span>}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {mySystemProjects.map((p) => {
+                const checked = systemConfirmed.has(p.id);
+                const others = p.team.filter((m: any) => (m.userId || m.id) !== user.id);
+                const tone = STATUS_TONE[p.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-all ${
+                      checked
+                        ? 'bg-primary/5 border-primary/40 shadow-sm'
+                        : 'border-dashed bg-muted/30 opacity-70 hover:opacity-100 line-through decoration-from-font'
+                    }`}
+                  >
+                    <Checkbox checked={checked} onCheckedChange={() => toggleSystem(p.id)} className="mt-1" />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium">{p.name}</div>
+                        <Badge variant="outline" className={`text-xs border ${tone}`}>
+                          {PROJECT_STATUS_LABELS[p.status] || p.status}
+                        </Badge>
+                        {p.myRole && (
+                          <Badge variant="secondary" className="text-xs">
+                            вы: {ROLE_LABELS[p.myRole] || p.myRole}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        {p.clientName && (
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-3 h-3" /> {p.clientName}
+                          </span>
+                        )}
+                        {p.updatedAt && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> обновлён {relativeTime(p.updatedAt)}
+                          </span>
+                        )}
+                        {p.myAssignedAt && (
+                          <span className="flex items-center gap-1">
+                            вас добавили {relativeTime(p.myAssignedAt)}
+                          </span>
+                        )}
+                      </div>
+
+                      {others.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                          <Users className="w-3 h-3" />
+                          <span>с вами в команде:</span>
+                          {others.slice(0, 5).map((m: any, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded bg-muted/60">
+                              {m.userName || m.name || '—'}
+                              {m.role ? ` (${ROLE_LABELS[m.role as UserRole] || m.role})` : ''}
+                            </span>
+                          ))}
+                          {others.length > 5 && (
+                            <span className="text-muted-foreground">+{others.length - 5}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {mySystemProjects.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="py-6 text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 text-amber-600 mb-2">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div className="font-medium">В системе вас пока не приписали ни к одному активному проекту.</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              Если вы где-то работали — добавьте проект вручную ниже, чтобы зам.дир увидел.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Блок 2 — Пропущенные проекты: поиск + минимальный набор полей */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-violet-600 text-white text-xs flex items-center justify-center">2</span>
+                Работали где-то ещё, чего нет выше?
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Необязательно. Если работали на проекте, которого нет в вашем списке — найдите его и добавьте.
+                Можно указать <b>часы за период</b> — они автоматически попадут в ваши таймщиты.
+              </CardDescription>
+            </div>
+            {manualAnswers.length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                Добавлено: {manualAnswers.length}
+                {manualHoursTotal > 0 && <span className="ml-1">• {manualHoursTotal} ч.</span>}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
           <div ref={searchBoxRef} className="relative">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setShowSuggest(true);
-                }}
+                onChange={(e) => { setQuery(e.target.value); setShowSuggest(true); }}
                 onFocus={() => setShowSuggest(true)}
-                placeholder="Начните печатать — например, «Рома», «КазМунай», «ТОО Свет»…"
+                placeholder="Начните печатать — например, «КазМунай», «ТОО Свет»…"
                 className="pl-9 h-11 text-base"
                 disabled={loading}
               />
@@ -378,25 +543,21 @@ export default function ProjectSurvey() {
             {showSuggest && query.trim().length >= 2 && (
               <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md max-h-80 overflow-y-auto">
                 {suggestions.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">
-                    Ничего не нашлось. Попробуйте другие буквы.
-                  </div>
+                  <div className="p-3 text-sm text-muted-foreground">Ничего не нашлось.</div>
                 ) : (
                   suggestions.map((p) => {
                     const clientName = (p as any).clientName || (p as any).client?.name || '';
                     return (
                       <button
                         key={p.id}
-                        onClick={() => addProject({ id: p.id, name: p.name })}
+                        onClick={() => addManual({ id: p.id, name: p.name })}
                         className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0 flex items-start gap-2"
                       >
                         <Plus className="w-4 h-4 mt-0.5 text-primary shrink-0" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium truncate">{p.name}</div>
                           {clientName && (
-                            <div className="text-xs text-muted-foreground truncate">
-                              Клиент: {clientName}
-                            </div>
+                            <div className="text-xs text-muted-foreground truncate">Клиент: {clientName}</div>
                           )}
                         </div>
                       </button>
@@ -406,200 +567,71 @@ export default function ProjectSurvey() {
               </div>
             )}
           </div>
-          <div className="text-xs text-muted-foreground mt-2">
-            Достаточно 2-3 букв названия проекта или клиента.
-          </div>
 
-          {myProjectsInSystem.length > 0 && (
-            <div className="mt-4 rounded-md border bg-primary/5 p-3 flex flex-wrap items-center gap-3">
-              <Sparkles className="w-4 h-4 text-primary shrink-0" />
-              <div className="flex-1 text-sm">
-                В системе вы числитесь в команде{' '}
-                <b>{myProjectsInSystem.length}</b> проект(ов).{' '}
-                {myProjectsInSystem.every((p) => alreadyAddedIds.has(p.id))
-                  ? 'Все уже добавлены ниже.'
-                  : 'Можно добавить их одним кликом и доуточнить периоды/часы.'}
-              </div>
-              {!myProjectsInSystem.every((p) => alreadyAddedIds.has(p.id)) && (
-                <Button size="sm" variant="outline" onClick={addAllMyProjects}>
-                  <Plus className="w-4 h-4 mr-1" /> Добавить мои проекты
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-base">
-              Мои проекты ({myAnswers.length})
-              {totalHours > 0 && (
-                <span className="ml-3 text-sm font-normal text-muted-foreground">
-                  всего: <b className="text-foreground">{totalHours} ч.</b>
-                </span>
-              )}
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleSaveDraft} disabled={busy}>
-                <Save className="w-4 h-4 mr-1" /> Черновик
-              </Button>
-              <Button size="sm" onClick={handleSubmit} disabled={busy}>
-                <Send className="w-4 h-4 mr-1" /> Отправить
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {myAnswers.length === 0 ? (
-            <div className="py-8 text-center space-y-4">
-              <div className="text-muted-foreground text-sm">
-                Пока пусто. Найдите и добавьте сверху ваш проект.
-              </div>
-              <div className="text-xs text-muted-foreground">или</div>
-              <Button variant="outline" onClick={handleSubmitNothing} disabled={busy}>
-                Я не участвовал ни в одном проекте — отправить пустой ответ
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {myAnswers.map((a) => (
-                <div key={a.projectId} className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold">{a.projectName}</div>
-                      {(() => {
-                        const team = teamByProjectId.get(a.projectId) || [];
-                        if (team.length === 0) return null;
-                        return (
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                            <Users className="w-3 h-3" />
-                            <span>В системе:</span>
-                            {team.map((m: any, i: number) => {
-                              const id = m.userId || m.id;
-                              const name = m.userName || m.name || '—';
-                              const role = m.role ? ` (${ROLE_LABELS[m.role as UserRole] || m.role})` : '';
-                              const isMe = id === user.id;
-                              return (
-                                <span
-                                  key={`${id}_${i}`}
-                                  className={`px-1.5 py-0.5 rounded ${isMe ? 'bg-primary/15 text-primary font-medium' : 'bg-muted/60'}`}
-                                >
-                                  {isMe ? 'вы' : name}{role}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeAnswer(a.projectId)}
-                      title="Убрать из списка"
-                    >
+          {manualAnswers.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {manualAnswers.map((m) => (
+                <div key={m.projectId} className="rounded-lg border p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium">{m.projectName}</div>
+                    <Button variant="ghost" size="sm" onClick={() => removeManual(m.projectId)} title="Убрать">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
-
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <Label className="text-xs">
-                        Моя роль на проекте <span className="text-destructive">*</span>
-                      </Label>
+                      <Label className="text-xs">Моя роль</Label>
                       <Select
-                        value={a.roleOnProject || ''}
-                        onValueChange={(v) => updateAnswer(a.projectId, { roleOnProject: v as UserRole })}
+                        value={m.roleOnProject || ''}
+                        onValueChange={(v) => updateManual(m.projectId, { roleOnProject: v as UserRole })}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Выберите роль…" />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Выберите роль…" /></SelectTrigger>
                         <SelectContent>
                           {PROJECT_ROLES.map((r) => (
-                            <SelectItem key={r.role} value={r.role}>
-                              {ROLE_LABELS[r.role]}
-                            </SelectItem>
+                            <SelectItem key={r.role} value={r.role}>{ROLE_LABELS[r.role]}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-
                     <div>
-                      <Label className="text-xs">
-                        Что с проектом сейчас? <span className="text-destructive">*</span>
-                      </Label>
-                      <RadioGroup
-                        value={a.statusVote}
-                        onValueChange={(v) =>
-                          updateAnswer(a.projectId, { statusVote: v as SurveyProjectStatusVote })
-                        }
-                        className="flex flex-wrap gap-2 mt-1"
-                      >
-                        {STATUS_OPTIONS.map((opt) => (
-                          <label
-                            key={opt.value}
-                            className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 cursor-pointer hover:bg-accent/40 text-xs"
-                          >
-                            <RadioGroupItem value={opt.value} />
-                            <span>{opt.label}</span>
-                          </label>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <Label className="text-xs">
-                        Период с <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        type="date"
-                        value={a.periodFrom || ''}
-                        onChange={(e) => updateAnswer(a.projectId, { periodFrom: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">
-                        Период по <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        type="date"
-                        value={a.periodTo || ''}
-                        onChange={(e) => updateAnswer(a.projectId, { periodTo: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">
-                        Часов за весь период <span className="text-destructive">*</span>
-                      </Label>
+                      <Label className="text-xs">Часов всего (для таймщитов)</Label>
                       <Input
                         type="number"
                         min={0}
                         step={0.5}
-                        value={a.totalHours ?? ''}
-                        onChange={(e) =>
-                          updateAnswer(a.projectId, {
-                            totalHours: e.target.value === '' ? undefined : Number(e.target.value),
-                          })
-                        }
+                        value={m.totalHours ?? ''}
+                        onChange={(e) => updateManual(m.projectId, {
+                          totalHours: e.target.value === '' ? undefined : Number(e.target.value),
+                        })}
                         placeholder="напр., 120"
                       />
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Эти часы попадут в ваши таймщиты.
-                      </div>
                     </div>
                   </div>
-
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Период с</Label>
+                      <Input
+                        type="date"
+                        value={m.periodFrom || ''}
+                        onChange={(e) => updateManual(m.projectId, { periodFrom: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Период по</Label>
+                      <Input
+                        type="date"
+                        value={m.periodTo || ''}
+                        onChange={(e) => updateManual(m.projectId, { periodTo: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <div>
                     <Label className="text-xs">Комментарий (необязательно)</Label>
                     <Textarea
-                      value={a.comment || ''}
-                      onChange={(e) => updateAnswer(a.projectId, { comment: e.target.value })}
-                      placeholder="Например: подключился в августе, отчёт сдан, осталось подписание"
+                      value={m.comment || ''}
+                      onChange={(e) => updateManual(m.projectId, { comment: e.target.value })}
                       rows={2}
+                      placeholder="Например: подключился в августе"
                     />
                   </div>
                 </div>
@@ -609,16 +641,45 @@ export default function ProjectSurvey() {
         </CardContent>
       </Card>
 
-      {myAnswers.length > 0 && (
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={handleSaveDraft} disabled={busy}>
-            <Save className="w-4 h-4 mr-2" /> Сохранить черновик
-          </Button>
-          <Button onClick={handleSubmit} disabled={busy}>
-            <Send className="w-4 h-4 mr-2" /> Отправить опрос
-          </Button>
-        </div>
-      )}
+      {/* Итог перед отправкой */}
+      <Card className="border-primary/40 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">3</span>
+            Готово к отправке
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {totalToSubmit === 0 ? (
+            <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
+              Вы не подтвердили ни одного проекта и ничего не добавили. Это будет отправлено как «я не участвовал ни в одном проекте». Если это не так — вернитесь и проверьте.
+            </div>
+          ) : (
+            <>
+              <div>
+                Подтверждаете участие в <b>{confirmedCount}</b> проект(ах) из системы
+                {manualAnswers.length > 0 && <> и добавляете <b>{manualAnswers.length}</b> новых</>}
+                . Всего <b>{totalToSubmit}</b> проект(ов).
+              </div>
+              {manualHoursTotal > 0 && (
+                <div className="text-muted-foreground">
+                  В таймщиты добавится <b className="text-foreground">{manualHoursTotal}</b> ч. по добавленным вручную.
+                </div>
+              )}
+              <div className="text-muted-foreground">
+                После отправки данные сразу увидит зам.директор и сможет их утвердить.
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="sticky bottom-4 z-10 flex justify-end">
+        <Button size="lg" onClick={handleSubmit} disabled={busy} className="shadow-xl px-8">
+          <Send className="w-4 h-4 mr-2" />
+          {isSubmitted ? 'Сохранить изменения' : `Отправить (${totalToSubmit})`}
+        </Button>
+      </div>
     </div>
   );
 }
