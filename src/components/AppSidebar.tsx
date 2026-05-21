@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
   FileSpreadsheet,
   Bot,
+  ListChecks,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -40,6 +41,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types/roles';
 import { getUnreadCount } from '@/lib/notifications';
+import { countPendingForUser } from '@/lib/aiTasks';
 
 interface MenuItem {
   title: string;
@@ -84,6 +86,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
       { title: 'Опрос: результаты',    url: '/project-survey-results',     icon: ClipboardCheck, allowedRoles: ['deputy_director','ceo','admin','partner'] },
       { title: 'Импорт таймщитов',     url: '/import-timesheet',           icon: FileSpreadsheet, allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
       { title: 'AI-ассистент «RB»',    url: '/ai',                         icon: Bot, allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
+      { title: 'Мои задачи от AI',     url: '/my-tasks',                   icon: ListChecks },
     ],
   },
   {
@@ -104,12 +107,22 @@ export function AppSidebar() {
   const { user, checkPermission, hasAnyRole, logout } = useAuth();
   const collapsed = state === 'collapsed';
   const [unreadCount, setUnreadCount] = useState(0);
+  const [aiTasksCount, setAiTasksCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
     const tick = () => setUnreadCount(getUnreadCount(user.id));
     tick();
     const interval = setInterval(tick, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Счётчик pending AI-задач — обновляется каждую минуту (in-app push)
+  useEffect(() => {
+    if (!user) return;
+    const tick = () => countPendingForUser(user.id).then(setAiTasksCount).catch(() => {});
+    tick();
+    const interval = setInterval(tick, 60_000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -151,11 +164,24 @@ export function AppSidebar() {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </Badge>
             )}
+            {item.url === '/my-tasks' && aiTasksCount > 0 && (
+              <Badge
+                variant="destructive"
+                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
+              >
+                {aiTasksCount > 9 ? '9+' : aiTasksCount}
+              </Badge>
+            )}
           </div>
           {!collapsed && <span className="flex-1 text-sm">{item.title}</span>}
           {!collapsed && item.url === '/notifications' && unreadCount > 0 && (
             <Badge variant="destructive" className="ml-auto text-xs">
               {unreadCount}
+            </Badge>
+          )}
+          {!collapsed && item.url === '/my-tasks' && aiTasksCount > 0 && (
+            <Badge variant="destructive" className="ml-auto text-xs">
+              {aiTasksCount}
             </Badge>
           )}
         </NavLink>
