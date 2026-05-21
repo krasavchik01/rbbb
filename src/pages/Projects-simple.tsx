@@ -905,12 +905,12 @@ export default function Projects() {
         return true;
       }
 
-      // Партнёр видит только проекты где он назначен партнёром
+      // Партнёр видит ВСЕ проекты где он назначен партнёром, на ЛЮБОМ статусе.
+      // По требованию CEO 2026-05-22: «партнёр в начале просто видит» — он должен
+      // увидеть проект сразу как зам.ГД его назначит, даже если статус new/
+      // pending_approval. Read-only до момента когда статус станет ready_to_complete
+      // (тогда партнёр сам утверждает завершение, см. ProjectWorkspace.canApproveCompletion).
       if (user.role === 'partner') {
-        // Не показываем проекты на утверждении
-        if (notesStatus === 'new' || notesStatus === 'pending_approval') {
-          return false;
-        }
         const isPartnerInTeam = team.some((member: any) => {
           const memberId = member.userId || member.id || member.employeeId;
           const memberRole = member.role || member.role_on_project;

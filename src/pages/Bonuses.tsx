@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { getAllResponses, type SurveyResponse } from '@/lib/projectSurvey';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,35 @@ export default function Bonuses() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'paid'>('all');
   const [filterType, setFilterType] = useState<'all' | 'project' | 'kpi' | 'annual'>('all');
   const [draftAdjustments, setDraftAdjustments] = useState<Record<string, Record<string, string>>>({});
+
+  // Часы по таймщитам (из project_survey_responses) — нужны CEO чтобы видеть факт
+  // перед одобрением. По требованию 2026-05-22: «таймщиты привязываются по
+  // итогу к финальному результату для ГД».
+  const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>([]);
+  useEffect(() => {
+    let active = true;
+    getAllResponses()
+      .then((rows) => { if (active) setSurveyResponses(rows); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // Индекс: для пары (userId × projectId) — сумма часов из answers.
+  const hoursIndex = useMemo(() => {
+    const idx = new Map<string, number>();
+    for (const r of surveyResponses) {
+      if (r.status !== 'submitted') continue;
+      const userId = r.userId;
+      for (const a of r.answers || []) {
+        if (!a.participated) continue;
+        if (typeof a.totalHours !== 'number' || a.totalHours <= 0) continue;
+        const key = `${userId}__${a.projectId}`;
+        idx.set(key, (idx.get(key) || 0) + a.totalHours);
+      }
+    }
+    return idx;
+  }, [surveyResponses]);
+  const getHoursFor = (userId: string, projectId: string): number => hoursIndex.get(`${userId}__${projectId}`) || 0;
 
   // Полный обзор всей фирмы — только CEO и deputy_director (через permission VIEW_ALL_BONUSES).
   // Утверждение выплат — только CEO/admin.
@@ -323,9 +353,10 @@ export default function Bonuses() {
                     const bonus = finances.teamBonuses[userId];
                     const employee = employees.find((item: any) => item.id === userId);
                     const inputValue = draftAdjustments[project.id]?.[userId] ?? (bonus?.amount != null ? String(bonus.amount) : '0');
+                    const actualHours = getHoursFor(userId, project.id);
 
                     return (
-                      <div key={userId} className="grid grid-cols-1 md:grid-cols-[1.4fr_0.7fr_0.9fr] gap-3 items-center p-3 rounded-lg bg-muted/30">
+                      <div key={userId} className="grid grid-cols-1 md:grid-cols-[1.4fr_0.7fr_0.7fr_0.9fr] gap-3 items-center p-3 rounded-lg bg-muted/30">
                         <div>
                           <p className="font-medium text-sm">{employee?.name || member.userName || member.name || 'Участник проекта'}</p>
                           <p className="text-xs text-muted-foreground">
@@ -334,6 +365,13 @@ export default function Bonuses() {
                         </div>
                         <div className="text-sm text-muted-foreground">
                           Расчёт: {(bonus?.amount || 0).toLocaleString('ru-RU')} ₸
+                        </div>
+                        <div className="text-sm">
+                          {actualHours > 0 ? (
+                            <span className="text-foreground"><b>{actualHours}</b> <span className="text-xs text-muted-foreground">ч. по таймщиту</span></span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">часы не указаны</span>
+                          )}
                         </div>
                         <Input
                           value={inputValue}
