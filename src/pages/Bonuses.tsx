@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useProjects } from '@/hooks/useSupabaseData';
+import { useTasks, type Task } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { calculateProjectFinances } from '@/types/project-v3';
@@ -29,6 +30,7 @@ export default function Bonuses() {
   const { user, checkPermission } = useAuth();
   const { projects = [], updateProject: updateProjectRecord, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
+  const { tasks = [] } = useTasks();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'paid'>('all');
@@ -63,6 +65,22 @@ export default function Bonuses() {
     return idx;
   }, [surveyResponses]);
   const getHoursFor = (userId: string, projectId: string): number => hoursIndex.get(`${userId}__${projectId}`) || 0;
+
+  // Статистика задач по проекту — CEO видит «нормально ли всё прошло»:
+  // сколько задач, сколько выполнено, сколько просрочено.
+  const getTaskStats = (projectId: string) => {
+    const projectTasks = tasks.filter((t: Task) => t.project_id === projectId);
+    const now = Date.now();
+    let done = 0, overdue = 0, inProgress = 0, blocked = 0;
+    for (const t of projectTasks) {
+      if (t.status === 'done') done++;
+      else if (t.status === 'blocked') blocked++;
+      else if (t.status === 'in_progress' || t.status === 'in_review') inProgress++;
+      // Просрочка: дедлайн прошёл и задача не done
+      if (t.due_at && t.status !== 'done' && new Date(t.due_at).getTime() < now) overdue++;
+    }
+    return { total: projectTasks.length, done, overdue, inProgress, blocked };
+  };
 
   // Полный обзор всей фирмы — только CEO и deputy_director (через permission VIEW_ALL_BONUSES).
   // Утверждение выплат — только CEO/admin.
@@ -326,17 +344,34 @@ export default function Bonuses() {
           {projectsAwaitingApproval.map((project: any) => {
             const finances = calculateProjectFinances(project);
             const team = project.team || project.notes?.team || [];
+            const notes = project.notes || {};
+            const clientName = notes.clientName || notes.client?.name || project.clientName;
+            const ourCompany = notes.ourCompany || notes.companyName;
+            const contractNumber = notes.contractNumber || notes.contract?.number;
+            const contractDate = notes.contractDate || notes.contract?.date;
+            const periodFrom = notes.periodFrom || notes.startDate;
+            const periodTo = notes.periodTo || notes.endDate;
+            const stats = getTaskStats(project.id);
+            const tasksHealthy = stats.total > 0 && stats.overdue === 0 && stats.blocked === 0;
+            const currency = notes.currency || '₸';
 
             return (
-              <Card key={project.id} className="p-5 border border-blue-200 shadow-sm">
+              <Card key={project.id} className="p-5 border border-blue-200 shadow-sm space-y-4">
+                {/* Шапка проекта */}
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                  <div>
+                  <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-base">{project.name || project.title || 'Проект'}</h3>
                       <Badge className="bg-blue-500">Ждёт CEO</Badge>
+                      {ourCompany && <Badge variant="outline" className="text-xs">{ourCompany}</Badge>}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      База бонусов: {(finances.bonusBase || 0).toLocaleString('ru-RU')} ₸ · Общий пул: {(finances.totalBonusAmount || 0).toLocaleString('ru-RU')} ₸
+                    {clientName && (
+                      <p className="text-sm text-muted-foreground">Клиент: <b className="text-foreground">{clientName}</b></p>
+                    )}
+                    <p className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+                      {contractNumber && <span>Договор № {contractNumber}{contractDate ? ` от ${format(new Date(contractDate), 'dd.MM.yyyy')}` : ''}</span>}
+                      {periodFrom && periodTo && <span>Период: {periodFrom} → {periodTo}</span>}
+                      <span>Сумма без НДС: <b className="text-foreground">{(finances.amountWithoutVAT || 0).toLocaleString('ru-RU')} {currency}</b></span>
                     </p>
                   </div>
                   {canApproveBonusPayout && (
@@ -347,6 +382,35 @@ export default function Bonuses() {
                   )}
                 </div>
 
+                {/* Статус задач */}
+                {stats.total > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Задачи:</span>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">✓ {stats.done} готовы</Badge>
+                    {stats.inProgress > 0 && <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">▶ {stats.inProgress} в работе</Badge>}
+                    {stats.blocked > 0 && <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">⛔ {stats.blocked} заблокированы</Badge>}
+                    {stats.overdue > 0 && <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">⏰ {stats.overdue} просрочены</Badge>}
+                    {tasksHealthy && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">всё нормально</Badge>}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Задачи в системе не создавались (или импорт постфактум).</p>
+                )}
+
+                {/* Прозрачная формула расчёта */}
+                <div className="text-xs bg-muted/40 rounded-md px-3 py-2 space-y-1">
+                  <div className="font-medium text-foreground">Как считается бонус:</div>
+                  <div>
+                    Сумма без НДС <b>{(finances.amountWithoutVAT || 0).toLocaleString('ru-RU')}</b>
+                    {' '}− Предрасход {finances.preExpensePercent}% (<b>{(finances.preExpenseAmount || 0).toLocaleString('ru-RU')}</b>)
+                    {finances.totalContractorsAmount > 0 && <> − ГПХ (<b>{(finances.totalContractorsAmount || 0).toLocaleString('ru-RU')}</b>)</>}
+                    {' '}= База бонусов <b>{(finances.bonusBase || 0).toLocaleString('ru-RU')}</b>
+                  </div>
+                  <div>
+                    База × {(project.finances?.bonusPercent ?? 10)}% = Общий пул бонусов <b className="text-primary">{(finances.totalBonusAmount || 0).toLocaleString('ru-RU')} {currency}</b>
+                    <span className="text-muted-foreground"> — распределяется ниже по ролям</span>
+                  </div>
+                </div>
+
                 <div className="mt-4 grid gap-3">
                   {team.map((member: any) => {
                     const userId = member.userId || member.id;
@@ -354,31 +418,47 @@ export default function Bonuses() {
                     const employee = employees.find((item: any) => item.id === userId);
                     const inputValue = draftAdjustments[project.id]?.[userId] ?? (bonus?.amount != null ? String(bonus.amount) : '0');
                     const actualHours = getHoursFor(userId, project.id);
+                    const planned = (member.bonusPercent || bonus?.percent || 0);
+                    const plannedAmount = ((finances.totalBonusAmount || 0) * planned) / 100;
+                    const ROLE_LABEL: Record<string, string> = {
+                      partner: 'Партнёр', manager_1: 'Менеджер 1', manager_2: 'Менеджер 2', manager_3: 'Менеджер 3',
+                      supervisor_1: 'Супервайзер 1', supervisor_2: 'Супервайзер 2', supervisor_3: 'Супервайзер 3',
+                      senior_assistant: 'Старший ассистент',
+                      assistant_1: 'Ассистент 1', assistant_2: 'Ассистент 2', assistant_3: 'Ассистент 3',
+                      tax_specialist_1: 'Налоговый специалист 1', tax_specialist_2: 'Налоговый специалист 2',
+                    };
 
                     return (
-                      <div key={userId} className="grid grid-cols-1 md:grid-cols-[1.4fr_0.7fr_0.7fr_0.9fr] gap-3 items-center p-3 rounded-lg bg-muted/30">
-                        <div>
-                          <p className="font-medium text-sm">{employee?.name || member.userName || member.name || 'Участник проекта'}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {member.role} · {bonus?.percent || 0}% {bonus?.manuallyAdjusted ? '· скорректировано вручную' : ''}
-                          </p>
+                      <div key={userId} className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_0.9fr_1fr] gap-3 items-center p-3 rounded-lg bg-muted/30">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{employee?.name || member.userName || member.name || 'Участник'}</p>
+                          <p className="text-xs text-muted-foreground">{ROLE_LABEL[member.role] || member.role}</p>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          Расчёт: {(bonus?.amount || 0).toLocaleString('ru-RU')} ₸
+                        <div className="text-xs">
+                          <div className="text-muted-foreground">от пула <b className="text-foreground">{planned}%</b></div>
+                          <div className="text-muted-foreground">план: <b className="text-foreground">{plannedAmount.toLocaleString('ru-RU')} {currency}</b></div>
                         </div>
-                        <div className="text-sm">
+                        <div className="text-xs">
                           {actualHours > 0 ? (
-                            <span className="text-foreground"><b>{actualHours}</b> <span className="text-xs text-muted-foreground">ч. по таймщиту</span></span>
+                            <>
+                              <div className="text-muted-foreground">факт</div>
+                              <div className="font-semibold">{actualHours} ч.</div>
+                            </>
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">часы не указаны</span>
+                            <span className="text-muted-foreground italic">без часов</span>
                           )}
                         </div>
-                        <Input
-                          value={inputValue}
-                          onChange={(e) => updateDraftAmount(project.id, userId, e.target.value)}
-                          inputMode="decimal"
-                          disabled={!canApproveBonusPayout}
-                        />
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={inputValue}
+                            onChange={(e) => updateDraftAmount(project.id, userId, e.target.value)}
+                            inputMode="decimal"
+                            disabled={!canApproveBonusPayout}
+                            className="text-right"
+                            title="Окончательная сумма бонуса (можно скорректировать вручную)"
+                          />
+                          <span className="text-xs text-muted-foreground">{currency}</span>
+                        </div>
                       </div>
                     );
                   })}
