@@ -103,7 +103,16 @@ export default function ProjectWorkspace() {
   const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
   const isPendingPaymentApproval = projectStatus === 'pending_payment_approval';
-  const canCompleteProject = (isPartner || isPM) && (isInProgress || projectStatus === 'ready_to_complete');
+  const isReadyToComplete = projectStatus === 'ready_to_complete';
+
+  // Двухэтапное закрытие проекта (поправлено по требованию CEO 2026-05-22):
+  //   1) PM (manager_*) переводит проект в ready_to_complete.
+  //   2) Партнёр проекта подтверждает завершение → pending_payment_approval.
+  //   3) CEO в /bonuses одобряет выплату бонусов → completed.
+  // Раньше PM и партнёр имели одну кнопку «Завершить» — это не соответствовало
+  // ролевой модели фирмы, где партнёр в начале только видит, а в конце утверждает.
+  const canMarkReady = (isPM || isAdmin) && (isInProgress || projectStatus === 'approved' || projectStatus === 'planning');
+  const canApproveCompletion = (isPartner || isAdmin) && isReadyToComplete;
   // Директор/зам видят только общую информацию, без деталей методологии
   const showFullDetails = !isDirector;
 
@@ -1116,22 +1125,43 @@ export default function ProjectWorkspace() {
 
       {/* Этапы аудита и паспорт проекта — УБРАНЫ */}
 
-      {/* Кнопка завершения проекта */}
-      {canCompleteProject && projectTasks.length === 0 && !isCompleted && !isPendingPaymentApproval && (
-        <Card className="p-6 border-green-200 bg-green-50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold mb-2">Завершить проект</h3>
+      {/* Кнопка перевода в «готов к закрытию» — для PM */}
+      {canMarkReady && !isCompleted && !isPendingPaymentApproval && !isReadyToComplete && (
+        <Card className="p-6 border-blue-200 bg-blue-50">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-semibold mb-2">Готов к закрытию?</h3>
               <p className="text-sm text-muted-foreground">
-                После завершения проекта автоматически рассчитаются и начислятся бонусы всем членам команды.
+                Как PM, отметь проект готовым. Партнёр проекта получит уведомление и утвердит завершение, после чего CEO одобрит бонусы.
               </p>
             </div>
             <Button
               onClick={() => setShowCompleteDialog(true)}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-blue-600 hover:bg-blue-700"
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Завершить проект
+              Готов к закрытию
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Кнопка финального утверждения партнёром */}
+      {canApproveCompletion && (
+        <Card className="p-6 border-amber-200 bg-amber-50">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-semibold mb-2">Проект готов — твоё утверждение</h3>
+              <p className="text-sm text-muted-foreground">
+                Как партнёр, утверди завершение. Проект уйдёт CEO в раздел «Бонусы» с финальным расчётом по таймщитам.
+              </p>
+            </div>
+            <Button
+              onClick={() => setShowCompleteDialog(true)}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Утвердить завершение
             </Button>
           </div>
         </Card>
@@ -1166,19 +1196,28 @@ export default function ProjectWorkspace() {
         </Card>
       )}
 
-      {/* Диалог подтверждения завершения */}
+      {/* Диалог подтверждения — текст зависит от текущего этапа */}
       <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Отправить на утверждение CEO?</DialogTitle>
+            <DialogTitle>
+              {isReadyToComplete ? 'Утвердить завершение проекта?' : 'Отметить проект готовым к закрытию?'}
+            </DialogTitle>
             <DialogDescription>
-              После отправки на утверждение:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Статус проекта изменится на "Ожидает утверждения бонусов"</li>
-                <li>Автоматически рассчитаются бонусы для всех членов команды</li>
-                <li>CEO увидит проект в разделе "Бонусы" и сможет утвердить выплаты</li>
-                <li>После одобрения CEO проект окончательно закрывается со статусом "Завершён"</li>
-              </ul>
+              {isReadyToComplete ? (
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Статус: «Готов к закрытию» → «Ожидает утверждения бонусов»</li>
+                  <li>Рассчитаются финальные бонусы команды с учётом часов из таймщитов</li>
+                  <li>CEO увидит проект в разделе «Бонусы» и утвердит выплаты</li>
+                  <li>После одобрения CEO проект закроется окончательно</li>
+                </ul>
+              ) : (
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Статус: «В работе» → «Готов к закрытию»</li>
+                  <li>Партнёр проекта получит уведомление и сможет утвердить завершение</li>
+                  <li>До утверждения партнёра проект можно отозвать</li>
+                </ul>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
@@ -1190,18 +1229,25 @@ export default function ProjectWorkspace() {
                 if (!project || !user) return;
 
                 try {
-                  // КРИТИЧНО: статус переходит в pending_payment_approval, а НЕ
-                  // сразу в completed. Иначе проект не появится в /bonuses у CEO
-                  // (там фильтр по pending_payment_approval). Финальное закрытие —
-                  // в Bonuses.tsx при кнопке «Утвердить бонусы» (status → completed).
+                  // Переход статуса зависит от текущего:
+                  //   approved/in_progress/planning → ready_to_complete (PM «Готов к закрытию»)
+                  //   ready_to_complete → pending_payment_approval (партнёр «Утверждаю»)
+                  const nextStatus = isReadyToComplete ? 'pending_payment_approval' : 'ready_to_complete';
                   const updatedProject = {
                     ...project,
-                    status: 'pending_payment_approval',
+                    status: nextStatus,
                     notes: {
                       ...project.notes,
-                      status: 'pending_payment_approval',
-                      submittedForPaymentApprovalAt: new Date().toISOString(),
-                      submittedForPaymentApprovalBy: user.id,
+                      status: nextStatus,
+                      ...(nextStatus === 'ready_to_complete'
+                        ? {
+                            markedReadyAt: new Date().toISOString(),
+                            markedReadyBy: user.id,
+                          }
+                        : {
+                            submittedForPaymentApprovalAt: new Date().toISOString(),
+                            submittedForPaymentApprovalBy: user.id,
+                          }),
                     }
                   };
 
