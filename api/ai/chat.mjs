@@ -258,6 +258,79 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'start_survey',
+    description: 'Запустить опрос «Кто в каком проекте участвовал». Все сотрудники увидят форму. Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        deadline: { type: 'string', description: 'ISO дата дедлайна, опционально' },
+        title: { type: 'string', description: 'Опциональный заголовок' },
+        description: { type: 'string', description: 'Опциональное описание для сотрудников' },
+        dry_run: { type: 'boolean' },
+      },
+    },
+  },
+  {
+    name: 'stop_survey',
+    description: 'Остановить опрос (сотрудники больше не смогут отвечать). Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: { dry_run: { type: 'boolean' } },
+    },
+  },
+  {
+    name: 'assign_to_project',
+    description: 'Добавить сотрудника в команду проекта. Записывает в notes.team[] и notes.teamIds[]. Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        employeeId: { type: 'string' },
+        role: { type: 'string', description: 'Роль на проекте, например senior_assistant / manager / supervisor / partner' },
+        dry_run: { type: 'boolean' },
+      },
+      required: ['projectId', 'employeeId', 'role'],
+    },
+  },
+  {
+    name: 'remove_from_project',
+    description: 'Убрать сотрудника из команды проекта. Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        employeeId: { type: 'string' },
+        dry_run: { type: 'boolean' },
+      },
+      required: ['projectId', 'employeeId'],
+    },
+  },
+  {
+    name: 'update_employee_role',
+    description: 'Изменить роль сотрудника в системе (employees.role). ОПАСНО — меняет уровень доступа. Только для ceo/admin. Двухфазный confirm.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        employeeId: { type: 'string' },
+        newRole: { type: 'string', enum: ['ceo', 'deputy_director', 'partner', 'hr', 'manager', 'senior_assistant', 'assistant_1', 'assistant_2', 'admin', 'supervisor', 'employee'] },
+        reason: { type: 'string' },
+        dry_run: { type: 'boolean' },
+      },
+      required: ['employeeId', 'newRole'],
+    },
+  },
+  {
+    name: 'recall_notes',
+    description: 'Достать все заметки AI про конкретного сотрудника или проект. Полезно когда юзер спрашивает «что ты знаешь про Иванова» или «что у нас по проекту X».',
+    input_schema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', description: 'employee:<id> | project:<id> | workspace' },
+      },
+      required: ['scope'],
+    },
+  },
 ];
 
 // ─── Tool executors (server-side, read from Supabase) ──────────────────────
@@ -277,7 +350,16 @@ const WRITE_TOOLS = new Set([
   'reject_proposal',
   'update_project_status',
   'create_task',
+  'start_survey',
+  'stop_survey',
+  'assign_to_project',
+  'remove_from_project',
+  'update_employee_role',
 ]);
+
+// Особо опасные tools — только для ceo + admin (не deputy_director)
+const ADMIN_ONLY_TOOLS = new Set(['update_employee_role']);
+const ADMIN_ROLES = new Set(['ceo', 'admin']);
 
 async function execTool(supabase, ctx, name, input) {
   // Сначала gate по ролям для write-tools
@@ -285,6 +367,12 @@ async function execTool(supabase, ctx, name, input) {
     return {
       error: 'PERMISSION_DENIED',
       message: `У роли ${ctx.serverVerifiedRole || 'unknown'} нет прав на write-действия. Может выполнить только ceo/admin/deputy_director.`,
+    };
+  }
+  if (ADMIN_ONLY_TOOLS.has(name) && input?.dry_run !== true && !ADMIN_ROLES.has(ctx.serverVerifiedRole || '')) {
+    return {
+      error: 'PERMISSION_DENIED',
+      message: `Этот tool доступен только ceo/admin. Текущая роль: ${ctx.serverVerifiedRole || 'unknown'}.`,
     };
   }
   try {
@@ -348,11 +436,18 @@ async function execTool(supabase, ctx, name, input) {
         };
       }
       case 'get_project': {
-        const { data, error } = await supabase.from('projects').select('id, name, status, updated_at, notes').eq('id', input.projectId).maybeSingle();
-        if (error) return { error: error.message };
+        const [projRes, aiNotesRes] = await Promise.all([
+          supabase.from('projects').select('id, name, status, updated_at, notes').eq('id', input.projectId).maybeSingle(),
+          supabase.from('ai_memory').select('memory_key, content, importance').eq('scope', `project:${input.projectId}`).order('importance', { ascending: false }).limit(20),
+        ]);
+        if (projRes.error) return { error: projRes.error.message };
+        const data = projRes.data;
         if (!data) return { error: 'Project not found' };
         const notes = typeof data.notes === 'string' ? safeParse(data.notes) : data.notes;
+        const aiNotes = aiNotesRes.data || [];
         return {
+          ai_notes: aiNotes,
+          notes_hint: aiNotes.length > 0 ? `У AI есть ${aiNotes.length} заметок про этот проект.` : 'Заметок про проект пока нет — сохраняй важное через save_memory(scope="project:' + data.id + '").',
           project: {
             id: data.id,
             name: data.name,
@@ -382,19 +477,22 @@ async function execTool(supabase, ctx, name, input) {
         return { employees: data || [] };
       }
       case 'get_employee_workload': {
-        const [emp, survey] = await Promise.all([
+        const [emp, survey, notes] = await Promise.all([
           supabase.from('employees').select('id, name, role, email').eq('id', input.employeeId).maybeSingle().then((r) => r.data),
           supabase.from('project_survey_responses').select('user_id, status, answers, updated_at').eq('user_id', input.employeeId).maybeSingle().then((r) => r.data),
+          // Подгружаем AI-заметки про этого сотрудника — это база знаний AI про каждого.
+          supabase.from('ai_memory').select('memory_key, content, importance').eq('scope', `employee:${input.employeeId}`).order('importance', { ascending: false }).limit(20).then((r) => r.data),
         ]);
         if (!emp) return { error: 'Employee not found' };
-        const summary = {
+        return {
           employee: emp,
           surveySubmitted: !!(survey && survey.status === 'submitted'),
           surveyUpdatedAt: survey?.updated_at || null,
           projectsCount: Array.isArray(survey?.answers) ? survey.answers.filter((a) => a.participated).length : 0,
           totalHours: Array.isArray(survey?.answers) ? survey.answers.reduce((s, a) => s + (a.totalHours || 0), 0) : 0,
+          ai_notes: notes || [],  // Заметки AI про этого сотрудника
+          notes_hint: (notes && notes.length > 0) ? `У AI есть ${notes.length} заметок про сотрудника — используй их в ответе.` : 'У AI пока нет заметок про этого сотрудника. Если узнал важное — сохрани через save_memory(scope=\"employee:' + emp.id + '\").',
         };
-        return summary;
       }
       case 'list_survey_responses': {
         const { data, error } = await supabase
@@ -426,7 +524,17 @@ async function execTool(supabase, ctx, name, input) {
         return { activity: data || [] };
       }
       case 'save_memory': {
-        const scope = input.scope === 'user' ? `user:${ctx.userId}` : 'workspace';
+        // scope может быть:
+        //  - 'user' → user:<ctx.userId>
+        //  - 'workspace' → workspace
+        //  - 'employee:<id>' → заметка про конкретного сотрудника (для AI-«картотеки»)
+        //  - 'project:<id>' → заметка про конкретный проект
+        let scope;
+        if (input.scope === 'user') scope = `user:${ctx.userId}`;
+        else if (input.scope === 'workspace') scope = 'workspace';
+        else if (typeof input.scope === 'string' && (input.scope.startsWith('employee:') || input.scope.startsWith('project:'))) scope = input.scope;
+        else return { error: 'Invalid scope. Use: user, workspace, employee:<id>, project:<id>' };
+
         const { error } = await supabase.from('ai_memory').upsert(
           {
             scope,
@@ -440,6 +548,16 @@ async function execTool(supabase, ctx, name, input) {
         );
         if (error) return { error: error.message };
         return { saved: true, key: input.key, scope };
+      }
+      case 'recall_notes': {
+        const { data, error } = await supabase
+          .from('ai_memory')
+          .select('memory_key, content, importance, created_at, updated_at, created_by')
+          .eq('scope', input.scope)
+          .order('importance', { ascending: false })
+          .limit(50);
+        if (error) return { error: error.message };
+        return { scope: input.scope, notes: data || [] };
       }
 
       // ─── DIAGNOSTIC ────────────────────────────────────────────────────
@@ -757,6 +875,161 @@ async function execTool(supabase, ctx, name, input) {
         return { ...preview, applied: true, task_id: data.id, created_at: data.created_at };
       }
 
+      case 'start_survey': {
+        const dry = input.dry_run !== false;
+        const { data: cur } = await supabase
+          .from('project_survey_config')
+          .select('*')
+          .eq('id', 'default')
+          .maybeSingle();
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            from_enabled: !!(cur?.enabled),
+            to_enabled: true,
+            title: input.title || cur?.title || 'Опрос по участию в проектах',
+            deadline: input.deadline || null,
+            description: input.description || null,
+            started_by: ctx.userName || ctx.userId,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру и спроси «подтверждаешь?». Только после явного «да» — повторно с dry_run=false. Напомни что после старта все сотрудники увидят форму на /project-survey.' };
+        const payload = {
+          id: 'default',
+          enabled: true,
+          title: preview.will_change.title,
+          description: preview.will_change.description,
+          deadline: preview.will_change.deadline,
+          started_at: new Date().toISOString(),
+          started_by: ctx.userId,
+          started_by_name: ctx.userName || null,
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await supabase.from('project_survey_config').upsert(payload, { onConflict: 'id' });
+        if (error) return { error: error.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'stop_survey': {
+        const dry = input.dry_run !== false;
+        const { data: cur } = await supabase
+          .from('project_survey_config')
+          .select('*')
+          .eq('id', 'default')
+          .maybeSingle();
+        const preview = {
+          dry_run: dry,
+          will_change: { from_enabled: !!(cur?.enabled), to_enabled: false },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру что опрос будет остановлен и спроси «подтверждаешь?». Сотрудники больше не смогут отвечать.' };
+        const { error } = await supabase
+          .from('project_survey_config')
+          .update({ enabled: false, updated_at: new Date().toISOString() })
+          .eq('id', 'default');
+        if (error) return { error: error.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'assign_to_project': {
+        const dry = input.dry_run !== false;
+        const [proj, emp] = await Promise.all([
+          supabase.from('projects').select('id, name, notes').eq('id', input.projectId).maybeSingle().then((r) => r.data),
+          supabase.from('employees').select('id, name, role').eq('id', input.employeeId).maybeSingle().then((r) => r.data),
+        ]);
+        if (!proj) return { error: 'Project not found' };
+        if (!emp) return { error: 'Employee not found' };
+        const notes = typeof proj.notes === 'string' ? safeParse(proj.notes) : proj.notes;
+        const existingTeam = Array.isArray(notes?.team) ? notes.team : [];
+        const existingIds = new Set(existingTeam.map((m) => m.userId || m.id));
+        if (existingIds.has(emp.id)) {
+          return { error: `Сотрудник ${emp.name} уже в команде проекта.` };
+        }
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            project_id: proj.id,
+            project_name: proj.name,
+            add_employee: { id: emp.id, name: emp.name, role: input.role },
+            team_size_before: existingTeam.length,
+            team_size_after: existingTeam.length + 1,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру и спроси «подтверждаешь?». Только после явного «да» — повторно с dry_run=false.' };
+        const newMember = { userId: emp.id, id: emp.id, name: emp.name, role: input.role, assignedAt: new Date().toISOString() };
+        const nextTeam = [...existingTeam, newMember];
+        const nextTeamIds = Array.from(new Set([...(notes?.teamIds || []), emp.id]));
+        const nextNotes = { ...(notes || {}), team: nextTeam, teamIds: nextTeamIds };
+        const { error } = await supabase
+          .from('projects')
+          .update({ notes: JSON.stringify(nextNotes), updated_at: new Date().toISOString() })
+          .eq('id', proj.id);
+        if (error) return { error: error.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'remove_from_project': {
+        const dry = input.dry_run !== false;
+        const [proj, emp] = await Promise.all([
+          supabase.from('projects').select('id, name, notes').eq('id', input.projectId).maybeSingle().then((r) => r.data),
+          supabase.from('employees').select('id, name').eq('id', input.employeeId).maybeSingle().then((r) => r.data),
+        ]);
+        if (!proj) return { error: 'Project not found' };
+        if (!emp) return { error: 'Employee not found' };
+        const notes = typeof proj.notes === 'string' ? safeParse(proj.notes) : proj.notes;
+        const existingTeam = Array.isArray(notes?.team) ? notes.team : [];
+        const present = existingTeam.some((m) => (m.userId || m.id) === emp.id);
+        if (!present) return { error: `Сотрудник ${emp.name} не в команде этого проекта.` };
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            project_id: proj.id,
+            project_name: proj.name,
+            remove_employee: { id: emp.id, name: emp.name },
+            team_size_before: existingTeam.length,
+            team_size_after: existingTeam.length - 1,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'Покажи юзеру что сотрудник будет удалён из команды и спроси «подтверждаешь?».' };
+        const nextTeam = existingTeam.filter((m) => (m.userId || m.id) !== emp.id);
+        const nextTeamIds = (notes?.teamIds || []).filter((id) => id !== emp.id);
+        const nextNotes = { ...(notes || {}), team: nextTeam, teamIds: nextTeamIds };
+        const { error } = await supabase
+          .from('projects')
+          .update({ notes: JSON.stringify(nextNotes), updated_at: new Date().toISOString() })
+          .eq('id', proj.id);
+        if (error) return { error: error.message };
+        return { ...preview, applied: true };
+      }
+
+      case 'update_employee_role': {
+        const dry = input.dry_run !== false;
+        const { data: emp, error } = await supabase
+          .from('employees')
+          .select('id, name, role')
+          .eq('id', input.employeeId)
+          .maybeSingle();
+        if (error) return { error: error.message };
+        if (!emp) return { error: 'Employee not found' };
+        if (emp.role === input.newRole) return { error: `У сотрудника уже роль ${input.newRole}.` };
+        const preview = {
+          dry_run: dry,
+          will_change: {
+            employee_id: emp.id,
+            employee_name: emp.name,
+            from_role: emp.role,
+            to_role: input.newRole,
+            reason: input.reason || null,
+          },
+        };
+        if (dry) return { ...preview, instruction: 'ОСТОРОЖНО — это меняет уровень доступа сотрудника. Объясни юзеру что будет сделано, попроси убедиться что это намеренно, и только после явного «да» — повторно с dry_run=false.' };
+        const { error: updErr } = await supabase
+          .from('employees')
+          .update({ role: input.newRole, updated_at: new Date().toISOString() })
+          .eq('id', emp.id);
+        if (updErr) return { error: updErr.message };
+        return { ...preview, applied: true };
+      }
+
       case 'list_tasks': {
         let q = supabase
           .from('ai_tasks')
@@ -844,6 +1117,21 @@ function buildSystemPrompt(memorySnippets, verifiedRole) {
 - reject_proposal(projectId, reason): отклонить предложение.
 - update_project_status(projectId, newStatus, reason): изменить статус проекта.
 - create_task(assignedToEmployeeId, title, description, priority, dueDate, relatedProjectId): создать задачу сотруднику.
+- start_survey(deadline?, title?, description?): запустить опрос «кто в каком проекте».
+- stop_survey(): остановить опрос.
+- assign_to_project(projectId, employeeId, role): добавить сотрудника в команду проекта.
+- remove_from_project(projectId, employeeId): убрать сотрудника из команды.
+- update_employee_role(employeeId, newRole, reason): сменить роль сотрудника (ТОЛЬКО ceo/admin, не deputy_director).
+
+«КАРТОТЕКА» — заметки AI про сотрудников и проекты:
+У тебя есть структурированная база знаний «кто что делает / что у нас по проекту X». Реализована через ai_memory с разными scope:
+- save_memory(key, content, scope='employee:<employee_id>', importance) — заметка про сотрудника
+- save_memory(key, content, scope='project:<project_id>', importance) — заметка про проект
+- save_memory(key, content, scope='workspace', importance) — общее правило фирмы
+- save_memory(key, content, scope='user', importance) — личное предпочтение юзера
+- recall_notes(scope) — достать ВСЕ заметки данного scope
+
+ВАЖНО: при вызове get_employee_workload или get_project — ты АВТОМАТИЧЕСКИ получаешь ai_notes по этому объекту в ответе. Не игнорируй их — они твои собственные знания. Когда юзер тебе что-то рассказывает про сотрудника / проект — сохраняй это как заметку с подходящим importance.
 
 КРИТИЧНЫЕ ПРАВИЛА WRITE-FLOW (обязательны!):
 1. ВСЕ write-tools (approve_proposal, reject_proposal, update_project_status, create_task) обязаны вызываться ДВАЖДЫ:
