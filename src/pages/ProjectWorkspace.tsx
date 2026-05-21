@@ -36,7 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
 // MethodologySelector removed
-import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology";
+// import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology"; — удалено по решению юзера
 import { ProjectV3 } from "@/types/project-v3";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole, TEAM_ROLE_SLOTS } from "@/types/roles";
 import { useEmployees } from "@/hooks/useSupabaseData";
@@ -206,7 +206,7 @@ export default function ProjectWorkspace() {
           // Проверяем тип проекта для автоматического выбора шаблона
           const projectType = projectFromState.type || projectFromState.notes?.type;
           if (projectType === 'audit' || projectFromState.name?.toLowerCase().includes('аудит')) {
-            setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
+            /* Russell Bedford audit methodology удалена по решению юзера. */
           }
         });
         return;
@@ -247,7 +247,7 @@ export default function ProjectWorkspace() {
         // Проверяем тип проекта
         const projectType = foundProject.type || foundProject.notes?.type;
         if (projectType === 'audit' || foundProject.name?.toLowerCase().includes('аудит')) {
-          setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
+          /* Russell Bedford audit methodology удалена по решению юзера. */
         }
       });
     } else if (projects.length > 0) {
@@ -265,7 +265,7 @@ export default function ProjectWorkspace() {
             if (data) setProjectData(data);
             const projectType = directProject.type || directProject.notes?.type;
             if (projectType === 'audit' || directProject.name?.toLowerCase().includes('аудит')) {
-              setTemplate(RUSSELL_BEDFORD_AUDIT_METHODOLOGY);
+              /* Russell Bedford audit methodology удалена по решению юзера. */
             }
           });
         } else {
@@ -554,10 +554,10 @@ export default function ProjectWorkspace() {
     );
   }
 
-  // Автоматически определяем шаблон: если проект аудиторский - используем методологию Russell Bedford
-  const activeTemplate = template || (project?.type === 'audit' || project?.notes?.type === 'audit' ||
-    project?.contract?.subject?.toLowerCase().includes('аудит') ||
-    project?.name?.toLowerCase().includes('аудит') ? RUSSELL_BEDFORD_AUDIT_METHODOLOGY : null);
+  // Audit-methodology (Russell Bedford) удалена. activeTemplate = только то,
+  // что пришло из БД через useTemplates. Если в БД пусто — null, секции
+  // методологии не рендерятся.
+  const activeTemplate = template;
 
   // Если шаблон все еще не найден, но есть проект - показываем карточку без шаблона
   // (можно работать с задачами и файлами)

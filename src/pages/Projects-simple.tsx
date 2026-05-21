@@ -24,7 +24,7 @@ import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate,
 import { supabase } from "@/integrations/supabase/client";
 import { notifyTeamAssembled, notifyTeamMemberAdded, notifyBulkProjectsImported } from "@/lib/projectNotifications";
 import { useAppSettings } from "@/lib/appSettings";
-import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates";
+// import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates"; — удалено по решению юзера
 import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
 import { ContractStagesEditor } from "@/components/projects/ContractStagesEditor";
 import { CEOSummaryTable } from "@/components/projects/CEOSummaryTable";
@@ -1350,30 +1350,11 @@ export default function Projects() {
     };
   };
 
-  // Функция расчета заполнения документов
-  const getDocumentCompletion = useCallback((project: any) => {
-    // Всего шаблонов
-    const totalTemplates = ALL_AUDIT_TEMPLATES.length;
-
-    // Проверяем заполненные документы в projectData или notes
-    const projectData = project.projectData || project.notes?.projectData;
-    const completedDocuments = projectData?.completedDocuments || project.notes?.completedDocuments || [];
-
-    // Если есть данные о заполнении
-    if (Array.isArray(completedDocuments) && completedDocuments.length > 0) {
-      return {
-        completed: completedDocuments.length,
-        total: totalTemplates,
-        percentage: Math.round((completedDocuments.length / totalTemplates) * 100)
-      };
-    }
-
-    // Если нет данных - возвращаем 0
-    return {
-      completed: 0,
-      total: totalTemplates,
-      percentage: 0
-    };
+  // Аудит-шаблоны удалены по решению юзера. Расчёт «заполненности документов»
+  // отключён — везде возвращаем заглушку, чтобы не ломать места, которые
+  // дёргают getDocumentCompletion.
+  const getDocumentCompletion = useCallback((_project: any) => {
+    return { completed: 0, total: 0, percentage: 0 };
   }, []);
 
   // Обогащённая статистика проекта: читаем реальные данные из localStorage + полей проекта
