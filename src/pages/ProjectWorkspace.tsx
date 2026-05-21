@@ -1170,14 +1170,14 @@ export default function ProjectWorkspace() {
       <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Завершить проект?</DialogTitle>
+            <DialogTitle>Отправить на утверждение CEO?</DialogTitle>
             <DialogDescription>
-              После завершения проекта:
+              После отправки на утверждение:
               <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Статус проекта изменится на "Завершен"</li>
+                <li>Статус проекта изменится на "Ожидает утверждения бонусов"</li>
                 <li>Автоматически рассчитаются бонусы для всех членов команды</li>
-                <li>Уведомления будут отправлены всем участникам</li>
-                <li>Бонусы будут отображаться в разделе "Бонусы"</li>
+                <li>CEO увидит проект в разделе "Бонусы" и сможет утвердить выплаты</li>
+                <li>После одобрения CEO проект окончательно закрывается со статусом "Завершён"</li>
               </ul>
             </DialogDescription>
           </DialogHeader>
@@ -1190,14 +1190,18 @@ export default function ProjectWorkspace() {
                 if (!project || !user) return;
 
                 try {
-                  // Обновляем статус проекта
+                  // КРИТИЧНО: статус переходит в pending_payment_approval, а НЕ
+                  // сразу в completed. Иначе проект не появится в /bonuses у CEO
+                  // (там фильтр по pending_payment_approval). Финальное закрытие —
+                  // в Bonuses.tsx при кнопке «Утвердить бонусы» (status → completed).
                   const updatedProject = {
                     ...project,
-                    status: 'completed',
+                    status: 'pending_payment_approval',
                     notes: {
                       ...project.notes,
-                      status: 'completed',
-                      completedAt: new Date().toISOString()
+                      status: 'pending_payment_approval',
+                      submittedForPaymentApprovalAt: new Date().toISOString(),
+                      submittedForPaymentApprovalBy: user.id,
                     }
                   };
 
@@ -1246,8 +1250,8 @@ export default function ProjectWorkspace() {
                   }
 
                   toast({
-                    title: 'Проект завершен!',
-                    description: 'Бонусы автоматически рассчитаны и начислены команде.',
+                    title: 'Отправлено на утверждение CEO',
+                    description: 'Бонусы рассчитаны. После одобрения CEO в разделе «Бонусы» проект закроется окончательно.',
                   });
 
                   setShowCompleteDialog(false);

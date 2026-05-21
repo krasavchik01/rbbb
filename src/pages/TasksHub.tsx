@@ -13,13 +13,13 @@ import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Bot, CheckSquare, User } from 'lucide-react';
+import { CheckSquare, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { countPendingForUser } from '@/lib/aiTasks';
 import Tasks from '@/pages/Tasks';
 import MyTasks from '@/pages/MyTasks';
 
-const TAB_KEYS = ['all', 'mine', 'ai'] as const;
+const TAB_KEYS = ['all', 'mine'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export default function TasksHub() {
@@ -68,9 +68,6 @@ export default function TasksHub() {
               <TabsTrigger value="all" className="gap-2">
                 <CheckSquare className="w-3 h-3" /> Все задачи системы
               </TabsTrigger>
-              <TabsTrigger value="ai" className="gap-2">
-                <Bot className="w-3 h-3" /> Все от AI
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="mine" className="mt-4">
@@ -78,13 +75,6 @@ export default function TasksHub() {
             </TabsContent>
             <TabsContent value="all" className="mt-4">
               <Tasks />
-            </TabsContent>
-            <TabsContent value="ai" className="mt-4">
-              <MyTasks />
-              <div className="text-xs text-muted-foreground mt-3 px-4">
-                Подсказка: «Все от AI» сейчас показывает то же что «Мои». В таб «Все» внутри MyTasks
-                можно переключиться там же (если ты админ/CEO/зам.дир).
-              </div>
             </TabsContent>
           </Tabs>
         </CardContent>

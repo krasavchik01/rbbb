@@ -311,7 +311,11 @@ export default function ProjectApproval() {
           totalContractorsAmount: finances?.totalContractorsAmount || 0,
           bonusBase: finances?.bonusBase || 0,
           totalBonusAmount: finances?.totalBonusAmount || 0,
-          teamBonuses: {},
+          // КРИТИЧНО: заполняем teamBonuses на этапе апрува, а не оставляем {}.
+          // Раньше шла пустая мапа → при показе финансов в Bonuses.tsx и
+          // ProjectWorkspace бонусы по ролям были невидимы до самого закрытия.
+          // Берём то что уже посчитал calculateProjectFinances выше.
+          teamBonuses: finances?.teamBonuses || {},
           totalPaidBonuses: 0,
           totalCosts: finances?.totalCosts || 0,
           grossProfit: finances?.grossProfit || 0,

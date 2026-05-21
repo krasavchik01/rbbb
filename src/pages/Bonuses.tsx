@@ -34,27 +34,14 @@ export default function Bonuses() {
   const [filterType, setFilterType] = useState<'all' | 'project' | 'kpi' | 'annual'>('all');
   const [draftAdjustments, setDraftAdjustments] = useState<Record<string, Record<string, string>>>({});
 
-  // Проверка прав доступа - только CEO и deputy_director могут видеть бонусы
+  // Полный обзор всей фирмы — только CEO и deputy_director (через permission VIEW_ALL_BONUSES).
+  // Утверждение выплат — только CEO/admin.
+  // Сотрудник без полного доступа всё равно может зайти и увидеть СВОИ бонусы — это
+  // «персональный» режим (personalView). Закрытая страница для не-CEO была неверным
+  // решением: сотрудники имели право знать сколько им начислено за их проекты.
   const canViewBonuses = checkPermission('VIEW_ALL_BONUSES');
   const canApproveBonusPayout = user?.role === 'ceo' || user?.role === 'admin';
-  
-  if (!canViewBonuses) {
-    return (
-      <div className="space-y-6 p-4 md:p-6">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Gift className="w-8 h-8" />
-            Бонусы
-          </h1>
-        </div>
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground text-lg">
-            У вас нет доступа к просмотру бонусов. Доступ имеют только генеральный директор и заместитель директора.
-          </p>
-        </Card>
-      </div>
-    );
-  }
+  const personalView = !canViewBonuses;
 
   const projectsAwaitingApproval = useMemo(() => {
     return projects.filter((project: any) => (project?.notes?.status || project?.status) === 'pending_payment_approval');
@@ -198,8 +185,11 @@ export default function Bonuses() {
       }
     });
 
-    return bonuses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [projects, employees]);
+    // В персональном режиме (обычный сотрудник без VIEW_ALL_BONUSES) показываем
+    // только его собственные начисления.
+    const ownerFiltered = personalView && user ? bonuses.filter((b) => b.employeeId === user.id) : bonuses;
+    return ownerFiltered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [projects, employees, personalView, user]);
 
   // Фильтрация бонусов
   const filteredBonuses = useMemo(() => {
@@ -296,7 +286,7 @@ export default function Bonuses() {
         ))}
       </div>
 
-      {projectsAwaitingApproval.length > 0 && (
+      {!personalView && projectsAwaitingApproval.length > 0 && (
         <div className="space-y-3">
           <div>
             <h2 className="text-lg font-semibold">Ожидают финального утверждения CEO</h2>
