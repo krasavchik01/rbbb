@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { AIErrorBoundary } from '@/components/AIErrorBoundary';
 const Index = lazy(() => import('@/pages/Index'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Projects = lazy(() => import('@/pages/Projects-simple'));
@@ -386,7 +387,9 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner', 'hr']}>
                   <Layout>
-                    <AIChat />
+                    <AIErrorBoundary>
+                      <AIChat />
+                    </AIErrorBoundary>
                   </Layout>
                 </ProtectedRoute>
               }
@@ -396,7 +399,9 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <MyTasks />
+                    <AIErrorBoundary>
+                      <MyTasks />
+                    </AIErrorBoundary>
                   </Layout>
                 </ProtectedRoute>
               }
