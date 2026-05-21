@@ -43,6 +43,8 @@ const ProjectSurveyResults = lazy(() => import('@/pages/ProjectSurveyResults'));
 const ImportTimesheet = lazy(() => import('@/pages/ImportTimesheet'));
 const AIChat = lazy(() => import('@/pages/AIChat'));
 const MyTasks = lazy(() => import('@/pages/MyTasks'));
+const TasksHub = lazy(() => import('@/pages/TasksHub'));
+const SurveyHub = lazy(() => import('@/pages/SurveyHub'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -157,11 +159,25 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <Tasks />
+                    <TasksHub />
                   </Layout>
                 </ProtectedRoute>
               }
             />
+            <Route path="/my-tasks" element={<Navigate to="/tasks?tab=mine" replace />} />
+            <Route
+              path="/survey"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <SurveyHub />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/project-survey" element={<Navigate to="/survey?tab=fill" replace />} />
+            <Route path="/project-survey-results" element={<Navigate to="/survey?tab=results" replace />} />
+            <Route path="/import-timesheet" element={<Navigate to="/survey?tab=import" replace />} />
             <Route
               path="/attendance"
               element={
@@ -352,36 +368,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/project-survey"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ProjectSurvey />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/project-survey-results"
-              element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner']}>
-                  <Layout>
-                    <ProjectSurveyResults />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/import-timesheet"
-              element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner', 'hr']}>
-                  <Layout>
-                    <ImportTimesheet />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* Старые маршруты /project-survey*, /import-timesheet — теперь
+                redirect → /survey?tab=... (определены выше в файле). */}
             <Route
               path="/ai"
               element={
@@ -394,18 +382,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/my-tasks"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <AIErrorBoundary>
-                      <MyTasks />
-                    </AIErrorBoundary>
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* /my-tasks — теперь redirect → /tasks?tab=mine (определён выше). */}
             <Route path="/404" element={<NotFound />} />
             <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>

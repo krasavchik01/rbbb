@@ -52,15 +52,26 @@ interface MenuItem {
   excludeRoles?: UserRole[];
 }
 
+// Структура sidebar: по доменам (после user-feedback session 2026-05-21).
+// AI-ассистент в самом верху как «универсальный пульт».
 const SECTIONS: { label: string; items: MenuItem[] }[] = [
   {
     label: 'Основное',
     items: [
-      { title: 'Дашборд',          url: '/',                  icon: LayoutDashboard },
-      { title: 'Проекты',          url: '/projects',          icon: FolderOpen },
-      { title: 'Уведомления',      url: '/notifications',     icon: Bell },
-      { title: 'Служебные записки', url: '/service-memos',    icon: ClipboardList, excludeRoles: ['procurement'] },
-      { title: 'Аудит',            url: '/audit',             icon: BookOpen,      excludeRoles: ['procurement'] },
+      { title: 'AI-ассистент «RB»', url: '/ai',           icon: Bot,             allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
+      { title: 'Дашборд',           url: '/',             icon: LayoutDashboard },
+      { title: 'Уведомления',       url: '/notifications', icon: Bell },
+    ],
+  },
+  {
+    label: 'Проекты',
+    items: [
+      { title: 'Список проектов',      url: '/projects',                   icon: FolderOpen },
+      { title: 'Опрос и команды',      url: '/survey',                     icon: ClipboardCheck, excludeRoles: ['procurement'] },
+      { title: 'Создать проект',       url: '/create-project-procurement', icon: FileText,    allowedRoles: ['procurement'] },
+      { title: 'Тендеры',              url: '/tenders',                    icon: Award,       allowedRoles: ['procurement'] },
+      { title: 'Утверждение проектов', url: '/project-approval',           icon: CheckSquare, allowedRoles: ['deputy_director','ceo'] },
+      { title: 'Аудит',                url: '/audit',                      icon: BookOpen,    excludeRoles: ['procurement'] },
       {
         title: 'МСФО 9 / ECL',
         url: '/ifrs9',
@@ -70,23 +81,26 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     ],
   },
   {
-    label: 'Работа',
+    label: 'Задачи и календарь',
     items: [
-      { title: 'Создать проект',       url: '/create-project-procurement', icon: FileText,    allowedRoles: ['procurement'] },
-      { title: 'Тендеры',              url: '/tenders',                    icon: Award,       allowedRoles: ['procurement'] },
-      { title: 'Утверждение проектов', url: '/project-approval',           icon: CheckSquare, allowedRoles: ['deputy_director','ceo'] },
-      { title: 'HR',                   url: '/hr',                         icon: UserCheck,   allowedRoles: ['hr'] },
-      { title: 'Тайм-щиты',            url: '/timesheets',                 icon: Clock,       excludeRoles: ['procurement','ceo','deputy_director'] },
-      { title: 'Посещаемость',         url: '/attendance',                 icon: Activity,    allowedRoles: ['ceo','deputy_director','hr','admin'] },
-      { title: 'Бонусы',               url: '/bonuses',                    icon: Gift,        permission: 'VIEW_BONUSES', excludeRoles: ['procurement'] },
-      { title: 'Аналитика',            url: '/analytics',                  icon: TrendingUp,  allowedRoles: ['partner','manager_1','manager_2','manager_3','deputy_director','ceo','admin'] },
-      { title: 'Календарь',            url: '/calendar',                   icon: Calendar,    excludeRoles: ['procurement'] },
-      { title: 'Задачи',               url: '/tasks',                      icon: CheckSquare, excludeRoles: ['procurement'] },
-      { title: 'Опрос по проектам',    url: '/project-survey',             icon: ClipboardCheck, excludeRoles: ['deputy_director','ceo','admin'] },
-      { title: 'Опрос: результаты',    url: '/project-survey-results',     icon: ClipboardCheck, allowedRoles: ['deputy_director','ceo','admin','partner'] },
-      { title: 'Импорт таймщитов',     url: '/import-timesheet',           icon: FileSpreadsheet, allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
-      { title: 'AI-ассистент «RB»',    url: '/ai',                         icon: Bot, allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
-      { title: 'Мои задачи от AI',     url: '/my-tasks',                   icon: ListChecks },
+      { title: 'Задачи',     url: '/tasks',    icon: CheckSquare, excludeRoles: ['procurement'] },
+      { title: 'Календарь',  url: '/calendar', icon: Calendar,    excludeRoles: ['procurement'] },
+    ],
+  },
+  {
+    label: 'Команда',
+    items: [
+      { title: 'HR',           url: '/hr',         icon: UserCheck, allowedRoles: ['hr'] },
+      { title: 'Посещаемость', url: '/attendance', icon: Activity,  allowedRoles: ['ceo','deputy_director','hr','admin'] },
+      { title: 'Служебные записки', url: '/service-memos', icon: ClipboardList, excludeRoles: ['procurement'] },
+    ],
+  },
+  {
+    label: 'Финансы',
+    items: [
+      { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
+      { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       permission: 'VIEW_BONUSES', excludeRoles: ['procurement'] },
+      { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['partner','manager_1','manager_2','manager_3','deputy_director','ceo','admin'] },
     ],
   },
   {
@@ -164,7 +178,7 @@ export function AppSidebar() {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </Badge>
             )}
-            {item.url === '/my-tasks' && aiTasksCount > 0 && (
+            {item.url === '/tasks' && aiTasksCount > 0 && (
               <Badge
                 variant="destructive"
                 className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
@@ -179,7 +193,7 @@ export function AppSidebar() {
               {unreadCount}
             </Badge>
           )}
-          {!collapsed && item.url === '/my-tasks' && aiTasksCount > 0 && (
+          {!collapsed && item.url === '/tasks' && aiTasksCount > 0 && (
             <Badge variant="destructive" className="ml-auto text-xs">
               {aiTasksCount}
             </Badge>
