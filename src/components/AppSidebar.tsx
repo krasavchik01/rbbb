@@ -71,13 +71,6 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
       { title: 'Создать проект',       url: '/create-project-procurement', icon: FileText,    allowedRoles: ['procurement'] },
       { title: 'Тендеры',              url: '/tenders',                    icon: Award,       allowedRoles: ['procurement'] },
       { title: 'Утверждение проектов', url: '/project-approval',           icon: CheckSquare, allowedRoles: ['deputy_director','ceo'] },
-      { title: 'Аудит',                url: '/audit',                      icon: BookOpen,    excludeRoles: ['procurement'] },
-      {
-        title: 'МСФО 9 / ECL',
-        url: '/ifrs9',
-        icon: Calculator,
-        allowedRoles: ['partner','manager_1','manager_2','manager_3','supervisor_1','supervisor_2','supervisor_3','tax_specialist_1','tax_specialist_2','assistant_1','assistant_2','assistant_3','admin'],
-      },
     ],
   },
   {

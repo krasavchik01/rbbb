@@ -31,10 +31,11 @@ const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const MSUKCompliance = lazy(() => import('@/pages/MSUKCompliance'));
 const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
-const Audit = lazy(() => import('@/pages/Audit'));
+// Audit и IFRS9 удалены из навигации по решению юзера (2026-05-21):
+// «усложнил с аудитом и процедурами МСФО, нагружает систему, убрать».
+// Файлы src/pages/Audit.tsx и src/pages/IFRS9.tsx сохранены на случай восстановления.
 const DemoUsersManagement = lazy(() => import('@/pages/DemoUsersManagement'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
-const IFRS9 = lazy(() => import('@/pages/IFRS9'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
@@ -318,16 +319,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/audit"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Audit />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* /audit удалён по решению юзера. Redirect на главную, чтобы старые ссылки не падали. */}
+            <Route path="/audit" element={<Navigate to="/" replace />} />
             <Route
               path="/demo-users"
               element={
@@ -358,16 +351,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/ifrs9"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <IFRS9 />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* /ifrs9 удалён по решению юзера. Redirect на главную. */}
+            <Route path="/ifrs9" element={<Navigate to="/" replace />} />
             {/* Старые маршруты /project-survey*, /import-timesheet — теперь
                 redirect → /survey?tab=... (определены выше в файле). */}
             <Route

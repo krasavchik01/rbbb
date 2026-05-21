@@ -22,8 +22,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/tasks': 'Задачи',
   '/notifications': 'Уведомления',
   '/service-memos': 'Служебные записки',
-  '/audit': 'Аудит МСА',
-  '/ifrs9': 'МСФО 9 / ECL',
   '/project-approval': 'Утверждение проектов',
   '/tenders': 'Тендеры',
   '/settings': 'Настройки',
