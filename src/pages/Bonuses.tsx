@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useProjects } from '@/hooks/useSupabaseData';
@@ -81,6 +82,14 @@ export default function Bonuses() {
     }
     return { total: projectTasks.length, done, overdue, inProgress, blocked };
   };
+  const getTasksForProject = (projectId: string): Task[] => tasks.filter((t: Task) => t.project_id === projectId);
+
+  // CEO может менять «общий процент бонуса от базы» на лету (по умолчанию 10).
+  const [draftBonusPercent, setDraftBonusPercent] = useState<Record<string, string>>({});
+  // CEO может «скрыть» бонус сотрудника от него самого (personal view не покажет).
+  const [draftHidden, setDraftHidden] = useState<Record<string, Record<string, boolean>>>({});
+  // Раскрытие списка задач проекта (по умолчанию свёрнут).
+  const [tasksOpen, setTasksOpen] = useState<Record<string, boolean>>({});
 
   // Полный обзор всей фирмы — только CEO и deputy_director (через permission VIEW_ALL_BONUSES).
   // Утверждение выплат — только CEO/admin.
@@ -109,8 +118,19 @@ export default function Bonuses() {
     if (!user || !canApproveBonusPayout) return;
 
     try {
-      const finances = calculateProjectFinances(project);
+      // Применяем кастомный процент бонуса от базы (CEO мог поменять с 10% на меньше/больше)
+      const customPercentRaw = draftBonusPercent[project.id];
+      const customPercent =
+        customPercentRaw !== undefined && customPercentRaw !== '' && !isNaN(Number(customPercentRaw))
+          ? Number(customPercentRaw)
+          : (project.finances?.bonusPercent ?? 10);
+      const projectWithPercent = {
+        ...project,
+        finances: { ...(project.finances || {}), bonusPercent: customPercent },
+      };
+      const finances = calculateProjectFinances(projectWithPercent);
       const adjustments = draftAdjustments[project.id] || {};
+      const hiddenMap = draftHidden[project.id] || {};
       const adjustedTeamBonuses = { ...finances.teamBonuses };
 
       Object.entries(adjustments).forEach(([employeeId, rawAmount]) => {
@@ -126,6 +146,20 @@ export default function Bonuses() {
         };
       });
 
+      // Применяем «скрыть от сотрудника» — записываем флаг в каждый bonus
+      Object.entries(hiddenMap).forEach(([employeeId, isHidden]) => {
+        if (adjustedTeamBonuses[employeeId]) {
+          adjustedTeamBonuses[employeeId] = { ...adjustedTeamBonuses[employeeId], hiddenFromEmployee: !!isHidden };
+        }
+      });
+      // Также сохраним предыдущий hiddenFromEmployee для тех кого не трогали
+      Object.keys(adjustedTeamBonuses).forEach((employeeId) => {
+        if (hiddenMap[employeeId] === undefined) {
+          const prev = project?.finances?.teamBonuses?.[employeeId]?.hiddenFromEmployee;
+          if (prev) adjustedTeamBonuses[employeeId] = { ...adjustedTeamBonuses[employeeId], hiddenFromEmployee: true };
+        }
+      });
+
       const totalPaidBonuses = Object.values(adjustedTeamBonuses).reduce((sum, bonus) => sum + (bonus.amount || 0), 0);
       const totalCosts = totalPaidBonuses + finances.totalContractorsAmount + finances.preExpenseAmount;
       const grossProfit = finances.amountWithoutVAT - totalCosts;
@@ -133,6 +167,7 @@ export default function Bonuses() {
 
       const updatedFinances = {
         ...finances,
+        bonusPercent: customPercent,
         teamBonuses: adjustedTeamBonuses,
         totalPaidBonuses,
         totalCosts,
@@ -213,6 +248,8 @@ export default function Bonuses() {
         const finances = calculateProjectFinances(project);
         const projectStatus = project?.notes?.status || project?.status;
         Object.entries(finances.teamBonuses).forEach(([userId, bonus]: [string, any]) => {
+          // CEO мог пометить бонус как «скрыть от сотрудника» — в personal view не показываем.
+          if (personalView && bonus?.hiddenFromEmployee) return;
           const employee = employees.find((e: any) => e.id === userId);
           if (employee) {
             bonuses.push({
@@ -342,9 +379,20 @@ export default function Bonuses() {
           </div>
 
           {projectsAwaitingApproval.map((project: any) => {
-            const finances = calculateProjectFinances(project);
+            // Используем draft процент если CEO его менял; иначе текущий из проекта; иначе 10.
+            const draftPercent = draftBonusPercent[project.id];
+            const effectivePercent =
+              draftPercent !== undefined && draftPercent !== '' && !isNaN(Number(draftPercent))
+                ? Number(draftPercent)
+                : (project.finances?.bonusPercent ?? 10);
+            const projectForCalc = {
+              ...project,
+              finances: { ...(project.finances || {}), bonusPercent: effectivePercent },
+            };
+            const finances = calculateProjectFinances(projectForCalc);
             const team = project.team || project.notes?.team || [];
             const notes = project.notes || {};
+            const projectTasks = getTasksForProject(project.id);
             const clientName = notes.clientName || notes.client?.name || project.clientName;
             const ourCompany = notes.ourCompany || notes.companyName;
             const contractNumber = notes.contractNumber || notes.contract?.number;
@@ -396,8 +444,8 @@ export default function Bonuses() {
                   <p className="text-xs text-muted-foreground italic">Задачи в системе не создавались (или импорт постфактум).</p>
                 )}
 
-                {/* Прозрачная формула расчёта */}
-                <div className="text-xs bg-muted/40 rounded-md px-3 py-2 space-y-1">
+                {/* Прозрачная формула расчёта с редактируемым процентом */}
+                <div className="text-xs bg-muted/40 rounded-md px-3 py-2 space-y-2">
                   <div className="font-medium text-foreground">Как считается бонус:</div>
                   <div>
                     Сумма без НДС <b>{(finances.amountWithoutVAT || 0).toLocaleString('ru-RU')}</b>
@@ -405,11 +453,72 @@ export default function Bonuses() {
                     {finances.totalContractorsAmount > 0 && <> − ГПХ (<b>{(finances.totalContractorsAmount || 0).toLocaleString('ru-RU')}</b>)</>}
                     {' '}= База бонусов <b>{(finances.bonusBase || 0).toLocaleString('ru-RU')}</b>
                   </div>
-                  <div>
-                    База × {(project.finances?.bonusPercent ?? 10)}% = Общий пул бонусов <b className="text-primary">{(finances.totalBonusAmount || 0).toLocaleString('ru-RU')} {currency}</b>
-                    <span className="text-muted-foreground"> — распределяется ниже по ролям</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span>База ×</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={50}
+                      step={0.5}
+                      className="h-7 w-20 text-right"
+                      value={draftPercent ?? String(effectivePercent)}
+                      onChange={(e) => setDraftBonusPercent((prev) => ({ ...prev, [project.id]: e.target.value }))}
+                      disabled={!canApproveBonusPayout}
+                      title="Можно поставить меньше или больше — это процент бонуса от базы"
+                    />
+                    <span>%</span>
+                    <span>= Общий пул бонусов <b className="text-primary">{(finances.totalBonusAmount || 0).toLocaleString('ru-RU')} {currency}</b></span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    Менять процент → плановые суммы участников ниже пересчитаются автоматически. Каждого можно дополнительно корректировать вручную.
                   </div>
                 </div>
+
+                {/* Раскрывающийся список задач: «как было сделано» */}
+                {projectTasks.length > 0 && (
+                  <div className="border rounded-md">
+                    <button
+                      onClick={() => setTasksOpen((s) => ({ ...s, [project.id]: !s[project.id] }))}
+                      className="w-full px-3 py-2 text-xs flex items-center justify-between hover:bg-muted/30"
+                    >
+                      <span className="font-medium">Задачи проекта ({projectTasks.length}) — как было сделано</span>
+                      <span className="text-muted-foreground">{tasksOpen[project.id] ? '▼' : '▶'}</span>
+                    </button>
+                    {tasksOpen[project.id] && (
+                      <div className="divide-y border-t text-xs">
+                        {projectTasks.map((t: Task) => {
+                          const assigneeNames = (t.assignees || [])
+                            .map((aid) => employees.find((e: any) => e.id === aid)?.name)
+                            .filter(Boolean)
+                            .join(', ');
+                          const overdue = t.due_at && t.status !== 'done' && new Date(t.due_at).getTime() < Date.now();
+                          const statusTone =
+                            t.status === 'done' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            t.status === 'blocked' ? 'bg-red-50 text-red-700 border-red-200' :
+                            t.status === 'in_progress' || t.status === 'in_review' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            'bg-slate-50 text-slate-600 border-slate-200';
+                          const statusLabel = {
+                            backlog: 'бэклог', todo: 'к работе', in_progress: 'в работе',
+                            in_review: 'на проверке', done: 'готово', blocked: 'заблокирована',
+                          }[t.status] || t.status;
+                          return (
+                            <div key={t.id} className="px-3 py-2 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className={`text-[10px] ${statusTone}`}>{statusLabel}</Badge>
+                              <span className="flex-1 min-w-0">{t.title}</span>
+                              {assigneeNames && <span className="text-muted-foreground">→ {assigneeNames}</span>}
+                              {t.due_at && (
+                                <span className={overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                                  до {format(new Date(t.due_at), 'dd.MM.yyyy')}
+                                  {overdue && ' • просрочена'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-4 grid gap-3">
                   {team.map((member: any) => {
@@ -448,16 +557,36 @@ export default function Bonuses() {
                             <span className="text-muted-foreground italic">без часов</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Input
-                            value={inputValue}
-                            onChange={(e) => updateDraftAmount(project.id, userId, e.target.value)}
-                            inputMode="decimal"
-                            disabled={!canApproveBonusPayout}
-                            className="text-right"
-                            title="Окончательная сумма бонуса (можно скорректировать вручную)"
-                          />
-                          <span className="text-xs text-muted-foreground">{currency}</span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Input
+                              value={inputValue}
+                              onChange={(e) => updateDraftAmount(project.id, userId, e.target.value)}
+                              inputMode="decimal"
+                              disabled={!canApproveBonusPayout}
+                              className="text-right h-8"
+                              title="Окончательная сумма бонуса (можно скорректировать вручную)"
+                            />
+                            <span className="text-xs text-muted-foreground">{currency}</span>
+                          </div>
+                          {canApproveBonusPayout && (
+                            <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                              <Checkbox
+                                checked={
+                                  draftHidden[project.id]?.[userId] ??
+                                  !!project?.finances?.teamBonuses?.[userId]?.hiddenFromEmployee
+                                }
+                                onCheckedChange={(v) =>
+                                  setDraftHidden((prev) => ({
+                                    ...prev,
+                                    [project.id]: { ...(prev[project.id] || {}), [userId]: !!v },
+                                  }))
+                                }
+                                className="h-3 w-3"
+                              />
+                              скрыть от сотрудника
+                            </label>
+                          )}
                         </div>
                       </div>
                     );
