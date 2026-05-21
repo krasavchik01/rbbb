@@ -74,15 +74,23 @@ function estCost({ input_tokens = 0, output_tokens = 0, cache_read_input_tokens 
 const TOOLS = [
   {
     name: 'list_projects',
-    description: 'Список проектов фирмы с опциональным фильтром по статусу и/или поисковой строке.',
+    description: 'Список проектов фирмы с опциональным фильтром по статусу, поиску и/или нашему бренду (МАК/RB IT/Parker Russell/Fin Consulting/Andersonkz и т.п.).',
     input_schema: {
       type: 'object',
       properties: {
         status: { type: 'string', description: 'Опционально: planning | in_progress | completed | cancelled | new | pending_approval | ready_to_complete | approved' },
-        search: { type: 'string', description: 'Опционально: подстрока для поиска в названии проекта или клиенте' },
-        limit: { type: 'integer', description: 'Сколько вернуть, default 20, max 100' },
+        search: { type: 'string', description: 'Опционально: подстрока для поиска в названии проекта ИЛИ клиента' },
+        ourCompany: { type: 'string', description: 'Опционально: бренд нашей фирмы (например, «МАК», «RB IT», «Parker Russell»). Ищется по notes.ourCompany через ILIKE %X%.' },
+        periodFrom: { type: 'string', description: 'Опционально ISO дата: вернуть проекты у которых notes.periodFrom >= этого.' },
+        periodTo:   { type: 'string', description: 'Опционально ISO дата: вернуть проекты у которых notes.periodTo <= этого.' },
+        limit: { type: 'integer', description: 'Сколько вернуть, default 20, max 200' },
       },
     },
+  },
+  {
+    name: 'list_companies',
+    description: 'Список НАШИХ собственных юр.лиц / брендов под которыми работает фирма (RB Partners IT Audit, Russell Bedford A+ Partners, Parker Russell, Fin Consulting, Andersonkz). Их 5. ЭТО НЕ КЛИЕНТЫ — это наши компании.',
+    input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'get_project',
@@ -171,7 +179,7 @@ const TOOLS = [
       properties: {
         type: {
           type: 'string',
-          enum: ['projects_by_status', 'projects_started_completed', 'employees_workload', 'survey_completion', 'ai_spending'],
+          enum: ['projects_by_status', 'projects_started_completed', 'employees_workload', 'survey_completion', 'ai_spending', 'projects_by_our_company'],
         },
       },
       required: ['type'],
@@ -282,14 +290,22 @@ async function execTool(supabase, ctx, name, input) {
   try {
     switch (name) {
       case 'list_projects': {
-        // Схема: projects(id, name, status, updated_at, notes). Имя клиента и
-        // прочие поля сидят в JSONB-колонке notes. Достаём их в JS, чтобы
-        // не зависеть от названий колонок.
-        let q = supabase.from('projects').select('id, name, status, updated_at, notes').limit(Math.min(input.limit || 20, 100));
+        // Схема: projects(id, name, status, updated_at, notes JSONB).
+        // notes.ourCompany — наш бренд ("МАК", "RB IT" и т.п.).
+        // notes.clientName — имя клиента.
+        // notes.periodFrom / periodTo — даты периода аудита.
+        // Тяжёлая фильтрация: ourCompany/clientName/periods сидят в JSONB,
+        // поэтому достаём шире и фильтруем в JS. Лимит безопасности — 500.
+        const fetchLimit = Math.min((input.limit || 20) * 5, 500);
+        let q = supabase.from('projects').select('id, name, status, updated_at, notes').limit(fetchLimit);
         if (input.status) q = q.eq('status', input.status);
         if (input.search) q = q.ilike('name', `%${input.search}%`);
         const { data, error } = await q;
         if (error) return { error: error.message };
+        const searchLower = input.search?.toLowerCase();
+        const ourCompanyLower = input.ourCompany?.toLowerCase();
+        const periodFrom = input.periodFrom || null;
+        const periodTo = input.periodTo || null;
         const parsed = (data || []).map((p) => {
           const notes = typeof p.notes === 'string' ? safeParse(p.notes) : p.notes;
           return {
@@ -298,19 +314,38 @@ async function execTool(supabase, ctx, name, input) {
             status: p.status,
             updated_at: p.updated_at,
             clientName: notes?.clientName || notes?.client?.name || null,
+            ourCompany: notes?.ourCompany || notes?.companyName || null,
             periodFrom: notes?.periodFrom || notes?.startDate || null,
             periodTo: notes?.periodTo || notes?.endDate || null,
             teamSize: Array.isArray(notes?.team) ? notes.team.length : (Array.isArray(notes?.teamIds) ? notes.teamIds.length : null),
           };
         });
-        // Если был поиск по client — дофильтруем в JS (т.к. он в JSONB)
-        const filtered = input.search
-          ? parsed.filter((p) =>
-              (p.name && p.name.toLowerCase().includes(input.search.toLowerCase())) ||
-              (p.clientName && p.clientName.toLowerCase().includes(input.search.toLowerCase())),
-            )
-          : parsed;
-        return { projects: filtered };
+        const filtered = parsed.filter((p) => {
+          if (searchLower) {
+            const nameOk = p.name && p.name.toLowerCase().includes(searchLower);
+            const clientOk = p.clientName && p.clientName.toLowerCase().includes(searchLower);
+            if (!nameOk && !clientOk) return false;
+          }
+          if (ourCompanyLower) {
+            if (!p.ourCompany || !p.ourCompany.toLowerCase().includes(ourCompanyLower)) return false;
+          }
+          if (periodFrom && p.periodFrom && p.periodFrom < periodFrom) return false;
+          if (periodTo && p.periodTo && p.periodTo > periodTo) return false;
+          return true;
+        });
+        return { projects: filtered.slice(0, input.limit || 20), totalFound: filtered.length };
+      }
+      case 'list_companies': {
+        const { data, error } = await supabase
+          .from('companies')
+          .select('id, name, brand_color, active')
+          .eq('active', true)
+          .order('name');
+        if (error) return { error: error.message };
+        return {
+          companies: data || [],
+          note: 'Это НАШИ собственные юр.лица (5 штук). Плюс в notes.ourCompany у каждого проекта есть бренд-сокращение (МАК, RB IT, и т.п.) — это другая система, см. через list_projects(ourCompany=...).',
+        };
       }
       case 'get_project': {
         const { data, error } = await supabase.from('projects').select('id, name, status, updated_at, notes').eq('id', input.projectId).maybeSingle();
@@ -324,13 +359,17 @@ async function execTool(supabase, ctx, name, input) {
             status: data.status,
             updated_at: data.updated_at,
             clientName: notes?.clientName || notes?.client?.name || null,
+            ourCompany: notes?.ourCompany || notes?.companyName || null,
             periodFrom: notes?.periodFrom || notes?.startDate || null,
             periodTo: notes?.periodTo || notes?.endDate || null,
+            contractNumber: notes?.contractNumber || null,
+            contractDate: notes?.contractDate || null,
             team: Array.isArray(notes?.team) ? notes.team.map((m) => ({ id: m.userId || m.id, name: m.name, role: m.role })) : [],
             description: notes?.description || null,
             manager: notes?.managerName || notes?.manager || null,
             partner: notes?.partnerName || notes?.partner || null,
             budget: notes?.finances?.amountWithoutVAT || notes?.budget || null,
+            currency: notes?.currency || null,
           },
         };
       }
@@ -481,6 +520,20 @@ async function execTool(supabase, ctx, name, input) {
             const counts = {};
             for (const p of data || []) counts[p.status || 'unknown'] = (counts[p.status || 'unknown'] || 0) + 1;
             return { type: 'projects_by_status', counts, total: (data || []).length };
+          }
+          case 'projects_by_our_company': {
+            // Группировка по notes.ourCompany — сколько проектов в каждом нашем бренде.
+            const { data } = await supabase.from('projects').select('id, status, notes').limit(2000);
+            const counts = {};
+            const byStatus = {};
+            for (const p of data || []) {
+              const notes = typeof p.notes === 'string' ? safeParse(p.notes) : p.notes;
+              const oc = notes?.ourCompany || notes?.companyName || '(не указано)';
+              counts[oc] = (counts[oc] || 0) + 1;
+              byStatus[oc] = byStatus[oc] || {};
+              byStatus[oc][p.status || 'unknown'] = (byStatus[oc][p.status || 'unknown'] || 0) + 1;
+            }
+            return { type: 'projects_by_our_company', counts, by_status: byStatus, total: (data || []).length };
           }
           case 'projects_started_completed': {
             const { data } = await supabase.from('projects').select('status, updated_at');
@@ -742,6 +795,14 @@ function buildSystemPrompt(memorySnippets, verifiedRole) {
 - никогда не предполагает что юзер хочет — если задача неясна, переспрашивает.
 
 СТРУКТУРА СИСТЕМЫ
+
+0. **НАШИ КОМПАНИИ И БРЕНДЫ (важно для поиска):**
+   - В фирме 5 собственных юр.лиц (таблица companies): RB Partners IT Audit, Russell Bedford A+ Partners, Parker Russell, Fin Consulting, Andersonkz.
+   - Дополнительно у каждого проекта есть **бренд-сокращение** в notes.ourCompany. Известные бренды: «МАК», «RB IT», «RB», «Parker Russell», «Fin Consulting», «Andersonkz». Это короткие обозначения, которые используют сотрудники в речи. ВНИМАНИЕ: «МАК» — это НАШ бренд, не клиент, не аббревиатура даты!
+   - Если юзер пишет «проекты в МАК», «сколько у МАК», «команда МАК» — это **наш бренд ourCompany**. Вызывай list_projects(ourCompany='МАК'). НЕ ищи по дате! НЕ ищи в клиентах!
+   - Если юзер пишет название известного клиента (ТОО ..., АО ...) — это клиент, ищи через list_projects(search='...').
+   - Если не уверен, что юзер имеет в виду (наш бренд или клиент) — переспроси.
+
 1. Сотрудники (таблица employees): роли — ceo, deputy_director, partner, hr, manager, senior_assistant, assistant_1, assistant_2, admin.
    - Партнёры (partner): верхний уровень, ведут проекты, сами себе руководители.
    - Заместитель директора (deputy_director): операционное управление, апрув предложений.
@@ -763,8 +824,9 @@ function buildSystemPrompt(memorySnippets, verifiedRole) {
 
 ТВОИ ТУЛЫ
 ЧТЕНИЕ (доступно всегда):
-- list_projects: список проектов с фильтрами.
+- list_projects(status?, search?, ourCompany?, periodFrom?, periodTo?, limit?): список проектов с фильтрами. **ourCompany** = наш бренд (МАК/RB IT/Parker Russell/Fin Consulting/Andersonkz). periodFrom/periodTo — фильтр по диапазону аудиторского периода.
 - get_project: детали проекта (команда, клиент, период, бюджет).
+- list_companies: 5 наших юр.лиц.
 - list_employees: список сотрудников.
 - get_employee_workload: загрузка сотрудника.
 - list_survey_responses: статистика по опросу.
