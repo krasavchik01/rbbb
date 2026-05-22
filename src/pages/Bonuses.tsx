@@ -408,6 +408,34 @@ export default function Bonuses() {
     return { total, pending, approved, paid, count: allBonuses.length };
   }, [allBonuses]);
 
+  // Сводка фонда бонусов за период: месяц / квартал / год. Для CEO — общая
+  // картина нагрузки на фонд. Дата бонуса = date поля (updated_at проекта
+  // как правило соответствует утверждению), для выплат — paidAt.
+  // Все суммы в ₸. Период вычисляется от текущей даты назад.
+  const fundSummary = useMemo(() => {
+    const now = Date.now();
+    const DAY = 86400 * 1000;
+    const month30 = now - 30 * DAY;
+    const quarter90 = now - 90 * DAY;
+    const year365 = now - 365 * DAY;
+    const calc = (since: number) => {
+      let accrued = 0; // начислено (approved+paid+pending в этом периоде)
+      let paidSum = 0; // выплачено
+      let waitingPaid = 0; // одобрено, но не выплачено
+      let waitingApprove = 0; // ждёт CEO
+      for (const b of allBonuses) {
+        const d = new Date(b.date).getTime();
+        if (d < since) continue;
+        accrued += b.amount || 0;
+        if (b.status === 'paid') paidSum += b.amount || 0;
+        else if (b.status === 'approved') waitingPaid += b.amount || 0;
+        else if (b.status === 'pending') waitingApprove += b.amount || 0;
+      }
+      return { accrued, paid: paidSum, waitingPaid, waitingApprove };
+    };
+    return { month: calc(month30), quarter: calc(quarter90), year: calc(year365) };
+  }, [allBonuses]);
+
   // Бонусы по сотрудникам
   const bonusesByEmployee = useMemo(() => {
     const grouped: Record<string, { employee: any; total: number; bonuses: typeof allBonuses }> = {};
@@ -484,6 +512,47 @@ export default function Bonuses() {
             <b>Бонусы — зона CEO.</b> Если нужно изменить состав команды на проекте — перейди в{' '}
             <a href="/project-approval" className="underline font-medium">«Утверждение проектов»</a>, твою команду можно скорректировать пока проект не закрыт.
           </p>
+        </Card>
+      )}
+
+      {/* Фонд бонусов — динамика за период (для CEO/admin) */}
+      {canEditBonuses && !personalView && (
+        <Card className="p-4 border-0 shadow-sm">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" /> Фонд бонусов — нагрузка за период
+              </h3>
+              <p className="text-xs text-muted-foreground">Сколько уже выплачено, сколько ждёт выплаты, сколько ждёт твоего утверждения</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { label: 'За 30 дней', data: fundSummary.month },
+              { label: 'За квартал (90д)', data: fundSummary.quarter },
+              { label: 'За год (365д)', data: fundSummary.year },
+            ].map(({ label, data }) => (
+              <div key={label} className="rounded-lg bg-muted/30 p-3 space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">{label}</div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-muted-foreground">Начислено</span>
+                  <span className="font-bold">{data.accrued.toLocaleString('ru-RU')} ₸</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-emerald-700">✓ выплачено</span>
+                  <span className="font-medium text-emerald-700">{data.paid.toLocaleString('ru-RU')} ₸</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-blue-700">⏳ к выплате</span>
+                  <span className="font-medium text-blue-700">{data.waitingPaid.toLocaleString('ru-RU')} ₸</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-amber-700">⚠ ждёт CEO</span>
+                  <span className="font-medium text-amber-700">{data.waitingApprove.toLocaleString('ru-RU')} ₸</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
