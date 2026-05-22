@@ -91,14 +91,22 @@ export default function Bonuses() {
   // Раскрытие списка задач проекта (по умолчанию свёрнут).
   const [tasksOpen, setTasksOpen] = useState<Record<string, boolean>>({});
 
-  // Полный обзор всей фирмы — только CEO и deputy_director (через permission VIEW_ALL_BONUSES).
-  // Утверждение выплат — только CEO/admin.
-  // Сотрудник без полного доступа всё равно может зайти и увидеть СВОИ бонусы — это
-  // «персональный» режим (personalView). Закрытая страница для не-CEO была неверным
-  // решением: сотрудники имели право знать сколько им начислено за их проекты.
-  const canViewBonuses = checkPermission('VIEW_ALL_BONUSES');
-  const canApproveBonusPayout = user?.role === 'ceo' || user?.role === 'admin';
+  // Бонусы — зона ответственности CEO. Зам.ГД в бонусах НЕ участвует (по
+  // требованию 2026-05-22): её работа — собрать команду в начале и контролировать.
+  // Поэтому VIEW_ALL_BONUSES снято с deputy_director (роль её не получит здесь).
+  //
+  //  - canViewAllBonuses: видит и всю фирму, и утверждение, и таб «По сотрудникам»
+  //    с действиями (выплатить, скрыть, скорректировать). Только CEO/admin.
+  //  - personalView: обычный сотрудник без VIEW_ALL_BONUSES — видит только СВОИ бонусы.
+  //  - deputyView: зам.ГД — она тут «гость», только сводка. Видит подсказку идти
+  //    в /project-approval, если надо менять команду.
+  const isCeoOrAdmin = user?.role === 'ceo' || user?.role === 'admin';
+  const isDeputy = user?.role === 'deputy_director';
+  const canViewBonuses = isCeoOrAdmin || isDeputy || checkPermission('VIEW_ALL_BONUSES');
+  const canApproveBonusPayout = isCeoOrAdmin;
+  const canEditBonuses = isCeoOrAdmin;
   const personalView = !canViewBonuses;
+  const deputyView = isDeputy && !isCeoOrAdmin;
 
   const projectsAwaitingApproval = useMemo(() => {
     return projects.filter((project: any) => (project?.notes?.status || project?.status) === 'pending_payment_approval');
@@ -227,6 +235,61 @@ export default function Bonuses() {
     }
   };
 
+  // ─── Действия CEO над отдельным бонусом в табе «По сотрудникам» ─────────
+  // Эти три действия выполняются после того как проект уже закрыт CEO:
+  // выплата (фиксация факта), скрытие от сотрудника, корректировка суммы.
+  const patchTeamBonus = async (projectId: string, userId: string, patch: Record<string, unknown>) => {
+    const project = projects.find((p: any) => p.id === projectId);
+    if (!project) return;
+    const notes = typeof project.notes === 'string'
+      ? (() => { try { return JSON.parse(project.notes); } catch { return {}; } })()
+      : (project.notes || {});
+    const finances = notes.finances || project.finances || {};
+    const teamBonuses = { ...(finances.teamBonuses || {}) };
+    teamBonuses[userId] = { ...(teamBonuses[userId] || {}), ...patch };
+    const nextFinances = { ...finances, teamBonuses };
+    return updateProjectRecord(projectId, { finances: nextFinances });
+  };
+  const markBonusPaid = async (projectId: string, userId: string) => {
+    if (!canEditBonuses) return;
+    try {
+      await patchTeamBonus(projectId, userId, { paidAt: new Date().toISOString(), paidBy: user?.id, paidByName: user?.name });
+      toast({ title: 'Бонус выплачен', description: 'Запись сохранена.' });
+      await refreshProjects();
+    } catch (e: any) {
+      toast({ title: 'Ошибка', description: e?.message || 'Не удалось зафиксировать выплату', variant: 'destructive' });
+    }
+  };
+  const unmarkBonusPaid = async (projectId: string, userId: string) => {
+    if (!canEditBonuses) return;
+    try {
+      await patchTeamBonus(projectId, userId, { paidAt: null, paidBy: null, paidByName: null });
+      toast({ title: 'Отметка выплаты снята' });
+      await refreshProjects();
+    } catch (e: any) {
+      toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
+    }
+  };
+  const toggleBonusVisibility = async (projectId: string, userId: string, current: boolean) => {
+    if (!canEditBonuses) return;
+    try {
+      await patchTeamBonus(projectId, userId, { hiddenFromEmployee: !current });
+      await refreshProjects();
+    } catch (e: any) {
+      toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
+    }
+  };
+  const reduceBonusAmount = async (projectId: string, userId: string, newAmount: number) => {
+    if (!canEditBonuses) return;
+    try {
+      await patchTeamBonus(projectId, userId, { amount: newAmount, manuallyAdjusted: true });
+      toast({ title: 'Сумма обновлена' });
+      await refreshProjects();
+    } catch (e: any) {
+      toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
+    }
+  };
+
   // Получаем все бонусы из проектов
   const allBonuses = useMemo(() => {
     const bonuses: Array<{
@@ -241,6 +304,9 @@ export default function Bonuses() {
       status: 'pending' | 'approved' | 'paid';
       date: string;
       description: string;
+      hiddenFromEmployee?: boolean;
+      paidAt?: string | null;
+      role?: string | null;
     }> = [];
 
     projects.forEach((project: any) => {
@@ -252,6 +318,10 @@ export default function Bonuses() {
           if (personalView && bonus?.hiddenFromEmployee) return;
           const employee = employees.find((e: any) => e.id === userId);
           if (employee) {
+            // Статус: paid (выплачено) > approved (закрытый проект) > pending (ждёт CEO)
+            let status: 'pending' | 'approved' | 'paid' = 'pending';
+            if (bonus.paidAt) status = 'paid';
+            else if (projectStatus === 'completed') status = 'approved';
             bonuses.push({
               id: `${project.id}-${userId}`,
               projectId: project.id,
@@ -261,10 +331,14 @@ export default function Bonuses() {
               amount: bonus.amount || 0,
               percent: bonus.percent || 0,
               type: 'project',
-              status: projectStatus === 'completed' ? 'approved' : 'pending',
+              status,
               date: project.updated_at || project.created_at || new Date().toISOString(),
-              description: `Бонус за проект "${project.name || project.title}"`
-            });
+              description: `Бонус за проект "${project.name || project.title}"`,
+              // Дополнительные поля для CEO-действий
+              hiddenFromEmployee: !!bonus.hiddenFromEmployee,
+              paidAt: bonus.paidAt || null,
+              role: bonus.role || null,
+            } as any);
           }
         });
       }
@@ -371,7 +445,16 @@ export default function Bonuses() {
         ))}
       </div>
 
-      {!personalView && projectsAwaitingApproval.length > 0 && (
+      {deputyView && (
+        <Card className="p-4 border-amber-200 bg-amber-50/50 text-sm">
+          <p className="text-amber-900">
+            <b>Бонусы — зона CEO.</b> Если нужно изменить состав команды на проекте — перейди в{' '}
+            <a href="/project-approval" className="underline font-medium">«Утверждение проектов»</a>, твою команду можно скорректировать пока проект не закрыт.
+          </p>
+        </Card>
+      )}
+
+      {canEditBonuses && projectsAwaitingApproval.length > 0 && (
         <div className="space-y-3">
           <div>
             <h2 className="text-lg font-semibold">Ожидают финального утверждения CEO</h2>
@@ -684,41 +767,87 @@ export default function Bonuses() {
               <p className="font-medium text-muted-foreground">Данные не найдены</p>
             </Card>
           ) : (
-            bonusesByEmployee.map(({ employee, total, bonuses }) => (
+            bonusesByEmployee.map(({ employee, total, bonuses }) => {
+              const paidTotal = bonuses.filter((b) => b.status === 'paid').reduce((s, b) => s + b.amount, 0);
+              const pendingTotal = total - paidTotal;
+              return (
               <Card key={employee.id || employee.name} className="p-4 border-0 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
                       {(employee.name || 'N')[0]}
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-sm">{employee.name || 'Неизвестный сотрудник'}</h3>
-                      <p className="text-xs text-muted-foreground">{bonuses.length} бонусов</p>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-sm truncate">{employee.name || 'Неизвестный сотрудник'}</h3>
+                      <p className="text-xs text-muted-foreground">{bonuses.length} бонусов · выплачено {paidTotal.toLocaleString('ru-RU')} ₸ · ждёт {pendingTotal.toLocaleString('ru-RU')} ₸</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-primary">{(total || 0).toLocaleString('ru-RU')} ₸</p>
-                    <p className="text-xs text-muted-foreground">Итого</p>
+                    <p className="text-xs text-muted-foreground">Всего</p>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  {bonuses.map((bonus) => (
-                    <div key={bonus.id} className="flex items-center justify-between p-2.5 bg-muted/40 rounded-lg">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{bonus.projectName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}
-                        </p>
+                  {bonuses.map((bonus: any) => {
+                    const isPaid = bonus.status === 'paid';
+                    return (
+                    <div key={bonus.id} className={`p-2.5 rounded-lg ${isPaid ? 'bg-emerald-50/50 border border-emerald-100' : 'bg-muted/40'}`}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{bonus.projectName}</p>
+                          <p className="text-xs text-muted-foreground flex flex-wrap gap-x-2">
+                            <span>{format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}</span>
+                            {bonus.role && <span>· {bonus.role}</span>}
+                            {bonus.hiddenFromEmployee && <span className="text-amber-700">· 🙈 скрыт от сотрудника</span>}
+                            {bonus.paidAt && <span className="text-emerald-700">· выплачено {format(new Date(bonus.paidAt), 'dd.MM.yyyy', { locale: ru })}</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {getStatusBadge(bonus.status)}
+                          {canEditBonuses ? (
+                            <Input
+                              type="number"
+                              value={bonus.amount}
+                              onChange={(e) => {
+                                const v = Number(e.target.value);
+                                if (Number.isFinite(v) && v >= 0) reduceBonusAmount(bonus.projectId, bonus.employeeId, v);
+                              }}
+                              className="w-32 h-7 text-right text-sm"
+                              disabled={isPaid}
+                              title={isPaid ? 'Бонус уже выплачен — для коррекции снимите отметку выплаты' : 'Изменить сумму (CEO может сократить)'}
+                            />
+                          ) : (
+                            <span className="font-semibold text-sm">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                        {getStatusBadge(bonus.status)}
-                        <span className="font-semibold text-sm">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</span>
-                      </div>
+                      {canEditBonuses && (
+                        <div className="flex items-center gap-2 mt-2 flex-wrap text-xs">
+                          {!isPaid ? (
+                            <Button size="sm" variant="default" className="h-6 px-2 text-xs" onClick={() => markBonusPaid(bonus.projectId, bonus.employeeId)}>
+                              <CheckCircle className="w-3 h-3 mr-1" /> Выплатить
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => unmarkBonusPaid(bonus.projectId, bonus.employeeId)}>
+                              Снять отметку
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => toggleBonusVisibility(bonus.projectId, bonus.employeeId, bonus.hiddenFromEmployee)}
+                          >
+                            {bonus.hiddenFromEmployee ? '👁 Показать сотруднику' : '🙈 Скрыть от сотрудника'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </Card>
-            ))
+            )})
           )}
         </TabsContent>
       </Tabs>
