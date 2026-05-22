@@ -128,7 +128,7 @@ function App() {
             <Route
               path="/bonuses"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['ceo', 'admin']}>
                   <Layout>
                     <Bonuses />
                   </Layout>

@@ -92,7 +92,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     label: 'Финансы',
     items: [
       { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
-      { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       permission: 'VIEW_BONUSES', excludeRoles: ['procurement'] },
+      { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'admin'] },
       { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['partner','manager_1','manager_2','manager_3','deputy_director','ceo','admin'] },
     ],
   },

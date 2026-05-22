@@ -93,22 +93,19 @@ export default function Bonuses() {
   // Раскрытие истории изменений конкретного бонуса (ключ = bonus.id).
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
 
-  // Бонусы — зона ответственности CEO. Зам.ГД в бонусах НЕ участвует (по
-  // требованию 2026-05-22): её работа — собрать команду в начале и контролировать.
-  // Поэтому VIEW_ALL_BONUSES снято с deputy_director (роль её не получит здесь).
-  //
-  //  - canViewAllBonuses: видит и всю фирму, и утверждение, и таб «По сотрудникам»
-  //    с действиями (выплатить, скрыть, скорректировать). Только CEO/admin.
-  //  - personalView: обычный сотрудник без VIEW_ALL_BONUSES — видит только СВОИ бонусы.
-  //  - deputyView: зам.ГД — она тут «гость», только сводка. Видит подсказку идти
-  //    в /project-approval, если надо менять команду.
+  // ЖЁСТКО (CEO 2026-05-22): «Бонусы — это часть только CEO в конце проекта.
+  // Никто кроме CEO нахуй не видит бонусы».
+  //  - CEO/admin: полный обзор фирмы, утверждение, выплаты, скрытие.
+  //  - Любая другая роль (включая зам.ГД, партнёра, PM, супервайзера,
+  //    ассистента) — НЕ видит чужие бонусы. Только свои (personalView)
+  //    через фильтр allBonuses по employeeId === user.id.
+  //  - Зам.ГД / партнёр / PM не имеют доступа к секции утверждения,
+  //    табу «По сотрудникам», сводке фонда, действиям выплаты.
   const isCeoOrAdmin = user?.role === 'ceo' || user?.role === 'admin';
-  const isDeputy = user?.role === 'deputy_director';
-  const canViewBonuses = isCeoOrAdmin || isDeputy || checkPermission('VIEW_ALL_BONUSES');
+  const canViewBonuses = true; // страница открыта всем, но содержимое режется
   const canApproveBonusPayout = isCeoOrAdmin;
   const canEditBonuses = isCeoOrAdmin;
-  const personalView = !canViewBonuses;
-  const deputyView = isDeputy && !isCeoOrAdmin;
+  const personalView = !isCeoOrAdmin;
 
   const projectsAwaitingApproval = useMemo(() => {
     return projects.filter((project: any) => (project?.notes?.status || project?.status) === 'pending_payment_approval');
@@ -505,15 +502,6 @@ export default function Bonuses() {
           </Card>
         ))}
       </div>
-
-      {deputyView && (
-        <Card className="p-4 border-amber-200 bg-amber-50/50 text-sm">
-          <p className="text-amber-900">
-            <b>Бонусы — зона CEO.</b> Если нужно изменить состав команды на проекте — перейди в{' '}
-            <a href="/project-approval" className="underline font-medium">«Утверждение проектов»</a>, твою команду можно скорректировать пока проект не закрыт.
-          </p>
-        </Card>
-      )}
 
       {/* Фонд бонусов — динамика за период (для CEO/admin) */}
       {canEditBonuses && !personalView && (
