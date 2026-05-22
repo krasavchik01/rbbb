@@ -90,6 +90,8 @@ export default function Bonuses() {
   const [draftHidden, setDraftHidden] = useState<Record<string, Record<string, boolean>>>({});
   // Раскрытие списка задач проекта (по умолчанию свёрнут).
   const [tasksOpen, setTasksOpen] = useState<Record<string, boolean>>({});
+  // Раскрытие истории изменений конкретного бонуса (ключ = bonus.id).
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
 
   // Бонусы — зона ответственности CEO. Зам.ГД в бонусах НЕ участвует (по
   // требованию 2026-05-22): её работа — собрать команду в начале и контролировать.
@@ -238,7 +240,10 @@ export default function Bonuses() {
   // ─── Действия CEO над отдельным бонусом в табе «По сотрудникам» ─────────
   // Эти три действия выполняются после того как проект уже закрыт CEO:
   // выплата (фиксация факта), скрытие от сотрудника, корректировка суммы.
-  const patchTeamBonus = async (projectId: string, userId: string, patch: Record<string, unknown>) => {
+  //
+  // Каждое изменение пишется в bonus.history[] — это «аудит-лог» прозрачности.
+  // Хранится в notes.finances.teamBonuses[userId].history: { action, by, byName, at, from?, to? }.
+  const patchTeamBonus = async (projectId: string, userId: string, patch: Record<string, unknown>, action?: { type: string; from?: unknown; to?: unknown }) => {
     const project = projects.find((p: any) => p.id === projectId);
     if (!project) return;
     const notes = typeof project.notes === 'string'
@@ -246,14 +251,23 @@ export default function Bonuses() {
       : (project.notes || {});
     const finances = notes.finances || project.finances || {};
     const teamBonuses = { ...(finances.teamBonuses || {}) };
-    teamBonuses[userId] = { ...(teamBonuses[userId] || {}), ...patch };
+    const prev = teamBonuses[userId] || {};
+    const prevHistory = Array.isArray(prev.history) ? prev.history : [];
+    const nextHistory = action
+      ? [...prevHistory, { ...action, by: user?.id, byName: user?.name, at: new Date().toISOString() }].slice(-20)
+      : prevHistory;
+    teamBonuses[userId] = { ...prev, ...patch, history: nextHistory };
     const nextFinances = { ...finances, teamBonuses };
     return updateProjectRecord(projectId, { finances: nextFinances });
   };
   const markBonusPaid = async (projectId: string, userId: string) => {
     if (!canEditBonuses) return;
     try {
-      await patchTeamBonus(projectId, userId, { paidAt: new Date().toISOString(), paidBy: user?.id, paidByName: user?.name });
+      await patchTeamBonus(
+        projectId, userId,
+        { paidAt: new Date().toISOString(), paidBy: user?.id, paidByName: user?.name },
+        { type: 'paid' },
+      );
       toast({ title: 'Бонус выплачен', description: 'Запись сохранена.' });
       await refreshProjects();
     } catch (e: any) {
@@ -263,7 +277,11 @@ export default function Bonuses() {
   const unmarkBonusPaid = async (projectId: string, userId: string) => {
     if (!canEditBonuses) return;
     try {
-      await patchTeamBonus(projectId, userId, { paidAt: null, paidBy: null, paidByName: null });
+      await patchTeamBonus(
+        projectId, userId,
+        { paidAt: null, paidBy: null, paidByName: null },
+        { type: 'unmark_paid' },
+      );
       toast({ title: 'Отметка выплаты снята' });
       await refreshProjects();
     } catch (e: any) {
@@ -273,7 +291,11 @@ export default function Bonuses() {
   const toggleBonusVisibility = async (projectId: string, userId: string, current: boolean) => {
     if (!canEditBonuses) return;
     try {
-      await patchTeamBonus(projectId, userId, { hiddenFromEmployee: !current });
+      await patchTeamBonus(
+        projectId, userId,
+        { hiddenFromEmployee: !current },
+        { type: current ? 'show' : 'hide' },
+      );
       await refreshProjects();
     } catch (e: any) {
       toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
@@ -282,7 +304,14 @@ export default function Bonuses() {
   const reduceBonusAmount = async (projectId: string, userId: string, newAmount: number) => {
     if (!canEditBonuses) return;
     try {
-      await patchTeamBonus(projectId, userId, { amount: newAmount, manuallyAdjusted: true });
+      const project = projects.find((p: any) => p.id === projectId) as any;
+      const notes = typeof project?.notes === 'string' ? (() => { try { return JSON.parse(project.notes); } catch { return {}; } })() : (project?.notes || {});
+      const prevAmount = notes?.finances?.teamBonuses?.[userId]?.amount ?? 0;
+      await patchTeamBonus(
+        projectId, userId,
+        { amount: newAmount, manuallyAdjusted: true },
+        { type: 'amount_change', from: prevAmount, to: newAmount },
+      );
       toast({ title: 'Сумма обновлена' });
       await refreshProjects();
     } catch (e: any) {
@@ -306,7 +335,9 @@ export default function Bonuses() {
       description: string;
       hiddenFromEmployee?: boolean;
       paidAt?: string | null;
+      paidByName?: string | null;
       role?: string | null;
+      history?: Array<{ type: string; by?: string; byName?: string; at: string; from?: unknown; to?: unknown }>;
     }> = [];
 
     projects.forEach((project: any) => {
@@ -337,7 +368,9 @@ export default function Bonuses() {
               // Дополнительные поля для CEO-действий
               hiddenFromEmployee: !!bonus.hiddenFromEmployee,
               paidAt: bonus.paidAt || null,
+              paidByName: bonus.paidByName || null,
               role: bonus.role || null,
+              history: Array.isArray(bonus.history) ? bonus.history : [],
             } as any);
           }
         });
@@ -840,6 +873,37 @@ export default function Bonuses() {
                           >
                             {bonus.hiddenFromEmployee ? '👁 Показать сотруднику' : '🙈 Скрыть от сотрудника'}
                           </Button>
+                          {(bonus.history?.length || 0) > 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs text-muted-foreground"
+                              onClick={() => setHistoryOpen((s) => ({ ...s, [bonus.id]: !s[bonus.id] }))}
+                            >
+                              {historyOpen[bonus.id] ? '▼' : '▶'} История ({bonus.history?.length})
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {historyOpen[bonus.id] && (bonus.history?.length || 0) > 0 && (
+                        <div className="mt-2 ml-1 border-l-2 border-muted pl-3 space-y-1">
+                          {(bonus.history || []).slice().reverse().map((h, idx) => {
+                            const label = h.type === 'paid' ? '💰 выплата зафиксирована'
+                              : h.type === 'unmark_paid' ? '↩️ отметка выплаты снята'
+                              : h.type === 'hide' ? '🙈 скрыт от сотрудника'
+                              : h.type === 'show' ? '👁 показан сотруднику'
+                              : h.type === 'amount_change' ? `✏️ сумма ${Number(h.from || 0).toLocaleString('ru-RU')} → ${Number(h.to || 0).toLocaleString('ru-RU')} ₸`
+                              : h.type;
+                            return (
+                              <div key={idx} className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
+                                <span>{label}</span>
+                                <span>·</span>
+                                <span>{h.byName || h.by || 'CEO'}</span>
+                                <span>·</span>
+                                <span>{format(new Date(h.at), 'dd.MM.yyyy HH:mm', { locale: ru })}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
