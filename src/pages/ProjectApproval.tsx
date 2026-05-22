@@ -47,6 +47,9 @@ export default function ProjectApproval() {
   const [appSettings] = useAppSettings();
 
   const [projects, setProjects] = useState<ProjectV3[]>([]);
+  // Активные проекты, где зам.ГД уже утвердила команду — для контроля и
+  // возможности пересоставить пока проект не закрыт.
+  const [activeProjects, setActiveProjects] = useState<ProjectV3[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<ProjectV3 | null>(null);
@@ -164,20 +167,32 @@ export default function ProjectApproval() {
       }
     }
 
-    // Фильтруем проекты на утверждении (new или pending_approval в notes.status)
-    const pending = filtered
-      .filter(p => {
-        const notesStatus = p?.notes?.status;
-        return notesStatus === 'new' || notesStatus === 'pending_approval';
-      })
-      .map(p => {
-        if (p.notes && typeof p.notes === 'object') {
-          return { ...p, ...p.notes, id: p.id };
-        }
-        return p;
-      }) as ProjectV3[];
-    console.log('📋 Загрузка проектов на утверждение из Supabase:', pending.length);
+    // Парсим notes (может быть string или object)
+    const parseNotes = (p: any) => {
+      if (!p) return p;
+      let notes = p.notes;
+      if (typeof notes === 'string') {
+        try { notes = JSON.parse(notes); } catch { notes = {}; }
+      }
+      return { ...p, ...(notes || {}), id: p.id, notes };
+    };
+    const parsed = filtered.map(parseNotes);
+
+    // На утверждении — статусы new/pending_approval
+    const pending = parsed.filter(p => {
+      const s = p?.notes?.status || p?.status;
+      return s === 'new' || s === 'pending_approval';
+    }) as ProjectV3[];
+
+    // Активные с назначенной командой — для зам.ГД «мои команды»
+    const active = parsed.filter(p => {
+      const s = p?.notes?.status || p?.status;
+      return ['approved', 'in_progress', 'planning', 'ready_to_complete', 'pending_payment_approval'].includes(s);
+    }) as ProjectV3[];
+
+    console.log('📋 ProjectApproval:', { pending: pending.length, active: active.length });
     setProjects(pending);
+    setActiveProjects(active);
   };
 
   useEffect(() => {
@@ -645,10 +660,14 @@ export default function ProjectApproval() {
       </div>
 
       <Tabs defaultValue="list" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-3">
           <TabsTrigger value="list">
             <FileText className="w-4 h-4 mr-2" />
-            Список проектов
+            На утверждение {projects.length > 0 && <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{projects.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="active">
+            <Users className="w-4 h-4 mr-2" />
+            Мои команды {activeProjects.length > 0 && <Badge variant="outline" className="ml-2 h-5 px-1.5 text-xs">{activeProjects.length}</Badge>}
           </TabsTrigger>
           <TabsTrigger value="calendar">
             <Calendar className="w-4 h-4 mr-2" />
@@ -799,6 +818,86 @@ export default function ProjectApproval() {
                 </div>
               </Card>
             ))
+          )}
+        </TabsContent>
+
+        {/* Мои команды — активные проекты с уже назначенной командой */}
+        <TabsContent value="active" className="space-y-3">
+          {activeProjects.length === 0 ? (
+            <Card className="p-12 text-center border-0 shadow-sm">
+              <Users className="w-10 h-10 mx-auto text-muted-foreground/50 mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">Активных проектов с назначенной командой нет</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">Когда утвердишь команду — проект появится здесь</p>
+            </Card>
+          ) : (
+            activeProjects.map((p: any) => {
+              const notes = (p && typeof p.notes === 'object') ? p.notes : {};
+              const team = notes.team || p.team || [];
+              const status = notes.status || p.status || '';
+              const statusTone =
+                status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                status === 'in_progress' || status === 'planning' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                status === 'ready_to_complete' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                status === 'pending_payment_approval' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                'bg-slate-100 text-slate-700 border-slate-200';
+              const statusLabel =
+                status === 'approved' ? 'Утверждён' :
+                status === 'in_progress' ? 'В работе' :
+                status === 'planning' ? 'Планирование' :
+                status === 'ready_to_complete' ? 'Готов к закрытию' :
+                status === 'pending_payment_approval' ? 'У CEO на бонусах' : status;
+              const canStillChangeTeam = ['approved', 'in_progress', 'planning'].includes(status);
+              return (
+                <Card key={p.id} className="p-4 border-0 shadow-sm">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{p.name || notes.name}</h3>
+                        <Badge variant="outline" className={`text-xs ${statusTone}`}>{statusLabel}</Badge>
+                        {notes.ourCompany && <Badge variant="outline" className="text-xs">{notes.ourCompany}</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {notes.clientName && <>Клиент: <b className="text-foreground">{notes.clientName}</b> · </>}
+                        {team.length} в команде
+                      </p>
+                      {team.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {team.map((m: any) => {
+                            const emp = employees.find((e: any) => e.id === (m.userId || m.id));
+                            const name = emp?.name || m.userName || m.name || '?';
+                            const roleLabel = (ROLE_LABELS as any)[m.role] || m.role;
+                            return (
+                              <Badge key={m.userId || m.id} variant="outline" className="text-[10px]">
+                                {name} <span className="opacity-60 ml-1">· {roleLabel}</span>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}`)} className="h-8 text-xs">
+                        <Eye className="w-3 h-3 mr-1" /> Открыть проект
+                      </Button>
+                      {canStillChangeTeam && canManageProjects && (
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => {
+                          // Открываем диалог пересоставления команды на этом проекте
+                          setSelectedProject(p);
+                          // Подгружаем уже назначенную команду в teamMembers state
+                          const memberMap: Record<string, string> = {};
+                          team.forEach((m: any) => {
+                            if (m.userId && m.role) memberMap[m.role] = m.userId;
+                          });
+                          setTeamMembers(memberMap);
+                        }}>
+                          <Users className="w-3 h-3 mr-1" /> Пересоставить команду
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
           )}
         </TabsContent>
 
