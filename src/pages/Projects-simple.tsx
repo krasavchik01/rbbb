@@ -1912,7 +1912,7 @@ export default function Projects() {
                           </span>
                           <span
                             className="hover:underline cursor-pointer truncate max-w-[300px]"
-                            onClick={() => navigate(`/projects/${project.id || project.notes?.id}`, { state: { project } })}
+                            onClick={() => navigate(`/project/${project.id || project.notes?.id}`, { state: { project } })}
                           >
                             {project.name || project.client?.name || 'Без названия'}
                           </span>
@@ -2928,7 +2928,7 @@ export default function Projects() {
                               variant="outline"
                               size="sm"
                               className="h-6 px-2 text-xs"
-                              onClick={() => navigate(`/projects/${project.id}`, { state: { project } })}
+                              onClick={() => navigate(`/project/${project.id}`, { state: { project } })}
                             >
                               ➡️
                             </Button>

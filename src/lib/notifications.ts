@@ -404,10 +404,15 @@ export const checkDeadlinesAndNotify = async (
         return memberId === currentUserId;
       });
 
-      // CEO и deputy_director видят все проекты
-      const isDirector = userRole === 'ceo' || userRole === 'deputy_director';
+      // ВАЖНО: раньше CEO и deputy_director получали уведомления о просроченных
+      // дедлайнах по ВСЕМ проектам (980 шт.) — это давало ~999 спам-уведомлений.
+      // По требованию CEO 2026-05-22: уведомления только участникам команды.
+      // CEO/зам.ГД отслеживают состояние через /projects (там подсветка просрочек).
+      if (!isInTeam) continue;
 
-      if (!isInTeam && !isDirector) continue;
+      // Не уведомлять о слишком старых проектах (старше 90 дней назад) — это
+      // импортированные исторические данные, реально не требуют внимания.
+      if (daysLeft < -90) continue;
 
       const projectName = project.name || project.client?.name || 'Без названия';
       const projectId = project.id || project.notes?.id;
