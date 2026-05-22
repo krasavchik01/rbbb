@@ -337,7 +337,7 @@ export const notifyDeadline = async (projectName: string, daysLeft: number, reci
     title,
     message,
     type,
-    action_url: projectId ? `/projects/${projectId}` : '/projects',
+    action_url: projectId ? `/project/${projectId}` : '/projects',
   });
 };
 
