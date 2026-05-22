@@ -8,6 +8,7 @@ import { useEmployees } from '@/hooks/useSupabaseData';
 import { Calendar, Clock, MapPin, Users, Building2, Briefcase, Home, Plane, Heart, Navigation, Activity } from 'lucide-react';
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 // Расширенные статусы посещаемости
 type AttendanceStatus = 'in_office' | 'on_project' | 'remote' | 'vacation' | 'sick_leave' | 'day_off';
