@@ -118,9 +118,13 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (!user) return;
-    const tick = () => setUnreadCount(getUnreadCount(user.id));
+    // getUnreadCount async — забыли await, в state летел Promise.
+    // Badge никогда не показывал правильное число.
+    const tick = () => {
+      getUnreadCount(user.id).then(setUnreadCount).catch(() => setUnreadCount(0));
+    };
     tick();
-    const interval = setInterval(tick, 5000);
+    const interval = setInterval(tick, 15000);
     return () => clearInterval(interval);
   }, [user]);
 

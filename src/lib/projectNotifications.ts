@@ -70,8 +70,8 @@ export const notifyProjectApproved = async (params: {
 
   const notification = await addNotification({
     user_id: params.partnerId,
-    title: '✅ Проект утверждён - распределите задачи',
-    message: `${params.approverName} утвердил проект "${params.projectName}". Команда назначена. Откройте проект для распределения задач на основе процедур.`,
+    title: '✅ Твой новый проект — посмотри команду',
+    message: `${params.approverName} утвердил проект «${params.projectName}» и назначил тебя партнёром. Команда уже подобрана. Открой проект, чтобы проверить состав и сопровождать ход работы. В конце ты подтверждаешь завершение перед CEO.`,
     type: 'success',
     action_url: '/projects',
   });
@@ -115,8 +115,8 @@ export const notifyPMAssigned = async (params: {
 }) => {
   return addNotification({
     user_id: params.pmId,
-    title: '🎯 Вы назначены менеджером проекта',
-    message: `${params.partnerName} назначил вас PM на проект "${params.projectName}". Партнер распределит задачи на основе процедур, после чего вы получите уведомления о назначенных задачах.`,
+    title: '🎯 Ты назначен PM на проекте',
+    message: `${params.partnerName} утвердил тебя менеджером проекта «${params.projectName}». Открой карточку, создай и распредели задачи команде. Когда команда сдаст работу — нажмёшь «Готов к закрытию», и партнёр утвердит передачу CEO на бонусы.`,
     type: 'success',
     action_url: `/project/${params.projectId}`,
   });
@@ -161,6 +161,46 @@ export const notifyTeamMemberRemoved = async (params: {
     type: 'warning',
     action_url: '/projects',
   });
+};
+
+/**
+ * PM нажал «Готов к закрытию» → Уведомляет партнёра проекта
+ */
+export const notifyReadyForPartnerApproval = async (params: {
+  projectName: string;
+  partnerId: string;
+  pmName: string;
+  projectId: string;
+}) => {
+  return addNotification({
+    user_id: params.partnerId,
+    title: '✅ Проект готов — твоё утверждение',
+    message: `${params.pmName} отметил проект «${params.projectName}» как готовый к закрытию. Открой карточку проекта и нажми «Утвердить завершение» — после этого CEO одобрит выплату бонусов.`,
+    type: 'info',
+    action_url: `/project/${params.projectId}`,
+  });
+};
+
+/**
+ * Партнёр утвердил завершение → Уведомляет CEO/admin
+ */
+export const notifyProjectReadyForCeoBonuses = async (params: {
+  projectName: string;
+  ceoIds: string[];
+  partnerName: string;
+  projectId: string;
+}) => {
+  return Promise.all(
+    params.ceoIds.map((ceoId) =>
+      addNotification({
+        user_id: ceoId,
+        title: '💰 Проект ждёт утверждения бонусов',
+        message: `${params.partnerName} подтвердил завершение проекта «${params.projectName}». Открой «Бонусы» — там полный расчёт с часами по таймщитам, можно скорректировать и закрыть.`,
+        type: 'success',
+        action_url: '/bonuses',
+      }),
+    ),
+  );
 };
 
 /**

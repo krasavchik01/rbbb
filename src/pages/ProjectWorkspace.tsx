@@ -42,7 +42,7 @@ import { PROJECT_ROLES, ROLE_LABELS, UserRole, TEAM_ROLE_SLOTS } from "@/types/r
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyProjectClosed, notifyBonusesApproved } from "@/lib/projectNotifications";
+import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses } from "@/lib/projectNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { calculateProjectFinances } from "@/types/project-v3";
 // TaskManager removed (using Tasks page component instead)
@@ -1268,31 +1268,30 @@ export default function ProjectWorkspace() {
 
                   await supabaseDataStore.updateProject(project.id, projectWithFinances);
 
-                  // Получаем команду проекта
+                  // Уведомления по этапу:
+                  //  - nextStatus = ready_to_complete (PM «Готов») → уведомить ПАРТНЁРА проекта
+                  //  - nextStatus = pending_payment_approval (партнёр «Утверждаю») → уведомить CEO/admin
                   const team = updatedProject.team || [];
-                  const teamIds = team.map((m: any) => m.userId);
                   const partner = team.find((m: any) => m.role === 'partner');
-                  const pm = team.find((m: any) => m.role === 'manager_1' || m.role === 'manager_2' || m.role === 'manager_3');
+                  const projectName = updatedProject.name || updatedProject.title || 'Проект';
 
-                  // Отправляем уведомления о завершении проекта
-                  notifyProjectClosed({
-                    projectName: updatedProject.name || updatedProject.title || 'Проект',
-                    partnerId: partner?.userId || user.id,
-                    pmId: pm?.userId || user.id,
-                    teamIds: teamIds,
-                    totalAmount: finances.totalBonusAmount.toLocaleString('ru-RU'),
-                    currency: '₸',
-                    projectId: project.id
-                  });
-
-                  // Отправляем уведомления о бонусах
-                  if (Object.keys(finances.teamBonuses).length > 0) {
-                    notifyBonusesApproved({
-                      projectName: updatedProject.name || updatedProject.title || 'Проект',
-                      teamIds: teamIds,
-                      ceoName: 'Система',
-                      projectId: project.id
+                  if (nextStatus === 'ready_to_complete' && partner?.userId) {
+                    notifyReadyForPartnerApproval({
+                      projectName,
+                      partnerId: partner.userId,
+                      pmName: user.name,
+                      projectId: project.id,
                     });
+                  } else if (nextStatus === 'pending_payment_approval') {
+                    const ceoIds = (employees || []).filter((e: any) => e.role === 'ceo' || e.role === 'admin').map((e: any) => e.id);
+                    if (ceoIds.length > 0) {
+                      notifyProjectReadyForCeoBonuses({
+                        projectName,
+                        ceoIds,
+                        partnerName: user.name,
+                        projectId: project.id,
+                      });
+                    }
                   }
 
                   toast({
