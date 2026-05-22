@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployees } from '@/hooks/useSupabaseData';
-import { Calendar, Clock, MapPin, Users, Building2, Briefcase, Home, Plane, Heart, Navigation } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, Building2, Briefcase, Home, Plane, Heart, Navigation, Activity } from 'lucide-react';
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -180,6 +180,61 @@ export default function Attendance() {
   const isHR = user?.role === 'admin' || user?.role === 'ceo';
   const isAdmin = user?.role === 'admin';
   const isCEO = user?.role === 'ceo';
+  // canViewAll — кто видит всю фирму (директора, HR, админ).
+  // Остальные сотрудники видят только СВОЮ посещаемость (personal view).
+  const canViewAll = user && ['ceo', 'deputy_director', 'hr', 'admin'].includes(user.role);
+  const personalView = !canViewAll;
+
+  // Если personal view — режем filteredRecords только по своим записям.
+  // Также скрываем фильтр «Сотрудник» (нечего фильтровать).
+  const visibleRecords = useMemo(
+    () => (personalView && user ? filteredRecords.filter(r => r.employeeId === user.id) : filteredRecords),
+    [filteredRecords, personalView, user],
+  );
+
+  // Аналитика по периоду для директоров (30 / 90 / 365 дней назад).
+  // Для каждого периода — топ статусов и распределение часов.
+  const analytics = useMemo(() => {
+    if (!canViewAll) return null;
+    const now = Date.now();
+    const DAY = 86400 * 1000;
+    const calc = (sinceMs: number) => {
+      const since = now - sinceMs;
+      const sliced = attendanceRecords.filter(r => new Date(r.date).getTime() >= since);
+      const byStatus: Record<string, number> = {};
+      const uniqueDays = new Set<string>();
+      const uniquePeople = new Set<string>();
+      for (const r of sliced) {
+        byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+        uniqueDays.add(r.date);
+        uniquePeople.add(r.employeeId);
+      }
+      return { total: sliced.length, byStatus, uniqueDays: uniqueDays.size, uniquePeople: uniquePeople.size };
+    };
+    return {
+      month: calc(30 * DAY),
+      quarter: calc(90 * DAY),
+      year: calc(365 * DAY),
+    };
+  }, [canViewAll, attendanceRecords]);
+
+  // Топ-N сотрудников по посещаемости в офисе за месяц (для CEO).
+  const topByPresence = useMemo(() => {
+    if (!canViewAll) return [];
+    const since = Date.now() - 30 * 86400 * 1000;
+    const sliced = attendanceRecords.filter(r => new Date(r.date).getTime() >= since);
+    const map = new Map<string, { name: string; office: number; remote: number; project: number; absent: number; total: number }>();
+    for (const r of sliced) {
+      const cur = map.get(r.employeeId) || { name: r.employeeName, office: 0, remote: 0, project: 0, absent: 0, total: 0 };
+      cur.total++;
+      if (r.status === 'in_office') cur.office++;
+      else if (r.status === 'remote') cur.remote++;
+      else if (r.status === 'on_project') cur.project++;
+      else if (r.status === 'vacation' || r.status === 'sick_leave' || r.status === 'day_off') cur.absent++;
+      map.set(r.employeeId, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 10);
+  }, [canViewAll, attendanceRecords]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -187,7 +242,9 @@ export default function Attendance() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">📊 Посещаемость</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">Учет рабочего времени сотрудников</p>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            {personalView ? 'Мои отметки за период' : 'Учёт рабочего времени сотрудников'}
+          </p>
         </div>
         {isAdmin && (
           <Badge variant="outline" className="text-xs self-start sm:self-auto">
@@ -196,7 +253,73 @@ export default function Attendance() {
         )}
       </div>
 
-      {/* Статистика - расширенная */}
+      {/* Personal info: только свои записи */}
+      {personalView && (
+        <Card className="p-4 bg-muted/30 border-muted">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">{user?.name}</p>
+              <p className="text-xs text-muted-foreground">
+                Видишь только свои отметки. Чтобы внести запись на сегодня — обратись к HR или используй мобильное приложение (если есть).
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Аналитика для CEO/зам.ГД/HR/admin — как требовал юзер «прям как аналитика» */}
+      {canViewAll && analytics && (
+        <Card className="p-4">
+          <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary" /> Аналитика посещаемости — за период
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { label: 'За 30 дней', data: analytics.month },
+              { label: 'За квартал (90д)', data: analytics.quarter },
+              { label: 'За год (365д)', data: analytics.year },
+            ].map(({ label, data }) => (
+              <div key={label} className="rounded-lg bg-muted/40 p-3 space-y-1.5 text-xs">
+                <div className="font-medium text-foreground text-sm">{label}</div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Записей</span><b>{data.total}</b></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Уникальных дней</span><b>{data.uniqueDays}</b></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Сотрудников</span><b>{data.uniquePeople}</b></div>
+                <div className="border-t pt-1.5 mt-1.5 space-y-1">
+                  <div className="flex justify-between"><span className="text-green-700">🏢 В офисе</span><b>{data.byStatus['in_office'] || 0}</b></div>
+                  <div className="flex justify-between"><span className="text-blue-700">💼 На проекте</span><b>{data.byStatus['on_project'] || 0}</b></div>
+                  <div className="flex justify-between"><span className="text-purple-700">🏠 Удалённо</span><b>{data.byStatus['remote'] || 0}</b></div>
+                  <div className="flex justify-between"><span className="text-orange-700">✈ Отпуск</span><b>{data.byStatus['vacation'] || 0}</b></div>
+                  <div className="flex justify-between"><span className="text-red-700">🤒 Больничный</span><b>{data.byStatus['sick_leave'] || 0}</b></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Топ-10 за месяц — для CEO/зам.ГД сразу видно «кто как ходит» */}
+          {topByPresence.length > 0 && (
+            <div className="mt-4 border-t pt-3">
+              <h3 className="text-sm font-medium mb-2">Топ-10 за 30 дней (сколько записей)</h3>
+              <div className="space-y-1.5">
+                {topByPresence.map((e, idx) => (
+                  <div key={e.name} className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 items-center text-xs p-2 rounded bg-muted/30">
+                    <span className="text-muted-foreground w-6">{idx + 1}.</span>
+                    <span className="font-medium truncate">{e.name}</span>
+                    <span className="text-green-700">🏢 {e.office}</span>
+                    <span className="text-purple-700">🏠 {e.remote}</span>
+                    <span className="text-blue-700">💼 {e.project}</span>
+                    <span className="text-orange-700">✈ {e.absent}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Сводная статистика «сегодня» — только для директоров/HR/админа.
+          Сотруднику нет смысла видеть сколько человек в фирме сегодня в офисе. */}
+      {canViewAll && (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
         <Card className="p-4">
           <div className="flex items-center space-x-2">
@@ -258,6 +381,7 @@ export default function Attendance() {
           </div>
         </Card>
       </div>
+      )}
 
       {/* Карта офисных локаций - для CEO (только просмотр) */}
       {isCEO && officeLocations.length > 0 && (
@@ -344,7 +468,7 @@ export default function Attendance() {
               </SelectContent>
             </Select>
 
-            {isHR && (
+            {canViewAll && (
               <Select value={filterEmployee} onValueChange={setFilterEmployee}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Выберите сотрудника" />
@@ -369,9 +493,9 @@ export default function Attendance() {
           Записи посещений - {new Date(filterDate).toLocaleDateString('ru-RU')}
         </h2>
 
-        {filteredRecords.length > 0 ? (
+        {visibleRecords.length > 0 ? (
           <div className="space-y-3">
-            {filteredRecords.map((record) => {
+            {visibleRecords.map((record) => {
               const statusInfo = STATUS_LABELS[record.status] || STATUS_LABELS.in_office;
               return (
                 <div

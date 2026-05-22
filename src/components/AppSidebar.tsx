@@ -84,7 +84,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     label: 'Команда',
     items: [
       { title: 'HR',           url: '/hr',         icon: UserCheck, allowedRoles: ['hr'] },
-      { title: 'Посещаемость', url: '/attendance', icon: Activity,  allowedRoles: ['ceo','deputy_director','hr','admin'] },
+      { title: 'Посещаемость', url: '/attendance', icon: Activity },
       { title: 'Служебные записки', url: '/service-memos', icon: ClipboardList, excludeRoles: ['procurement'] },
     ],
   },
