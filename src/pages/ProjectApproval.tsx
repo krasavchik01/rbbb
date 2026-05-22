@@ -484,30 +484,46 @@ export default function ProjectApproval() {
     }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!selectedProject) return;
 
-    const reason = "Требуется дополнительная информация"; // TODO: добавить ввод причины
-    
-    const allProjects = JSON.parse(localStorage.getItem('rb_projects_v3') || '[]');
-    const index = allProjects.findIndex((p: ProjectV3) => p.id === selectedProject.id);
-    if (index !== -1) {
-      allProjects[index].status = 'cancelled';
-      localStorage.setItem('rb_projects_v3', JSON.stringify(allProjects));
+    // Спрашиваем причину у пользователя (раньше была hardcoded заглушка).
+    const reason = window.prompt('Укажи причину отклонения проекта (будет видна procurement):', '');
+    if (!reason || !reason.trim()) {
+      toast({ title: 'Отмена', description: 'Причина не указана, проект не отклонён.' });
+      return;
     }
 
-    // Отправляем уведомление в отдел закупок
-    notifyProjectRejected({
-      projectName: selectedProject.name,
-      reason: reason,
-      procurementUserId: 'procurement_1', // ID отдела закупок
-      rejectorName: user?.name || 'Зам. директора'
-    });
+    // Реальный procurement-юзер = создатель проекта (notes.createdBy), а не
+    // hardcoded 'procurement_1'. Fallback на любого procurement если ID не найден.
+    const notes = (selectedProject as any).notes || {};
+    let procurementId = notes.createdBy || (selectedProject as any).createdBy || '';
+    if (!procurementId) {
+      const fallback = (availableEmployees || []).find((e: any) => e.role === 'procurement');
+      procurementId = fallback?.id || '';
+    }
+
+    // Обновляем статус в Supabase (раньше писал только в localStorage)
+    try {
+      const nextNotes = { ...notes, status: 'cancelled', rejectionReason: reason, rejectedBy: user?.id, rejectedByName: user?.name, rejectedAt: new Date().toISOString() };
+      await supabaseDataStore.updateProject(selectedProject.id, { ...(selectedProject as any), status: 'cancelled', notes: nextNotes });
+    } catch (e) {
+      console.error('handleReject: updateProject failed', e);
+    }
+
+    if (procurementId) {
+      notifyProjectRejected({
+        projectName: selectedProject.name,
+        reason,
+        procurementUserId: procurementId,
+        rejectorName: user?.name || 'Зам. директора',
+      });
+    }
 
     toast({
-      title: "Проект отклонён",
-      description: "Проект возвращён отделу закупок. Уведомление отправлено.",
-      variant: "destructive"
+      title: 'Проект отклонён',
+      description: procurementId ? 'Procurement получит уведомление с причиной.' : 'Procurement-сотрудник не найден — сообщи отделу закупок вручную.',
+      variant: 'destructive',
     });
 
     setProjects(projects.filter(p => p.id !== selectedProject.id));
@@ -876,7 +892,7 @@ export default function ProjectApproval() {
                       )}
                     </div>
                     <div className="flex flex-col gap-2 shrink-0">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}`)} className="h-8 text-xs">
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/project/${p.id}`)} className="h-8 text-xs">
                         <Eye className="w-3 h-3 mr-1" /> Открыть проект
                       </Button>
                       {canStillChangeTeam && canManageProjects && (

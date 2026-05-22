@@ -45,14 +45,12 @@ export function AppHeader() {
 
   useEffect(() => {
     if (!user) return;
-    
+    // getUnreadCount async — раньше присваивался Promise, badge показывал NaN/0/Promise.
     const updateCount = () => {
-      const count = getUnreadCount(user.id);
-      setUnreadCount(count);
+      getUnreadCount(user.id).then(setUnreadCount).catch(() => setUnreadCount(0));
     };
-    
     updateCount();
-    const interval = setInterval(updateCount, 5000);
+    const interval = setInterval(updateCount, 15000);
     
     return () => clearInterval(interval);
   }, [user]);

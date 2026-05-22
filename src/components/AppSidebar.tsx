@@ -99,7 +99,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
   {
     label: 'Администрирование',
     items: [
-      { title: 'Управление',         url: '/user-management',       icon: UserCog,  allowedRoles: ['admin','partner'] },
+      { title: 'Управление',         url: '/user-management',       icon: UserCog,  allowedRoles: ['admin'] },
       { title: 'Диагностика',        url: '/diagnostics',           icon: Activity, allowedRoles: ['admin'] },
       { title: 'Тест БД',            url: '/database-test',         icon: Activity, allowedRoles: ['admin'] },
       { title: 'SMTP Настройки',     url: '/smtp-settings',         icon: Mail,     allowedRoles: ['admin'] },

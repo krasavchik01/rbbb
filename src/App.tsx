@@ -98,7 +98,7 @@ function App() {
             <Route
               path="/analytics"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['partner','manager_1','manager_2','manager_3','deputy_director','ceo','admin']}>
                   <Layout>
                     <Analytics />
                   </Layout>
