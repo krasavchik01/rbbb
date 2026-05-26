@@ -137,8 +137,42 @@ export interface ListFilter {
 }
 
 /**
- * Общий list — все фильтры опциональны. Если задан partnerId, делаем
- * pre-fetch проектов этого партнёра, затем фильтр по projectId.
+ * Извлекает userId партнёра проекта.
+ * В этой системе partner живёт ТОЛЬКО в notes.team[] (где role='partner'),
+ * а плоское поле projects.partner_id у всех 981 проектов пустое.
+ * Поэтому: парсим notes JSON, ищем в team участника с role='partner'.
+ *
+ * Принимает либо raw row из supabase (notes — строка), либо уже распарсенный
+ * project (team — массив), и работает в обоих случаях.
+ */
+export function getProjectPartnerId(project: any): string | null {
+  if (!project) return null;
+  // На фронте useProjects уже распарсил notes и положил team в project.team
+  let team = Array.isArray(project.team) ? project.team : null;
+  if (!team) {
+    // Прямо из БД: notes — строка с JSON
+    const raw = project.notes;
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        team = Array.isArray(parsed?.team) ? parsed.team : null;
+      } catch {
+        team = null;
+      }
+    } else if (raw && Array.isArray(raw.team)) {
+      team = raw.team;
+    }
+  }
+  if (!team) return null;
+  const partner = team.find((m: any) => m?.role === 'partner');
+  return partner?.userId || partner?.id || null;
+}
+
+/**
+ * Общий list — все фильтры опциональны. Если задан partnerId, грузим все
+ * проекты, парсим notes и берём те, у кого в team[] есть участник с
+ * role='partner' и userId=partnerId. Колонка projects.partner_id в этой
+ * системе не используется (везде NULL).
  */
 export async function listTimesheets(filter: ListFilter = {}): Promise<TimesheetEntry[]> {
   let projectIdsForPartner: string[] | null = null;
@@ -146,13 +180,14 @@ export async function listTimesheets(filter: ListFilter = {}): Promise<Timesheet
   if (filter.partnerId) {
     const { data: projs, error: projErr } = await supabase
       .from('projects')
-      .select('id')
-      .eq('partner_id', filter.partnerId);
+      .select('id, notes');
     if (projErr) {
-      console.error('[timesheets] listTimesheets: partner projects fetch failed', projErr);
+      console.error('[timesheets] listTimesheets: projects fetch failed', projErr);
       return [];
     }
-    projectIdsForPartner = (projs || []).map((p: any) => p.id);
+    projectIdsForPartner = (projs || [])
+      .filter((p: any) => getProjectPartnerId(p) === filter.partnerId)
+      .map((p: any) => p.id);
     if (projectIdsForPartner.length === 0) return [];
   }
 

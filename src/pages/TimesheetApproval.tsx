@@ -36,6 +36,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import {
   approveEntries,
+  getProjectPartnerId,
   listTimesheets,
   rejectEntries,
   type TimesheetEntry,
@@ -119,11 +120,13 @@ export default function TimesheetApproval() {
   const isAdminLike = !!user && ['deputy_director', 'ceo', 'admin'].includes(user.role);
   const isPrivileged = isPartner || isAdminLike;
 
-  // Map: projectId → partnerId (или null если у проекта partner не задан)
+  // Map: projectId → partnerId (или null если у проекта partner не задан).
+  // ВАЖНО: в этой системе partner_id-колонка не используется, партнёр живёт
+  // в notes.team[] с role='partner' — извлекаем через getProjectPartnerId.
   const partnerIdByProject = useMemo(() => {
     const m = new Map<string, string | null>();
     for (const p of projects as any[]) {
-      m.set(p.id, p.partner_id || p.partnerId || null);
+      m.set(p.id, getProjectPartnerId(p));
     }
     return m;
   }, [projects]);
@@ -131,7 +134,8 @@ export default function TimesheetApproval() {
   const projectInfoById = useMemo(() => {
     const m = new Map<string, { name: string; partnerId?: string }>();
     for (const p of projects as any[]) {
-      m.set(p.id, { name: p.name, partnerId: p.partner_id || p.partnerId || undefined });
+      const pid = getProjectPartnerId(p);
+      m.set(p.id, { name: p.name, partnerId: pid || undefined });
     }
     return m;
   }, [projects]);
