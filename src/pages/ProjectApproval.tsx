@@ -676,20 +676,31 @@ export default function ProjectApproval() {
       </div>
 
       <Tabs defaultValue="list" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-3">
-          <TabsTrigger value="list">
-            <FileText className="w-4 h-4 mr-2" />
-            На утверждение {projects.length > 0 && <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{projects.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="active">
-            <Users className="w-4 h-4 mr-2" />
-            Мои команды {activeProjects.length > 0 && <Badge variant="outline" className="ml-2 h-5 px-1.5 text-xs">{activeProjects.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="calendar">
-            <Calendar className="w-4 h-4 mr-2" />
-            Календарь занятости
-          </TabsTrigger>
-        </TabsList>
+        {/* На мобилке табы могут не уместиться из-за бейджа-счётчика —
+            используем горизонтальный скролл + компактные подписи */}
+        <div className="overflow-x-auto -mx-2 px-2 sm:overflow-visible sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-max sm:w-full md:w-auto md:inline-grid md:grid-cols-3 gap-1">
+            <TabsTrigger value="list" className="whitespace-nowrap gap-1.5 px-3">
+              <FileText className="w-4 h-4 flex-shrink-0" />
+              <span>На утверждение</span>
+              {projects.length > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs">{projects.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="active" className="whitespace-nowrap gap-1.5 px-3">
+              <Users className="w-4 h-4 flex-shrink-0" />
+              <span>Мои команды</span>
+              {activeProjects.length > 0 && (
+                <Badge variant="outline" className="h-5 px-1.5 text-xs">{activeProjects.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="whitespace-nowrap gap-1.5 px-3">
+              <Calendar className="w-4 h-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Календарь занятости</span>
+              <span className="sm:hidden">Календарь</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Список проектов */}
         <TabsContent value="list" className="space-y-4">
@@ -734,8 +745,8 @@ export default function ProjectApproval() {
             </Card>
           ) : (
             projects.map(project => (
-              <Card key={project.id} className="p-6 hover:shadow-lg transition-all">
-                <div className="flex items-start gap-4">
+              <Card key={project.id} className="p-4 sm:p-6 hover:shadow-lg transition-all">
+                <div className="flex items-start gap-3 sm:gap-4">
                   {/* Чекбокс для массового удаления */}
                   {isAdmin && (
                     <div className="pt-1">
@@ -748,37 +759,39 @@ export default function ProjectApproval() {
                     </div>
                   )}
 
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                  <div className="flex-1 min-w-0">
+                    {/* На мобилке: блок-инфо и блок-кнопки в столбик.
+                        На md+: инфо слева, кнопки справа (старое поведение). */}
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <Building2 className="w-6 h-6 text-white" />
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-lg">{project.name}</h3>
-                            <p className="text-sm text-muted-foreground">{project.client.name}</p>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-base sm:text-lg break-words leading-tight">{project.name}</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground break-words">{project.client.name}</p>
                           </div>
                         </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
+                      <div className="min-w-0">
                         <Label className="text-xs text-muted-foreground">Компания</Label>
-                        <p className="font-medium">{project.companyName}</p>
+                        <p className="font-medium text-sm break-words">{project.companyName}</p>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <Label className="text-xs text-muted-foreground">Вид проекта</Label>
-                        <Badge variant="outline">{project.type}</Badge>
+                        <Badge variant="outline" className="break-words">{project.type}</Badge>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <Label className="text-xs text-muted-foreground">Сумма без НДС</Label>
-                        <p className="font-semibold text-green-600">
+                        <p className="font-semibold text-green-600 text-sm break-words">
                           {project.contract?.amountWithoutVAT ? formatCurrency(project.contract.amountWithoutVAT) : 'Не указано'}
                         </p>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <Label className="text-xs text-muted-foreground">Срок</Label>
-                        <p className="text-sm">
+                        <p className="text-xs sm:text-sm break-words">
                           {project.contract.serviceStartDate && `${new Date(project.contract.serviceStartDate).toLocaleDateString('ru-RU')} - `}
                           {new Date(project.contract.serviceEndDate).toLocaleDateString('ru-RU')}
                         </p>
@@ -786,19 +799,21 @@ export default function ProjectApproval() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <Button onClick={() => navigate(`/project/${project.id}`)} variant="outline" className="whitespace-nowrap">
+                  {/* Кнопки: на мобилке во всю ширину под содержимым,
+                      на md+ — узкая колонка справа. */}
+                  <div className="flex flex-col gap-2 w-full md:w-auto md:min-w-[180px]">
+                    <Button onClick={() => navigate(`/project/${project.id}`)} variant="outline" className="w-full whitespace-nowrap">
                       <Eye className="w-4 h-4 mr-2" />
                       Открыть
                     </Button>
-                    <Button onClick={() => setSelectedProject(project)} className="whitespace-nowrap">
+                    <Button onClick={() => setSelectedProject(project)} className="w-full whitespace-nowrap">
                       <Users className="w-4 h-4 mr-2" />
                       Назначить команду
                     </Button>
                     {isAdmin && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm" className="whitespace-nowrap">
+                          <Button variant="destructive" size="sm" className="w-full whitespace-nowrap">
                             <Trash2 className="w-4 h-4 mr-2" />
                             Удалить
                           </Button>
