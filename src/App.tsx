@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AIErrorBoundary } from '@/components/AIErrorBoundary';
+import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 const Index = lazy(() => import('@/pages/Index'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Projects = lazy(() => import('@/pages/Projects-simple'));
@@ -229,7 +230,9 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <ProjectApproval />
+                    <WidgetErrorBoundary fullPage label="Утверждение проектов">
+                      <ProjectApproval />
+                    </WidgetErrorBoundary>
                   </Layout>
                 </ProtectedRoute>
               }
