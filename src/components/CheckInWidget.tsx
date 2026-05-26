@@ -93,11 +93,17 @@ export function CheckInWidget() {
     });
   };
 
-  // Автоопределение локации: в офисе или удалённо (по радиусу)
+  // Автоопределение локации: в офисе или удалённо (по радиусу).
+  // Полностью defensive — если appSettings битый, считаем remote.
   const detectLocation = (coords: { lat: number; lng: number }): LocationType => {
-    if (!appSettings.officeLocation.enabled) return 'remote';
-    if (!coords.lat && !coords.lng) return 'remote';
-    return isWithinOfficeRadius(coords.lat, coords.lng) ? 'office' : 'remote';
+    try {
+      if (!appSettings?.officeLocation?.enabled) return 'remote';
+      if (!coords.lat && !coords.lng) return 'remote';
+      return isWithinOfficeRadius(coords.lat, coords.lng) ? 'office' : 'remote';
+    } catch (e) {
+      console.warn('detectLocation failed, falling back to remote:', e);
+      return 'remote';
+    }
   };
 
   // Отметка прихода. Если передан explicit — используем его, иначе автоопределение.

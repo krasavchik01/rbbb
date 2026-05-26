@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { CheckInWidget } from '@/components/CheckInWidget';
+import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -1005,7 +1006,9 @@ export default function Dashboard() {
       {/* Виджет отметки посещений */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={(isDirector || isPartner) && appSettings.recentActivityEnabled ? "lg:col-span-1" : "lg:col-span-3"}>
-          <CheckInWidget />
+          <WidgetErrorBoundary label="Отметка посещений">
+            <CheckInWidget />
+          </WidgetErrorBoundary>
         </div>
 
         {/* Последние активности — директорам и партнёрам, если включено в настройках */}

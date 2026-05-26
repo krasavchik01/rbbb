@@ -10,6 +10,7 @@ import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CheckInWidget } from '@/components/CheckInWidget';
+import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 
 // Расширенные статусы посещаемости
 type AttendanceStatus = 'in_office' | 'on_project' | 'remote' | 'vacation' | 'sick_leave' | 'day_off';
@@ -255,8 +256,11 @@ export default function Attendance() {
         )}
       </div>
 
-      {/* Виджет отметки прихода/ухода — доступен всем ролям прямо тут. */}
-      <CheckInWidget />
+      {/* Виджет отметки прихода/ухода — доступен всем ролям прямо тут.
+          Обёрнут в ErrorBoundary, чтобы падение виджета не валило всю страницу. */}
+      <WidgetErrorBoundary label="Отметка посещений">
+        <CheckInWidget />
+      </WidgetErrorBoundary>
 
       {/* Personal info: только свои записи */}
       {personalView && (
