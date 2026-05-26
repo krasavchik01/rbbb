@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useStringUrlState, useBoolUrlState } from "@/hooks/useUrlState";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,10 +135,11 @@ export default function Projects() {
   const [appSettings] = useAppSettings();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
+  // Поиск живёт в URL (?q=...) — ссылку можно скинуть и фильтр применится.
+  const [searchQuery, setSearchQuery] = useStringUrlState('q', '');
   // Debounced версия поиска: input реагирует мгновенно (responsive feel),
   // но тяжёлая фильтрация 800+ проектов запускается через 250мс после паузы в наборе.
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 250);
     return () => clearTimeout(t);
@@ -164,14 +166,21 @@ export default function Projects() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
-  // Базовые фильтры
-  const [filterYear, setFilterYear] = useState<string>('all'); // 'all' | '2022' | '2023' | '2024' | '2025' и т.д.
-  const [filterCompany, setFilterCompany] = useState<string>('all'); // 'all' | конкретная компания
-  const [filterLongTerm, setFilterLongTerm] = useState<boolean | 'all'>('all'); // 'all' | true | false
-  const [showAmounts, setShowAmounts] = useState<boolean>(true); // Показывать ли суммы
+  // Базовые фильтры — живут в URL (?year=2025&company=MAK&...).
+  // Это значит обновление страницы НЕ сбрасывает фильтры, и ссылку можно скинуть.
+  const [filterYear, setFilterYear] = useStringUrlState('year', 'all');
+  const [filterCompany, setFilterCompany] = useStringUrlState('company', 'all');
+  // filterLongTerm имеет три состояния — храним как строку в URL ('long'|'short'|'all').
+  const [filterLongTermRaw, setFilterLongTermRaw] = useStringUrlState('term', 'all');
+  const filterLongTerm: boolean | 'all' =
+    filterLongTermRaw === 'long' ? true : filterLongTermRaw === 'short' ? false : 'all';
+  const setFilterLongTerm = useCallback((v: boolean | 'all') => {
+    setFilterLongTermRaw(v === true ? 'long' : v === false ? 'short' : 'all');
+  }, [setFilterLongTermRaw]);
+  const [showAmounts, setShowAmounts] = useState<boolean>(true); // Показывать ли суммы (UI-only, не пишем в URL)
 
   // Фильтры по колонкам
-  const [filterStatus, setFilterStatus] = useState<string>('all'); // 'all' | 'new' | 'pending_approval' | 'in_progress' | 'completed'
+  const [filterStatus, setFilterStatus] = useStringUrlState('status', 'all'); // 'all' | 'new' | 'pending_approval' | 'in_progress' | 'completed'
   const [filterProgressMin, setFilterProgressMin] = useState<number | ''>('');
   const [filterProgressMax, setFilterProgressMax] = useState<number | ''>('');
   const [filterAmountMin, setFilterAmountMin] = useState<number | ''>('');
@@ -182,17 +191,20 @@ export default function Projects() {
   const [filterDeadlineFrom, setFilterDeadlineFrom] = useState<string>('');
   const [filterDeadlineTo, setFilterDeadlineTo] = useState<string>('');
 
-  // Сортировка
+  // Сортировка — тоже в URL (?sort=name_asc).
   type SortOption = 'deadline_asc' | 'deadline_desc' | 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc';
-  const [sortBy, setSortBy] = useState<SortOption>('deadline_asc'); // По умолчанию: ближайшие дедлайны сверху
+  const [sortBy, setSortBy] = useStringUrlState('sort', 'deadline_asc') as [SortOption, (v: SortOption) => void];
 
-  // Фильтры для вкладки "Утверждение"
+  // Фильтры для вкладки "Утверждение" (короткая жизнь, не в URL)
   const [approvalSearch, setApprovalSearch] = useState('');
   const [approvalCompanyFilter, setApprovalCompanyFilter] = useState('all');
-  
-  // Новые фильтры для оптимизации (Скоро дедлайн, Период аудита)
-  const [filterUpcomingDeadlines, setFilterUpcomingDeadlines] = useState(false);
-  const [filterAuditPeriod, setFilterAuditPeriod] = useState<'all' | '6m' | '9m' | '1y'>('all');
+
+  // Часто используемые быстрые фильтры — тоже в URL.
+  const [filterUpcomingDeadlines, setFilterUpcomingDeadlines] = useBoolUrlState('deadline30', false);
+  const [filterAuditPeriod, setFilterAuditPeriod] = useStringUrlState('period', 'all') as [
+    'all' | '6m' | '9m' | '1y',
+    (v: 'all' | '6m' | '9m' | '1y') => void
+  ];
   // Свёрнутая панель «Расширенные фильтры» — раскрывается по клику.
   // По умолчанию закрыта: главные 4 фильтра всегда видны, остальное под кнопкой.
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
