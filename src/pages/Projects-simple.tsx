@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,86 @@ interface SimpleProject {
 
 // ВСЕ ДЕМО-ПРОЕКТЫ УДАЛЕНЫ - используем только реальные данные из Supabase
 // demoProjects removed
+
+// Порог: при меньшем числе карточек overhead виртуализации больше пользы — рендерим обычным grid-ом.
+const VIRTUALIZE_THRESHOLD = 50;
+
+/**
+ * Виртуализированная сетка карточек проектов.
+ * При 800+ проектов рендерим только видимые в viewport строки +overscan,
+ * вместо 800 DOM-нод держим ~30. Внутри строки — обычный grid с 1/2/3 колонками
+ * под текущую ширину окна.
+ *
+ * Использует useWindowVirtualizer (скроллится с window), чтобы не нужно было
+ * задавать фиксированную высоту контейнеру списка.
+ */
+function VirtualizedProjectGrid({
+  projects,
+  renderCard,
+}: {
+  projects: any[];
+  renderCard: (project: any, index: number) => React.ReactNode;
+}) {
+  const [cols, setCols] = useState<number>(() => {
+    if (typeof window === 'undefined') return 3;
+    const w = window.innerWidth;
+    return w >= 1024 ? 3 : w >= 640 ? 2 : 1;
+  });
+
+  useEffect(() => {
+    const calc = () => {
+      const w = window.innerWidth;
+      const next = w >= 1024 ? 3 : w >= 640 ? 2 : 1;
+      setCols(prev => (prev === next ? prev : next));
+    };
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, []);
+
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const rows = Math.ceil(projects.length / cols);
+
+  const virtualizer = useWindowVirtualizer({
+    count: rows,
+    estimateSize: () => 360, // приблизительная высота карточки + gap
+    overscan: 3,
+    scrollMargin: parentRef.current?.offsetTop ?? 0,
+  });
+
+  // Fallback на обычный grid если карточек мало — overhead виртуализации не оправдан.
+  if (projects.length < VIRTUALIZE_THRESHOLD) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+        {projects.map((p, i) => renderCard(p, i))}
+      </div>
+    );
+  }
+
+  const virtualRows = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  return (
+    <div ref={parentRef} className="relative w-full" style={{ height: totalSize }}>
+      {virtualRows.map(virtualRow => {
+        const startIdx = virtualRow.index * cols;
+        const rowItems = projects.slice(startIdx, startIdx + cols);
+        return (
+          <div
+            key={virtualRow.key}
+            data-index={virtualRow.index}
+            ref={virtualizer.measureElement}
+            className="absolute left-0 right-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 pb-3 sm:pb-6"
+            style={{
+              transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+            }}
+          >
+            {rowItems.map((project, idx) => renderCard(project, startIdx + idx))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function Projects() {
   const { projects: realProjects, loading, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
@@ -2680,14 +2761,15 @@ export default function Projects() {
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-            {filteredProjects.map((project, index) => (
+          <VirtualizedProjectGrid
+            projects={filteredProjects}
+            renderCard={(project, index) => (
               <ProjectCard
                 key={project.id || project.notes?.id || `project-${index}`}
                 project={project}
               />
-            ))}
-          </div>
+            )}
+          />
         </TabsContent>
 
         <TabsContent value="kanban" className="space-y-4">
