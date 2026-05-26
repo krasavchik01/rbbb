@@ -129,7 +129,7 @@ export default function ServiceMemos() {
   const loadMemos = async () => {
     try {
       const { data, error } = await supabase
-        .from('service_memos' as any)
+        .from('service_memos')
         .select(`
           *,
           workflow:service_memo_workflow(*)
@@ -192,7 +192,7 @@ export default function ServiceMemos() {
 
     try {
       const { data: memoData, error: memoError } = await supabase
-        .from('service_memos' as any)
+        .from('service_memos')
         .insert({
           title: formData.title,
           description: formData.description,
@@ -222,7 +222,7 @@ export default function ServiceMemos() {
       }));
 
       const { error: workflowError } = await supabase
-        .from('service_memo_workflow' as any)
+        .from('service_memo_workflow')
         .insert(workflowStages);
 
       if (workflowError) throw workflowError;
@@ -258,7 +258,7 @@ export default function ServiceMemos() {
 
       const currentStage = selectedMemo.currentStage;
       const { error: workflowUpdateError } = await supabase
-        .from('service_memo_workflow' as any)
+        .from('service_memo_workflow')
         .update({
           status: 'approved',
           approver_id: user?.id,
@@ -275,7 +275,7 @@ export default function ServiceMemos() {
       const newStatus = isLastStage ? 'completed' : 'in_progress';
 
       const { error: memoUpdateError } = await supabase
-        .from('service_memos' as any)
+        .from('service_memos')
         .update({
           current_stage_index: nextStage,
           overall_status: newStatus,
@@ -321,7 +321,7 @@ export default function ServiceMemos() {
       if (!selectedMemo) return;
 
       const { error: workflowError } = await supabase
-        .from('service_memo_workflow' as any)
+        .from('service_memo_workflow')
         .update({
           status: 'rejected',
           approver_id: user?.id,
@@ -334,7 +334,7 @@ export default function ServiceMemos() {
       if (workflowError) throw workflowError;
 
       const { error: memoError } = await supabase
-        .from('service_memos' as any)
+        .from('service_memos')
         .update({
           overall_status: 'rejected',
           updated_at: new Date().toISOString()
@@ -368,7 +368,7 @@ export default function ServiceMemos() {
 
     try {
       const { error } = await supabase
-        .from('service_memos' as any)
+        .from('service_memos')
         .delete()
         .eq('id', memoId);
 

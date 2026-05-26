@@ -379,6 +379,147 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_tasks: {
+        Row: {
+          id: string
+          assigned_to: string
+          assigned_to_name: string | null
+          created_by: string
+          created_by_name: string | null
+          title: string
+          description: string | null
+          priority: string
+          related_project_id: string | null
+          due_date: string | null
+          status: string
+          completed_at: string | null
+          notify_channel: string | null
+          notified_at: string | null
+          created_via: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          assigned_to: string
+          assigned_to_name?: string | null
+          created_by: string
+          created_by_name?: string | null
+          title: string
+          description?: string | null
+          priority?: string
+          related_project_id?: string | null
+          due_date?: string | null
+          status?: string
+          completed_at?: string | null
+          notify_channel?: string | null
+          notified_at?: string | null
+          created_via?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          assigned_to?: string
+          assigned_to_name?: string | null
+          created_by?: string
+          created_by_name?: string | null
+          title?: string
+          description?: string | null
+          priority?: string
+          related_project_id?: string | null
+          due_date?: string | null
+          status?: string
+          completed_at?: string | null
+          notify_channel?: string | null
+          notified_at?: string | null
+          created_via?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      service_memos: {
+        Row: {
+          id: string
+          title: string
+          description: string
+          priority: string | null
+          category: string | null
+          overall_status: string | null
+          current_stage_index: number | null
+          created_at: string | null
+          updated_at: string | null
+          completed_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          description: string
+          priority?: string | null
+          category?: string | null
+          overall_status?: string | null
+          current_stage_index?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          completed_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string
+          priority?: string | null
+          category?: string | null
+          overall_status?: string | null
+          current_stage_index?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          completed_at?: string | null
+          created_by?: string | null
+        }
+        Relationships: []
+      }
+      service_memo_workflow: {
+        Row: {
+          id: string
+          memo_id: string | null
+          stage_index: number
+          department: string
+          department_label: string | null
+          status: string | null
+          approver_id: string | null
+          approved_at: string | null
+          comments: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          memo_id?: string | null
+          stage_index: number
+          department: string
+          department_label?: string | null
+          status?: string | null
+          approver_id?: string | null
+          approved_at?: string | null
+          comments?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          memo_id?: string | null
+          stage_index?: number
+          department?: string
+          department_label?: string | null
+          status?: string | null
+          approver_id?: string | null
+          approved_at?: string | null
+          comments?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number

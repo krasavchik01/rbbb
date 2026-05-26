@@ -32,7 +32,7 @@ export interface AiTask {
 
 export async function listMyTasks(userId: string): Promise<AiTask[]> {
   const { data, error } = await supabase
-    .from('ai_tasks' as any)
+    .from('ai_tasks')
     .select('*')
     .eq('assigned_to', userId)
     .order('created_at', { ascending: false });
@@ -45,7 +45,7 @@ export async function listMyTasks(userId: string): Promise<AiTask[]> {
 
 export async function listAllTasks(limit = 200): Promise<AiTask[]> {
   const { data, error } = await supabase
-    .from('ai_tasks' as any)
+    .from('ai_tasks')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -59,7 +59,7 @@ export async function listAllTasks(limit = 200): Promise<AiTask[]> {
 /** Счётчик «непрочитанных» (pending) задач — для badge в Sidebar */
 export async function countPendingForUser(userId: string): Promise<number> {
   const { count, error } = await supabase
-    .from('ai_tasks' as any)
+    .from('ai_tasks')
     .select('id', { count: 'exact', head: true })
     .eq('assigned_to', userId)
     .in('status', ['pending', 'in_progress']);
@@ -80,7 +80,7 @@ export async function updateTaskStatus(
   };
   if (status === 'done') patch.completed_at = new Date().toISOString();
   const { data, error } = await supabase
-    .from('ai_tasks' as any)
+    .from('ai_tasks')
     .update(patch)
     .eq('id', taskId)
     .select('*')
