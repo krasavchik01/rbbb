@@ -879,7 +879,7 @@ export default function ProjectApproval() {
                       {team.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {team.map((m: any) => {
-                            const emp = employees.find((e: any) => e.id === (m.userId || m.id));
+                            const emp = (realEmployees || []).find((e: any) => e.id === (m.userId || m.id));
                             const name = emp?.name || m.userName || m.name || '?';
                             const roleLabel = (ROLE_LABELS as any)[m.role] || m.role;
                             return (
