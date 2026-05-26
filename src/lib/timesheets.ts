@@ -406,6 +406,37 @@ export function pendingHoursIndex(): Promise<Map<string, number>> {
   return hoursIndexByStatus('submitted');
 }
 
+export interface ProjectHoursTotals {
+  approved: number;
+  pending: number;
+}
+
+/**
+ * Сразу по всем проектам — Map<projectId, {approved, pending}>.
+ * Используется в карточках списка проектов и на дашборде, чтобы не делать
+ * N запросов «часы по этому проекту» для каждого ряда.
+ */
+export async function allProjectsHoursTotals(): Promise<Map<string, ProjectHoursTotals>> {
+  const { data, error } = await supabase
+    .from('timesheet_entries')
+    .select('project_id, hours, status')
+    .in('status', ['approved', 'submitted']);
+  if (error) {
+    console.error('[timesheets] allProjectsHoursTotals failed', error);
+    return new Map();
+  }
+  const m = new Map<string, ProjectHoursTotals>();
+  for (const r of data || []) {
+    if (!r.project_id) continue;
+    const cur = m.get(r.project_id) || { approved: 0, pending: 0 };
+    const h = Number(r.hours) || 0;
+    if (r.status === 'approved') cur.approved += h;
+    else if (r.status === 'submitted') cur.pending += h;
+    m.set(r.project_id, cur);
+  }
+  return m;
+}
+
 // ─── Утилиты для импорта ────────────────────────────────────────────────────
 
 /**

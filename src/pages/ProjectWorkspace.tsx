@@ -30,6 +30,8 @@ import {
   Plus
 } from "lucide-react";
 import { useTemplates, useProjects } from "@/hooks/useDataStore";
+import { ProjectVitals } from "@/components/projects/ProjectVitals";
+import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheets";
 import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
 import { ProjectData, ElementData } from "@/types/methodology";
 import { useToast } from "@/hooks/use-toast";
@@ -119,6 +121,17 @@ export default function ProjectWorkspace() {
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
   const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } =
     useProjectDataSync(id || '');
+
+  // Часы этого проекта (approved + pending) — для шапки.
+  const [projectHours, setProjectHours] = useState<ProjectHoursTotals | undefined>();
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    allProjectsHoursTotals()
+      .then((m) => { if (active) setProjectHours(m.get(id)); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [id]);
 
   // Фильтруем задачи для текущего проекта (всегда вызывается, до условных вычислений)
   const projectTasks = useMemo(() => {
@@ -647,6 +660,16 @@ export default function ProjectWorkspace() {
           )}
         </div>
       </div>
+
+      {/* Vitals: единый индикатор — стадия, задачи, команда, часы */}
+      <Card className="p-4">
+        <ProjectVitals
+          project={project}
+          tasks={projectTasks}
+          hours={projectHours}
+          variant="expanded"
+        />
+      </Card>
 
       {/* Общий прогресс (только если есть шаблон) */}
       {projectData && projectData.completionStatus && activeTemplate && (

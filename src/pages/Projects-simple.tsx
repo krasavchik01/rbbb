@@ -31,6 +31,9 @@ import { useAppSettings } from "@/lib/appSettings";
 import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
 import { ContractStagesEditor } from "@/components/projects/ContractStagesEditor";
 import { CEOSummaryTable } from "@/components/projects/CEOSummaryTable";
+import { ProjectVitals } from "@/components/projects/ProjectVitals";
+import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheets";
+import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 
 // Простые типы
@@ -132,6 +135,31 @@ export default function Projects() {
   const { projects: realProjects, loading, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
   const { companies: allAppCompanies = [] } = useCompanies();
+  const { tasks = [] } = useTasks();
+
+  // Часы по проектам (approved + pending) — один запрос на всю страницу,
+  // не на карточку. Карточка лукапит по projectId.
+  const [hoursByProject, setHoursByProject] = useState<Map<string, ProjectHoursTotals>>(new Map());
+  useEffect(() => {
+    let active = true;
+    allProjectsHoursTotals()
+      .then((m) => { if (active) setHoursByProject(m); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // Индекс задач по projectId — чтобы карточка лукапила O(1) вместо filter()
+  const tasksByProject = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const t of tasks) {
+      const pid = (t as any).project_id;
+      if (!pid) continue;
+      const cur = m.get(pid) || [];
+      cur.push(t);
+      m.set(pid, cur);
+    }
+    return m;
+  }, [tasks]);
   const [appSettings] = useAppSettings();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -1651,6 +1679,18 @@ export default function Projects() {
             )}
           </div>
         </div>
+
+        {/* Vitals: стадия + задачи + часы — один индикатор для всех ролей */}
+        {projectId && (
+          <div className="mb-3 pb-3 border-b border-border/40">
+            <ProjectVitals
+              project={project}
+              tasks={tasksByProject.get(projectId)}
+              hours={hoursByProject.get(projectId)}
+              variant="compact"
+            />
+          </div>
+        )}
 
         <div className="space-y-3">
           {/* Блок с суммой */}

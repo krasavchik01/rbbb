@@ -8,6 +8,9 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useSupabaseData';
+import { useTasks } from '@/hooks/useTasks';
+import { ProjectVitals } from '@/components/projects/ProjectVitals';
+import { allProjectsHoursTotals, type ProjectHoursTotals } from '@/lib/timesheets';
 import { CheckInWidget } from '@/components/CheckInWidget';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 import { useAppSettings } from '@/lib/appSettings';
@@ -186,7 +189,31 @@ export default function Dashboard() {
   const [appSettings] = useAppSettings();
   const { projects = [], loading: projectsLoading } = useProjects();
   const { employees = [], loading: employeesLoading } = useEmployees();
+  const { tasks = [] } = useTasks();
   const navigate = useNavigate();
+
+  // Часы по всем проектам — один запрос, использует Top-5 виджет.
+  const [hoursByProject, setHoursByProject] = useState<Map<string, ProjectHoursTotals>>(new Map());
+  useEffect(() => {
+    let active = true;
+    allProjectsHoursTotals()
+      .then((m) => { if (active) setHoursByProject(m); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // Индекс задач по projectId (O(1) лукап для карточек)
+  const tasksByProject = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const t of tasks) {
+      const pid = (t as any).project_id;
+      if (!pid) continue;
+      const cur = m.get(pid) || [];
+      cur.push(t);
+      m.set(pid, cur);
+    }
+    return m;
+  }, [tasks]);
 
   // Состояние для фильтра проектов по компании
   const [showOtherCompanies, setShowOtherCompanies] = useState(false);
@@ -451,7 +478,9 @@ export default function Dashboard() {
         id: p.id,
         name: p.name || p.client?.name || p.companyName || 'Проект',
         value: safeNumber(p.finances?.amountWithoutVAT || p.notes?.finances?.amountWithoutVAT || p.contract?.amountWithoutVAT || p.amount || 0),
-        progress: p.completionPercent || p.completion || 0
+        progress: p.completionPercent || p.completion || 0,
+        // Полный объект — нужен ProjectVitals (status, team в notes)
+        raw: p,
       }));
   }, [userProjects, user]);
 
@@ -915,7 +944,11 @@ export default function Dashboard() {
               </div>
               <div className="space-y-4">
                 {topProjectsData.map((proj, idx) => (
-                  <div key={proj.id || idx} className="bg-white dark:bg-slate-900 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-800 hover:border-amber-300 transition-colors">
+                  <div
+                    key={proj.id || idx}
+                    className="bg-white dark:bg-slate-900 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-800 hover:border-amber-300 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/project/${proj.id}`)}
+                  >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-400 font-bold text-sm">
@@ -932,9 +965,16 @@ export default function Dashboard() {
                         </Badge>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 mb-3 overflow-hidden">
                       <div className="bg-amber-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${Math.max(0, Math.min(100, proj.progress))}%` }} />
                     </div>
+                    {/* Vitals: стадия, задачи, часы — единый язык */}
+                    <ProjectVitals
+                      project={proj.raw}
+                      tasks={tasksByProject.get(proj.id)}
+                      hours={hoursByProject.get(proj.id)}
+                      variant="compact"
+                    />
                   </div>
                 ))}
               </div>
