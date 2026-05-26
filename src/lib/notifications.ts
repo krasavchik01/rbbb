@@ -173,6 +173,33 @@ export const deleteNotification = async (notificationId: string): Promise<boolea
 };
 
 /**
+ * Удалить ВСЕ уведомления пользователя (одним DELETE).
+ * Используется для кнопки «Удалить все» — действие разрушительное,
+ * вызывающий код обязан показать подтверждение.
+ */
+export const deleteAllNotifications = async (userId: string): Promise<{ deleted: number; error?: string }> => {
+  try {
+    console.log('🗑️ [deleteAllNotifications] Удаление ВСЕХ уведомлений для userId:', userId);
+
+    const { error, count } = await supabase
+      .from('notifications')
+      .delete({ count: 'exact' })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('❌ [deleteAllNotifications] Ошибка удаления:', error);
+      return { deleted: 0, error: error.message };
+    }
+
+    console.log(`✅ [deleteAllNotifications] Удалено ${count ?? 0} уведомлений`);
+    return { deleted: count ?? 0 };
+  } catch (error: any) {
+    console.error('❌ [deleteAllNotifications] Ошибка:', error);
+    return { deleted: 0, error: error?.message || String(error) };
+  }
+};
+
+/**
  * Получить количество непрочитанных уведомлений
  */
 export const getUnreadCount = async (userId: string): Promise<number> => {

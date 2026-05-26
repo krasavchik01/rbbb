@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Bell, Check, Trash2, Search, ExternalLink, RefreshCw } from "lucide-react";
+import { Bell, Check, Trash2, Search, ExternalLink, RefreshCw, CheckCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { supabaseDataStore, Project } from "@/lib/supabaseDataStore";
@@ -13,10 +13,22 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  deleteAllNotifications,
   Notification,
   checkDeadlinesAndNotify
 } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -92,16 +104,45 @@ export default function Notifications() {
 
   const handleMarkAllRead = async () => {
     if (!user) return;
-    await markAllAsRead(user.id);
+    const ok = await markAllAsRead(user.id);
     await loadNotifications();
+    if (ok) {
+      toast({ title: '✅ Готово', description: 'Все уведомления отмечены как прочитанные' });
+    }
   };
 
   const handleClearRead = async () => {
     const readNotifications = notifications.filter(n => n.read);
+    if (readNotifications.length === 0) {
+      toast({ title: 'Нет прочитанных', description: 'Нечего удалять' });
+      return;
+    }
     for (const n of readNotifications) {
       await deleteNotification(n.id);
     }
     await loadNotifications();
+    toast({ title: '🗑️ Удалено', description: `Удалено ${readNotifications.length} прочитанных уведомлений` });
+  };
+
+  // Удалить ВСЕ уведомления пользователя (прочитанные и непрочитанные).
+  // Разрушительное действие — вызывается из AlertDialog с подтверждением.
+  const handleDeleteAll = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const { deleted, error } = await deleteAllNotifications(user.id);
+      if (error) {
+        toast({ title: '❌ Ошибка', description: error, variant: 'destructive' });
+      } else {
+        toast({
+          title: '🗑️ Все уведомления удалены',
+          description: `Удалено ${deleted} ${deleted === 1 ? 'уведомление' : 'уведомлений'}`,
+        });
+      }
+      await loadNotifications();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleToggleRead = async (id: string) => {
@@ -217,14 +258,61 @@ export default function Notifications() {
             <span className="hidden sm:inline">Проверить дедлайны</span>
             <span className="sm:hidden">Дедлайны</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={handleMarkAllRead} disabled={loading} className="gap-2 text-xs sm:text-sm">
-            <Check className="w-3.5 h-3.5" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMarkAllRead}
+            disabled={loading || unreadCount === 0}
+            className="gap-2 text-xs sm:text-sm"
+            title="Отметить все как прочитанные"
+          >
+            <CheckCheck className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Прочитать все</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={handleClearRead} disabled={loading} className="gap-2 text-xs sm:text-sm text-destructive hover:text-destructive">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearRead}
+            disabled={loading || notifications.filter(n => n.read).length === 0}
+            className="gap-2 text-xs sm:text-sm"
+            title="Удалить только прочитанные"
+          >
             <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Очистить</span>
+            <span className="hidden sm:inline">Удалить прочитанные</span>
           </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || notifications.length === 0}
+                className="gap-2 text-xs sm:text-sm text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                title="Удалить все уведомления"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Удалить все</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Удалить все уведомления?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Будут удалены {notifications.length} {notifications.length === 1 ? 'уведомление' : 'уведомлений'}
+                  {unreadCount > 0 && ` (включая ${unreadCount} непрочитанных)`}.
+                  Действие необратимо.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAll}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Удалить все
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
