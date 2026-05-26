@@ -7,7 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,7 +28,8 @@ import {
   Plus,
   Edit,
   Trash2,
-  Check
+  Check,
+  ChevronsUpDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -45,6 +49,122 @@ interface TimesheetEntry {
 }
 
 const getProjectName = (project: any) => project?.name || project?.title || 'Без проекта';
+const getProjectClient = (project: any) => project?.client || project?.company || project?.notes?.client || '';
+
+// Combobox с поиском по проектам.
+// Группирует проекты на «Мои» (где пользователь в команде) и «Все остальные»,
+// чтобы из любого количества проектов можно было найти нужный по названию/клиенту.
+function ProjectCombobox({
+  projects,
+  myProjectIds,
+  value,
+  onChange,
+  placeholder = 'Выберите проект',
+  allowAll = false,
+  triggerClassName,
+}: {
+  projects: any[];
+  myProjectIds: Set<string>;
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  allowAll?: boolean; // показывать ли пункт «Все проекты» (для фильтра)
+  triggerClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selected = useMemo(() => {
+    if (allowAll && value === 'all') return { name: 'Все проекты' };
+    return projects.find((p: any) => p.id === value) || null;
+  }, [projects, value, allowAll]);
+
+  const myList = useMemo(
+    () => projects.filter((p: any) => myProjectIds.has(p.id)),
+    [projects, myProjectIds],
+  );
+  const otherList = useMemo(
+    () => projects.filter((p: any) => !myProjectIds.has(p.id)),
+    [projects, myProjectIds],
+  );
+
+  const renderItem = (p: any) => {
+    const name = getProjectName(p);
+    const client = getProjectClient(p);
+    // CommandItem matches по value — кладём туда и название, и клиента,
+    // чтобы поиск находил по обоим.
+    return (
+      <CommandItem
+        key={p.id}
+        value={`${name} ${client}`}
+        onSelect={() => {
+          onChange(p.id);
+          setOpen(false);
+        }}
+      >
+        <Check className={cn('mr-2 h-4 w-4', value === p.id ? 'opacity-100' : 'opacity-0')} />
+        <div className="flex flex-col min-w-0">
+          <span className="truncate">{name}</span>
+          {client && <span className="text-xs text-muted-foreground truncate">{client}</span>}
+        </div>
+      </CommandItem>
+    );
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            'justify-between bg-muted/40 border-0 font-normal',
+            !selected && 'text-muted-foreground',
+            triggerClassName,
+          )}
+        >
+          <span className="truncate">{selected ? getProjectName(selected) : placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="p-0 w-[--radix-popover-trigger-width] min-w-[260px]"
+      >
+        <Command>
+          <CommandInput placeholder="Поиск проекта или клиента..." />
+          <CommandList>
+            <CommandEmpty>Проекты не найдены</CommandEmpty>
+            {allowAll && (
+              <CommandGroup>
+                <CommandItem
+                  value="__all__ все проекты"
+                  onSelect={() => {
+                    onChange('all');
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn('mr-2 h-4 w-4', value === 'all' ? 'opacity-100' : 'opacity-0')} />
+                  Все проекты
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {myList.length > 0 && (
+              <CommandGroup heading="Мои проекты">
+                {myList.map(renderItem)}
+              </CommandGroup>
+            )}
+            {otherList.length > 0 && (
+              <CommandGroup heading={myList.length > 0 ? 'Остальные проекты' : 'Все проекты'}>
+                {otherList.map(renderItem)}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function Timesheets() {
   const { user } = useAuth();
@@ -71,26 +191,23 @@ export default function Timesheets() {
   const canFillTimesheets = user && user.role !== 'ceo' && user.role !== 'deputy_director';
   const canReviewTimesheets = !!user && ['ceo', 'admin', 'deputy_director', 'partner', 'manager_1', 'manager_2', 'manager_3'].includes(user.role);
   
-  // Получаем проекты пользователя (где он в команде)
-  const userProjects = useMemo(() => {
-    if (!user) return [];
-
-    // Фильтруем проекты где пользователь в команде
-    const filteredProjects = projects.filter((p: any) => {
+  // Проекты, где пользователь в команде. Используется для группы «Мои проекты»
+  // в комбобоксе — но в общем списке доступны ВСЕ проекты, чтобы можно было
+  // найти любой по поиску.
+  const myProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!user) return ids;
+    for (const p of projects as any[]) {
       const team = p.team || [];
-      return team.some((member: any) => member.userId === user.id || member.id === user.id);
-    });
-
-    // Если нет проектов в команде, показываем все активные проекты
-    if (filteredProjects.length === 0) {
-      return projects.filter((p: any) => {
-        const status = p?.notes?.status || p?.status;
-        return ['approved', 'team_assembled', 'planning', 'in_progress', 'pending_payment_approval'].includes(status);
-      });
+      if (team.some((m: any) => m.userId === user.id || m.id === user.id)) {
+        ids.add(p.id);
+      }
     }
-
-    return filteredProjects;
+    return ids;
   }, [projects, user]);
+
+  // Полный список проектов для комбобокса — все, не только «свои».
+  const allProjects = useMemo(() => (projects as any[]).slice(), [projects]);
 
   // Загружаем тайм-шиты из localStorage
   useEffect(() => {
@@ -350,18 +467,14 @@ export default function Timesheets() {
               <div className="space-y-4 mt-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Проект *</Label>
-                  <Select value={formData.projectId} onValueChange={(value) => setFormData({...formData, projectId: value})}>
-                    <SelectTrigger className="bg-muted/40 border-0 focus:ring-1">
-                      <SelectValue placeholder="Выберите проект" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {userProjects.map((p: any) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {getProjectName(p)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ProjectCombobox
+                    projects={allProjects}
+                    myProjectIds={myProjectIds}
+                    value={formData.projectId}
+                    onChange={(id) => setFormData({ ...formData, projectId: id })}
+                    placeholder="Выберите проект — введите название или клиента"
+                    triggerClassName="w-full"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -468,19 +581,15 @@ export default function Timesheets() {
                 <SelectItem value="rejected">Отклонено</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterProject} onValueChange={setFilterProject}>
-              <SelectTrigger className="bg-muted/40 border-0 text-sm">
-                <SelectValue placeholder="Проект" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Все проекты</SelectItem>
-                {userProjects.map((p: any) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {getProjectName(p)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ProjectCombobox
+              projects={allProjects}
+              myProjectIds={myProjectIds}
+              value={filterProject}
+              onChange={setFilterProject}
+              placeholder="Все проекты"
+              allowAll
+              triggerClassName="text-sm h-10"
+            />
           </div>
         </div>
       </Card>
