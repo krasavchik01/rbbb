@@ -119,7 +119,7 @@ let cachedTablesAvailable: boolean | null = null;
 async function tablesAvailable(): Promise<boolean> {
   if (cachedTablesAvailable !== null) return cachedTablesAvailable;
   try {
-    const { error } = await supabase.from('project_survey_config' as any).select('id').limit(1);
+    const { error } = await supabase.from('project_survey_config').select('id').limit(1);
     cachedTablesAvailable = !error;
   } catch {
     cachedTablesAvailable = false;
@@ -207,7 +207,7 @@ function proposalToRow(p: SurveyProposal) {
 export async function getSurveyConfig(): Promise<SurveyConfig> {
   if (await tablesAvailable()) {
     const { data } = await supabase
-      .from('project_survey_config' as any)
+      .from('project_survey_config')
       .select('*')
       .eq('id', 'default')
       .maybeSingle();
@@ -243,7 +243,7 @@ export async function setSurveyConfig(patch: Partial<SurveyConfig>): Promise<Sur
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase
-      .from('project_survey_config' as any)
+      .from('project_survey_config')
       .upsert(payload, { onConflict: 'id' });
     if (error) console.error('[projectSurvey] setSurveyConfig failed', error);
   }
@@ -272,7 +272,7 @@ export async function stopSurvey(): Promise<SurveyConfig> {
 export async function getAllResponses(): Promise<SurveyResponse[]> {
   if (await tablesAvailable()) {
     const { data, error } = await supabase
-      .from('project_survey_responses' as any)
+      .from('project_survey_responses')
       .select('*')
       .order('updated_at', { ascending: false });
     if (!error && data) return data.map(rowToResponse);
@@ -283,7 +283,7 @@ export async function getAllResponses(): Promise<SurveyResponse[]> {
 export async function getResponseForUser(userId: string): Promise<SurveyResponse | null> {
   if (await tablesAvailable()) {
     const { data } = await supabase
-      .from('project_survey_responses' as any)
+      .from('project_survey_responses')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
@@ -304,7 +304,7 @@ export async function saveResponse(response: SurveyResponse): Promise<SurveyResp
 
   if (await tablesAvailable()) {
     const { data, error } = await supabase
-      .from('project_survey_responses' as any)
+      .from('project_survey_responses')
       .upsert(responseToRow(next), { onConflict: 'user_id' })
       .select()
       .maybeSingle();
@@ -331,7 +331,7 @@ export async function deleteResponse(userId: string): Promise<void> {
   );
   writeJson(STORAGE_KEYS.RESPONSES, local);
   if (await tablesAvailable()) {
-    await supabase.from('project_survey_responses' as any).delete().eq('user_id', userId);
+    await supabase.from('project_survey_responses').delete().eq('user_id', userId);
   }
   await regenerateProposals();
 }
@@ -340,8 +340,8 @@ export async function clearAllResponses(): Promise<void> {
   writeJson(STORAGE_KEYS.RESPONSES, []);
   writeJson(STORAGE_KEYS.PROPOSALS, []);
   if (await tablesAvailable()) {
-    await supabase.from('project_survey_responses' as any).delete().neq('user_id', '');
-    await supabase.from('project_survey_proposals' as any).delete().neq('project_id', '');
+    await supabase.from('project_survey_responses').delete().neq('user_id', '');
+    await supabase.from('project_survey_proposals').delete().neq('project_id', '');
   }
 }
 
@@ -350,7 +350,7 @@ export async function clearAllResponses(): Promise<void> {
 export async function getAllProposals(): Promise<SurveyProposal[]> {
   if (await tablesAvailable()) {
     const { data, error } = await supabase
-      .from('project_survey_proposals' as any)
+      .from('project_survey_proposals')
       .select('*')
       .order('updated_at', { ascending: false });
     if (!error && data) return data.map(rowToProposal);
@@ -367,7 +367,7 @@ export async function upsertProposal(p: SurveyProposal): Promise<SurveyProposal>
 
   if (await tablesAvailable()) {
     const { data, error } = await supabase
-      .from('project_survey_proposals' as any)
+      .from('project_survey_proposals')
       .upsert(proposalToRow(p), { onConflict: 'project_id' })
       .select()
       .maybeSingle();
@@ -383,7 +383,7 @@ export async function deleteProposal(projectId: string): Promise<void> {
   );
   writeJson(STORAGE_KEYS.PROPOSALS, local);
   if (await tablesAvailable()) {
-    await supabase.from('project_survey_proposals' as any).delete().eq('project_id', projectId);
+    await supabase.from('project_survey_proposals').delete().eq('project_id', projectId);
   }
 }
 

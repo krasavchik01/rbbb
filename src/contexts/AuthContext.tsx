@@ -28,8 +28,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Демо пользователи с новыми ролями
-const DEMO_USERS: Record<string, { password: string; user: User }> = {
+// Демо-пользователи: жёстко зашиты в исходниках. В prod-сборке без явного
+// флага VITE_ENABLE_DEMO_USERS=true они исключаются из бандла (dead-code
+// elimination по веточке `false ? {...} : {}`), поэтому через них нельзя
+// войти, и пароли не утекают в JS.
+// В dev-режиме (npm run dev) включены всегда — нужны для тестирования ролей.
+// TODO(auth-migration, task #8): после миграции на Supabase Auth удалить
+// блок полностью; роли — через Supabase users + user_metadata.
+const DEMO_USERS_ENABLED =
+  import.meta.env.DEV ||
+  import.meta.env.VITE_ENABLE_DEMO_USERS === 'true';
+
+const DEMO_USERS: Record<string, { password: string; user: User }> = DEMO_USERS_ENABLED ? {
   // CEO - Генеральный директор (главный босс)
   'ceo@rbpartners.com': {
     password: 'ceo',
@@ -238,7 +248,7 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
       position: 'Налоговый специалист',
     },
   },
-};
+} : {};
 
 // Обогащает пользователя данными о доступе к компаниям из Supabase
 async function enrichUserWithAccess(user: User): Promise<User> {

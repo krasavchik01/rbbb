@@ -20,16 +20,38 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // In-memory storage removed (Migrated to Supabase)
 
 // Helper function to parse auth user from request
-// In production, this would validate JWT token from Authorization header
+// TODO(auth-migration): сейчас доверяем заголовкам x-user-* — это подделывается
+// клиентом. Безопасный вариант: валидация Supabase JWT из Authorization. См.
+// task #8 — миграция на Supabase Auth. До этого ручки НЕ должны делать
+// серверные mutation-actions без отдельной строгой проверки.
 const getUserFromRequest = (req) => {
-  // For now, assume user info is passed in headers
-  // In production: validate JWT token from req.headers.authorization
   return {
     id: req.headers['x-user-id'] || 'unknown',
     name: req.headers['x-user-name'] || 'Unknown',
     role: req.headers['x-user-role'] || 'member',
   };
 };
+
+// Защита от path traversal: имя проекта/файла не должно вытаскивать нас за
+// пределы baseDir. Поможет если кто-то пришлёт projectId="../../etc" или
+// filename="..\\..\\windows\\system32". После path.resolve проверяем префикс.
+function safeJoin(baseDir, ...parts) {
+  for (const part of parts) {
+    if (typeof part !== 'string' || part.length === 0) {
+      throw new Error('Empty path component');
+    }
+    // Запрещаем разделители путей, '..' и null-байты внутри сегмента.
+    if (/[\\/]/.test(part) || part === '..' || part.includes('\0')) {
+      throw new Error(`Unsafe path component: ${part}`);
+    }
+  }
+  const resolvedBase = path.resolve(baseDir);
+  const resolved = path.resolve(path.join(resolvedBase, ...parts));
+  if (resolved !== resolvedBase && !resolved.startsWith(resolvedBase + path.sep)) {
+    throw new Error('Path escapes base directory');
+  }
+  return resolved;
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -68,16 +90,23 @@ if (multer) {
   storage = multer.diskStorage({
     destination: (req, file, cb) => {
       const projectId = req.body.projectId || 'general';
-      const projectDir = path.join(storagePath, projectId);
-      if (!fs.existsSync(projectDir)) {
-        fs.mkdirSync(projectDir, { recursive: true });
+      try {
+        const projectDir = safeJoin(storagePath, projectId);
+        if (!fs.existsSync(projectDir)) {
+          fs.mkdirSync(projectDir, { recursive: true });
+        }
+        cb(null, projectDir);
+      } catch (err) {
+        cb(err, null);
       }
-      cb(null, projectDir);
     },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      // Очистка имени файла от спецсимволов
-      const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      // Очистка имени файла от спецсимволов. Точки тоже схлопываем подряд,
+      // чтобы исключить '..' даже в имени файла (после удаления слэшей).
+      const safeName = file.originalname
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(/\.{2,}/g, '.');
       cb(null, `${uniqueSuffix}-${safeName}`);
     }
   });
@@ -131,10 +160,17 @@ app.post('/api/upload', (req, res, next) => {
 // Скачивание/Просмотр файла
 app.get('/api/files/:projectId/:filename', (req, res) => {
   const { projectId, filename } = req.params;
-  const filePath = path.join(storagePath, projectId, filename);
+  let filePath;
+  try {
+    filePath = safeJoin(storagePath, projectId, filename);
+  } catch (err) {
+    return res.status(400).json({ error: 'Некорректный путь к файлу' });
+  }
 
   if (fs.existsSync(filePath)) {
-    // В будущем здесь можно добавить проверку прав доступа
+    // TODO(auth-migration): добавить проверку прав доступа к проекту после
+    // миграции на Supabase Auth (task #8). Сейчас любой, кто знает имя файла,
+    // может его скачать.
     res.sendFile(filePath);
   } else {
     res.status(404).json({ error: 'Файл не найден' });
@@ -144,7 +180,12 @@ app.get('/api/files/:projectId/:filename', (req, res) => {
 // Удаление файла
 app.delete('/api/files/:projectId/:filename', (req, res) => {
   const { projectId, filename } = req.params;
-  const filePath = path.join(storagePath, projectId, filename);
+  let filePath;
+  try {
+    filePath = safeJoin(storagePath, projectId, filename);
+  } catch (err) {
+    return res.status(400).json({ error: 'Некорректный путь к файлу' });
+  }
 
   try {
     if (fs.existsSync(filePath)) {
@@ -293,7 +334,12 @@ if (!fs.existsSync(projectDataDir)) {
 // Получить данные проекта (шаблон, этапы, паспорт)
 app.get('/api/project-data/:projectId', (req, res) => {
   const { projectId } = req.params;
-  const filePath = path.join(projectDataDir, `${projectId}.json`);
+  let filePath;
+  try {
+    filePath = safeJoin(projectDataDir, `${projectId}.json`);
+  } catch (err) {
+    return res.status(400).json({ error: 'Некорректный идентификатор проекта' });
+  }
 
   try {
     if (fs.existsSync(filePath)) {
@@ -311,7 +357,12 @@ app.get('/api/project-data/:projectId', (req, res) => {
 // Сохранить/обновить данные проекта
 app.put('/api/project-data/:projectId', (req, res) => {
   const { projectId } = req.params;
-  const filePath = path.join(projectDataDir, `${projectId}.json`);
+  let filePath;
+  try {
+    filePath = safeJoin(projectDataDir, `${projectId}.json`);
+  } catch (err) {
+    return res.status(400).json({ error: 'Некорректный идентификатор проекта' });
+  }
 
   try {
     const payload = {
@@ -332,7 +383,12 @@ app.put('/api/project-data/:projectId', (req, res) => {
 // Удалить данные проекта
 app.delete('/api/project-data/:projectId', (req, res) => {
   const { projectId } = req.params;
-  const filePath = path.join(projectDataDir, `${projectId}.json`);
+  let filePath;
+  try {
+    filePath = safeJoin(projectDataDir, `${projectId}.json`);
+  } catch (err) {
+    return res.status(400).json({ error: 'Некорректный идентификатор проекта' });
+  }
 
   try {
     if (fs.existsSync(filePath)) {

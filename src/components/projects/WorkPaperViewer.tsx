@@ -283,8 +283,9 @@ export function WorkPaperViewer({
         );
 
       case 'static_checklist':
-        const items = element.items || 
-          (element.content_from === 'procedures_template' ? template.procedures_template : []);
+        const items = element.items ||
+          (element.content_from === 'procedures_template' ? template.procedures_template : []) ||
+          [];
         return (
           <div key={index} className="mb-4 space-y-2">
             {items.map((item, idx) => (

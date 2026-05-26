@@ -247,6 +247,138 @@ export type Database = {
         }
         Relationships: []
       }
+      project_survey_responses: {
+        Row: {
+          id: string
+          user_id: string
+          user_name: string
+          user_role: string | null
+          status: string
+          answers: Json
+          submitted_at: string | null
+          updated_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          user_name: string
+          user_role?: string | null
+          status?: string
+          answers?: Json
+          submitted_at?: string | null
+          updated_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          user_name?: string
+          user_role?: string | null
+          status?: string
+          answers?: Json
+          submitted_at?: string | null
+          updated_at?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      project_survey_proposals: {
+        Row: {
+          id: string
+          project_id: string
+          project_name: string
+          status: string
+          proposed_team: Json
+          proposed_status: string | null
+          status_votes: Json
+          respondents_count: number
+          participants_count: number
+          confidence: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          reviewed_at: string | null
+          applied_at: string | null
+          override_notes: string | null
+          generated_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          project_name: string
+          status?: string
+          proposed_team?: Json
+          proposed_status?: string | null
+          status_votes?: Json
+          respondents_count?: number
+          participants_count?: number
+          confidence?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          reviewed_at?: string | null
+          applied_at?: string | null
+          override_notes?: string | null
+          generated_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          project_name?: string
+          status?: string
+          proposed_team?: Json
+          proposed_status?: string | null
+          status_votes?: Json
+          respondents_count?: number
+          participants_count?: number
+          confidence?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          reviewed_at?: string | null
+          applied_at?: string | null
+          override_notes?: string | null
+          generated_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      project_survey_config: {
+        Row: {
+          id: string
+          enabled: boolean
+          title: string
+          description: string | null
+          deadline: string | null
+          started_at: string | null
+          started_by: string | null
+          started_by_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          enabled?: boolean
+          title?: string
+          description?: string | null
+          deadline?: string | null
+          started_at?: string | null
+          started_by?: string | null
+          started_by_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          enabled?: boolean
+          title?: string
+          description?: string | null
+          deadline?: string | null
+          started_at?: string | null
+          started_by?: string | null
+          started_by_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number

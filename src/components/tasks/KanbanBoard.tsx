@@ -146,7 +146,7 @@ function TaskCard({ task, onUpdate: _onUpdate, onDelete, onOpen, isDragging = fa
             </span>
           </Badge>
           
-          {task.estimate_h > 0 && (
+          {(task.estimate_h ?? 0) > 0 && (
             <div className="flex items-center space-x-1 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
               <span>{task.estimate_h}ч</span>
