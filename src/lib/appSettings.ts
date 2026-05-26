@@ -3,6 +3,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Company, DEFAULT_COMPANIES } from '@/types/companies';
+import type { UserRole } from '@/types/roles';
 
 export interface SMTPConfig {
   host: string;
@@ -28,9 +29,9 @@ export interface AppSettings {
   // Режим работы приложения
   maintenanceMode: boolean;
   maintenanceMessage: string;
-  // Видимость блока «Последние активности» на дашборде
-  // (даже когда true, его видят только директора и партнёры — задаётся в коде Dashboard)
-  recentActivityEnabled: boolean;
+  // Роли, которым показывается блок «Последние активности» на дашборде.
+  // Пустой массив = блок скрыт у всех. Демо-юзеры не видят его в любом случае.
+  recentActivityVisibleRoles: UserRole[];
   // Список компаний (управляемый администратором)
   companies: Company[];
   // SMTP конфигурация для отправки email
@@ -48,7 +49,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   maintenanceMode: false,
   maintenanceMessage: '',
-  recentActivityEnabled: true,
+  recentActivityVisibleRoles: ['ceo', 'deputy_director', 'partner'],
   companies: DEFAULT_COMPANIES // Используем дефолтный список компаний
 };
 
@@ -98,7 +99,9 @@ export async function getAppSettings(): Promise<AppSettings> {
         },
         maintenanceMode: data.maintenance_mode ?? DEFAULT_SETTINGS.maintenanceMode,
         maintenanceMessage: data.maintenance_message ?? DEFAULT_SETTINGS.maintenanceMessage,
-        recentActivityEnabled: (data as any).recent_activity_enabled ?? DEFAULT_SETTINGS.recentActivityEnabled,
+        recentActivityVisibleRoles: Array.isArray((data as any).recent_activity_visible_roles)
+          ? ((data as any).recent_activity_visible_roles as UserRole[])
+          : DEFAULT_SETTINGS.recentActivityVisibleRoles,
         companies: (data.companies && Array.isArray(data.companies)) ? data.companies : DEFAULT_SETTINGS.companies
       };
 
@@ -168,7 +171,7 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
         office_address: updated.officeLocation.address,
         maintenance_mode: updated.maintenanceMode,
         maintenance_message: updated.maintenanceMessage,
-        recent_activity_enabled: updated.recentActivityEnabled,
+        recent_activity_visible_roles: updated.recentActivityVisibleRoles,
         companies: updated.companies // Сохраняем компании
       } as any)
       .eq('id', settingsRow.id)

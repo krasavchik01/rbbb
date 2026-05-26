@@ -11,6 +11,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAppSettings } from '@/lib/appSettings';
 import { CompaniesManagement } from '@/components/settings/CompaniesManagement';
 import { UserCompanyAssignment } from '@/components/settings/UserCompanyAssignment';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ROLE_LABELS, type UserRole } from '@/types/roles';
 import {
   User,
   Bell,
@@ -55,8 +57,8 @@ export default function Settings() {
 
   // Локальное состояние для демо-аккаунтов
   const [showDemoUsers, setShowDemoUsers] = useState(appSettings.showDemoUsers);
-  // Локальное состояние для блока «Последние активности» на дашборде
-  const [recentActivityEnabled, setRecentActivityEnabled] = useState(appSettings.recentActivityEnabled);
+  // Список ролей, которым видно блок «Последние активности» на дашборде
+  const [recentActivityVisibleRoles, setRecentActivityVisibleRoles] = useState<UserRole[]>(appSettings.recentActivityVisibleRoles);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const isAdmin = user?.role === 'admin';
@@ -64,7 +66,7 @@ export default function Settings() {
   // Синхронизация с appSettings при изменении
   useEffect(() => {
     setShowDemoUsers(appSettings.showDemoUsers);
-    setRecentActivityEnabled(appSettings.recentActivityEnabled);
+    setRecentActivityVisibleRoles(appSettings.recentActivityVisibleRoles);
     setOfficeSettings({
       enabled: appSettings.officeLocation.enabled,
       latitude: appSettings.officeLocation.latitude.toString(),
@@ -113,7 +115,7 @@ export default function Settings() {
     try {
       await updateAppSettings({
         showDemoUsers: showDemoUsers,
-        recentActivityEnabled: recentActivityEnabled,
+        recentActivityVisibleRoles: recentActivityVisibleRoles,
         officeLocation: {
           enabled: officeSettings.enabled,
           latitude: parseFloat(officeSettings.latitude) || 0,
@@ -487,27 +489,65 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* Видимость «Последние активности» */}
-                <div className="flex items-center justify-between pt-4 border-t">
+                {/* Видимость «Последние активности» — выбор ролей */}
+                <div className="pt-4 border-t space-y-3">
                   <div className="space-y-1">
                     <Label className="text-base">Блок «Последние активности» на дашборде</Label>
                     <p className="text-sm text-muted-foreground">
-                      Виден только директорам и партнёрам. Здесь можно полностью отключить его и для них.
+                      Отметьте роли, которым показывать блок. Демо-пользователи не видят его в любом случае.
+                      Снимите все галочки, чтобы скрыть блок у всех.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {recentActivityEnabled ? (
-                      <Eye className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <EyeOff className="w-4 h-4 text-muted-foreground" />
-                    )}
-                    <Switch
-                      checked={recentActivityEnabled}
-                      onCheckedChange={(checked) => {
-                        setRecentActivityEnabled(checked);
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRecentActivityVisibleRoles(['ceo', 'deputy_director', 'partner']);
                         setHasUnsavedChanges(true);
                       }}
-                    />
+                    >
+                      По умолчанию (CEO, зам., партнёр)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRecentActivityVisibleRoles([]);
+                        setHasUnsavedChanges(true);
+                      }}
+                    >
+                      Скрыть у всех
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {(Object.keys(ROLE_LABELS) as UserRole[]).map((role) => {
+                      const checked = recentActivityVisibleRoles.includes(role);
+                      return (
+                        <label
+                          key={role}
+                          className="flex items-center gap-2 px-3 py-2 rounded-md border bg-card hover:bg-accent/40 cursor-pointer transition-colors"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => {
+                              setRecentActivityVisibleRoles((prev) => {
+                                const isChecked = value === true;
+                                if (isChecked && !prev.includes(role)) return [...prev, role];
+                                if (!isChecked) return prev.filter((r) => r !== role);
+                                return prev;
+                              });
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                          <span className="text-sm">{ROLE_LABELS[role]}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

@@ -822,8 +822,8 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Последняя активность */}
-        {recentProjects.length > 0 && (
+        {/* Последняя активность — только ролям, отмеченным в Настройках админом */}
+        {recentProjects.length > 0 && !isDemoUser && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) && (
           <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-3">
             <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl" />
             <div className="relative z-10">
@@ -1010,14 +1010,14 @@ export default function Dashboard() {
 
       {/* Виджет отметки посещений */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={(isDirector || isPartner) && !isDemoUser && appSettings.recentActivityEnabled ? "lg:col-span-1" : "lg:col-span-3"}>
+        <div className={!isDemoUser && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) ? "lg:col-span-1" : "lg:col-span-3"}>
           <WidgetErrorBoundary label="Отметка посещений">
             <CheckInWidget />
           </WidgetErrorBoundary>
         </div>
 
-        {/* Последние активности — директорам и партнёрам, если включено в настройках */}
-        {(isDirector || isPartner) && !isDemoUser && appSettings.recentActivityEnabled && (
+        {/* Последние активности — ролям, отмеченным в Настройках админом */}
+        {!isDemoUser && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) && (
           <div className="lg:col-span-2">
             <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
               <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
