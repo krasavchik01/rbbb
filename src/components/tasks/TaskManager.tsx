@@ -11,21 +11,7 @@ import { TaskChecklist } from "./TaskChecklist";
 import { KanbanBoard } from "./KanbanBoard";
 import { Task, TaskStatus, PriorityLevel, ChecklistItem, Project } from "@/types/project";
 import { useAuth } from "@/contexts/AuthContext";
-import { 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Calendar, 
-  User, 
-  Flag, 
-  Clock, 
-  CheckCircle2,
-  AlertCircle,
-  Play,
-  Pause,
-  Eye,
-  MoreHorizontal
-} from "lucide-react";
+import { Plus } from "lucide-react";
 
 interface TaskManagerProps {
   project: Project;

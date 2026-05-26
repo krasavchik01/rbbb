@@ -196,6 +196,57 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          id: string
+          show_demo_users: boolean
+          office_location_enabled: boolean
+          office_latitude: number | null
+          office_longitude: number | null
+          office_radius_meters: number | null
+          office_address: string | null
+          maintenance_mode: boolean
+          maintenance_message: string | null
+          recent_activity_enabled: boolean
+          recent_activity_visible_roles: string[]
+          companies: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          show_demo_users?: boolean
+          office_location_enabled?: boolean
+          office_latitude?: number | null
+          office_longitude?: number | null
+          office_radius_meters?: number | null
+          office_address?: string | null
+          maintenance_mode?: boolean
+          maintenance_message?: string | null
+          recent_activity_enabled?: boolean
+          recent_activity_visible_roles?: string[]
+          companies?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          show_demo_users?: boolean
+          office_location_enabled?: boolean
+          office_latitude?: number | null
+          office_longitude?: number | null
+          office_radius_meters?: number | null
+          office_address?: string | null
+          maintenance_mode?: boolean
+          maintenance_message?: string | null
+          recent_activity_enabled?: boolean
+          recent_activity_visible_roles?: string[]
+          companies?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number

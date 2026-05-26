@@ -13,11 +13,6 @@ interface ProjectWorkflowProps {
 export function ProjectWorkflow({ project, userRole, onStatusChange }: ProjectWorkflowProps) {
   const currentStatusIndex = Object.keys(PROJECT_STATUS_LABELS).indexOf(project.status);
   
-  const canTransition = (status: ProjectStatus): boolean => {
-    const transition = WORKFLOW_TRANSITIONS[project.status];
-    return transition.roles.includes(userRole) && transition.next.includes(status);
-  };
-
   const getRequirementStatus = (requirement: string): boolean => {
     switch (requirement) {
       case 'name':
@@ -76,8 +71,7 @@ export function ProjectWorkflow({ project, userRole, onStatusChange }: ProjectWo
           {Object.entries(PROJECT_STATUS_LABELS).map(([status, label], index) => {
             const isCompleted = index < currentStatusIndex;
             const isCurrent = index === currentStatusIndex;
-            const isNext = index === currentStatusIndex + 1;
-            
+
             return (
               <div key={status} className="flex items-center">
                 <div className="flex flex-col items-center">

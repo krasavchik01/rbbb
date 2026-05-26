@@ -4,12 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
-  Calendar, 
-  Users, 
-  ArrowRight, 
+  Calendar,
+  Users,
+  ArrowRight,
   AlertTriangle,
   Clock,
-  Target
 } from "lucide-react";
 import { Project, PROJECT_STATUS_LABELS, RISK_LABELS } from "@/types/project";
 import { format } from "date-fns";

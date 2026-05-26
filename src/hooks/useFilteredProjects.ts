@@ -1,10 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
-import {
-  projectMatchesAllowedCompanies,
-  normalizeCompanyName,
-} from '@/lib/userCompanyAccess';
+import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
 
 /**
  * Фильтрует массив проектов по allowedCompanyIds текущего пользователя.

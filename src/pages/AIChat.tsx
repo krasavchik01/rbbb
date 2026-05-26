@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Bot, Send, Sparkles, Wrench, RotateCcw, ChevronDown, ChevronUp,
+  Bot, Send, Wrench, RotateCcw, ChevronDown, ChevronUp,
   Wand2, Eye, ShieldCheck,
 } from 'lucide-react';
 

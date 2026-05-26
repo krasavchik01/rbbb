@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Company, Employee, Project, Task, ProjectTeamMember } from '@/types/project-simple';
 
 export function useProjects() {

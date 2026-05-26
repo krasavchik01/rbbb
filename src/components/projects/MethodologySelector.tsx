@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ProjectTemplate, ProjectStage, ProcedureElement, ELEMENT_TYPE_ICONS } from '@/types/methodology';
+import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from '@/types/methodology';
 import { CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
 
 export interface SelectedProcedure {
@@ -24,9 +24,9 @@ interface MethodologySelectorProps {
   initialSelection?: SelectedProcedure[];
 }
 
-export function MethodologySelector({ 
-  template, 
-  projectId, 
+export function MethodologySelector({
+  template,
+  projectId: _projectId,
   employees,
   onSave, 
   onCancel,

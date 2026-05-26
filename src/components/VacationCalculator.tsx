@@ -11,7 +11,7 @@ interface VacationCalculatorProps {
   hireDate: string;
 }
 
-export function VacationCalculator({ employeeId, hireDate }: VacationCalculatorProps) {
+export function VacationCalculator({ employeeId: _employeeId, hireDate }: VacationCalculatorProps) {
   const [vacationType, setVacationType] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

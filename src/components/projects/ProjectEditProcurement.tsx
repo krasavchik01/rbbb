@@ -14,7 +14,6 @@ import {
   Trash2,
   FileText,
   Calendar,
-  DollarSign,
   Edit,
   Save,
   X,

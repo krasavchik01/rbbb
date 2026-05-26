@@ -8,7 +8,6 @@ import { useEmployees } from '@/hooks/useSupabaseData';
 import { Calendar, Clock, MapPin, Users, Building2, Briefcase, Home, Plane, Heart, Navigation, Activity } from 'lucide-react';
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { CheckInWidget } from '@/components/CheckInWidget';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 
@@ -47,7 +46,6 @@ const STATUS_LABELS: Record<AttendanceStatus, { label: string; icon: React.React
 export default function Attendance() {
   const { user } = useAuth();
   const { employees = [] } = useEmployees();
-  const { toast } = useToast();
   const [appSettings] = useAppSettings();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
@@ -57,7 +55,6 @@ export default function Attendance() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Настройки геолокации офиса - БЕРЁМ ИЗ ГЛОБАЛЬНЫХ НАСТРОЕК
-  const [officeSettingsOpen, setOfficeSettingsOpen] = useState(false);
   const officeLocations: OfficeLocation[] = useMemo(() => {
     // Если координаты из глобальных настроек заданы
     if (appSettings.officeLocation.latitude && appSettings.officeLocation.longitude) {
@@ -180,7 +177,6 @@ export default function Attendance() {
     return `${hours}ч ${minutes}м`;
   };
 
-  const isHR = user?.role === 'admin' || user?.role === 'ceo';
   const isAdmin = user?.role === 'admin';
   const isCEO = user?.role === 'ceo';
   // canViewAll — кто видит всю фирму (директора, HR, админ).

@@ -9,15 +9,16 @@
  * перенаправляют сюда с подставленным табом.
  */
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ClipboardCheck, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import ProjectSurvey from '@/pages/ProjectSurvey';
-import ProjectSurveyResults from '@/pages/ProjectSurveyResults';
-import ImportTimesheet from '@/pages/ImportTimesheet';
+// ImportTimesheet тянет xlsx (~425 KB) — грузим только при открытии таба «Импорт».
+const ImportTimesheet = lazy(() => import('@/pages/ImportTimesheet'));
+const ProjectSurveyResults = lazy(() => import('@/pages/ProjectSurveyResults'));
 
 const TAB_KEYS = ['fill', 'results', 'import'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -74,12 +75,16 @@ export default function SurveyHub() {
             </TabsContent>
             {isPrivileged && (
               <TabsContent value="results" className="mt-4">
-                <ProjectSurveyResults />
+                <Suspense fallback={<div className="p-6 text-muted-foreground">Загрузка результатов…</div>}>
+                  <ProjectSurveyResults />
+                </Suspense>
               </TabsContent>
             )}
             {isPrivileged && (
               <TabsContent value="import" className="mt-4">
-                <ImportTimesheet />
+                <Suspense fallback={<div className="p-6 text-muted-foreground">Загрузка импорта…</div>}>
+                  <ImportTimesheet />
+                </Suspense>
               </TabsContent>
             )}
           </Tabs>

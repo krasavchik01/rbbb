@@ -3,14 +3,11 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/hooks/useSupabaseData';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Briefcase,
-  User,
   AlertCircle,
   Loader2,
   X
@@ -19,7 +16,6 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { ru } from 'date-fns/locale';
 
 export default function Calendar() {
-  const { user } = useAuth();
   const { projects = [], loading } = useProjects();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);

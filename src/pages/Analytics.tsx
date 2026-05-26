@@ -1,22 +1,17 @@
 import { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects-simple';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  TrendingUp, 
-  TrendingDown,
-  Users, 
-  Briefcase, 
-  DollarSign, 
-  Calendar,
+import {
+  TrendingUp,
+  Users,
+  Briefcase,
+  DollarSign,
   BarChart3,
-  PieChart,
   Activity,
   Target,
-  Clock,
   CheckCircle
 } from 'lucide-react';
 import { calculateProjectFinances } from '@/types/project-v3';
@@ -125,21 +120,6 @@ export default function Analytics() {
         return sum + finances.profitMargin;
       }, 0) / total : 0
     };
-  }, [projects]);
-
-  // Проекты по статусам
-  const projectsByStatus = useMemo(() => {
-    const statuses: Record<string, number> = {};
-    projects.forEach((p: any) => {
-      statuses[p.status] = (statuses[p.status] || 0) + 1;
-    });
-    return Object.entries(statuses).map(([status, count]) => ({
-      name: status === 'in_progress' ? 'В работе' : 
-            status === 'completed' ? 'Завершено' :
-            status === 'pending' ? 'Ожидает' :
-            status === 'draft' ? 'Черновик' : status,
-      value: count
-    }));
   }, [projects]);
 
   // Проекты по менеджерам

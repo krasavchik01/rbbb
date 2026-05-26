@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowRight, Check, FileText, Rocket } from "lucide-react";
 import { useTemplates } from "@/hooks/useDataStore";
 import { ProjectTemplate, CustomField } from "@/types/methodology";
-import { dataStore } from "@/store/dataStore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects } from "@/hooks/useSupabaseData";

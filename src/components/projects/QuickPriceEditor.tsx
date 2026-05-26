@@ -16,7 +16,7 @@ interface QuickPriceEditorProps {
 }
 
 export function QuickPriceEditor({
-  projectId,
+  projectId: _projectId,
   projectName,
   currentAmount,
   currentCurrency = 'KZT',

@@ -2,8 +2,15 @@
  * Утилиты для импорта и экспорта проектов в Excel
  */
 
-import * as XLSX from 'xlsx';
+import type * as XLSXNs from 'xlsx';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
+
+// xlsx грузим динамически — это самый тяжёлый пакет в проекте (~425 KB).
+// Без этого xlsx-chunk подтягивался вместе со страницей /projects, даже когда
+// пользователь не нажимал «Экспорт» или «Импорт».
+async function loadXlsx(): Promise<typeof XLSXNs> {
+  return await import('xlsx');
+}
 
 // Интерфейс для проекта (упрощенный для Excel)
 export interface ProjectExcelRow {
@@ -68,7 +75,8 @@ function formatContactsForExcel(contacts: any[]): string {
 /**
  * Экспорт проектов в Excel
  */
-export function exportProjectsToExcel(projects: any[], filename: string = 'projects.xlsx') {
+export async function exportProjectsToExcel(projects: any[], filename: string = 'projects.xlsx') {
+  const XLSX = await loadXlsx();
   const excelData: ProjectExcelRow[] = projects.map((project, index) => {
     const clientName = project.client?.name || project.clientName || '';
     const contractNumber = project.contract?.number || project.contractNumber || '';
@@ -199,10 +207,6 @@ function excelDateToISO(excelDate: any): string | null {
     // Разница: 70 лет * 365.25 дней = 25567.5, но из-за бага Excel добавляем 1
     // Точнее: (new Date(1900, 0, 1) - new Date(1899, 11, 30)).getTime() / (1000 * 60 * 60 * 24) = 1
     // Правильная формула: Excel date - 25569 (количество дней между 1899-12-30 и 1970-01-01)
-    const excelEpoch = new Date(1899, 11, 30); // 30 декабря 1899
-    const jsEpoch = new Date(1970, 0, 1); // 1 января 1970
-    const daysBetweenEpochs = Math.floor((jsEpoch.getTime() - excelEpoch.getTime()) / (1000 * 60 * 60 * 24));
-    
     // Excel серийный номер - это дни от 1 января 1900 (но считает от 0 января 1900 из-за бага)
     // Правильная формула: (excelDate - 1) * 86400000 + excelEpoch.getTime()
     // Но проще использовать стандартную формулу
@@ -332,7 +336,8 @@ function parseContacts(contactsText: string): Array<{
 /**
  * Скачать шаблон для импорта
  */
-export function downloadImportTemplate() {
+export async function downloadImportTemplate() {
+  const XLSX = await loadXlsx();
   const templateData: Partial<ProjectExcelRow>[] = [
     {
       '№': 1,
@@ -418,7 +423,8 @@ export function downloadImportTemplate() {
 /**
  * Импорт проектов из Excel
  */
-export function importProjectsFromExcel(file: File): Promise<{ projects: any[]; errors: Array<{ row: number; message: string }> }> {
+export async function importProjectsFromExcel(file: File): Promise<{ projects: any[]; errors: Array<{ row: number; message: string }> }> {
+  const XLSX = await loadXlsx();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -676,8 +682,9 @@ export function importProjectsFromExcel(file: File): Promise<{ projects: any[]; 
             // Логирование суммы для отладки
             if (import.meta.env.DEV) {
               console.log(`📊 Импорт проекта ${project.name}:`, {
-                amountRaw: amountRaw,
-                amount: amount,
+                amountRaw,
+                amountWithoutVAT,
+                amountWithVAT,
                 finances: project.finances?.amountWithoutVAT,
                 contract: project.contract?.amountWithoutVAT
               });

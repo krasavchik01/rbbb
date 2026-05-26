@@ -22,7 +22,7 @@ interface ContractStagesEditorProps {
 const VAT_RATE = 0.16; // НДС 16%
 
 export function ContractStagesEditor({
-  projectId,
+  projectId: _projectId,
   projectName,
   totalAmount,
   currency,

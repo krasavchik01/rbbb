@@ -10,6 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "npm run build && node server.js",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "lint": "eslint .",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",

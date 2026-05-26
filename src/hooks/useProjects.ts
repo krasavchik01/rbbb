@@ -24,8 +24,6 @@ type Task = Database['public']['Tables']['tasks']['Row'] & {
   reporter_employee?: Employee;
   assignee_employees?: Employee[];
 };
-type ProjectTeamMember = Database['public']['Tables']['project_team']['Row'];
-
 export function useProjects() {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);

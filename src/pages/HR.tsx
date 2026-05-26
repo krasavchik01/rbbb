@@ -13,7 +13,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useToast } from "@/hooks/use-toast";
 import { sendWelcomeEmail } from "@/lib/emailService";
-import * as XLSX from 'xlsx';
+import type * as XLSXNs from 'xlsx';
+// xlsx ≈ 425 KB — динамический импорт, чтобы не тянуть пакет на страницу /hr
+// до клика по «Шаблон / Импорт / Экспорт».
+const loadXlsx = (): Promise<typeof XLSXNs> => import('xlsx');
 import {
   Plus,
   Search,
@@ -374,7 +377,8 @@ export default function HR() {
   };
 
   // Скачать шаблон Excel
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await loadXlsx();
     const template = [
       {
         "ФИО": "Иванов Иван Иванович",
@@ -411,6 +415,7 @@ export default function HR() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
+        const XLSX = await loadXlsx();
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
@@ -779,7 +784,8 @@ export default function HR() {
   };
 
   // Экспорт в Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXlsx();
     const exportData = employees.map((emp: any) => ({
       "Имя": emp.name,
       "Email": emp.email,

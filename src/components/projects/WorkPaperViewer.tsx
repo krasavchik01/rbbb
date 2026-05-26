@@ -3,7 +3,7 @@
  * Читает structure_definition из шаблона и рендерит соответствующие элементы
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,15 +12,12 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
-import { 
-  Save, 
-  Send, 
-  CheckCircle2, 
-  XCircle, 
-  MessageSquare,
+import {
+  Save,
+  Send,
+  CheckCircle2,
+  XCircle,
   FileText,
-  AlertCircle,
   ExternalLink
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -28,12 +25,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   WorkPaper,
   WorkPaperTemplate,
-  StructureDefinition,
   StructureElement,
   TableElement,
   WorkPaperStatus,
-  parseReference,
-  extractReferences
 } from '@/types/workPapers';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
 

@@ -1,9 +1,8 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Search, Filter, X } from "lucide-react";
-import { ProjectStatus, RiskLevel, PROJECT_STATUS_LABELS, RISK_LABELS } from "@/types/project";
+import { Search, X } from "lucide-react";
+import { PROJECT_STATUS_LABELS, RISK_LABELS } from "@/types/project";
 import type { Company, Employee } from "@/types/project";
 
 interface ProjectFiltersProps {

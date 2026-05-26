@@ -28,7 +28,7 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 export default function Bonuses() {
-  const { user, checkPermission } = useAuth();
+  const { user } = useAuth();
   const { projects = [], updateProject: updateProjectRecord, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
   const { tasks = [] } = useTasks();
@@ -102,7 +102,6 @@ export default function Bonuses() {
   //  - Зам.ГД / партнёр / PM не имеют доступа к секции утверждения,
   //    табу «По сотрудникам», сводке фонда, действиям выплаты.
   const isCeoOrAdmin = user?.role === 'ceo' || user?.role === 'admin';
-  const canViewBonuses = true; // страница открыта всем, но содержимое режется
   const canApproveBonusPayout = isCeoOrAdmin;
   const canEditBonuses = isCeoOrAdmin;
   const personalView = !isCeoOrAdmin;

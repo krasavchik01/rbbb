@@ -76,7 +76,6 @@ const STORAGE_KEYS = {
 
 class SupabaseDataStore {
   private isOnline: boolean = false;
-  private syncInProgress: boolean = false;
 
   constructor() {
     this.checkConnection();
@@ -1005,7 +1004,7 @@ class SupabaseDataStore {
   /**
  * Удаляет файл проекта (из БД и с хранилища)
  */
-  async deleteProjectFile(fileId: string, uploadedBy: string, projectId?: string): Promise<boolean> {
+  async deleteProjectFile(fileId: string, _uploadedBy: string, projectId?: string): Promise<boolean> {
     try {
       if (!projectId) return false;
 

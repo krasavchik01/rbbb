@@ -2,32 +2,28 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskChecklist } from "./TaskChecklist";
 import { Task, TaskStatus, PriorityLevel, ChecklistItem, Project } from "@/types/project";
 import { useAuth } from "@/contexts/AuthContext";
 import { notifyTaskCompleted } from "@/lib/projectNotifications";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Plus, 
-  Calendar, 
-  Clock, 
-  User, 
-  Flag, 
+import {
+  Plus,
+  Calendar,
+  Clock,
+  Flag,
   CheckCircle2,
   AlertCircle,
   Play,
   Pause,
   Eye,
-  Edit2,
   Trash2,
-  MoreHorizontal
 } from "lucide-react";
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -58,7 +54,7 @@ interface TaskCardProps {
   isDragging?: boolean;
 }
 
-function TaskCard({ task, onUpdate, onDelete, onOpen, isDragging = false }: TaskCardProps) {
+function TaskCard({ task, onUpdate: _onUpdate, onDelete, onOpen, isDragging = false }: TaskCardProps) {
   const { hasRole } = useAuth();
   const canEdit = hasRole('partner') || hasRole('admin');
 

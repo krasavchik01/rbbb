@@ -37,7 +37,7 @@ export function InfographicsChart({ type, data, title, subtitle, height = 300 }:
                 fill="#8884d8"
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
               >
-                {data.map((entry, index) => (
+                {data.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>

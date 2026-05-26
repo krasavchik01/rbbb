@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragStartEvent,
   DragOverlay,
   PointerSensor,
@@ -14,7 +13,6 @@ import {
   closestCenter,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,12 +21,10 @@ import {
   Search,
   GripVertical,
   CheckCircle,
-  User,
   Shield,
   ShieldOff,
   Users,
   ArrowRight,
-  X,
 } from 'lucide-react';
 import { useAppSettings } from '@/lib/appSettings';
 import { useEmployees } from '@/hooks/useSupabaseData';

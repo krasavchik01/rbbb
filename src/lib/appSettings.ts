@@ -249,7 +249,7 @@ import { useState, useEffect } from 'react';
 
 export function useAppSettings(): [AppSettings, (settings: Partial<AppSettings>) => Promise<void>] {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Загружаем настройки при монтировании

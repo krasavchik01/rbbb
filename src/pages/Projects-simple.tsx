@@ -115,9 +115,9 @@ export default function Projects() {
   const isAdmin = user?.role === 'ceo';
 
   // Функции экспорта/импорта
-  const handleExportProjects = () => {
+  const handleExportProjects = async () => {
     try {
-      exportProjectsToExcel(filteredProjects, `projects_${new Date().toISOString().split('T')[0]}.xlsx`);
+      await exportProjectsToExcel(filteredProjects, `projects_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast({
         title: "✅ Экспорт завершен",
         description: `Экспортировано ${filteredProjects.length} проектов`,
@@ -132,9 +132,9 @@ export default function Projects() {
     }
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     try {
-      downloadImportTemplate();
+      await downloadImportTemplate();
       toast({
         title: "✅ Шаблон скачан",
         description: "Файл template_import_projects.xlsx сохранен",

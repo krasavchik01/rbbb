@@ -348,7 +348,7 @@ export const notifyDeadline = async (projectName: string, daysLeft: number, reci
 export const checkDeadlinesAndNotify = async (
   projects: any[],
   currentUserId: string,
-  userRole: string
+  _userRole: string
 ): Promise<{ notified: number; projects: string[] }> => {
   const notifiedProjects: string[] = [];
   const today = new Date();

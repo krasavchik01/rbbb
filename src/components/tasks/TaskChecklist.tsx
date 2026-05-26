@@ -13,11 +13,11 @@ interface TaskChecklistProps {
   disabled?: boolean;
 }
 
-export function TaskChecklist({ 
-  checklist, 
-  onUpdate, 
-  taskId, 
-  disabled = false 
+export function TaskChecklist({
+  checklist,
+  onUpdate,
+  taskId: _taskId,
+  disabled = false
 }: TaskChecklistProps) {
   const { hasRole } = useAuth();
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
