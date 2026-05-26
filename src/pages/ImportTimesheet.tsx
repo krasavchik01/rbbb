@@ -10,16 +10,16 @@ import {
   parseTimesheetFile,
   normalizeProjectName,
   type ParseResult,
+  type ParsedRow,
   type EmployeeAggregate,
   type ProjectAggregate,
 } from '@/lib/timesheetImport';
 import {
-  submitResponse,
-  getAllResponses,
-  type SurveyProjectAnswer,
-  type SurveyResponse,
-} from '@/lib/projectSurvey';
-import { normalizeUserRole } from '@/types/roles';
+  bulkInsert,
+  makeImportBatchId,
+  type TimesheetEntryDraft,
+} from '@/lib/timesheets';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Upload,
   FileSpreadsheet,
@@ -47,6 +47,7 @@ export default function ImportTimesheet() {
   const { toast } = useToast();
 
   const [fileName, setFileName] = useState<string>('');
+  const [importBatchId, setImportBatchId] = useState<string | null>(null);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -56,9 +57,10 @@ export default function ImportTimesheet() {
   // письма»). По умолчанию не считаем их за участие, чтобы не зачислить
   // людей в команды проектов, по которым они реально не работали.
   const [includeZeroHours, setIncludeZeroHours] = useState(false);
-  // userId → краткая сводка по уже существующему ответу (для бейджа «уже загружен»)
-  const [existingResponses, setExistingResponses] = useState<
-    Map<string, { hours: number; projects: number; updatedAt: string }>
+  // userId → сводка по уже существующим записям этой пачки (для бейджа
+  // «уже загружен из этого файла — будет перезаписан»).
+  const [existingBatch, setExistingBatch] = useState<
+    Map<string, { rows: number; hours: number; approved: number }>
   >(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +76,8 @@ export default function ImportTimesheet() {
   const handleFile = async (file: File) => {
     setFileName(file.name);
     setBusy(true);
+    setExistingBatch(new Map());
+    setImportBatchId(null);
     try {
       const buf = await file.arrayBuffer();
       const r = parseTimesheetFile(buf, projectList, employeeList);
@@ -81,33 +85,36 @@ export default function ImportTimesheet() {
       // По умолчанию выбираем всех сотрудников с найденным user_id
       setSelectedEmployees(new Set(r.employees.filter((e) => e.matchedUserId).map((e) => e.employee)));
 
-      // Идемпотентность: подтягиваем уже сохранённые ответы и помечаем,
-      // у кого из найденных в файле сотрудников импорт ПЕРЕЗАПИШЕТ существующий
-      // ответ (UNIQUE user_id на уровне БД, см. migration 20260512000000).
-      const matchedUserIds = new Set(r.employees.map((e) => e.matchedUserId).filter(Boolean) as string[]);
-      const map = new Map<string, { hours: number; projects: number; updatedAt: string }>();
-      if (matchedUserIds.size > 0) {
-        try {
-          const all = await getAllResponses();
-          for (const resp of all) {
-            if (!matchedUserIds.has(resp.userId)) continue;
-            const hours = resp.answers.reduce((s, a) => s + (a.totalHours || 0), 0);
-            map.set(resp.userId, {
-              hours,
-              projects: resp.answers.filter((a) => a.participated).length,
-              updatedAt: resp.updatedAt,
-            });
+      // Идемпотентность: считаем хэш файла и проверяем, есть ли уже записи
+      // этой пачки в БД. Повторный импорт удалит и перезапишет (см. handleImport).
+      const batchId = await makeImportBatchId(file);
+      setImportBatchId(batchId);
+
+      const matchedUserIds = r.employees.map((e) => e.matchedUserId).filter(Boolean) as string[];
+      if (matchedUserIds.length > 0) {
+        const { data: existing } = await supabase
+          .from('timesheet_entries')
+          .select('employee_id, hours, status')
+          .eq('import_batch_id', batchId)
+          .eq('source', 'import');
+        if (existing && existing.length > 0) {
+          const map = new Map<string, { rows: number; hours: number; approved: number }>();
+          for (const row of existing) {
+            const cur = map.get(row.employee_id) || { rows: 0, hours: 0, approved: 0 };
+            cur.rows += 1;
+            cur.hours += Number(row.hours) || 0;
+            if (row.status === 'approved') cur.approved += 1;
+            map.set(row.employee_id, cur);
           }
-        } catch {
-          // не критично — просто не покажем бейдж
+          setExistingBatch(map);
         }
       }
-      setExistingResponses(map);
 
+      const dup = existingBatch.size;
       toast({
         title: 'Файл прочитан',
         description: `Строк: ${r.rows.length}, сотрудников: ${r.employees.length}` +
-          (map.size > 0 ? ` · ${map.size} уже загружены ранее (будут перезаписаны)` : ''),
+          (dup > 0 ? ` · ${dup} уже из этого файла (будут перезаписаны)` : ''),
       });
     } catch (err: any) {
       toast({ title: 'Ошибка чтения файла', description: err?.message || String(err), variant: 'destructive' });
@@ -127,7 +134,7 @@ export default function ImportTimesheet() {
 
   const toggleAll = () => {
     if (!result) return;
-    const all = result.employees.map((e) => e.employee);
+    const all = result.employees.filter((e) => e.matchedUserId).map((e) => e.employee);
     if (all.every((k) => selectedEmployees.has(k))) {
       setSelectedEmployees(new Set());
     } else {
@@ -135,73 +142,125 @@ export default function ImportTimesheet() {
     }
   };
 
-  const buildAnswers = (emp: EmployeeAggregate): SurveyProjectAnswer[] => {
-    return emp.projects
-      .filter((pg) => includeUnmatched || pg.matchScore !== 'none')
-      .filter((pg) => includeZeroHours || pg.totalHours > 0)
-      .map((pg) => {
-        const projectId =
-          pg.matchedProjectId ||
-          `unmatched:${(normalizeProjectName(pg.projectName) || pg.projectName.toLowerCase()).slice(0, 60)}`;
-        const projectName = pg.matchedProjectName || pg.projectName;
-        const commentBits: string[] = [`Импорт таймщита (${pg.rowsCount} стр.)`];
-        if (pg.sections.length > 0) commentBits.push(`Секции: ${pg.sections.slice(0, 3).join('; ')}${pg.sections.length > 3 ? '…' : ''}`);
-        if (pg.managers.length > 0) commentBits.push(`Руководитель: ${pg.managers.join(', ')}`);
-        if (pg.partners.length > 0) commentBits.push(`Партнёр: ${pg.partners.join(', ')}`);
-        return {
-          projectId,
-          projectName,
-          participated: true,
-          roleOnProject: normalizeUserRole(pg.position || emp.matchedUserRole || null),
-          periodFrom: pg.periodFrom || undefined,
-          periodTo: pg.periodTo || undefined,
-          totalHours: pg.totalHours || undefined,
-          statusVote: 'in_progress',
-          comment: commentBits.join(' · '),
-        };
+  /**
+   * Превращаем ParsedRow → TimesheetEntryDraft. Одна строка xlsx = одна запись.
+   * Фильтры:
+   *  - kind='absence' — пропускаем (это дни отпуска/больничного, не таймщит)
+   *  - effectiveProject пустой — пропускаем (это «голая» админка без проекта)
+   *  - hours=0 — пропускаем, если includeZeroHours=false
+   *  - проект не найден в системе и includeUnmatched=false — пропускаем
+   *  - нет isoDate — пропускаем (некорректная дата)
+   */
+  const buildRowDrafts = (
+    emp: EmployeeAggregate,
+    rows: ParsedRow[],
+    projectIdByName: Map<string, string>,
+  ): TimesheetEntryDraft[] => {
+    const drafts: TimesheetEntryDraft[] = [];
+    for (const r of rows) {
+      if (r.employee !== emp.employee) continue;
+      if (r.kind === 'absence') continue;
+      if (!r.effectiveProject) continue;
+      if (!r.isoDate) continue;
+      if (!includeZeroHours && (!r.hours || r.hours === 0)) continue;
+
+      const nameKey = normalizeProjectName(r.effectiveProject) || r.effectiveProject.toLowerCase();
+      const matchedProjectId =
+        r.preMatchFromNotes?.id && !r.preMatchFromNotes.id.startsWith('self:')
+          ? r.preMatchFromNotes.id
+          : projectIdByName.get(nameKey) || null;
+
+      if (!matchedProjectId && !includeUnmatched) continue;
+
+      drafts.push({
+        employeeId: emp.matchedUserId!,
+        employeeName: emp.matchedUserName || emp.employee,
+        projectId: matchedProjectId,
+        projectName: r.effectiveProject,
+        workDate: r.isoDate,
+        hours: r.hours,
+        section: r.section || undefined,
+        position: r.position || undefined,
+        location: r.location || undefined,
+        city: r.city || undefined,
+        managerRaw: r.manager || undefined,
+        partnerRaw: r.partner || undefined,
+        notes: r.notes || undefined,
+        source: 'import',
+        status: 'submitted',
+        createdBy: user?.id,
       });
+    }
+    return drafts;
   };
 
   const handleImport = async () => {
-    if (!result || !user) return;
+    if (!result || !user || !importBatchId) return;
     const targets = result.employees.filter((e) => selectedEmployees.has(e.employee) && e.matchedUserId);
     if (targets.length === 0) {
       toast({ title: 'Никого не выбрано', description: 'Отметьте сотрудников с найденными user_id.', variant: 'destructive' });
       return;
     }
-    setBusy(true);
-    setProgress({ done: 0, total: targets.length });
-    let okCount = 0;
-    let errCount = 0;
-    try {
-      for (let idx = 0; idx < targets.length; idx++) {
-        const emp = targets[idx];
-        const answers = buildAnswers(emp);
-        if (answers.length === 0) {
-          errCount += 1;
-          setProgress({ done: idx + 1, total: targets.length });
-          continue;
-        }
-        try {
-          const resp: SurveyResponse = {
-            id: `srv_import_${emp.matchedUserId}_${Date.now()}`,
-            userId: emp.matchedUserId!,
-            userName: emp.matchedUserName || emp.employee,
-            userRole: normalizeUserRole(emp.matchedUserRole || null),
-            answers,
-            status: 'submitted',
-            updatedAt: new Date().toISOString(),
-          };
-          await submitResponse(resp);
-          okCount += 1;
-        } catch {
-          errCount += 1;
-        }
-        setProgress({ done: idx + 1, total: targets.length });
+
+    // Map: nameKey → projectId — для быстрого матчинга строк на ID.
+    const projectIdByName = new Map<string, string>();
+    for (const emp of result.employees) {
+      for (const pg of emp.projects) {
+        if (!pg.matchedProjectId) continue;
+        const key = normalizeProjectName(pg.projectName) || pg.projectName.toLowerCase();
+        projectIdByName.set(key, pg.matchedProjectId);
       }
+    }
+
+    // Считаем общее число строк для прогресса
+    const allDrafts: TimesheetEntryDraft[] = [];
+    for (const emp of targets) {
+      allDrafts.push(...buildRowDrafts(emp, result.rows, projectIdByName));
+    }
+    if (allDrafts.length === 0) {
       toast({
-        title: `Импортировано ${okCount} сотрудник(ов)`,
-        description: errCount > 0 ? `${errCount} с ошибкой` : 'Данные появятся в «Опрос: результаты» и во вкладке «Кто-где-когда».',
+        title: 'Нечего импортировать',
+        description: 'Все строки выбранных сотрудников отфильтрованы (проверьте чекбоксы «включать unmatched / 0 часов»).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setBusy(true);
+    setProgress({ done: 0, total: allDrafts.length });
+
+    try {
+      // 1) Удаляем старые записи этой пачки ТОЛЬКО для выбранных сотрудников.
+      //    Если импортёр запускает повторно тот же файл и снимает галочку с
+      //    одного сотрудника, его старые записи остаются (не теряем работу).
+      const selectedUserIds = targets.map((e) => e.matchedUserId!);
+      const { error: delErr } = await supabase
+        .from('timesheet_entries')
+        .delete()
+        .eq('import_batch_id', importBatchId)
+        .eq('source', 'import')
+        .in('employee_id', selectedUserIds);
+      if (delErr) {
+        toast({ title: 'Ошибка удаления старой пачки', description: delErr.message, variant: 'destructive' });
+        return;
+      }
+
+      // 2) Вставляем построчно. Делим на чанки по 500 — Supabase REST имеет
+      //    ограничение на размер payload, и большой xlsx (5000+ строк) лучше не пихать одним INSERT.
+      const CHUNK = 500;
+      let inserted = 0;
+      for (let i = 0; i < allDrafts.length; i += CHUNK) {
+        const chunk = allDrafts.slice(i, i + CHUNK).map((d) => ({ ...d, importBatchId }));
+        const n = await bulkInsert(chunk);
+        inserted += n;
+        setProgress({ done: Math.min(i + CHUNK, allDrafts.length), total: allDrafts.length });
+      }
+
+      toast({
+        title: `Импортировано ${inserted} строк`,
+        description:
+          `${targets.length} сотрудник(ов) · ${inserted} зап. · ` +
+          'Записи ожидают подтверждения партнёра проекта (или зам.директора, если партнёр не указан).',
       });
     } finally {
       setBusy(false);
@@ -248,9 +307,8 @@ export default function ImportTimesheet() {
           </CardTitle>
           <CardDescription className="mt-2">
             Скачайте таймщит сотрудника из Google Sheets как <b>.xlsx</b> (Файл → Скачать → Microsoft Excel)
-            и загрузите сюда. Система сама распознает колонки <i>Сотрудник, Дата, Проект, Должность,
-            Категория Секция, Часы, Локация, Руководитель, Партнер, Примечание</i>, сопоставит проекты
-            с теми, что в системе, и сгруппирует по сотрудник × проект.
+            и загрузите сюда. Каждая строка файла (день × секция) сохраняется отдельно — партнёр
+            проекта увидит детализацию и подтвердит часы.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -277,9 +335,9 @@ export default function ImportTimesheet() {
           </div>
           <ul className="text-xs text-muted-foreground mt-3 space-y-1">
             <li>• Строки «<span className="font-mono">---Административная работа---</span>» — смотрю «Примечание», если там виден реальный проект, использую его</li>
-            <li>• «Отсутствие (Отпуск, больничный)» — считаю как дни без проекта</li>
-            <li>• Руководитель и партнёр собираются <b>отдельно по каждому проекту</b> (они могут отличаться)</li>
-            <li>• Можно загружать таймщит на любого сотрудника — система привяжет по ФИО</li>
+            <li>• «Отсутствие (Отпуск, больничный)» — считаю как дни без проекта (не идут в таймщит)</li>
+            <li>• Партнёр в файле сохраняется как <code>partner_raw</code>, апрувит партнёр из карточки проекта (расхождения будут видны)</li>
+            <li>• Повторный импорт того же файла перезаписывает свою пачку (по хэшу) — задвоения не будет</li>
           </ul>
         </CardContent>
       </Card>
@@ -313,14 +371,14 @@ export default function ImportTimesheet() {
                 <CardTitle className="text-base">Сотрудники в файле</CardTitle>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <Checkbox checked={includeUnmatched} onCheckedChange={(v) => setIncludeUnmatched(!!v)} />
-                  Включать проекты, которых нет в системе (импортировать как есть)
+                  Включать проекты, которых нет в системе (project_id будет пустым → апрув у зам.дир)
                 </label>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <Checkbox checked={includeZeroHours} onCheckedChange={(v) => setIncludeZeroHours(!!v)} />
-                  Включать проекты с 0 часов (маркеры событий)
+                  Включать строки с 0 часов (маркеры событий)
                 </label>
                 <Button size="sm" variant="outline" onClick={toggleAll} className="ml-auto">
-                  {result.employees.length > 0 && result.employees.every((e) => selectedEmployees.has(e.employee))
+                  {result.employees.filter((e) => e.matchedUserId).every((e) => selectedEmployees.has(e.employee))
                     ? 'Снять выделение'
                     : 'Выбрать всех найденных'}
                 </Button>
@@ -331,6 +389,7 @@ export default function ImportTimesheet() {
           {result.employees.map((emp) => {
             const checked = selectedEmployees.has(emp.employee);
             const matched = !!emp.matchedUserId;
+            const exist = matched ? existingBatch.get(emp.matchedUserId!) : null;
             return (
               <Card
                 key={emp.employee}
@@ -357,19 +416,25 @@ export default function ImportTimesheet() {
                             <XCircle className="w-3 h-3 mr-1" /> в системе нет — будет пропущен
                           </Badge>
                         )}
-                        {matched && existingResponses.has(emp.matchedUserId!) && (
+                        {exist && (
                           <Badge
                             variant="outline"
-                            className="text-xs bg-violet-50 text-violet-700 border-violet-200"
-                            title={`Прошлая загрузка: ${existingResponses.get(emp.matchedUserId!)!.hours} ч., ${existingResponses.get(emp.matchedUserId!)!.projects} проект(ов), ${new Date(existingResponses.get(emp.matchedUserId!)!.updatedAt).toLocaleString('ru')}`}
+                            className={
+                              exist.approved > 0
+                                ? 'text-xs bg-red-50 text-red-700 border-red-200'
+                                : 'text-xs bg-violet-50 text-violet-700 border-violet-200'
+                            }
+                            title={`Из этого файла: ${exist.rows} зап., ${exist.hours} ч.${exist.approved > 0 ? `, ${exist.approved} уже подтверждены партнёром — перезапись их удалит!` : ''}`}
                           >
-                            уже загружен — будет перезаписан
+                            {exist.approved > 0
+                              ? `${exist.approved} уже подтверждены — потеряются!`
+                              : `уже из этого файла (${exist.rows} зап.) — будет перезаписано`}
                           </Badge>
                         )}
                       </CardTitle>
                       <CardDescription className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                         <span><Clock className="w-3 h-3 inline mr-1" /> {emp.totalProjectHours} ч. по проектам</span>
-                        {emp.adminHours > 0 && <span>+ {emp.adminHours} ч. админ</span>}
+                        {emp.adminHours > 0 && <span>+ {emp.adminHours} ч. админ (без проекта — не идут в таймщит)</span>}
                         {emp.absenceDays > 0 && <span>отсутствие: {emp.absenceDays} дн.</span>}
                         <span>{emp.projects.length} проект(ов)</span>
                       </CardDescription>
@@ -458,12 +523,14 @@ export default function ImportTimesheet() {
           <div className="sticky bottom-4 z-10 flex justify-end items-center gap-3">
             {progress && (
               <div className="bg-background border rounded-md px-3 py-2 text-sm shadow-lg">
-                Импорт: <b>{progress.done}</b> / {progress.total}
+                Импорт: <b>{progress.done}</b> / {progress.total} строк
               </div>
             )}
             <Button size="lg" onClick={handleImport} disabled={busy || selectedEmployees.size === 0} className="shadow-xl px-8">
               <Sparkles className="w-4 h-4 mr-2" />
-              {busy && progress ? `Импортирую… ${progress.done}/${progress.total}` : `Импортировать выбранных (${selectedEmployees.size})`}
+              {busy && progress
+                ? `Импортирую… ${progress.done}/${progress.total}`
+                : `Импортировать (${selectedEmployees.size} сотр.)`}
             </Button>
           </div>
         </>

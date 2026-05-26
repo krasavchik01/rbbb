@@ -247,6 +247,87 @@ export type Database = {
         }
         Relationships: []
       }
+      timesheet_entries: {
+        Row: {
+          id: string
+          employee_id: string
+          employee_name: string
+          project_id: string | null
+          project_name: string
+          work_date: string
+          hours: number
+          section: string | null
+          position: string | null
+          location: string | null
+          city: string | null
+          manager_raw: string | null
+          partner_raw: string | null
+          notes: string | null
+          source: string
+          import_batch_id: string | null
+          status: string
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          reviewed_at: string | null
+          reviewer_notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          employee_name: string
+          project_id?: string | null
+          project_name: string
+          work_date: string
+          hours?: number
+          section?: string | null
+          position?: string | null
+          location?: string | null
+          city?: string | null
+          manager_raw?: string | null
+          partner_raw?: string | null
+          notes?: string | null
+          source?: string
+          import_batch_id?: string | null
+          status?: string
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          reviewed_at?: string | null
+          reviewer_notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          employee_name?: string
+          project_id?: string | null
+          project_name?: string
+          work_date?: string
+          hours?: number
+          section?: string | null
+          position?: string | null
+          location?: string | null
+          city?: string | null
+          manager_raw?: string | null
+          partner_raw?: string | null
+          notes?: string | null
+          source?: string
+          import_batch_id?: string | null
+          status?: string
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          reviewed_at?: string | null
+          reviewer_notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       project_survey_responses: {
         Row: {
           id: string

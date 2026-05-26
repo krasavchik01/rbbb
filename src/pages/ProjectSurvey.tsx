@@ -19,6 +19,8 @@ import {
   type SurveyProjectAnswer,
   type SurveyResponse,
 } from '@/lib/projectSurvey';
+import { bulkInsert, type TimesheetEntryDraft } from '@/lib/timesheets';
+import { supabase } from '@/integrations/supabase/client';
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from '@/types/roles';
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from '@/types/project-v3';
 import { CheckCircle2, ClipboardList, Send, Search, X, Plus, Trash2, Users, Building2, Clock, Sparkles } from 'lucide-react';
@@ -84,40 +86,57 @@ function buildAnswerFromManual(m: ManualAnswer): SurveyProjectAnswer {
   };
 }
 
-function appendTimesheetsForManual(user: { id: string; name: string }, items: ManualAnswer[]): number {
-  if (items.length === 0) return 0;
-  const saved = (() => {
-    try { return JSON.parse(localStorage.getItem('timesheets') || '[]'); } catch { return []; }
-  })();
-  let created = 0;
+/**
+ * Сохраняет ручные ответы опроса в timesheet_entries (source='survey').
+ * Идемпотентно: повторный сабмит опроса для тех же projectId удаляет
+ * предыдущие survey-записи этого юзера по этим проектам и создаёт новые.
+ * Это позволяет править ответ опроса без задвоения часов.
+ *
+ * Записи идут со status='submitted' — партнёр проекта (или зам.дир, если
+ * партнёра нет) увидит их в своём списке на утверждение.
+ */
+async function appendTimesheetsForManual(
+  user: { id: string; name: string },
+  items: ManualAnswer[],
+): Promise<number> {
+  const withHours = items.filter((m) => m.totalHours && m.totalHours > 0 && m.projectId);
+  if (withHours.length === 0) return 0;
+
   const today = new Date().toISOString().split('T')[0];
-  for (const m of items) {
-    if (!m.totalHours || m.totalHours <= 0) continue;
-    const tag = `[опрос:${m.projectId}]`;
-    const already = saved.some(
-      (ts: any) => ts.employeeId === user.id && typeof ts.description === 'string' && ts.description.includes(tag),
-    );
-    if (already) continue;
-    saved.push({
-      id: `ts_survey_${user.id}_${m.projectId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      employeeId: user.id,
-      employeeName: user.name,
-      projectId: m.projectId,
-      projectName: m.projectName,
-      date: m.periodFrom || today,
-      hours: m.totalHours,
-      description: [
-        `Период: ${m.periodFrom || '—'} → ${m.periodTo || 'сейчас'}`,
-        m.roleOnProject ? `Роль: ${ROLE_LABELS[m.roleOnProject]}` : null,
-        m.comment || null,
-        tag,
-      ].filter(Boolean).join(' · '),
-      status: 'submitted',
-    });
-    created += 1;
+
+  // 1) Удаляем существующие survey-записи этого юзера по этим проектам.
+  //    (project_id хранится как TEXT — проекты, которых нет в системе, имеют
+  //    синтетический id вида 'unmatched:...' из ProjectSurvey, такие тоже подойдут.)
+  const projectIds = withHours.map((m) => m.projectId).filter((id) => !id.startsWith('unmatched:'));
+  if (projectIds.length > 0) {
+    await supabase
+      .from('timesheet_entries')
+      .delete()
+      .eq('employee_id', user.id)
+      .eq('source', 'survey')
+      .in('project_id', projectIds);
   }
-  localStorage.setItem('timesheets', JSON.stringify(saved));
-  return created;
+
+  // 2) Готовим новые drafts. Одна запись на проект (без построчной детализации —
+  //    в опросе нет дней/секций, только totalHours за период).
+  const drafts: TimesheetEntryDraft[] = withHours.map((m) => ({
+    employeeId: user.id,
+    employeeName: user.name,
+    projectId: m.projectId.startsWith('unmatched:') ? null : m.projectId,
+    projectName: m.projectName,
+    workDate: m.periodFrom || today,
+    hours: m.totalHours!,
+    position: m.roleOnProject ? ROLE_LABELS[m.roleOnProject] : undefined,
+    notes: [
+      `Период по опросу: ${m.periodFrom || '—'} → ${m.periodTo || 'сейчас'}`,
+      m.comment || null,
+    ].filter(Boolean).join(' · ') || undefined,
+    source: 'survey',
+    status: 'submitted',
+    createdBy: user.id,
+  }));
+
+  return bulkInsert(drafts);
 }
 
 export default function ProjectSurvey() {
@@ -291,11 +310,11 @@ export default function ProjectSurvey() {
         submittedAt: existingResponse?.submittedAt,
       });
       setExistingResponse(next);
-      const tsCreated = appendTimesheetsForManual({ id: user.id, name: user.name }, manualAnswers);
+      const tsCreated = await appendTimesheetsForManual({ id: user.id, name: user.name }, manualAnswers);
       toast({
         title: 'Спасибо!',
         description: tsCreated > 0
-          ? `Отправлено. По добавленным проектам в таймщиты записано ${tsCreated} запис(и/ей).`
+          ? `Отправлено. По добавленным проектам создано ${tsCreated} записи таймщита — ждут подтверждения партнёра.`
           : 'Отправлено. Зам.директор увидит ваши данные в результатах опроса.',
       });
     } finally {

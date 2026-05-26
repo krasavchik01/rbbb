@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,15 @@ import { useEmployees } from '@/hooks/useSupabaseData';
 import { useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  listTimesheets,
+  createEntry,
+  updateEntry,
+  deleteEntry,
+  approveEntries,
+  rejectEntries,
+  type TimesheetEntry as DbTimesheetEntry,
+} from '@/lib/timesheets';
 import { 
   Clock,
   Calendar,
@@ -209,20 +218,37 @@ export default function Timesheets() {
   // Полный список проектов для комбобокса — все, не только «свои».
   const allProjects = useMemo(() => (projects as any[]).slice(), [projects]);
 
-  // Загружаем тайм-шиты из localStorage
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('timesheets') || '[]');
-    const enriched = saved.map((ts: any) => {
-      const employee = employees.find((e: any) => e.id === ts.employeeId);
-      const project = ts.projectId ? projects.find((p: any) => p.id === ts.projectId) : null;
+  // Маппинг записи из БД в UI-формат (старый локальный TimesheetEntry).
+  const toUiEntry = useCallback(
+    (e: DbTimesheetEntry): TimesheetEntry => {
+      const employee = employees.find((emp: any) => emp.id === e.employeeId);
+      const project = e.projectId ? projects.find((p: any) => p.id === e.projectId) : null;
       return {
-        ...ts,
-        employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: getProjectName(project)
+        id: e.id,
+        employeeId: e.employeeId,
+        employeeName: employee?.name || e.employeeName || 'Неизвестный сотрудник',
+        projectId: e.projectId || undefined,
+        projectName: getProjectName(project) || e.projectName,
+        date: e.workDate,
+        hours: e.hours,
+        description: e.notes || '',
+        status: e.status as TimesheetEntry['status'],
+        reviewedBy: e.reviewedByName,
+        reviewedAt: e.reviewedAt,
       };
-    });
-    setTimesheets(enriched);
-  }, [employees, projects]);
+    },
+    [employees, projects],
+  );
+
+  // Загружаем тайм-шиты из Supabase.
+  const reload = useCallback(async () => {
+    const entries = await listTimesheets();
+    setTimesheets(entries.map(toUiEntry));
+  }, [toUiEntry]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   // Фильтруем тайм-щиты по текущему пользователю (если не админ/CEO)
   const visibleTimesheets = useMemo(() => {
@@ -250,55 +276,56 @@ export default function Timesheets() {
   }, [visibleTimesheets, searchTerm, filterStatus, filterDate, filterProject]);
 
   // Сохранение тайм-щита
-  const saveTimesheet = () => {
+  const saveTimesheet = async () => {
     if (!user) return;
-    
+
     if (!formData.projectId) {
       toast({ title: 'Ошибка', description: 'Выберите проект', variant: 'destructive' });
       return;
     }
-    
+
     if (!formData.hours || parseFloat(formData.hours) <= 0) {
       toast({ title: 'Ошибка', description: 'Укажите количество часов', variant: 'destructive' });
       return;
     }
 
-    const newTimesheet: TimesheetEntry = {
-      id: editingTimesheet?.id || `ts_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      employeeId: user.id,
-      employeeName: user.name,
-      projectId: formData.projectId,
-      projectName: getProjectName(projects.find((p: any) => p.id === formData.projectId)),
-      date: formData.date,
-      hours: parseFloat(formData.hours),
-      description: formData.description || 'Работа над проектом',
-      status: editingTimesheet?.status || 'draft'
-    };
+    const projectName = getProjectName(projects.find((p: any) => p.id === formData.projectId));
+    const hours = parseFloat(formData.hours);
+    const description = formData.description || 'Работа над проектом';
 
-    const saved = JSON.parse(localStorage.getItem('timesheets') || '[]');
     if (editingTimesheet) {
-      const index = saved.findIndex((ts: any) => ts.id === editingTimesheet.id);
-      if (index >= 0) {
-        saved[index] = newTimesheet;
+      const updated = await updateEntry(editingTimesheet.id, {
+        projectId: formData.projectId,
+        projectName,
+        workDate: formData.date,
+        hours,
+        notes: description,
+      });
+      if (!updated) {
+        toast({ title: 'Ошибка', description: 'Не удалось обновить запись', variant: 'destructive' });
+        return;
       }
     } else {
-      saved.push(newTimesheet);
+      const created = await createEntry({
+        employeeId: user.id,
+        employeeName: user.name,
+        projectId: formData.projectId,
+        projectName,
+        workDate: formData.date,
+        hours,
+        notes: description,
+        source: 'manual',
+        status: 'draft',
+        createdBy: user.id,
+      });
+      if (!created) {
+        toast({ title: 'Ошибка', description: 'Не удалось создать запись', variant: 'destructive' });
+        return;
+      }
     }
-    
-    localStorage.setItem('timesheets', JSON.stringify(saved));
-    
-    // Обновляем состояние
-    const enriched = saved.map((ts: any) => {
-      const employee = employees.find((e: any) => e.id === ts.employeeId);
-      const project = ts.projectId ? projects.find((p: any) => p.id === ts.projectId) : null;
-      return {
-        ...ts,
-        employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: getProjectName(project)
-      };
-    });
-    setTimesheets(enriched);
-    
+
+    await reload();
+
     toast({ title: 'Успешно', description: editingTimesheet ? 'Тайм-щит обновлен' : 'Тайм-щит создан' });
     setShowAddDialog(false);
     setEditingTimesheet(null);
@@ -306,7 +333,7 @@ export default function Timesheets() {
       projectId: '',
       date: new Date().toISOString().split('T')[0],
       hours: '',
-      description: ''
+      description: '',
     });
   };
 
@@ -328,77 +355,44 @@ export default function Timesheets() {
   };
 
   // Удаление тайм-щита
-  const handleDelete = (timesheet: TimesheetEntry) => {
+  const handleDelete = async (timesheet: TimesheetEntry) => {
     if (!user || timesheet.employeeId !== user.id) return;
     if (timesheet.status === 'approved') {
       toast({ title: 'Ошибка', description: 'Нельзя удалить утвержденный тайм-щит', variant: 'destructive' });
       return;
     }
-    
-    const saved = JSON.parse(localStorage.getItem('timesheets') || '[]');
-    const filtered = saved.filter((ts: any) => ts.id !== timesheet.id);
-    localStorage.setItem('timesheets', JSON.stringify(filtered));
-    
-    const enriched = filtered.map((ts: any) => {
-      const employee = employees.find((e: any) => e.id === ts.employeeId);
-      const project = ts.projectId ? projects.find((p: any) => p.id === ts.projectId) : null;
-      return {
-        ...ts,
-        employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: getProjectName(project)
-      };
-    });
-    setTimesheets(enriched);
+    const ok = await deleteEntry(timesheet.id);
+    if (!ok) {
+      toast({ title: 'Ошибка', description: 'Не удалось удалить', variant: 'destructive' });
+      return;
+    }
+    await reload();
     toast({ title: 'Успешно', description: 'Тайм-щит удален' });
   };
 
   // Отправка на проверку
-  const handleSubmit = (timesheet: TimesheetEntry) => {
+  const handleSubmit = async (timesheet: TimesheetEntry) => {
     if (!user || timesheet.employeeId !== user.id) return;
-    
-    const saved = JSON.parse(localStorage.getItem('timesheets') || '[]');
-    const index = saved.findIndex((ts: any) => ts.id === timesheet.id);
-    if (index >= 0) {
-      saved[index].status = 'submitted';
-      localStorage.setItem('timesheets', JSON.stringify(saved));
-      
-      const enriched = saved.map((ts: any) => {
-        const employee = employees.find((e: any) => e.id === ts.employeeId);
-        const project = ts.projectId ? projects.find((p: any) => p.id === ts.projectId) : null;
-        return {
-          ...ts,
-          employeeName: employee?.name || 'Неизвестный сотрудник',
-          projectName: getProjectName(project)
-        };
-      });
-      setTimesheets(enriched);
-      toast({ title: 'Успешно', description: 'Тайм-щит отправлен на проверку' });
+    const updated = await updateEntry(timesheet.id, { status: 'submitted' });
+    if (!updated) {
+      toast({ title: 'Ошибка', description: 'Не удалось отправить', variant: 'destructive' });
+      return;
     }
+    await reload();
+    toast({ title: 'Успешно', description: 'Тайм-щит отправлен на проверку' });
   };
 
-  const handleReview = (timesheet: TimesheetEntry, status: 'approved' | 'rejected') => {
+  const handleReview = async (timesheet: TimesheetEntry, status: 'approved' | 'rejected') => {
     if (!user || !canReviewTimesheets || timesheet.status !== 'submitted') return;
-
-    const saved = JSON.parse(localStorage.getItem('timesheets') || '[]');
-    const index = saved.findIndex((ts: any) => ts.id === timesheet.id);
-    if (index < 0) return;
-
-    saved[index].status = status;
-    saved[index].reviewedBy = user.name;
-    saved[index].reviewedAt = new Date().toISOString();
-    localStorage.setItem('timesheets', JSON.stringify(saved));
-
-    const enriched = saved.map((ts: any) => {
-      const employee = employees.find((e: any) => e.id === ts.employeeId);
-      const project = ts.projectId ? projects.find((p: any) => p.id === ts.projectId) : null;
-      return {
-        ...ts,
-        employeeName: employee?.name || 'Неизвестный сотрудник',
-        projectName: getProjectName(project)
-      };
-    });
-    setTimesheets(enriched);
-
+    const reviewer = { id: user.id, name: user.name };
+    const n = status === 'approved'
+      ? await approveEntries([timesheet.id], reviewer)
+      : await rejectEntries([timesheet.id], reviewer, '');
+    if (n === 0) {
+      toast({ title: 'Ошибка', description: 'Не удалось изменить статус', variant: 'destructive' });
+      return;
+    }
+    await reload();
     toast({
       title: status === 'approved' ? 'Тайм-щит утверждён' : 'Тайм-щит отклонён',
       description: `${timesheet.employeeName}: ${(timesheet.hours || 0).toFixed(1)} ч`,
