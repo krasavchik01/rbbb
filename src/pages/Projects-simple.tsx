@@ -135,6 +135,13 @@ export default function Projects() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  // Debounced версия поиска: input реагирует мгновенно (responsive feel),
+  // но тяжёлая фильтрация 800+ проектов запускается через 250мс после паузы в наборе.
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 250);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
@@ -1036,9 +1043,9 @@ export default function Projects() {
 
     console.log(`🔍 [Projects] Фильтрация для ${user?.role} (${user?.id}): показано ${filtered.length} из ${uniqueProjects.length} проектов`);
 
-    // 1. Поиск по тексту (существующий)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    // 1. Поиск по тексту (debounced — не дёргаем фильтр на каждый символ)
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(project => {
         const name = (project.name || project.client?.name || '').toLowerCase();
         const clientName = (project.clientName || '').toLowerCase();
@@ -1291,7 +1298,7 @@ export default function Projects() {
     });
 
     setFilteredProjects(filtered);
-  }, [realProjects, searchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterHasContract, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount, filterUpcomingDeadlines, filterAuditPeriod]);
+  }, [realProjects, debouncedSearchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterHasContract, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount, filterUpcomingDeadlines, filterAuditPeriod]);
 
 
   // Получаем уникальные роли сотрудников для фильтра распределения команды
