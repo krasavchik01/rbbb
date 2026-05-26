@@ -16,13 +16,9 @@ import {
   Award,
   Mail,
   ClipboardList,
-  BookOpen,
   Zap,
-  Calculator,
   ClipboardCheck,
-  FileSpreadsheet,
   Bot,
-  ListChecks,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -93,7 +89,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
       { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'admin'] },
-      { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['partner','manager_1','manager_2','manager_3','deputy_director','ceo','admin'] },
+      { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['ceo', 'admin'] },
     ],
   },
   {

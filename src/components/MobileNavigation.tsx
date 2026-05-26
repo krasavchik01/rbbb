@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FolderKanban, Users, BarChart3, Settings, Menu, Bell, LogOut, Activity } from 'lucide-react';
+import { Home, FolderKanban, Users, BarChart3, Settings, Menu, LogOut, Activity } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,7 +27,7 @@ const allNavItems: NavItem[] = [
   { to: '/projects', icon: FolderKanban, label: 'Проекты' },
   { to: '/hr', icon: Users, label: 'HR', allowedRoles: ['hr'] },
   { to: '/attendance', icon: Activity, label: 'Посещаемость', allowedRoles: ['ceo', 'deputy_director'] },
-  { to: '/analytics', icon: BarChart3, label: 'Аналитика', excludeRoles: ['procurement'] },
+  { to: '/analytics', icon: BarChart3, label: 'Аналитика', allowedRoles: ['ceo', 'admin'] },
   { to: '/settings', icon: Settings, label: 'Настройки', excludeRoles: ['ceo', 'deputy_director'] },
 ];
 

@@ -25,7 +25,6 @@ const SupabaseDiagnostics = lazy(() => import('@/pages/SupabaseDiagnostics'));
 const DatabaseTest = lazy(() => import('@/pages/DatabaseTest'));
 const Tenders = lazy(() => import('@/pages/Tenders'));
 const Calendar = lazy(() => import('@/pages/Calendar'));
-const Tasks = lazy(() => import('@/pages/Tasks'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
@@ -39,11 +38,7 @@ const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
-const ProjectSurvey = lazy(() => import('@/pages/ProjectSurvey'));
-const ProjectSurveyResults = lazy(() => import('@/pages/ProjectSurveyResults'));
-const ImportTimesheet = lazy(() => import('@/pages/ImportTimesheet'));
 const AIChat = lazy(() => import('@/pages/AIChat'));
-const MyTasks = lazy(() => import('@/pages/MyTasks'));
 const TasksHub = lazy(() => import('@/pages/TasksHub'));
 const SurveyHub = lazy(() => import('@/pages/SurveyHub'));
 
@@ -98,7 +93,7 @@ function App() {
             <Route
               path="/analytics"
               element={
-                <ProtectedRoute allowedRoles={['partner','manager_1','manager_2','manager_3','deputy_director','ceo','admin']}>
+                <ProtectedRoute allowedRoles={['ceo', 'admin']}>
                   <Layout>
                     <Analytics />
                   </Layout>
