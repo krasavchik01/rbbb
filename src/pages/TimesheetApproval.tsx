@@ -1,0 +1,589 @@
+/**
+ * Утверждение таймщитов — экран партнёра проекта.
+ *
+ * Кто и что видит:
+ *  - partner          → только записи по проектам, где project.partner_id = user.id;
+ *  - deputy_director  → всё + отдельный таб «Без партнёра» (записи проектов без
+ *                       partner_id и записи без projectId — админ-работа);
+ *  - ceo / admin      → то же что зам.дир.
+ *
+ * Гранулярность апрува — гибрид: партнёр раскрывает строки сотрудника
+ * (день/секция/часы/локация/заметки), снимает галочки с проблемных,
+ * жмёт «Утвердить выбранные» одной кнопкой. Отклонить — с обязательным
+ * комментарием в Dialog.
+ *
+ * После approve часы попадают в Bonuses (PR 3 — переключим).
+ */
+
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
+import {
+  approveEntries,
+  listTimesheets,
+  rejectEntries,
+  type TimesheetEntry,
+  type TimesheetStatus,
+} from '@/lib/timesheets';
+import {
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  XCircle,
+  RefreshCw,
+  User as UserIcon,
+  Calendar,
+  MapPin,
+  FolderOpen,
+  Inbox,
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
+type BucketKind = 'partner' | 'no_partner' | 'no_project';
+
+// Группировка: bucket → projectId|null → employeeId → entries[]
+interface ProjectGroup {
+  projectId: string | null;
+  projectName: string;          // snapshot из первой entry
+  systemPartnerName?: string;   // если есть partner_id у проекта
+  systemPartnerId?: string;
+  byEmployee: Map<string, TimesheetEntry[]>;
+  totalHours: number;
+  totalRows: number;
+}
+
+interface Buckets {
+  partner: Map<string, ProjectGroup>;     // мои проекты (где я partner)
+  no_partner: Map<string, ProjectGroup>;  // проекты без partner_id (только для deputy/ceo/admin)
+  no_project: Map<string, ProjectGroup>;  // entries без project_id (key = 'no_project')
+}
+
+function emptyBuckets(): Buckets {
+  return {
+    partner: new Map(),
+    no_partner: new Map(),
+    no_project: new Map(),
+  };
+}
+
+function bucketFor(entry: TimesheetEntry, partnerIdByProject: Map<string, string | null>): BucketKind {
+  if (!entry.projectId) return 'no_project';
+  const pid = partnerIdByProject.get(entry.projectId);
+  return pid ? 'partner' : 'no_partner';
+}
+
+const STATUS_LABEL: Record<TimesheetStatus, string> = {
+  draft: 'Черновики',
+  submitted: 'На утверждение',
+  approved: 'Утверждённые',
+  rejected: 'Отклонённые',
+};
+
+export default function TimesheetApproval() {
+  const { user } = useAuth();
+  const { projects = [] } = useProjects();
+  const { employees = [] } = useEmployees();
+  const { toast } = useToast();
+
+  const [entries, setEntries] = useState<TimesheetEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [statusTab, setStatusTab] = useState<TimesheetStatus>('submitted');
+  const [bucketTab, setBucketTab] = useState<BucketKind>('partner');
+  // employeeId → entryId → selected
+  const [selected, setSelected] = useState<Record<string, Record<string, boolean>>>({});
+  const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({});
+  const [openEmployees, setOpenEmployees] = useState<Record<string, boolean>>({});
+  const [rejectDialog, setRejectDialog] = useState<{ key: string; ids: string[]; reason: string } | null>(null);
+
+  const isPartner = user?.role === 'partner';
+  const isAdminLike = !!user && ['deputy_director', 'ceo', 'admin'].includes(user.role);
+  const isPrivileged = isPartner || isAdminLike;
+
+  // Map: projectId → partnerId (или null если у проекта partner не задан)
+  const partnerIdByProject = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const p of projects as any[]) {
+      m.set(p.id, p.partner_id || p.partnerId || null);
+    }
+    return m;
+  }, [projects]);
+
+  const projectInfoById = useMemo(() => {
+    const m = new Map<string, { name: string; partnerId?: string }>();
+    for (const p of projects as any[]) {
+      m.set(p.id, { name: p.name, partnerId: p.partner_id || p.partnerId || undefined });
+    }
+    return m;
+  }, [projects]);
+
+  const employeeNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of employees as any[]) m.set(e.id, e.name);
+    return m;
+  }, [employees]);
+
+  const reload = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      // Партнёр — загружаем только записи по его проектам через filter partnerId.
+      // Зам.дир/ceo/admin — все записи, потом сами раскладываем по бакетам.
+      const filter = isPartner
+        ? { partnerId: user.id, status: statusTab }
+        : { status: statusTab };
+      const rows = await listTimesheets(filter);
+      setEntries(rows);
+      setSelected({});
+    } finally {
+      setLoading(false);
+    }
+  }, [user, isPartner, statusTab]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  // Раскладываем загруженные entries по бакетам.
+  const buckets: Buckets = useMemo(() => {
+    const b = emptyBuckets();
+    for (const e of entries) {
+      const kind = bucketFor(e, partnerIdByProject);
+      // Партнёру показываем только записи его проектов (фильтр уже на сервере),
+      // но защитимся: записи без projectId / без партнёра у партнёра не показываем.
+      if (isPartner && kind !== 'partner') continue;
+
+      const bucket = b[kind];
+      const key = e.projectId || '__no_project__';
+      let group = bucket.get(key);
+      if (!group) {
+        const sysProject = e.projectId ? projectInfoById.get(e.projectId) : undefined;
+        const sysPartnerId = sysProject?.partnerId;
+        group = {
+          projectId: e.projectId,
+          projectName: sysProject?.name || e.projectName,
+          systemPartnerId: sysPartnerId,
+          systemPartnerName: sysPartnerId ? employeeNameById.get(sysPartnerId) : undefined,
+          byEmployee: new Map(),
+          totalHours: 0,
+          totalRows: 0,
+        };
+        bucket.set(key, group);
+      }
+      const empEntries = group.byEmployee.get(e.employeeId) || [];
+      empEntries.push(e);
+      group.byEmployee.set(e.employeeId, empEntries);
+      group.totalHours += e.hours;
+      group.totalRows += 1;
+    }
+    return b;
+  }, [entries, partnerIdByProject, projectInfoById, employeeNameById, isPartner]);
+
+  if (!user) return <div className="p-6 text-muted-foreground">Войдите.</div>;
+  if (!isPrivileged) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Нет доступа</CardTitle>
+          <CardDescription>
+            Утверждение таймщитов доступно партнёру, зам.директору, CEO и админу.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  // Селект-хелперы
+  const isEntrySelected = (employeeId: string, entryId: string) =>
+    !!selected[employeeId]?.[entryId];
+
+  const toggleEntry = (employeeId: string, entryId: string) => {
+    setSelected((prev) => {
+      const next = { ...prev };
+      const cur = { ...(next[employeeId] || {}) };
+      if (cur[entryId]) delete cur[entryId];
+      else cur[entryId] = true;
+      next[employeeId] = cur;
+      return next;
+    });
+  };
+
+  const setAllForEmployee = (employeeId: string, entryIds: string[], value: boolean) => {
+    setSelected((prev) => {
+      const next = { ...prev };
+      const cur: Record<string, boolean> = {};
+      if (value) for (const id of entryIds) cur[id] = true;
+      next[employeeId] = cur;
+      return next;
+    });
+  };
+
+  const selectedIdsForEmployee = (employeeId: string): string[] =>
+    Object.keys(selected[employeeId] || {});
+
+  const doApprove = async (ids: string[]) => {
+    if (ids.length === 0) {
+      toast({ title: 'Ничего не выбрано', description: 'Отметьте хотя бы одну запись.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const n = await approveEntries(ids, { id: user.id, name: user.name });
+      toast({ title: `Утверждено: ${n}`, description: 'Часы пойдут в расчёт бонуса.' });
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openRejectDialog = (key: string, ids: string[]) => {
+    if (ids.length === 0) {
+      toast({ title: 'Ничего не выбрано', description: 'Отметьте записи, которые отклоняете.' });
+      return;
+    }
+    setRejectDialog({ key, ids, reason: '' });
+  };
+
+  const submitReject = async () => {
+    if (!rejectDialog) return;
+    const reason = rejectDialog.reason.trim();
+    if (!reason) {
+      toast({ title: 'Нужна причина', description: 'Сотрудник увидит её и поправит запись.', variant: 'destructive' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const n = await rejectEntries(rejectDialog.ids, { id: user.id, name: user.name }, reason);
+      toast({ title: `Отклонено: ${n}`, description: 'Сотрудник увидит причину и сможет поправить.' });
+      setRejectDialog(null);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Подсчёт счётчиков для табов бакетов
+  const bucketCount = (kind: BucketKind) => {
+    let n = 0;
+    for (const g of buckets[kind].values()) n += g.totalRows;
+    return n;
+  };
+
+  const activeBucketGroups = useMemo(
+    () => Array.from(buckets[bucketTab].values()).sort((a, b) => b.totalHours - a.totalHours),
+    [buckets, bucketTab],
+  );
+
+  return (
+    <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto pb-24">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <CheckCircle2 className="w-6 h-6 text-primary" /> Утверждение таймщитов
+          </CardTitle>
+          <CardDescription>
+            {isPartner
+              ? 'Здесь показаны таймщиты сотрудников по проектам, где вы партнёр. Подтверждённые часы пойдут в расчёт бонуса.'
+              : 'Записи по всем проектам — с фильтром «Без партнёра», где требуется ваше решение как зам.директора.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as TimesheetStatus)}>
+              <TabsList>
+                <TabsTrigger value="submitted">{STATUS_LABEL.submitted}</TabsTrigger>
+                <TabsTrigger value="approved">{STATUS_LABEL.approved}</TabsTrigger>
+                <TabsTrigger value="rejected">{STATUS_LABEL.rejected}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button variant="outline" size="sm" onClick={reload} disabled={loading} className="ml-auto">
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Обновить
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Бакеты (для зам.дир/ceo/admin — три, для partner только один) */}
+      {isAdminLike && (
+        <Tabs value={bucketTab} onValueChange={(v) => setBucketTab(v as BucketKind)}>
+          <TabsList>
+            <TabsTrigger value="partner" className="gap-2">
+              С партнёром
+              {bucketCount('partner') > 0 && (
+                <Badge variant="secondary" className="text-xs">{bucketCount('partner')}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="no_partner" className="gap-2">
+              Без партнёра в системе
+              {bucketCount('no_partner') > 0 && (
+                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">
+                  {bucketCount('no_partner')}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="no_project" className="gap-2">
+              Без проекта / админ
+              {bucketCount('no_project') > 0 && (
+                <Badge variant="secondary" className="text-xs">{bucketCount('no_project')}</Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {loading ? (
+        <Card><CardContent className="py-10 text-center text-muted-foreground">Загрузка…</CardContent></Card>
+      ) : activeBucketGroups.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3">
+              <Inbox className="w-7 h-7 text-muted-foreground/60" />
+            </div>
+            <p className="font-medium">Записей нет</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {statusTab === 'submitted'
+                ? 'Здесь будут появляться таймщиты, ждущие вашего подтверждения.'
+                : `Нет ${STATUS_LABEL[statusTab].toLowerCase()} в этой категории.`}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        activeBucketGroups.map((group) => {
+          const projKey = group.projectId || '__no_project__';
+          const isOpen = openProjects[projKey] ?? true;
+          return (
+            <Card key={projKey}>
+              <CardHeader className="pb-3 cursor-pointer" onClick={() => setOpenProjects((p) => ({ ...p, [projKey]: !isOpen }))}>
+                <div className="flex items-start gap-3 flex-wrap">
+                  {isOpen ? <ChevronDown className="w-4 h-4 mt-1 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 mt-1 text-muted-foreground" />}
+                  <FolderOpen className="w-5 h-5 mt-0.5 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-base">{group.projectName}</CardTitle>
+                    <CardDescription className="mt-1 text-xs">
+                      {group.byEmployee.size} сотр. · {group.totalRows} зап. · {group.totalHours.toFixed(1)} ч.
+                      {group.systemPartnerName && (
+                        <> · Партнёр: <b className="text-foreground">{group.systemPartnerName}</b></>
+                      )}
+                    </CardDescription>
+                  </div>
+                  {bucketTab === 'no_partner' && (
+                    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">
+                      <AlertTriangle className="w-3 h-3 mr-1" /> в системе нет партнёра — апрув у зам.дир
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+
+              {isOpen && (
+                <CardContent className="space-y-3">
+                  {Array.from(group.byEmployee.entries())
+                    .sort((a, b) => (employeeNameById.get(a[0]) || '').localeCompare(employeeNameById.get(b[0]) || '', 'ru'))
+                    .map(([employeeId, empEntries]) => {
+                      const empKey = `${projKey}__${employeeId}`;
+                      const empOpen = openEmployees[empKey] ?? true;
+                      const empName = employeeNameById.get(employeeId) || empEntries[0]?.employeeName || 'Неизвестный';
+                      const totalH = empEntries.reduce((s, e) => s + e.hours, 0);
+                      const days = new Set(empEntries.map((e) => e.workDate)).size;
+                      const sections = Array.from(new Set(empEntries.map((e) => e.section).filter(Boolean) as string[]));
+                      const entryIds = empEntries.map((e) => e.id);
+                      const selectedIds = selectedIdsForEmployee(employeeId).filter((id) => entryIds.includes(id));
+                      const allChecked = selectedIds.length === entryIds.length && entryIds.length > 0;
+                      const someChecked = selectedIds.length > 0 && !allChecked;
+                      // Расхождение partner_raw в xlsx vs system
+                      const distinctPartnersRaw = Array.from(
+                        new Set(empEntries.map((e) => e.partnerRaw).filter(Boolean) as string[]),
+                      );
+                      const partnerMismatch =
+                        group.systemPartnerName &&
+                        distinctPartnersRaw.length > 0 &&
+                        !distinctPartnersRaw.some(
+                          (p) => p.toLowerCase().trim() === group.systemPartnerName!.toLowerCase().trim(),
+                        );
+
+                      return (
+                        <div key={empKey} className="rounded-lg border bg-card">
+                          <div
+                            className="p-3 flex items-start gap-3 cursor-pointer hover:bg-accent/30 transition-colors"
+                            onClick={() => setOpenEmployees((p) => ({ ...p, [empKey]: !empOpen }))}
+                          >
+                            {empOpen ? <ChevronDown className="w-4 h-4 mt-1 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 mt-1 text-muted-foreground" />}
+                            <UserIcon className="w-5 h-5 mt-0.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium flex flex-wrap items-center gap-2">
+                                {empName}
+                                {partnerMismatch && (
+                                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    в файле: {distinctPartnersRaw.join(', ')} · в системе: {group.systemPartnerName}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                <span><Clock className="w-3 h-3 inline mr-1" />{totalH.toFixed(1)} ч.</span>
+                                <span>{days} дн.</span>
+                                <span>{empEntries.length} зап.</span>
+                                {sections.length > 0 && (
+                                  <span className="truncate">секции: {sections.slice(0, 3).join(', ')}{sections.length > 3 ? `, +${sections.length - 3}` : ''}</span>
+                                )}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-xs shrink-0" title="Выбрано записей">
+                              {selectedIds.length} / {entryIds.length}
+                            </Badge>
+                          </div>
+
+                          {empOpen && (
+                            <div className="border-t">
+                              {statusTab === 'submitted' && (
+                                <div className="p-2 flex flex-wrap items-center gap-2 border-b bg-muted/20">
+                                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                    <Checkbox
+                                      checked={allChecked || (someChecked ? 'indeterminate' : false)}
+                                      onCheckedChange={(v) => setAllForEmployee(employeeId, entryIds, !!v)}
+                                    />
+                                    Выделить все
+                                  </label>
+                                  <div className="ml-auto flex flex-wrap gap-2">
+                                    <Button
+                                      size="sm"
+                                      className="bg-emerald-600 hover:bg-emerald-700"
+                                      disabled={busy || selectedIds.length === 0}
+                                      onClick={() => doApprove(selectedIds)}
+                                    >
+                                      <CheckCircle2 className="w-4 h-4 mr-1" /> Утвердить выбранные ({selectedIds.length})
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-red-200 text-red-700 hover:bg-red-50"
+                                      disabled={busy || selectedIds.length === 0}
+                                      onClick={() => openRejectDialog(empKey, selectedIds)}
+                                    >
+                                      <XCircle className="w-4 h-4 mr-1" /> Отклонить
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="divide-y">
+                                {empEntries
+                                  .slice()
+                                  .sort((a, b) => a.workDate.localeCompare(b.workDate))
+                                  .map((e) => {
+                                    const checked = isEntrySelected(employeeId, e.id);
+                                    return (
+                                      <div
+                                        key={e.id}
+                                        className={`p-3 flex items-start gap-3 text-sm ${checked ? 'bg-primary/5' : ''}`}
+                                      >
+                                        {statusTab === 'submitted' && (
+                                          <Checkbox
+                                            checked={checked}
+                                            onCheckedChange={() => toggleEntry(employeeId, e.id)}
+                                            className="mt-0.5"
+                                          />
+                                        )}
+                                        <div className="flex-1 min-w-0 grid sm:grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1 items-baseline">
+                                          <span className="font-mono text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                                            <Calendar className="w-3 h-3" />
+                                            {format(new Date(e.workDate), 'dd MMM', { locale: ru })}
+                                          </span>
+                                          <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                              {e.section && (
+                                                <span className="px-1.5 py-0.5 rounded bg-muted/70 text-xs">{e.section}</span>
+                                              )}
+                                              {e.position && (
+                                                <span className="text-xs text-muted-foreground">{e.position}</span>
+                                              )}
+                                              {(e.location || e.city) && (
+                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                  <MapPin className="w-3 h-3" />
+                                                  {[e.location, e.city].filter(Boolean).join(' · ')}
+                                                </span>
+                                              )}
+                                              {e.source !== 'import' && (
+                                                <Badge variant="outline" className="text-[10px] py-0">
+                                                  {e.source === 'survey' ? 'из опроса' : 'вручную'}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            {e.notes && (
+                                              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{e.notes}</div>
+                                            )}
+                                            {e.reviewerNotes && statusTab === 'rejected' && (
+                                              <div className="text-xs text-red-700 bg-red-50 rounded mt-1 px-2 py-1">
+                                                <b>Причина отказа:</b> {e.reviewerNotes}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <span className="font-mono text-sm font-semibold whitespace-nowrap text-right">
+                                            {e.hours.toFixed(1)} ч.
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </CardContent>
+              )}
+            </Card>
+          );
+        })
+      )}
+
+      {/* Диалог отклонения с обязательной причиной */}
+      <Dialog open={!!rejectDialog} onOpenChange={(v) => !v && setRejectDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Отклонить записи</DialogTitle>
+            <DialogDescription>
+              Будет отклонено <b>{rejectDialog?.ids.length || 0}</b> записи. Сотрудник увидит причину и сможет поправить.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Причина (обязательно)</Label>
+            <Textarea
+              rows={3}
+              value={rejectDialog?.reason || ''}
+              onChange={(e) =>
+                setRejectDialog((d) => (d ? { ...d, reason: e.target.value } : d))
+              }
+              placeholder="Например: «Часы не совпадают с тем, что я знаю по проекту — уточни даты»"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialog(null)}>Отмена</Button>
+            <Button variant="destructive" onClick={submitReject} disabled={busy}>
+              <XCircle className="w-4 h-4 mr-2" /> Отклонить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

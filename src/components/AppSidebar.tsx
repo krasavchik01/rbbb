@@ -19,6 +19,7 @@ import {
   Zap,
   ClipboardCheck,
   Bot,
+  CheckCircle2,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -88,6 +89,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     label: 'Финансы',
     items: [
       { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
+      { title: 'Утверждение часов', url: '/timesheet-approval', icon: CheckCircle2, allowedRoles: ['partner','deputy_director','ceo','admin'] },
       { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'admin'] },
       { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['ceo', 'admin'] },
     ],
