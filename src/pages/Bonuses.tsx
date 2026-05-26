@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { getAllResponses, type SurveyResponse } from '@/lib/projectSurvey';
+import { approvedHoursIndex, pendingHoursIndex } from '@/lib/timesheets';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,34 +38,30 @@ export default function Bonuses() {
   const [filterType, setFilterType] = useState<'all' | 'project' | 'kpi' | 'annual'>('all');
   const [draftAdjustments, setDraftAdjustments] = useState<Record<string, Record<string, string>>>({});
 
-  // Часы по таймщитам (из project_survey_responses) — нужны CEO чтобы видеть факт
-  // перед одобрением. По требованию 2026-05-22: «таймщиты привязываются по
-  // итогу к финальному результату для ГД».
-  const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>([]);
+  // Часы по таймщитам — нужны CEO чтобы видеть факт перед утверждением бонуса.
+  // Источник истины с PR 3: timesheet_entries.
+  //  - approvedIdx — часы, которые партнёр уже подтвердил (идут в бонус по факту);
+  //  - pendingIdx — часы, ждущие подтверждения (CEO видит «+N ч. на утверждение»
+  //    и не закрывает проект, пока партнёр не разберётся).
+  // Старый источник (project_survey_responses + answers.totalHours) выпилен —
+  // он не различал утверждённые/неутверждённые часы.
+  const [approvedIdx, setApprovedIdx] = useState<Map<string, number>>(new Map());
+  const [pendingIdx, setPendingIdx] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     let active = true;
-    getAllResponses()
-      .then((rows) => { if (active) setSurveyResponses(rows); })
+    Promise.all([approvedHoursIndex(), pendingHoursIndex()])
+      .then(([a, p]) => {
+        if (!active) return;
+        setApprovedIdx(a);
+        setPendingIdx(p);
+      })
       .catch(() => {});
     return () => { active = false; };
   }, []);
-
-  // Индекс: для пары (userId × projectId) — сумма часов из answers.
-  const hoursIndex = useMemo(() => {
-    const idx = new Map<string, number>();
-    for (const r of surveyResponses) {
-      if (r.status !== 'submitted') continue;
-      const userId = r.userId;
-      for (const a of r.answers || []) {
-        if (!a.participated) continue;
-        if (typeof a.totalHours !== 'number' || a.totalHours <= 0) continue;
-        const key = `${userId}__${a.projectId}`;
-        idx.set(key, (idx.get(key) || 0) + a.totalHours);
-      }
-    }
-    return idx;
-  }, [surveyResponses]);
-  const getHoursFor = (userId: string, projectId: string): number => hoursIndex.get(`${userId}__${projectId}`) || 0;
+  const getHoursFor = (userId: string, projectId: string): number =>
+    approvedIdx.get(`${userId}__${projectId}`) || 0;
+  const getPendingHoursFor = (userId: string, projectId: string): number =>
+    pendingIdx.get(`${userId}__${projectId}`) || 0;
 
   // Статистика задач по проекту — CEO видит «нормально ли всё прошло»:
   // сколько задач, сколько выполнено, сколько просрочено.
@@ -699,6 +695,7 @@ export default function Bonuses() {
                     const employee = employees.find((item: any) => item.id === userId);
                     const inputValue = draftAdjustments[project.id]?.[userId] ?? (bonus?.amount != null ? String(bonus.amount) : '0');
                     const actualHours = getHoursFor(userId, project.id);
+                    const pendingApprovalHours = getPendingHoursFor(userId, project.id);
                     const planned = (member.bonusPercent || bonus?.percent || 0);
                     const plannedAmount = ((finances.totalBonusAmount || 0) * planned) / 100;
                     const ROLE_LABEL: Record<string, string> = {
@@ -722,11 +719,16 @@ export default function Bonuses() {
                         <div className="text-xs">
                           {actualHours > 0 ? (
                             <>
-                              <div className="text-muted-foreground">факт</div>
+                              <div className="text-muted-foreground">факт (утв.)</div>
                               <div className="font-semibold">{actualHours} ч.</div>
                             </>
                           ) : (
-                            <span className="text-muted-foreground italic">без часов</span>
+                            <span className="text-muted-foreground italic">без утв. часов</span>
+                          )}
+                          {pendingApprovalHours > 0 && (
+                            <div className="mt-0.5 text-amber-700" title="Часы, отправленные сотрудником, но ещё не подтверждённые партнёром проекта">
+                              +{pendingApprovalHours} ч. ждут партнёра
+                            </div>
                           )}
                         </div>
                         <div className="space-y-1">

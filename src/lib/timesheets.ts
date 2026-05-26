@@ -371,17 +371,13 @@ export interface HoursByPair {
   hours: number;
 }
 
-/**
- * Сумма approved-часов по парам (сотрудник × проект).
- * Bonuses.tsx переключается на это вместо чтения из project_survey_responses.
- */
-export async function approvedHoursIndex(): Promise<Map<string, number>> {
+async function hoursIndexByStatus(status: TimesheetStatus): Promise<Map<string, number>> {
   const { data, error } = await supabase
     .from('timesheet_entries')
     .select('employee_id, project_id, hours')
-    .eq('status', 'approved');
+    .eq('status', status);
   if (error) {
-    console.error('[timesheets] approvedHoursIndex failed', error);
+    console.error(`[timesheets] hoursIndexByStatus(${status}) failed`, error);
     return new Map();
   }
   const idx = new Map<string, number>();
@@ -391,6 +387,23 @@ export async function approvedHoursIndex(): Promise<Map<string, number>> {
     idx.set(key, (idx.get(key) || 0) + (Number(r.hours) || 0));
   }
   return idx;
+}
+
+/**
+ * Сумма approved-часов по парам (сотрудник × проект).
+ * Bonuses.tsx использует это вместо старого чтения из project_survey_responses.
+ */
+export function approvedHoursIndex(): Promise<Map<string, number>> {
+  return hoursIndexByStatus('approved');
+}
+
+/**
+ * Сумма часов в статусе submitted (ждут партнёра/зам.дир).
+ * Bonuses показывает рядом с фактом — CEO видит «+M ч. ждут утверждения»
+ * и не закрывает проект преждевременно.
+ */
+export function pendingHoursIndex(): Promise<Map<string, number>> {
+  return hoursIndexByStatus('submitted');
 }
 
 // ─── Утилиты для импорта ────────────────────────────────────────────────────
