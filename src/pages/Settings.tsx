@@ -55,6 +55,8 @@ export default function Settings() {
 
   // Локальное состояние для демо-аккаунтов
   const [showDemoUsers, setShowDemoUsers] = useState(appSettings.showDemoUsers);
+  // Локальное состояние для блока «Последние активности» на дашборде
+  const [recentActivityEnabled, setRecentActivityEnabled] = useState(appSettings.recentActivityEnabled);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const isAdmin = user?.role === 'admin';
@@ -62,6 +64,7 @@ export default function Settings() {
   // Синхронизация с appSettings при изменении
   useEffect(() => {
     setShowDemoUsers(appSettings.showDemoUsers);
+    setRecentActivityEnabled(appSettings.recentActivityEnabled);
     setOfficeSettings({
       enabled: appSettings.officeLocation.enabled,
       latitude: appSettings.officeLocation.latitude.toString(),
@@ -110,6 +113,7 @@ export default function Settings() {
     try {
       await updateAppSettings({
         showDemoUsers: showDemoUsers,
+        recentActivityEnabled: recentActivityEnabled,
         officeLocation: {
           enabled: officeSettings.enabled,
           latitude: parseFloat(officeSettings.latitude) || 0,
@@ -477,6 +481,30 @@ export default function Settings() {
                       checked={showDemoUsers}
                       onCheckedChange={(checked) => {
                         setShowDemoUsers(checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Видимость «Последние активности» */}
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="space-y-1">
+                    <Label className="text-base">Блок «Последние активности» на дашборде</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Виден только директорам и партнёрам. Здесь можно полностью отключить его и для них.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {recentActivityEnabled ? (
+                      <Eye className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <EyeOff className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <Switch
+                      checked={recentActivityEnabled}
+                      onCheckedChange={(checked) => {
+                        setRecentActivityEnabled(checked);
                         setHasUnsavedChanges(true);
                       }}
                     />

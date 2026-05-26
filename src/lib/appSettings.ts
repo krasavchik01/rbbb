@@ -28,6 +28,9 @@ export interface AppSettings {
   // Режим работы приложения
   maintenanceMode: boolean;
   maintenanceMessage: string;
+  // Видимость блока «Последние активности» на дашборде
+  // (даже когда true, его видят только директора и партнёры — задаётся в коде Dashboard)
+  recentActivityEnabled: boolean;
   // Список компаний (управляемый администратором)
   companies: Company[];
   // SMTP конфигурация для отправки email
@@ -45,6 +48,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   maintenanceMode: false,
   maintenanceMessage: '',
+  recentActivityEnabled: true,
   companies: DEFAULT_COMPANIES // Используем дефолтный список компаний
 };
 
@@ -94,6 +98,7 @@ export async function getAppSettings(): Promise<AppSettings> {
         },
         maintenanceMode: data.maintenance_mode ?? DEFAULT_SETTINGS.maintenanceMode,
         maintenanceMessage: data.maintenance_message ?? DEFAULT_SETTINGS.maintenanceMessage,
+        recentActivityEnabled: (data as any).recent_activity_enabled ?? DEFAULT_SETTINGS.recentActivityEnabled,
         companies: (data.companies && Array.isArray(data.companies)) ? data.companies : DEFAULT_SETTINGS.companies
       };
 
@@ -163,8 +168,9 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
         office_address: updated.officeLocation.address,
         maintenance_mode: updated.maintenanceMode,
         maintenance_message: updated.maintenanceMessage,
+        recent_activity_enabled: updated.recentActivityEnabled,
         companies: updated.companies // Сохраняем компании
-      })
+      } as any)
       .eq('id', settingsRow.id)
       .select();
 

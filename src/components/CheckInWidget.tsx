@@ -2,11 +2,40 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, CheckCircle, XCircle } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  MapPin,
+  Clock,
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  Building2,
+  Briefcase,
+  Home,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAppSettings, isWithinOfficeRadius } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
+
+type LocationType = 'office' | 'client' | 'remote';
+
+const LOCATION_LABELS: Record<LocationType, string> = {
+  office: 'В офисе',
+  client: 'На проекте',
+  remote: 'Удалённо',
+};
+
+// employee_id в таблице attendance — UUID. Демо-юзеры (id вида "ceo_1", "partner_1")
+// валидно не вставятся — Postgres вернёт 22P02 invalid input syntax for type uuid.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface TodayRecord {
   id: string;
@@ -37,53 +66,60 @@ export function CheckInWidget() {
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
+          const locationLabel = LOCATION_LABELS[(data.location_type || 'remote') as LocationType] || 'Удалённо';
           setTodayRecord({
             id: data.id,
             checkIn: data.check_in || '',
             checkOut: data.check_out || undefined,
-            location: data.location_type === 'office' ? 'В офисе' : 'Удалённо',
+            location: locationLabel,
           });
-          setCurrentLocation(data.location_type === 'office' ? 'В офисе' : 'Удалённо');
+          setCurrentLocation(locationLabel);
         }
       });
   }, [user?.id]);
 
-  // Получаем геолокацию
-  const getCurrentLocation = async (): Promise<{ location: string; locationType: string; coords: { lat: number; lng: number } }> => {
+  // Получаем координаты пользователя (без определения типа локации)
+  const getCoords = async (): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        resolve({ location: 'Геолокация недоступна', locationType: 'remote', coords: { lat: 0, lng: 0 } });
+        resolve({ lat: 0, lng: 0 });
         return;
       }
-
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          if (appSettings.officeLocation.enabled) {
-            const inOffice = isWithinOfficeRadius(latitude, longitude);
-            resolve({
-              location: inOffice ? 'В офисе' : 'Удалённо',
-              locationType: inOffice ? 'office' : 'remote',
-              coords: { lat: latitude, lng: longitude },
-            });
-          } else {
-            resolve({ location: 'Удалённо', locationType: 'remote', coords: { lat: latitude, lng: longitude } });
-          }
-        },
-        () => resolve({ location: 'Геолокация недоступна', locationType: 'remote', coords: { lat: 0, lng: 0 } }),
-        { timeout: 5000 }
+        (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+        () => resolve({ lat: 0, lng: 0 }),
+        { timeout: 5000 },
       );
     });
   };
 
-  // Отметка прихода
-  const handleCheckIn = async () => {
+  // Автоопределение локации: в офисе или удалённо (по радиусу)
+  const detectLocation = (coords: { lat: number; lng: number }): LocationType => {
+    if (!appSettings.officeLocation.enabled) return 'remote';
+    if (!coords.lat && !coords.lng) return 'remote';
+    return isWithinOfficeRadius(coords.lat, coords.lng) ? 'office' : 'remote';
+  };
+
+  // Отметка прихода. Если передан explicit — используем его, иначе автоопределение.
+  const handleCheckIn = async (explicit?: LocationType) => {
     if (!user) return;
+
+    // Демо-юзеры с id типа "ceo_1" не пройдут вставку в attendance.employee_id (UUID).
+    if (!UUID_RE.test(user.id)) {
+      toast({
+        title: 'Демо-аккаунт',
+        description: 'У этого аккаунта нестандартный ID — отметка прихода доступна только реальным сотрудникам из БД.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsCheckingIn(true);
     try {
-      const { location, locationType, coords } = await getCurrentLocation();
-      setCurrentLocation(location);
+      const coords = await getCoords();
+      const locationType: LocationType = explicit ?? detectLocation(coords);
+      const locationLabel = LOCATION_LABELS[locationType];
+      setCurrentLocation(locationLabel);
 
       const now = new Date();
       const today = now.toISOString().split('T')[0];
@@ -111,19 +147,27 @@ export function CheckInWidget() {
       setTodayRecord({
         id: data.id,
         checkIn: timeStr,
-        location,
+        location: locationLabel,
       });
 
       toast({
-        title: "Приход отмечен",
-        description: `Время: ${now.toLocaleTimeString('ru-RU')}\nМестоположение: ${location}`,
+        title: 'Приход отмечен',
+        description: `Время: ${now.toLocaleTimeString('ru-RU')}\nМестоположение: ${locationLabel}`,
       });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Не удалось отметить приход";
+    } catch (error: any) {
+      // Supabase возвращает { code, details, hint, message } — это НЕ инстанс Error,
+      // поэтому раньше пользователь видел только generic "Не удалось отметить приход".
+      console.error('check-in failed:', error);
+      const msg =
+        error?.message ||
+        (typeof error === 'string' ? error : null) ||
+        (error?.code ? `Supabase: ${error.code}` : 'Не удалось отметить приход');
+      const hint = error?.hint ? `\nПодсказка: ${error.hint}` : '';
+      const details = error?.details ? `\n${error.details}` : '';
       toast({
-        title: "Ошибка",
-        description: errorMessage,
-        variant: "destructive",
+        title: 'Ошибка отметки прихода',
+        description: `${msg}${details}${hint}`,
+        variant: 'destructive',
       });
     } finally {
       setIsCheckingIn(false);
@@ -160,22 +204,25 @@ export function CheckInWidget() {
       setTodayRecord({ ...todayRecord, checkOut: timeStr });
 
       toast({
-        title: "Уход отмечен",
+        title: 'Уход отмечен',
         description: `Время: ${now.toLocaleTimeString('ru-RU')}`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('check-out failed:', error);
+      const msg = error?.message || (error?.code ? `Supabase: ${error.code}` : 'Не удалось отметить уход');
       toast({
-        title: "Ошибка",
-        description: "Не удалось отметить уход",
-        variant: "destructive",
+        title: 'Ошибка отметки ухода',
+        description: msg,
+        variant: 'destructive',
       });
     } finally {
       setIsCheckingOut(false);
     }
   };
 
-  // Показываем только для сотрудников (не для CEO и замдиректора)
-  if (!user || user.role === 'ceo' || user.role === 'deputy_director') {
+  // Виджет должен быть доступен всем сотрудникам, включая руководство и партнёров.
+  // Без user — скрываем.
+  if (!user) {
     return null;
   }
 
@@ -223,23 +270,53 @@ export function CheckInWidget() {
           )}
         </div>
       ) : (
-        <Button
-          onClick={handleCheckIn}
-          disabled={isCheckingIn}
-          className="w-full"
-        >
-          {isCheckingIn ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Отмечаем приход...
-            </>
-          ) : (
-            <>
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Отметить приход
-            </>
-          )}
-        </Button>
+        // Split-кнопка: основная часть — авто-определение, правая — ручной выбор локации
+        <div className="flex w-full">
+          <Button
+            onClick={() => handleCheckIn()}
+            disabled={isCheckingIn}
+            className="flex-1 rounded-r-none"
+          >
+            {isCheckingIn ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Отмечаем приход...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Отметить приход
+              </>
+            )}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                disabled={isCheckingIn}
+                aria-label="Выбрать тип локации"
+                className="rounded-l-none border-l border-primary-foreground/20 px-3"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Указать вручную</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleCheckIn('office')}>
+                <Building2 className="h-4 w-4 mr-2 text-green-600" />
+                В офисе
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleCheckIn('client')}>
+                <Briefcase className="h-4 w-4 mr-2 text-blue-600" />
+                На проекте
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleCheckIn('remote')}>
+                <Home className="h-4 w-4 mr-2 text-purple-600" />
+                Удалённо
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )}
     </Card>
   );

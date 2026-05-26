@@ -9,6 +9,7 @@ import { Calendar, Clock, MapPin, Users, Building2, Briefcase, Home, Plane, Hear
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { CheckInWidget } from '@/components/CheckInWidget';
 
 // Расширенные статусы посещаемости
 type AttendanceStatus = 'in_office' | 'on_project' | 'remote' | 'vacation' | 'sick_leave' | 'day_off';
@@ -254,6 +255,9 @@ export default function Attendance() {
         )}
       </div>
 
+      {/* Виджет отметки прихода/ухода — доступен всем ролям прямо тут. */}
+      <CheckInWidget />
+
       {/* Personal info: только свои записи */}
       {personalView && (
         <Card className="p-4 bg-muted/30 border-muted">
@@ -262,7 +266,7 @@ export default function Attendance() {
             <div className="flex-1">
               <p className="text-sm font-medium">{user?.name}</p>
               <p className="text-xs text-muted-foreground">
-                Видишь только свои отметки. Чтобы внести запись на сегодня — обратись к HR или используй мобильное приложение (если есть).
+                Видишь только свои отметки. Отметить приход/уход можно кнопкой выше.
               </p>
             </div>
           </div>

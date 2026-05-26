@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { CheckInWidget } from '@/components/CheckInWidget';
+import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 import {
   TrendingUp,
@@ -181,6 +182,7 @@ const MetricCard = React.memo(({
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [appSettings] = useAppSettings();
   const { projects = [], loading: projectsLoading } = useProjects();
   const { employees = [], loading: employeesLoading } = useEmployees();
   const navigate = useNavigate();
@@ -1002,12 +1004,12 @@ export default function Dashboard() {
 
       {/* Виджет отметки посещений */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={isDirector ? "lg:col-span-1" : "lg:col-span-3"}>
+        <div className={(isDirector || isPartner) && appSettings.recentActivityEnabled ? "lg:col-span-1" : "lg:col-span-3"}>
           <CheckInWidget />
         </div>
 
-        {/* Последние активности - только для директоров */}
-        {isDirector && (
+        {/* Последние активности — директорам и партнёрам, если включено в настройках */}
+        {(isDirector || isPartner) && appSettings.recentActivityEnabled && (
           <div className="lg:col-span-2">
             <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
               <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
