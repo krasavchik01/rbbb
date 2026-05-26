@@ -15,7 +15,8 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { TaskManager } from "@/components/tasks/TaskManager";
 import { Task, Project as ProjectType, ChecklistItem, PriorityLevel, TaskStatus } from "@/types/project";
-import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, Circle, AlertCircle, XCircle, BarChart3, Trash2, Download, Upload, FileDown } from "lucide-react";
+import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, Circle, AlertCircle, XCircle, BarChart3, Trash2, Download, Upload, FileDown, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useProjects, useEmployees, useCompanies } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -104,6 +105,9 @@ export default function Projects() {
   // Новые фильтры для оптимизации (Скоро дедлайн, Период аудита)
   const [filterUpcomingDeadlines, setFilterUpcomingDeadlines] = useState(false);
   const [filterAuditPeriod, setFilterAuditPeriod] = useState<'all' | '6m' | '9m' | '1y'>('all');
+  // Свёрнутая панель «Расширенные фильтры» — раскрывается по клику.
+  // По умолчанию закрыта: главные 4 фильтра всегда видны, остальное под кнопкой.
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
 
   // Массовые действия (только для CEO)
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
@@ -2266,9 +2270,79 @@ export default function Projects() {
 
           </div>
 
-          {/* Расширенные фильтры - Слайдеры и селекты */}
-          <div className="pt-4 sm:pt-6 border-t border-primary/10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+          {/* Чипы активных «расширенных» фильтров + кнопка раскрытия панели.
+              Идея: главные фильтры выше всегда видны, остальное — под кнопкой.
+              Активные расширенные фильтры показываем чипами, чтобы пользователь
+              видел что включено, даже когда панель свёрнута. */}
+          {(() => {
+            const advChips: { key: string; label: string; onClear: () => void }[] = [];
+            if (filterStatus !== 'all') advChips.push({ key: 'status', label: `Статус: ${filterStatus}`, onClear: () => setFilterStatus('all') });
+            if (filterProgressMin !== '' || filterProgressMax !== '') advChips.push({ key: 'progress', label: `Прогресс: ${filterProgressMin || 0}–${filterProgressMax || 100}%`, onClear: () => { setFilterProgressMin(''); setFilterProgressMax(''); } });
+            if (filterAmountMin !== '' || filterAmountMax !== '') advChips.push({ key: 'amount', label: `Сумма: ${filterAmountMin || '0'}–${filterAmountMax || '∞'}`, onClear: () => { setFilterAmountMin(''); setFilterAmountMax(''); } });
+            if (filterHasTeam !== 'all') advChips.push({ key: 'team', label: filterHasTeam ? 'Есть команда' : 'Нет команды', onClear: () => setFilterHasTeam('all') });
+            if (filterHasTasks !== 'all') advChips.push({ key: 'tasks', label: filterHasTasks ? 'Есть задачи' : 'Нет задач', onClear: () => setFilterHasTasks('all') });
+            if (filterHasContract !== 'all') advChips.push({ key: 'contract', label: filterHasContract ? 'Договор загружен' : 'Нет договора', onClear: () => setFilterHasContract('all') });
+            if (filterDeadlineFrom || filterDeadlineTo) advChips.push({ key: 'deadline', label: `Срок: ${filterDeadlineFrom || '…'} – ${filterDeadlineTo || '…'}`, onClear: () => { setFilterDeadlineFrom(''); setFilterDeadlineTo(''); } });
+            const advCount = advChips.length;
+            return (
+              <Collapsible open={advancedFiltersOpen} onOpenChange={setAdvancedFiltersOpen} className="pt-4 sm:pt-6 border-t border-primary/10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full h-9 gap-2 border-primary/30 hover:bg-primary/5"
+                    >
+                      <SlidersHorizontal className="w-4 h-4" />
+                      Расширенные фильтры
+                      {advCount > 0 && (
+                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-primary text-primary-foreground">
+                          {advCount}
+                        </Badge>
+                      )}
+                      <ChevronDown className={`w-4 h-4 transition-transform ${advancedFiltersOpen ? 'rotate-180' : ''}`} />
+                    </Button>
+                  </CollapsibleTrigger>
+                  {/* Чипы активных расширенных фильтров */}
+                  {advChips.map(chip => (
+                    <Badge
+                      key={chip.key}
+                      variant="secondary"
+                      className="rounded-full pl-3 pr-1 py-1 gap-1 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15"
+                    >
+                      <span className="text-xs">{chip.label}</span>
+                      <button
+                        onClick={chip.onClear}
+                        className="ml-0.5 rounded-full hover:bg-primary/20 p-0.5"
+                        aria-label="Сбросить фильтр"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  {/* Сортировка переехала сюда — нужна часто, не прячем */}
+                  <div className="ml-auto flex items-center gap-2">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold hidden sm:inline">Сортировка</Label>
+                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                      <SelectTrigger className="h-9 w-[200px] rounded-full bg-background/50 border-primary/20 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="deadline_asc">По дедлайну (ближайшие)</SelectItem>
+                        <SelectItem value="deadline_desc">По дедлайну (дальние)</SelectItem>
+                        <SelectItem value="date_desc">По дате (новые)</SelectItem>
+                        <SelectItem value="date_asc">По дате (старые)</SelectItem>
+                        <SelectItem value="amount_desc">По сумме (большие)</SelectItem>
+                        <SelectItem value="amount_asc">По сумме (маленькие)</SelectItem>
+                        <SelectItem value="name_asc">По названию (А-Я)</SelectItem>
+                        <SelectItem value="name_desc">По названию (Я-А)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <CollapsibleContent className="pt-4 sm:pt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
 
               {/* Статус проекта */}
               <div className="space-y-3">
@@ -2353,93 +2427,79 @@ export default function Projects() {
                 )}
               </div>
 
-              {/* Сортировка */}
+              {/* Наличие команды (раньше был в нижнем ряду — слили в одну панель) */}
               <div className="space-y-3">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Сортировка</Label>
-                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие команды</Label>
+                <Select value={filterHasTeam === 'all' ? 'all' : filterHasTeam ? 'yes' : 'no'}
+                  onValueChange={(v) => setFilterHasTeam(v === 'all' ? 'all' : v === 'yes')}>
                   <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="deadline_asc">По дедлайну (ближайшие)</SelectItem>
-                    <SelectItem value="deadline_desc">По дедлайну (дальние)</SelectItem>
-                    <SelectItem value="date_desc">По дате (новые)</SelectItem>
-                    <SelectItem value="date_asc">По дате (старые)</SelectItem>
-                    <SelectItem value="amount_desc">По сумме (большие)</SelectItem>
-                    <SelectItem value="amount_asc">По сумме (маленькие)</SelectItem>
-                    <SelectItem value="name_asc">По названию (А-Я)</SelectItem>
-                    <SelectItem value="name_desc">По названию (Я-А)</SelectItem>
+                    <SelectItem value="all">Команда: Все</SelectItem>
+                    <SelectItem value="yes">✅ Есть команда</SelectItem>
+                    <SelectItem value="no">❌ Нет команды</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-            </div>
-          </div>
-
-          {/* Возвращаем фильтр по команде и задачам как нижний ряд */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8 pt-4">
-            <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие команды</Label>
-              <Select value={filterHasTeam === 'all' ? 'all' : filterHasTeam ? 'yes' : 'no'}
-                onValueChange={(v) => setFilterHasTeam(v === 'all' ? 'all' : v === 'yes')}>
-                <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Команда: Все</SelectItem>
-                  <SelectItem value="yes">✅ Есть команда</SelectItem>
-                  <SelectItem value="no">❌ Нет команды</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие задач</Label>
-              <Select value={filterHasTasks === 'all' ? 'all' : filterHasTasks ? 'yes' : 'no'}
-                onValueChange={(v) => setFilterHasTasks(v === 'all' ? 'all' : v === 'yes')}>
-                <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Задачи: Все</SelectItem>
-                  <SelectItem value="yes">✅ Есть задачи</SelectItem>
-                  <SelectItem value="no">❌ Нет задач</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Файл договора</Label>
-              <Select value={filterHasContract === 'all' ? 'all' : filterHasContract ? 'yes' : 'no'}
-                onValueChange={(v) => setFilterHasContract(v === 'all' ? 'all' : v === 'yes')}>
-                <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Договор: Все</SelectItem>
-                  <SelectItem value="yes">Договор загружен</SelectItem>
-                  <SelectItem value="no">Нет файла договора</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {/* Диапазон дедлайна */}
-            <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Срок проекта (От и До)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={filterDeadlineFrom}
-                  onChange={(e) => setFilterDeadlineFrom(e.target.value)}
-                  className="h-10 rounded-lg bg-background/50 border-primary/20"
-                />
-                <span className="text-muted-foreground font-bold">-</span>
-                <Input
-                  type="date"
-                  value={filterDeadlineTo}
-                  onChange={(e) => setFilterDeadlineTo(e.target.value)}
-                  className="h-10 rounded-lg bg-background/50 border-primary/20"
-                />
+              {/* Наличие задач */}
+              <div className="space-y-3">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Наличие задач</Label>
+                <Select value={filterHasTasks === 'all' ? 'all' : filterHasTasks ? 'yes' : 'no'}
+                  onValueChange={(v) => setFilterHasTasks(v === 'all' ? 'all' : v === 'yes')}>
+                  <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Задачи: Все</SelectItem>
+                    <SelectItem value="yes">✅ Есть задачи</SelectItem>
+                    <SelectItem value="no">❌ Нет задач</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-          </div>
+
+              {/* Файл договора */}
+              <div className="space-y-3">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Файл договора</Label>
+                <Select value={filterHasContract === 'all' ? 'all' : filterHasContract ? 'yes' : 'no'}
+                  onValueChange={(v) => setFilterHasContract(v === 'all' ? 'all' : v === 'yes')}>
+                  <SelectTrigger className="h-10 rounded-lg bg-background/50 border-primary/20 hover:border-primary/50 transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Договор: Все</SelectItem>
+                    <SelectItem value="yes">Договор загружен</SelectItem>
+                    <SelectItem value="no">Нет файла договора</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Срок проекта (От/До) — на всю ширину последнего ряда */}
+              <div className="space-y-3 sm:col-span-2 lg:col-span-4">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Срок проекта (От и До)</Label>
+                <div className="flex items-center gap-2 max-w-md">
+                  <Input
+                    type="date"
+                    value={filterDeadlineFrom}
+                    onChange={(e) => setFilterDeadlineFrom(e.target.value)}
+                    className="h-10 rounded-lg bg-background/50 border-primary/20"
+                  />
+                  <span className="text-muted-foreground font-bold">-</span>
+                  <Input
+                    type="date"
+                    value={filterDeadlineTo}
+                    onChange={(e) => setFilterDeadlineTo(e.target.value)}
+                    className="h-10 rounded-lg bg-background/50 border-primary/20"
+                  />
+                </div>
+              </div>
+
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })()}
 
           {/* Футер фильтров (Сброс и статистика) */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-4 sm:pt-6 border-t border-primary/10 mt-4 sm:mt-6 !mb-0">
