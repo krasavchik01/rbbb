@@ -30,6 +30,13 @@ import {
 
 const REFRESH_MS = 30_000;
 
+// Роли, у которых не бывает рабочих часов на проектах — им виджет
+// «Мои часы» не нужен (будет вечный ноль и засирать дашборд).
+const NON_EXECUTOR_ROLES = new Set([
+  'ceo', 'deputy_director', 'company_director',
+  'procurement', 'hr', 'accountant', 'admin_staff', 'admin',
+]);
+
 // ─── Hook: периодически перезапускает callback ──────────────────────────────
 function useInterval(callback: () => void, ms: number) {
   useEffect(() => {
@@ -88,6 +95,7 @@ export function MyHoursWidget() {
   useInterval(refresh, REFRESH_MS);
 
   if (!user) return null;
+  if (NON_EXECUTOR_ROLES.has(user.role)) return null;
 
   return (
     <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10">

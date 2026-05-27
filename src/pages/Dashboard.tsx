@@ -743,24 +743,32 @@ export default function Dashboard() {
 
       {/* Виджеты часов/апрува/бонусов — реальные данные из БД, обновляются раз в 30 сек */}
       {(() => {
+        // «Мои часы» — только тем, кто реально работает на проектах
+        // (не CEO/зам.дир/HR/закупки/админ — у них нет таймщитов).
+        const nonExecutor = new Set(['ceo', 'deputy_director', 'company_director', 'procurement', 'hr', 'accountant', 'admin_staff', 'admin']);
+        const showMyHours = !!user?.role && !nonExecutor.has(user.role);
         // Апрув часов: только partner (свои проекты) + зам.дир (как fallback) + admin.
-        // CEO здесь намеренно не показываем — это не его задача.
         const showApproval =
           isPartner ||
           user?.role === 'deputy_director' ||
           user?.role === 'admin';
+        if (!showMyHours && !showApproval && !isDirector) return null;
         return (
           <>
-            <div className={`grid grid-cols-1 ${showApproval ? 'lg:grid-cols-2' : ''} gap-4`}>
-              <WidgetErrorBoundary label="Мои часы">
-                <MyHoursWidget />
-              </WidgetErrorBoundary>
-              {showApproval && (
-                <WidgetErrorBoundary label="Ждут апрува">
-                  <PartnerApprovalWidget />
-                </WidgetErrorBoundary>
-              )}
-            </div>
+            {(showMyHours || showApproval) && (
+              <div className={`grid grid-cols-1 ${showMyHours && showApproval ? 'lg:grid-cols-2' : ''} gap-4`}>
+                {showMyHours && (
+                  <WidgetErrorBoundary label="Мои часы">
+                    <MyHoursWidget />
+                  </WidgetErrorBoundary>
+                )}
+                {showApproval && (
+                  <WidgetErrorBoundary label="Ждут апрува">
+                    <PartnerApprovalWidget />
+                  </WidgetErrorBoundary>
+                )}
+              </div>
+            )}
             {isDirector && (
               <WidgetErrorBoundary label="Бонусы 2024-2025">
                 <BonusesOverviewWidget />
