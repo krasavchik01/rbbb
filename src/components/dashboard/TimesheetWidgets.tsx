@@ -147,10 +147,13 @@ export function PartnerApprovalWidget() {
   const [pending, setPending] = useState<{ rows: number; hours: number; projects: number }>({ rows: 0, hours: 0, projects: 0 });
   const [loading, setLoading] = useState(true);
 
-  // Те проекты, где user — партнёр (или все, для зам.дир/CEO/admin).
+  // Те проекты, где user — партнёр (или все, для зам.дир/admin).
+  // CEO специально исключён — он не апрувает таймщиты, это не его задача.
+  // Апрув: partner по своим проектам; deputy_director как fallback по проектам
+  // без партнёра. admin оставлен для отладки.
   const myProjectIds = useMemo(() => {
     if (!user) return null;
-    const isPrivileged = ['deputy_director', 'ceo', 'admin'].includes(user.role);
+    const isPrivileged = ['deputy_director', 'admin'].includes(user.role);
     if (isPrivileged) return null;     // null = «все проекты»
     if (user.role !== 'partner') return [];
     return (projects as any[])
@@ -187,7 +190,8 @@ export function PartnerApprovalWidget() {
   useInterval(refresh, REFRESH_MS);
 
   if (!user) return null;
-  const isPrivileged = ['deputy_director', 'ceo', 'admin'].includes(user.role);
+  // CEO исключён намеренно — апрув часов это не его уровень.
+  const isPrivileged = ['deputy_director', 'admin'].includes(user.role);
   const isPartner = user.role === 'partner';
   if (!isPrivileged && !isPartner) return null;
 

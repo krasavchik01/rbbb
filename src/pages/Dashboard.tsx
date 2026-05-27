@@ -314,17 +314,22 @@ export default function Dashboard() {
   const projectStats = useMemo(() => {
     const total = userProjects.length;
 
-    // Проекты ожидающие утверждения партнером (по доступным проектам)
+    // Новые проекты на одобрении CEO/зам.дир.
+    // Только те, где notes.status pending/new И реальный projects.status — не
+    // 'completed' (иначе legacy notes.status="new" продолжает считаться у уже
+    // закрытых проектов и метрика забивается шумом — было 872/997).
     const pendingPartnerApproval = (user?.role === 'ceo' || user?.role === 'deputy_director')
       ? projects.filter((p: any) => {
+        if (p.status === 'completed' || p.status === 'closed') return false;
         const ns = parseNotes(p)?.status;
         return ns === 'new' || ns === 'pending_approval';
       }).length
       : 0;
 
-    // Проекты ожидающие распределения команды
+    // Проекты ожидающие распределения команды — то же ограничение.
     const awaitingTeam = (user?.role === 'ceo' || user?.role === 'deputy_director')
       ? projects.filter((p: any) => {
+        if (p.status === 'completed' || p.status === 'closed') return false;
         const notes = parseNotes(p);
         const ns = notes?.status;
         const team = notes?.team || p.team || [];
@@ -738,7 +743,12 @@ export default function Dashboard() {
 
       {/* Виджеты часов/апрува/бонусов — реальные данные из БД, обновляются раз в 30 сек */}
       {(() => {
-        const showApproval = isPartner || isDirector;
+        // Апрув часов: только partner (свои проекты) + зам.дир (как fallback) + admin.
+        // CEO здесь намеренно не показываем — это не его задача.
+        const showApproval =
+          isPartner ||
+          user?.role === 'deputy_director' ||
+          user?.role === 'admin';
         return (
           <>
             <div className={`grid grid-cols-1 ${showApproval ? 'lg:grid-cols-2' : ''} gap-4`}>
@@ -813,14 +823,15 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Ожидают утверждения - для procurement и директоров */}
-        {(isProcurement || isDirector) && (
+        {/* Новые проекты, ждущие одобрения CEO (procurement → CEO/deputy → партнёр).
+            Это про проекты, не про часы — не путать с виджетом «Ждут моего апрува». */}
+        {(isProcurement || isDirector) && projectStats.pendingPartnerApproval > 0 && (
           <MetricCard
-            title="На утверждении"
+            title="Новые проекты на одобрении"
             value={projectStats.pendingPartnerApproval}
             icon={AlertTriangle}
-            subtitle="Требуют внимания"
-            gradient={projectStats.pendingPartnerApproval > 0 ? "from-yellow-500 to-orange-600" : "from-slate-400 to-slate-500"}
+            subtitle="procurement → CEO/зам.дир"
+            gradient="from-yellow-500 to-orange-600"
           />
         )}
       </div>
