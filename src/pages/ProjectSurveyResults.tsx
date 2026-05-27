@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects, useEmployees } from '@/hooks/useSupabaseData';
 import {
+  aggregatePeopleVotes,
   approveProposal,
   clearAllResponses,
   deleteResponse,
@@ -35,18 +36,22 @@ import {
   setSurveyConfig,
   startSurvey,
   stopSurvey,
+  type PersonVote,
   type SurveyConfig,
   type SurveyProposal,
   type SurveyResponse,
 } from '@/lib/projectSurvey';
 import { ROLE_LABELS } from '@/types/roles';
+import type { UserRole } from '@/types/roles';
 import {
   CheckCircle2,
   CheckCheck,
   ClipboardList,
+  Crown,
   Download,
   RefreshCw,
   Sparkles,
+  Star,
   Trash2,
   Users,
   X,
@@ -110,6 +115,14 @@ export default function ProjectSurveyResults() {
 
   const pendingProposals = useMemo(() => proposals.filter((p) => p.status === 'pending'), [proposals]);
   const reviewedProposals = useMemo(() => proposals.filter((p) => p.status !== 'pending'), [proposals]);
+
+  // На лету считаем голоса partner/leader/teammates по каждому проекту —
+  // без зависимости от того, что персистнуто в проекте proposals.
+  const peopleVotesByProject = useMemo(() => {
+    const m = new Map<string, { partner: PersonVote[]; leader: PersonVote[]; teammates: PersonVote[] }>();
+    for (const p of proposals) m.set(p.projectId, aggregatePeopleVotes(responses, p.projectId));
+    return m;
+  }, [proposals, responses]);
 
   if (!user) return null;
 
@@ -207,7 +220,14 @@ export default function ProjectSurveyResults() {
       });
       return false;
     }
-    const team = p.proposedTeam.map((m) => ({
+
+    // Голоса partner/leader/teammates от сотрудников (на лету из responses)
+    const votes = peopleVotesByProject.get(p.projectId);
+    const winnerPartner = votes?.partner.find((v) => v.userId);     // только привязанные к учётке
+    const winnerLeader  = votes?.leader.find((v) => v.userId);
+
+    type TM = { userId: string; userName: string; role: UserRole; bonusPercent: number; assignedAt: string; assignedBy: string };
+    const team: TM[] = p.proposedTeam.map((m) => ({
       userId: m.userId,
       userName: m.userName,
       role: m.role,
@@ -215,6 +235,23 @@ export default function ProjectSurveyResults() {
       assignedAt: new Date().toISOString(),
       assignedBy: user.id,
     }));
+
+    const upsertWithRole = (uid: string, name: string, role: UserRole) => {
+      const i = team.findIndex((t) => t.userId === uid);
+      if (i >= 0) team[i].role = role;
+      else
+        team.push({
+          userId: uid,
+          userName: name,
+          role,
+          bonusPercent: 0,
+          assignedAt: new Date().toISOString(),
+          assignedBy: user.id,
+        });
+    };
+    if (winnerPartner?.userId) upsertWithRole(winnerPartner.userId, winnerPartner.userName, 'partner' as UserRole);
+    if (winnerLeader?.userId)  upsertWithRole(winnerLeader.userId,  winnerLeader.userName,  'project_leader' as UserRole);
+
     const updates: any = { team, teamIds: team.map((t) => t.userId) };
     if (p.proposedStatus === 'completed') {
       updates.status = 'completed';
@@ -461,6 +498,9 @@ export default function ProjectSurveyResults() {
               {pendingProposals.map((p) => {
                 const statusLabel = p.proposedStatus ? PROPOSED_STATUS_LABEL[p.proposedStatus] : null;
                 const confidence = CONFIDENCE_LABEL[p.confidence];
+                const votes = peopleVotesByProject.get(p.projectId);
+                const topPartner = votes?.partner[0];
+                const topLeader  = votes?.leader[0];
                 return (
                   <Card key={p.projectId} className="border-primary/30">
                     <CardContent className="p-4 space-y-3">
@@ -536,6 +576,101 @@ export default function ProjectSurveyResults() {
                           будет очищена при принятии.
                         </div>
                       )}
+
+                      {/* Сводка голосов от сотрудников: кого помнят как партнёра /
+                          руководителя / в команде. Помогает восстановить
+                          прошедшие проекты, где team пустая. */}
+                      {votes && (votes.partner.length || votes.leader.length || votes.teammateMentions.length > 0 || votes.teammates.length > 0) ? (
+                        <div className="rounded border p-2 space-y-2 bg-amber-50/30">
+                          <div className="text-xs font-medium text-amber-800 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Что вспомнили сотрудники
+                          </div>
+                          <div className="grid sm:grid-cols-3 gap-2 text-xs">
+                            <div>
+                              <div className="text-muted-foreground mb-1 flex items-center gap-1">
+                                <Crown className="w-3 h-3" /> Партнёр
+                              </div>
+                              {votes.partner.length === 0 ? (
+                                <span className="text-muted-foreground italic">— никто не назвал</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {votes.partner.map((v, i) => (
+                                    <Badge
+                                      key={`${v.userId || v.userName}-${i}`}
+                                      variant={i === 0 ? 'default' : 'outline'}
+                                      className="text-xs gap-1"
+                                    >
+                                      {v.userName}
+                                      <span className="opacity-75">×{v.count}</span>
+                                      {!v.userId && <span className="opacity-60">(?)</span>}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground mb-1 flex items-center gap-1">
+                                <Star className="w-3 h-3" /> Руководитель
+                              </div>
+                              {votes.leader.length === 0 ? (
+                                <span className="text-muted-foreground italic">— никто не назвал</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {votes.leader.map((v, i) => (
+                                    <Badge
+                                      key={`${v.userId || v.userName}-${i}`}
+                                      variant={i === 0 ? 'default' : 'outline'}
+                                      className="text-xs gap-1"
+                                    >
+                                      {v.userName}
+                                      <span className="opacity-75">×{v.count}</span>
+                                      {!v.userId && <span className="opacity-60">(?)</span>}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground mb-1 flex items-center gap-1">
+                                <Users className="w-3 h-3" /> Упомянули в команде
+                              </div>
+                              {votes.teammates.length === 0 ? (
+                                <span className="text-muted-foreground italic">— никто</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {votes.teammates.slice(0, 8).map((v, i) => (
+                                    <Badge
+                                      key={`${v.userId || v.userName}-${i}`}
+                                      variant="outline"
+                                      className="text-xs gap-1"
+                                    >
+                                      {v.userName}
+                                      {v.count > 1 && <span className="opacity-75">×{v.count}</span>}
+                                      {!v.userId && <span className="opacity-60">(?)</span>}
+                                    </Badge>
+                                  ))}
+                                  {votes.teammates.length > 8 && (
+                                    <span className="text-muted-foreground">+{votes.teammates.length - 8}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {(topPartner?.userId || topLeader?.userId) && (
+                            <div className="text-xs text-amber-800/80">
+                              При принятии в команду добавим
+                              {topPartner?.userId && (
+                                <> <b>{topPartner.userName}</b> как «Партнёр»</>
+                              )}
+                              {topPartner?.userId && topLeader?.userId && <> и</>}
+                              {topLeader?.userId && (
+                                <> <b>{topLeader.userName}</b> как «Руководитель проекта»</>
+                              )}
+                              .
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
 
                       <div className="flex flex-wrap gap-2 justify-end">
                         <Button size="sm" variant="outline" onClick={() => handleReject(p)} disabled={busy}>

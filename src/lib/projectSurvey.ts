@@ -25,6 +25,11 @@ export type SurveyProjectStatusVote =
   | 'cancelled'
   | 'unknown';
 
+export interface RememberedPerson {
+  userId?: string;   // если выбран из списка сотрудников
+  userName: string;  // отображаемое имя (обязательно — для not-in-system людей)
+}
+
 export interface SurveyProjectAnswer {
   projectId: string;
   projectName: string;
@@ -35,6 +40,11 @@ export interface SurveyProjectAnswer {
   totalHours?: number;       // суммарно часов на проект за период (для таймщитов)
   statusVote: SurveyProjectStatusVote;
   comment?: string;
+  // Память сотрудника о команде проекта — нужно, чтобы по нескольким
+  // ответам реконструировать «кто с кем работал» в прошедших проектах.
+  rememberedPartner?: RememberedPerson;
+  rememberedLeader?: RememberedPerson;
+  rememberedTeammates?: RememberedPerson[];
 }
 
 export interface SurveyResponse {
@@ -74,6 +84,18 @@ export interface ProposedTeamMember {
   bonusPercent: number;
 }
 
+/**
+ * Голос на конкретного человека (partner/leader/teammate).
+ * Голосуют сотрудники в опросе — система суммирует упоминания.
+ * userId может быть пустым, если упомянутого человека нет в списке сотрудников
+ * (тогда отображаем по имени без линка к учётке).
+ */
+export interface PersonVote {
+  userId?: string;
+  userName: string;
+  count: number;
+}
+
 export interface SurveyProposal {
   id: string;
   projectId: string;
@@ -85,6 +107,11 @@ export interface SurveyProposal {
   respondentsCount: number;
   participantsCount: number;
   confidence: 'low' | 'medium' | 'high';
+  // Сводка голосов сотрудников: кого назвали партнёром/руководителем
+  // и кого упоминали как участников. Сортировано по count убыванию.
+  partnerVotes?: PersonVote[];
+  leaderVotes?: PersonVote[];
+  teammateMentions?: PersonVote[];
   reviewedBy?: string;
   reviewedByName?: string;
   reviewedAt?: string;
@@ -172,6 +199,10 @@ function rowToProposal(row: any): SurveyProposal {
     respondentsCount: row.respondents_count || 0,
     participantsCount: row.participants_count || 0,
     confidence: row.confidence || 'low',
+    // partner/leader/teammate голоса не персистятся в БД (не плодим миграции).
+    // Они считаются на лету в админке из текущих responses (см.
+    // aggregatePeopleVotes ниже). В пропоsals они опциональны и нужны
+    // только для in-memory consumers сразу после regenerate.
     reviewedBy: row.reviewed_by || undefined,
     reviewedByName: row.reviewed_by_name || undefined,
     reviewedAt: row.reviewed_at || undefined,
@@ -388,12 +419,73 @@ export async function deleteProposal(projectId: string): Promise<void> {
 }
 
 /**
+ * Аккумулятор голосов на человека (партнёр/руководитель/участник).
+ * Ключ — `userId` если есть, иначе нормализованное имя.
+ */
+function bumpVote(
+  acc: Map<string, PersonVote>,
+  p: RememberedPerson | undefined,
+): void {
+  if (!p) return;
+  const name = (p.userName || '').trim();
+  if (!p.userId && !name) return;
+  const key = p.userId || `name:${name.toLowerCase()}`;
+  const cur = acc.get(key);
+  if (cur) {
+    cur.count += 1;
+    // подхватим userId, если в более позднем голосе он появился
+    if (!cur.userId && p.userId) cur.userId = p.userId;
+    if (!cur.userName && name) cur.userName = name;
+  } else {
+    acc.set(key, { userId: p.userId, userName: name, count: 1 });
+  }
+}
+
+function toSortedVotes(acc: Map<string, PersonVote>): PersonVote[] {
+  return Array.from(acc.values()).sort(
+    (a, b) => b.count - a.count || a.userName.localeCompare(b.userName, 'ru'),
+  );
+}
+
+/**
+ * Считает голоса на партнёра/руководителя/участников по одному проекту
+ * прямо из ответов сотрудников. Используется в админке для отображения
+ * сводки «кого назвали кем» — без зависимости от персистнутых proposals.
+ */
+export function aggregatePeopleVotes(
+  responses: SurveyResponse[],
+  projectId: string,
+): { partner: PersonVote[]; leader: PersonVote[]; teammates: PersonVote[] } {
+  const partner = new Map<string, PersonVote>();
+  const leader = new Map<string, PersonVote>();
+  const team = new Map<string, PersonVote>();
+  for (const r of responses) {
+    if (r.status !== 'submitted') continue;
+    for (const a of r.answers) {
+      if (a.projectId !== projectId) continue;
+      if (!a.participated) continue;
+      bumpVote(partner, a.rememberedPartner);
+      bumpVote(leader, a.rememberedLeader);
+      for (const t of a.rememberedTeammates || []) bumpVote(team, t);
+    }
+  }
+  return {
+    partner: toSortedVotes(partner),
+    leader: toSortedVotes(leader),
+    teammates: toSortedVotes(team),
+  };
+}
+
+/**
  * Сформировать кандидатные предложения из ответов.
  * Берёт всех participated=true и собирает команду; голоса по статусу выбирают
  * proposed_status.
  */
 export function buildProposalsFromResponses(responses: SurveyResponse[]): SurveyProposal[] {
   const projects = new Map<string, SurveyProposal>();
+  const partnerAcc = new Map<string, Map<string, PersonVote>>();
+  const leaderAcc = new Map<string, Map<string, PersonVote>>();
+  const teamAcc = new Map<string, Map<string, PersonVote>>();
 
   for (const r of responses) {
     if (r.status !== 'submitted') continue;
@@ -415,6 +507,9 @@ export function buildProposalsFromResponses(responses: SurveyResponse[]): Survey
           updatedAt: new Date().toISOString(),
         };
         projects.set(a.projectId, p);
+        partnerAcc.set(a.projectId, new Map());
+        leaderAcc.set(a.projectId, new Map());
+        teamAcc.set(a.projectId, new Map());
       }
       p.respondentsCount += 1;
       p.statusVotes[a.statusVote] = (p.statusVotes[a.statusVote] || 0) + 1;
@@ -429,12 +524,18 @@ export function buildProposalsFromResponses(responses: SurveyResponse[]): Survey
           periodTo: a.periodTo,
           bonusPercent: 0,
         });
+        bumpVote(partnerAcc.get(a.projectId)!, a.rememberedPartner);
+        bumpVote(leaderAcc.get(a.projectId)!, a.rememberedLeader);
+        for (const t of a.rememberedTeammates || []) bumpVote(teamAcc.get(a.projectId)!, t);
       }
     }
   }
 
   for (const p of projects.values()) {
     p.participantsCount = p.proposedTeam.length;
+    p.partnerVotes = toSortedVotes(partnerAcc.get(p.projectId) || new Map());
+    p.leaderVotes = toSortedVotes(leaderAcc.get(p.projectId) || new Map());
+    p.teammateMentions = toSortedVotes(teamAcc.get(p.projectId) || new Map());
 
     // Голосование по статусу: завершён > отменён > идёт > unknown
     const v = p.statusVotes;

@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProjects } from '@/hooks/useSupabaseData';
+import { useProjects, useEmployees } from '@/hooks/useSupabaseData';
 import {
   getResponseForUser,
   getSurveyConfig,
   submitResponse,
+  type RememberedPerson,
   type SurveyConfig,
   type SurveyProjectAnswer,
   type SurveyResponse,
@@ -23,7 +24,8 @@ import { bulkInsert, type TimesheetEntryDraft } from '@/lib/timesheets';
 import { supabase } from '@/integrations/supabase/client';
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from '@/types/roles';
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from '@/types/project-v3';
-import { CheckCircle2, ClipboardList, Send, Search, X, Plus, Trash2, Users, Building2, Clock, Sparkles } from 'lucide-react';
+import { PersonPicker, TeamPicker } from '@/components/SurveyPeoplePicker';
+import { CheckCircle2, ClipboardList, Send, Search, X, Plus, Trash2, Users, Building2, Clock, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 
 const STATUS_TONE: Partial<Record<ProjectStatus, string>> = {
   in_progress: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -60,15 +62,33 @@ interface ManualAnswer {
   periodTo?: string;
   totalHours?: number;
   comment?: string;
+  rememberedPartner?: RememberedPerson;
+  rememberedLeader?: RememberedPerson;
+  rememberedTeammates?: RememberedPerson[];
 }
 
-function buildAnswerFromSystem(p: { id: string; name: string; myRole?: UserRole; status?: string }): SurveyProjectAnswer {
+// Память про команду для системного проекта — собирается, только если в
+// фактической team нет partner / project_leader. Тогда сотрудник может
+// помочь восстановить кто был кем.
+interface SystemMemory {
+  rememberedPartner?: RememberedPerson;
+  rememberedLeader?: RememberedPerson;
+  rememberedTeammates?: RememberedPerson[];
+}
+
+function buildAnswerFromSystem(
+  p: { id: string; name: string; myRole?: UserRole; status?: string },
+  memory?: SystemMemory,
+): SurveyProjectAnswer {
   return {
     projectId: p.id,
     projectName: p.name,
     participated: true,
     roleOnProject: p.myRole,
     statusVote: 'in_progress',
+    rememberedPartner: memory?.rememberedPartner,
+    rememberedLeader: memory?.rememberedLeader,
+    rememberedTeammates: memory?.rememberedTeammates?.length ? memory.rememberedTeammates : undefined,
   };
 }
 
@@ -83,6 +103,9 @@ function buildAnswerFromManual(m: ManualAnswer): SurveyProjectAnswer {
     totalHours: m.totalHours,
     comment: m.comment,
     statusVote: 'in_progress',
+    rememberedPartner: m.rememberedPartner,
+    rememberedLeader: m.rememberedLeader,
+    rememberedTeammates: m.rememberedTeammates?.length ? m.rememberedTeammates : undefined,
   };
 }
 
@@ -142,6 +165,7 @@ async function appendTimesheetsForManual(
 export default function ProjectSurvey() {
   const { user } = useAuth();
   const { projects, loading } = useProjects();
+  const { employees } = useEmployees();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -153,6 +177,12 @@ export default function ProjectSurvey() {
   const [systemConfirmed, setSystemConfirmed] = useState<Set<string>>(new Set());
   const [systemInitialized, setSystemInitialized] = useState(false);
   const [manualAnswers, setManualAnswers] = useState<ManualAnswer[]>([]);
+  // memory по системным проектам — id → что я вспомнил про partner/leader/team.
+  // Заполняется, только если в фактической команде проекта не хватает
+  // partner или project_leader (см. mySystemProjects.needsRecall).
+  const [systemMemory, setSystemMemory] = useState<Record<string, SystemMemory>>({});
+  // Раскрытие блока «помогите восстановить» для системного проекта
+  const [systemRecallOpen, setSystemRecallOpen] = useState<Record<string, boolean>>({});
 
   // Поиск
   const [query, setQuery] = useState('');
@@ -193,7 +223,10 @@ export default function ProjectSurvey() {
         return teamIds.includes(user.id) || team.some((m: any) => (m.userId || m.id) === user.id);
       })
       .map((p) => {
-        const me = (p.team || []).find((m: any) => (m.userId || m.id) === user.id);
+        const team = p.team || [];
+        const me = team.find((m: any) => (m.userId || m.id) === user.id);
+        const hasPartner = team.some((m: any) => m.role === 'partner');
+        const hasLeader = team.some((m: any) => m.role === 'project_leader');
         return {
           id: p.id,
           name: p.name,
@@ -202,7 +235,11 @@ export default function ProjectSurvey() {
           updatedAt: p.updated_at as string | null,
           myRole: me?.role as UserRole | undefined,
           myAssignedAt: me?.assignedAt as string | undefined,
-          team: p.team || [],
+          team,
+          // Если в системной команде нет партнёра ИЛИ нет руководителя —
+          // сотрудник может помочь восстановить (опциональный блок)
+          needsPartnerRecall: !hasPartner,
+          needsLeaderRecall: !hasLeader,
         };
       })
       .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -222,10 +259,18 @@ export default function ProjectSurvey() {
     const systemIds = new Set(mySystemProjects.map((p) => p.id));
     const confirmed = new Set<string>();
     const manual: ManualAnswer[] = [];
+    const memory: Record<string, SystemMemory> = {};
     for (const a of existingResponse.answers) {
       if (!a.participated) continue;
       if (systemIds.has(a.projectId)) {
         confirmed.add(a.projectId);
+        if (a.rememberedPartner || a.rememberedLeader || a.rememberedTeammates?.length) {
+          memory[a.projectId] = {
+            rememberedPartner: a.rememberedPartner,
+            rememberedLeader: a.rememberedLeader,
+            rememberedTeammates: a.rememberedTeammates || [],
+          };
+        }
       } else {
         manual.push({
           projectId: a.projectId,
@@ -235,11 +280,15 @@ export default function ProjectSurvey() {
           periodTo: a.periodTo,
           totalHours: a.totalHours,
           comment: a.comment,
+          rememberedPartner: a.rememberedPartner,
+          rememberedLeader: a.rememberedLeader,
+          rememberedTeammates: a.rememberedTeammates || [],
         });
       }
     }
     setSystemConfirmed(confirmed);
     setManualAnswers(manual);
+    setSystemMemory(memory);
     setSystemInitialized(true);
   }, [existingResponse, mySystemProjects]);
 
@@ -296,7 +345,7 @@ export default function ProjectSurvey() {
     setBusy(true);
     try {
       const answers: SurveyProjectAnswer[] = [
-        ...confirmedSystem.map((p) => buildAnswerFromSystem(p)),
+        ...confirmedSystem.map((p) => buildAnswerFromSystem(p, systemMemory[p.id])),
         ...manualAnswers.map(buildAnswerFromManual),
       ];
       const next = await submitResponse({
@@ -436,64 +485,130 @@ export default function ProjectSurvey() {
                 const checked = systemConfirmed.has(p.id);
                 const others = p.team.filter((m: any) => (m.userId || m.id) !== user.id);
                 const tone = STATUS_TONE[p.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+                const recallNeeded = checked && (p.needsPartnerRecall || p.needsLeaderRecall);
+                const recallOpen = !!systemRecallOpen[p.id];
+                const mem = systemMemory[p.id] || {};
+                const setMem = (patch: Partial<SystemMemory>) => {
+                  setSystemMemory((prev) => ({ ...prev, [p.id]: { ...prev[p.id], ...patch } }));
+                };
                 return (
-                  <label
+                  <div
                     key={p.id}
-                    className={`flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-all ${
+                    className={`rounded-md border transition-all ${
                       checked
                         ? 'bg-primary/5 border-primary/40 shadow-sm'
-                        : 'border-dashed bg-muted/30 opacity-70 hover:opacity-100 line-through decoration-from-font'
+                        : 'border-dashed bg-muted/30 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <Checkbox checked={checked} onCheckedChange={() => toggleSystem(p.id)} className="mt-1" />
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-medium">{p.name}</div>
-                        <Badge variant="outline" className={`text-xs border ${tone}`}>
-                          {PROJECT_STATUS_LABELS[p.status] || p.status}
-                        </Badge>
-                        {p.myRole && (
-                          <Badge variant="secondary" className="text-xs">
-                            вы: {ROLE_LABELS[p.myRole] || p.myRole}
+                    <label
+                      className={`flex items-start gap-3 p-3 cursor-pointer ${
+                        checked ? '' : 'line-through decoration-from-font'
+                      }`}
+                    >
+                      <Checkbox checked={checked} onCheckedChange={() => toggleSystem(p.id)} className="mt-1" />
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium">{p.name}</div>
+                          <Badge variant="outline" className={`text-xs border ${tone}`}>
+                            {PROJECT_STATUS_LABELS[p.status] || p.status}
                           </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        {p.clientName && (
-                          <span className="flex items-center gap-1">
-                            <Building2 className="w-3 h-3" /> {p.clientName}
-                          </span>
-                        )}
-                        {p.updatedAt && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> обновлён {relativeTime(p.updatedAt)}
-                          </span>
-                        )}
-                        {p.myAssignedAt && (
-                          <span className="flex items-center gap-1">
-                            вас добавили {relativeTime(p.myAssignedAt)}
-                          </span>
-                        )}
-                      </div>
-
-                      {others.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                          <Users className="w-3 h-3" />
-                          <span>с вами в команде:</span>
-                          {others.slice(0, 5).map((m: any, i: number) => (
-                            <span key={i} className="px-1.5 py-0.5 rounded bg-muted/60">
-                              {m.userName || m.name || '—'}
-                              {m.role ? ` (${ROLE_LABELS[m.role as UserRole] || m.role})` : ''}
-                            </span>
-                          ))}
-                          {others.length > 5 && (
-                            <span className="text-muted-foreground">+{others.length - 5}</span>
+                          {p.myRole && (
+                            <Badge variant="secondary" className="text-xs">
+                              вы: {ROLE_LABELS[p.myRole] || p.myRole}
+                            </Badge>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </label>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {p.clientName && (
+                            <span className="flex items-center gap-1">
+                              <Building2 className="w-3 h-3" /> {p.clientName}
+                            </span>
+                          )}
+                          {p.updatedAt && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> обновлён {relativeTime(p.updatedAt)}
+                            </span>
+                          )}
+                          {p.myAssignedAt && (
+                            <span className="flex items-center gap-1">
+                              вас добавили {relativeTime(p.myAssignedAt)}
+                            </span>
+                          )}
+                        </div>
+
+                        {others.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                            <Users className="w-3 h-3" />
+                            <span>с вами в команде:</span>
+                            {others.slice(0, 5).map((m: any, i: number) => (
+                              <span key={i} className="px-1.5 py-0.5 rounded bg-muted/60">
+                                {m.userName || m.name || '—'}
+                                {m.role ? ` (${ROLE_LABELS[m.role as UserRole] || m.role})` : ''}
+                              </span>
+                            ))}
+                            {others.length > 5 && (
+                              <span className="text-muted-foreground">+{others.length - 5}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+
+                    {recallNeeded && (
+                      <div className="border-t bg-amber-50/40">
+                        <button
+                          type="button"
+                          onClick={() => setSystemRecallOpen((s) => ({ ...s, [p.id]: !s[p.id] }))}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-amber-50"
+                        >
+                          <span className="flex items-center gap-2 text-amber-800">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Помогите восстановить:
+                            {p.needsPartnerRecall && <span> кто был партнёром</span>}
+                            {p.needsPartnerRecall && p.needsLeaderRecall && <span>,</span>}
+                            {p.needsLeaderRecall && <span> кто был руководителем</span>}?
+                          </span>
+                          {recallOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                        {recallOpen && (
+                          <div className="px-3 pb-3 space-y-3">
+                            {p.needsPartnerRecall && (
+                              <div>
+                                <Label className="text-xs">Партнёр проекта</Label>
+                                <PersonPicker
+                                  value={mem.rememberedPartner}
+                                  onChange={(v) => setMem({ rememberedPartner: v })}
+                                  employees={employees}
+                                  placeholder="Кого помните как партнёра…"
+                                />
+                              </div>
+                            )}
+                            {p.needsLeaderRecall && (
+                              <div>
+                                <Label className="text-xs">Руководитель проекта</Label>
+                                <PersonPicker
+                                  value={mem.rememberedLeader}
+                                  onChange={(v) => setMem({ rememberedLeader: v })}
+                                  employees={employees}
+                                  placeholder="Кого помните как руководителя…"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <Label className="text-xs">Кто ещё был в команде (необязательно)</Label>
+                              <TeamPicker
+                                value={mem.rememberedTeammates || []}
+                                onChange={(v) => setMem({ rememberedTeammates: v })}
+                                employees={employees}
+                                placeholder="Добавьте по одному…"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -641,6 +756,41 @@ export default function ProjectSurvey() {
                         type="date"
                         value={m.periodTo || ''}
                         onChange={(e) => updateManual(m.projectId, { periodTo: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-violet-200 bg-violet-50/30 p-3 space-y-3">
+                    <div className="text-xs text-violet-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Помогите восстановить команду — кого вы помните по этому проекту.
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Партнёр проекта</Label>
+                        <PersonPicker
+                          value={m.rememberedPartner}
+                          onChange={(v) => updateManual(m.projectId, { rememberedPartner: v })}
+                          employees={employees}
+                          placeholder="Кого помните как партнёра…"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Руководитель проекта</Label>
+                        <PersonPicker
+                          value={m.rememberedLeader}
+                          onChange={(v) => updateManual(m.projectId, { rememberedLeader: v })}
+                          employees={employees}
+                          placeholder="Кого помните как руководителя…"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Кто ещё был в команде (необязательно)</Label>
+                      <TeamPicker
+                        value={m.rememberedTeammates || []}
+                        onChange={(v) => updateManual(m.projectId, { rememberedTeammates: v })}
+                        employees={employees}
+                        placeholder="Добавьте по одному…"
                       />
                     </div>
                   </div>
