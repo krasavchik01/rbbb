@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
@@ -52,6 +52,12 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Редирект для legacy-уведомлений: /projects/:id → /project/:id.
+function RedirectToProject() {
+  const { id } = useParams();
+  return <Navigate to={`/project/${id}`} replace />;
+}
 
 function App() {
   return (
@@ -377,6 +383,11 @@ function App() {
               }
             />
             {/* /my-tasks — теперь redirect → /tasks?tab=mine (определён выше). */}
+            {/* Legacy-уведомления писались с url /projects/:id (с «s») — в БД
+                таких ~150 штук, продолжают всплывать после клика по бейджу
+                уведомлений. Текущий код пишет /project/:id. Редирект чинит
+                старые уведомления без миграции данных. */}
+            <Route path="/projects/:id" element={<RedirectToProject />} />
             <Route path="/404" element={<NotFound />} />
             <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
