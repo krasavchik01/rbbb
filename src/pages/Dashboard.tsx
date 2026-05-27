@@ -13,6 +13,7 @@ import { ProjectVitals } from '@/components/projects/ProjectVitals';
 import { allProjectsHoursTotals, type ProjectHoursTotals } from '@/lib/timesheets';
 import { CheckInWidget } from '@/components/CheckInWidget';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
+import { MyHoursWidget, PartnerApprovalWidget, BonusesOverviewWidget } from '@/components/dashboard/TimesheetWidgets';
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -735,6 +736,30 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Виджеты часов/апрува/бонусов — реальные данные из БД, обновляются раз в 30 сек */}
+      {(() => {
+        const showApproval = isPartner || isDirector;
+        return (
+          <>
+            <div className={`grid grid-cols-1 ${showApproval ? 'lg:grid-cols-2' : ''} gap-4`}>
+              <WidgetErrorBoundary label="Мои часы">
+                <MyHoursWidget />
+              </WidgetErrorBoundary>
+              {showApproval && (
+                <WidgetErrorBoundary label="Ждут апрува">
+                  <PartnerApprovalWidget />
+                </WidgetErrorBoundary>
+              )}
+            </div>
+            {isDirector && (
+              <WidgetErrorBoundary label="Бонусы 2024-2025">
+                <BonusesOverviewWidget />
+              </WidgetErrorBoundary>
+            )}
+          </>
+        );
+      })()}
+
       {/* Основные метрики - адаптивные для каждой роли */}
       <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4`}>
         {/* Общая выручка - только для директоров */}
@@ -743,7 +768,6 @@ export default function Dashboard() {
             title="Общая выручка"
             value={safeNumber(projectStats.totalRevenue) > 0 ? `${(safeNumber(projectStats.totalRevenue) / 1000000).toFixed(1)}M ₸` : '0 ₸'}
             icon={DollarSign}
-            trend={{ value: 12, label: '+12%' }}
             subtitle="За все проекты"
             gradient="from-green-500 to-emerald-600"
           />
