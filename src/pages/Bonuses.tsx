@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { calculateProjectFinances } from '@/types/project-v3';
 import { notifyBonusesApproved, notifyProjectClosed } from '@/lib/projectNotifications';
+import { CEOSummaryTable, type CEOSummaryActions } from '@/components/projects/CEOSummaryTable';
 import {
   Gift,
   TrendingUp,
@@ -116,19 +117,29 @@ export default function Bonuses() {
     }));
   };
 
-  const approveProjectBonuses = async (project: any) => {
+  const approveProjectBonuses = async (
+    project: any,
+    overrides?: { bonusPercent?: number; overheadPercent?: number; distribution?: Record<string, number> },
+  ) => {
     if (!user || !canApproveBonusPayout) return;
 
     try {
-      // Применяем кастомный процент бонуса от базы (CEO мог поменять с 10% на меньше/больше)
+      // Применяем кастомный процент бонуса от базы (CEO мог поменять с 10% на меньше/больше).
+      // overrides.bonusPercent → draftBonusPercent → project.finances.bonusPercent → 10.
       const customPercentRaw = draftBonusPercent[project.id];
       const customPercent =
-        customPercentRaw !== undefined && customPercentRaw !== '' && !isNaN(Number(customPercentRaw))
+        overrides?.bonusPercent ??
+        (customPercentRaw !== undefined && customPercentRaw !== '' && !isNaN(Number(customPercentRaw))
           ? Number(customPercentRaw)
-          : (project.finances?.bonusPercent ?? 10);
+          : (project.finances?.bonusPercent ?? 10));
       const projectWithPercent = {
         ...project,
-        finances: { ...(project.finances || {}), bonusPercent: customPercent },
+        finances: {
+          ...(project.finances || {}),
+          bonusPercent: customPercent,
+          ...(overrides?.overheadPercent != null ? { preExpensePercent: overrides.overheadPercent } : {}),
+          ...(overrides?.distribution ? { distribution: overrides.distribution } : {}),
+        },
       };
       const finances = calculateProjectFinances(projectWithPercent);
       const adjustments = draftAdjustments[project.id] || {};
@@ -448,6 +459,41 @@ export default function Bonuses() {
     return Object.values(grouped).sort((a, b) => b.total - a.total);
   }, [filteredBonuses, employees]);
 
+  // Адаптер действий для CEOSummaryTable.
+  // Используется только если canApproveBonusPayout (CEO/admin).
+  const ceoTableActions: CEOSummaryActions | undefined = canApproveBonusPayout
+    ? {
+        approveAndClose: async (project, settings) => {
+          await approveProjectBonuses(project, settings);
+        },
+        markPaid: async (projectId, userId) => {
+          await markBonusPaid(projectId, userId);
+        },
+        unmarkPaid: async (projectId, userId) => {
+          await unmarkBonusPaid(projectId, userId);
+        },
+        toggleHidden: async (projectId, userId, current) => {
+          await toggleBonusVisibility(projectId, userId, current);
+        },
+        adjustAmount: async (projectId, userId, amount) => {
+          await reduceBonusAmount(projectId, userId, amount);
+        },
+      }
+    : undefined;
+
+  // Минимальные адаптеры под пропсы CEOSummaryTable.
+  const getProjectAmountForTable = (project: any) => {
+    const notes = project?.notes || {};
+    const amount =
+      Number(project?.contract?.amountWithoutVAT) ||
+      Number(project?.amountWithoutVAT) ||
+      Number(notes?.contract?.amountWithoutVAT) ||
+      Number(notes?.amountWithoutVAT) ||
+      0;
+    return { amount, currency: project?.currency || notes?.currency || '₸' };
+  };
+  const getCompanyDisplayNameForTable = (company: string) => company || '';
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
@@ -539,238 +585,23 @@ export default function Bonuses() {
         </Card>
       )}
 
-      {canEditBonuses && projectsAwaitingApproval.length > 0 && (
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold">Ожидают финального утверждения CEO</h2>
-            <p className="text-sm text-muted-foreground">Проверьте суммы, при необходимости скорректируйте их и закройте проект.</p>
-          </div>
-
-          {projectsAwaitingApproval.map((project: any) => {
-            // Используем draft процент если CEO его менял; иначе текущий из проекта; иначе 10.
-            const draftPercent = draftBonusPercent[project.id];
-            const effectivePercent =
-              draftPercent !== undefined && draftPercent !== '' && !isNaN(Number(draftPercent))
-                ? Number(draftPercent)
-                : (project.finances?.bonusPercent ?? 10);
-            const projectForCalc = {
-              ...project,
-              finances: { ...(project.finances || {}), bonusPercent: effectivePercent },
-            };
-            const finances = calculateProjectFinances(projectForCalc);
-            const team = project.team || project.notes?.team || [];
-            const notes = project.notes || {};
-            const projectTasks = getTasksForProject(project.id);
-            const clientName = notes.clientName || notes.client?.name || project.clientName;
-            const ourCompany = notes.ourCompany || notes.companyName;
-            const contractNumber = notes.contractNumber || notes.contract?.number;
-            const contractDate = notes.contractDate || notes.contract?.date;
-            const periodFrom = notes.periodFrom || notes.startDate;
-            const periodTo = notes.periodTo || notes.endDate;
-            const stats = getTaskStats(project.id);
-            const tasksHealthy = stats.total > 0 && stats.overdue === 0 && stats.blocked === 0;
-            const currency = notes.currency || '₸';
-
-            return (
-              <Card key={project.id} className="p-5 border border-blue-200 shadow-sm space-y-4">
-                {/* Шапка проекта */}
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-base">{project.name || project.title || 'Проект'}</h3>
-                      <Badge className="bg-blue-500">Ждёт CEO</Badge>
-                      {ourCompany && <Badge variant="outline" className="text-xs">{ourCompany}</Badge>}
-                    </div>
-                    {clientName && (
-                      <p className="text-sm text-muted-foreground">Клиент: <b className="text-foreground">{clientName}</b></p>
-                    )}
-                    <p className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
-                      {contractNumber && <span>Договор № {contractNumber}{contractDate ? ` от ${format(new Date(contractDate), 'dd.MM.yyyy')}` : ''}</span>}
-                      {periodFrom && periodTo && <span>Период: {periodFrom} → {periodTo}</span>}
-                      <span>Сумма без НДС: <b className="text-foreground">{(finances.amountWithoutVAT || 0).toLocaleString('ru-RU')} {currency}</b></span>
-                    </p>
-                  </div>
-                  {canApproveBonusPayout && (
-                    <Button onClick={() => approveProjectBonuses(project)} className="gap-2 self-start">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Утвердить и закрыть
-                    </Button>
-                  )}
-                </div>
-
-                {/* Статус задач */}
-                {stats.total > 0 ? (
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Задачи:</span>
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">✓ {stats.done} готовы</Badge>
-                    {stats.inProgress > 0 && <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">▶ {stats.inProgress} в работе</Badge>}
-                    {stats.blocked > 0 && <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">⛔ {stats.blocked} заблокированы</Badge>}
-                    {stats.overdue > 0 && <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">⏰ {stats.overdue} просрочены</Badge>}
-                    {tasksHealthy && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">всё нормально</Badge>}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Задачи в системе не создавались (или импорт постфактум).</p>
-                )}
-
-                {/* Прозрачная формула расчёта с редактируемым процентом */}
-                <div className="text-xs bg-muted/40 rounded-md px-3 py-2 space-y-2">
-                  <div className="font-medium text-foreground">Как считается бонус:</div>
-                  <div>
-                    Сумма без НДС <b>{(finances.amountWithoutVAT || 0).toLocaleString('ru-RU')}</b>
-                    {' '}− Предрасход {finances.preExpensePercent}% (<b>{(finances.preExpenseAmount || 0).toLocaleString('ru-RU')}</b>)
-                    {finances.totalContractorsAmount > 0 && <> − ГПХ (<b>{(finances.totalContractorsAmount || 0).toLocaleString('ru-RU')}</b>)</>}
-                    {' '}= База бонусов <b>{(finances.bonusBase || 0).toLocaleString('ru-RU')}</b>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span>База ×</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={50}
-                      step={0.5}
-                      className="h-7 w-20 text-right"
-                      value={draftPercent ?? String(effectivePercent)}
-                      onChange={(e) => setDraftBonusPercent((prev) => ({ ...prev, [project.id]: e.target.value }))}
-                      disabled={!canApproveBonusPayout}
-                      title="Можно поставить меньше или больше — это процент бонуса от базы"
-                    />
-                    <span>%</span>
-                    <span>= Общий пул бонусов <b className="text-primary">{(finances.totalBonusAmount || 0).toLocaleString('ru-RU')} {currency}</b></span>
-                  </div>
-                  <div className="text-muted-foreground">
-                    Менять процент → плановые суммы участников ниже пересчитаются автоматически. Каждого можно дополнительно корректировать вручную.
-                  </div>
-                </div>
-
-                {/* Раскрывающийся список задач: «как было сделано» */}
-                {projectTasks.length > 0 && (
-                  <div className="border rounded-md">
-                    <button
-                      onClick={() => setTasksOpen((s) => ({ ...s, [project.id]: !s[project.id] }))}
-                      className="w-full px-3 py-2 text-xs flex items-center justify-between hover:bg-muted/30"
-                    >
-                      <span className="font-medium">Задачи проекта ({projectTasks.length}) — как было сделано</span>
-                      <span className="text-muted-foreground">{tasksOpen[project.id] ? '▼' : '▶'}</span>
-                    </button>
-                    {tasksOpen[project.id] && (
-                      <div className="divide-y border-t text-xs">
-                        {projectTasks.map((t: Task) => {
-                          const assigneeNames = (t.assignees || [])
-                            .map((aid) => employees.find((e: any) => e.id === aid)?.name)
-                            .filter(Boolean)
-                            .join(', ');
-                          const overdue = t.due_at && t.status !== 'done' && new Date(t.due_at).getTime() < Date.now();
-                          const statusTone =
-                            t.status === 'done' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                            t.status === 'blocked' ? 'bg-red-50 text-red-700 border-red-200' :
-                            t.status === 'in_progress' || t.status === 'in_review' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            'bg-slate-50 text-slate-600 border-slate-200';
-                          const statusLabel = {
-                            backlog: 'бэклог', todo: 'к работе', in_progress: 'в работе',
-                            in_review: 'на проверке', done: 'готово', blocked: 'заблокирована',
-                          }[t.status] || t.status;
-                          return (
-                            <div key={t.id} className="px-3 py-2 flex flex-wrap items-center gap-2">
-                              <Badge variant="outline" className={`text-[10px] ${statusTone}`}>{statusLabel}</Badge>
-                              <span className="flex-1 min-w-0">{t.title}</span>
-                              {assigneeNames && <span className="text-muted-foreground">→ {assigneeNames}</span>}
-                              {t.due_at && (
-                                <span className={overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
-                                  до {format(new Date(t.due_at), 'dd.MM.yyyy')}
-                                  {overdue && ' • просрочена'}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-4 grid gap-3">
-                  {team.map((member: any) => {
-                    const userId = member.userId || member.id;
-                    const bonus = finances.teamBonuses[userId];
-                    const employee = employees.find((item: any) => item.id === userId);
-                    const inputValue = draftAdjustments[project.id]?.[userId] ?? (bonus?.amount != null ? String(bonus.amount) : '0');
-                    const actualHours = getHoursFor(userId, project.id);
-                    const pendingApprovalHours = getPendingHoursFor(userId, project.id);
-                    const planned = (member.bonusPercent || bonus?.percent || 0);
-                    const plannedAmount = ((finances.totalBonusAmount || 0) * planned) / 100;
-                    const ROLE_LABEL: Record<string, string> = {
-                      partner: 'Партнёр', manager_1: 'Менеджер 1', manager_2: 'Менеджер 2', manager_3: 'Менеджер 3',
-                      supervisor_1: 'Супервайзер 1', supervisor_2: 'Супервайзер 2', supervisor_3: 'Супервайзер 3',
-                      senior_assistant: 'Старший ассистент',
-                      assistant_1: 'Ассистент 1', assistant_2: 'Ассистент 2', assistant_3: 'Ассистент 3',
-                      tax_specialist_1: 'Налоговый специалист 1', tax_specialist_2: 'Налоговый специалист 2',
-                    };
-
-                    return (
-                      <div key={userId} className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_0.9fr_1fr] gap-3 items-center p-3 rounded-lg bg-muted/30">
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{employee?.name || member.userName || member.name || 'Участник'}</p>
-                          <p className="text-xs text-muted-foreground">{ROLE_LABEL[member.role] || member.role}</p>
-                        </div>
-                        <div className="text-xs">
-                          <div className="text-muted-foreground">от пула <b className="text-foreground">{planned}%</b></div>
-                          <div className="text-muted-foreground">план: <b className="text-foreground">{plannedAmount.toLocaleString('ru-RU')} {currency}</b></div>
-                        </div>
-                        <div className="text-xs">
-                          {actualHours > 0 ? (
-                            <>
-                              <div className="text-muted-foreground">факт (утв.)</div>
-                              <div className="font-semibold">{actualHours} ч.</div>
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground italic">без утв. часов</span>
-                          )}
-                          {pendingApprovalHours > 0 && (
-                            <div className="mt-0.5 text-amber-700" title="Часы, отправленные сотрудником, но ещё не подтверждённые партнёром проекта">
-                              +{pendingApprovalHours} ч. ждут партнёра
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1">
-                            <Input
-                              value={inputValue}
-                              onChange={(e) => updateDraftAmount(project.id, userId, e.target.value)}
-                              inputMode="decimal"
-                              disabled={!canApproveBonusPayout}
-                              className="text-right h-8"
-                              title="Окончательная сумма бонуса (можно скорректировать вручную)"
-                            />
-                            <span className="text-xs text-muted-foreground">{currency}</span>
-                          </div>
-                          {canApproveBonusPayout && (
-                            <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
-                              <Checkbox
-                                checked={
-                                  draftHidden[project.id]?.[userId] ??
-                                  !!project?.finances?.teamBonuses?.[userId]?.hiddenFromEmployee
-                                }
-                                onCheckedChange={(v) =>
-                                  setDraftHidden((prev) => ({
-                                    ...prev,
-                                    [project.id]: { ...(prev[project.id] || {}), [userId]: !!v },
-                                  }))
-                                }
-                                className="h-3 w-3"
-                              />
-                              скрыть от сотрудника
-                            </label>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+      {/* Единый формат для CEO — табличный CEO-свод. Тот же компонент
+          используется в /projects на табе «CEO-свод». Здесь стартовый
+          фильтр выставлен в «pending» (ждут утверждения), но CEO может
+          переключиться. Действия (approve, mark paid, hide, adjust)
+          проброшены через ceoTableActions. */}
+      {canEditBonuses && (
+        <CEOSummaryTable
+          projects={projects}
+          employees={employees}
+          getProjectAmount={getProjectAmountForTable}
+          getCompanyDisplayName={getCompanyDisplayNameForTable}
+          initialStatusFilter="pending"
+          actions={ceoTableActions}
+          hideHeader={true}
+        />
       )}
+
 
       <Tabs defaultValue="list" className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
