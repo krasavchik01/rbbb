@@ -197,6 +197,25 @@ export default function ProjectWorkspace() {
     }
   }, [project?.contract?.amendments, project?.notes?.contract?.amendments]);
 
+  // Прямая подгрузка проекта по id из Supabase — параллельно с useProjects.
+  // Раньше: useProjects (из старого useDataStore) мог возвращать пустой
+  // массив бесконечно, и страница висла на «Загрузка проекта...» если
+  // зашли по прямой ссылке (например, из уведомления через Redirect,
+  // который не передаёт location.state). Этот fallback гарантирует, что
+  // проект загрузится даже когда основной store молчит.
+  useEffect(() => {
+    if (!id || project) return;
+    let cancelled = false;
+    supabaseDataStore.getProject(id).then((p) => {
+      if (cancelled || !p) return;
+      console.log('✅ [ProjectWorkspace] direct getProject:', p.name || p.id);
+      setProject(p);
+    }).catch((err) => {
+      console.error('[ProjectWorkspace] direct getProject failed', err);
+    });
+    return () => { cancelled = true; };
+  }, [id, project]);
+
   // Загрузка данных проекта (с синхронизацией)
   useEffect(() => {
     if (!id) return;
