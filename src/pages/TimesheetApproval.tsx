@@ -308,6 +308,26 @@ export default function TimesheetApproval() {
     [buckets, bucketTab],
   );
 
+  // Все id записей в одном проекте — для кнопки «Утвердить весь проект».
+  const allEntryIdsInGroup = (group: ProjectGroup): string[] => {
+    const ids: string[] = [];
+    for (const empEntries of group.byEmployee.values()) {
+      for (const e of empEntries) ids.push(e.id);
+    }
+    return ids;
+  };
+
+  // Все id во всех проектах текущего бакета — для «Утвердить всё показанное».
+  const allEntryIdsInBucket = useMemo((): string[] => {
+    const ids: string[] = [];
+    for (const g of activeBucketGroups) {
+      for (const empEntries of g.byEmployee.values()) {
+        for (const e of empEntries) ids.push(e.id);
+      }
+    }
+    return ids;
+  }, [activeBucketGroups]);
+
   return (
     <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto pb-24">
       <Card>
@@ -333,6 +353,16 @@ export default function TimesheetApproval() {
             <Button variant="outline" size="sm" onClick={reload} disabled={loading} className="ml-auto">
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Обновить
             </Button>
+            {statusTab === 'submitted' && allEntryIdsInBucket.length > 0 && (
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                disabled={busy}
+                onClick={() => openApproveDialog(`__bulk_${bucketTab}`, allEntryIdsInBucket)}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" /> Утвердить всё показанное ({allEntryIdsInBucket.length})
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -404,6 +434,19 @@ export default function TimesheetApproval() {
                     <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">
                       <AlertTriangle className="w-3 h-3 mr-1" /> в системе нет партнёра — апрув у зам.дир
                     </Badge>
+                  )}
+                  {statusTab === 'submitted' && (
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openApproveDialog(`__project_${projKey}`, allEntryIdsInGroup(group));
+                      }}
+                    >
+                      <CheckCircle2 className="w-4 h-4 mr-1" /> Утвердить весь проект ({group.totalRows})
+                    </Button>
                   )}
                 </div>
               </CardHeader>
@@ -601,6 +644,15 @@ export default function TimesheetApproval() {
               впишите сюда — останется в истории и сотрудник увидит.
             </DialogDescription>
           </DialogHeader>
+          {(approveDialog?.ids.length || 0) >= 50 && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div>
+                Вы утверждаете <b>{approveDialog?.ids.length}</b> записей за один раз.
+                Убедитесь, что часы вам знакомы — после апрува они уйдут в расчёт бонуса.
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label className="text-xs">Коммент партнёра (опционально)</Label>
             <Textarea
