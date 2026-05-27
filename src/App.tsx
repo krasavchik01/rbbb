@@ -16,6 +16,7 @@ const Settings = lazy(() => import('@/pages/Settings'));
 const Employees = lazy(() => import('@/pages/Employees'));
 const Timesheets = lazy(() => import('@/pages/Timesheets'));
 const TimesheetApproval = lazy(() => import('@/pages/TimesheetApproval'));
+const AssignPartners = lazy(() => import('@/pages/AssignPartners'));
 const Bonuses = lazy(() => import('@/pages/Bonuses'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
 const TemplateConstructor = lazy(() => import('@/pages/TemplateConstructor'));
@@ -134,6 +135,16 @@ function App() {
                 <ProtectedRoute allowedRoles={['partner', 'deputy_director', 'ceo', 'admin']}>
                   <Layout>
                     <TimesheetApproval />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assign-partners"
+              element={
+                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin']}>
+                  <Layout>
+                    <AssignPartners />
                   </Layout>
                 </ProtectedRoute>
               }

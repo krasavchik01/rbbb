@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   Bot,
   CheckCircle2,
+  Briefcase,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -68,6 +69,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
       { title: 'Создать проект',       url: '/create-project-procurement', icon: FileText,    allowedRoles: ['procurement'] },
       { title: 'Тендеры',              url: '/tenders',                    icon: Award,       allowedRoles: ['procurement'] },
       { title: 'Утверждение проектов', url: '/project-approval',           icon: CheckSquare, allowedRoles: ['deputy_director','ceo'] },
+      { title: 'Назначение партнёров', url: '/assign-partners',            icon: Briefcase,   allowedRoles: ['deputy_director','ceo','admin'] },
     ],
   },
   {
