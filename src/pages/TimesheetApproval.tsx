@@ -115,6 +115,7 @@ export default function TimesheetApproval() {
   const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({});
   const [openEmployees, setOpenEmployees] = useState<Record<string, boolean>>({});
   const [rejectDialog, setRejectDialog] = useState<{ key: string; ids: string[]; reason: string } | null>(null);
+  const [approveDialog, setApproveDialog] = useState<{ key: string; ids: string[]; comment: string } | null>(null);
 
   const isPartner = user?.role === 'partner';
   const isAdminLike = !!user && ['deputy_director', 'ceo', 'admin'].includes(user.role);
@@ -244,15 +245,25 @@ export default function TimesheetApproval() {
   const selectedIdsForEmployee = (employeeId: string): string[] =>
     Object.keys(selected[employeeId] || {});
 
-  const doApprove = async (ids: string[]) => {
+  const openApproveDialog = (key: string, ids: string[]) => {
     if (ids.length === 0) {
       toast({ title: 'Ничего не выбрано', description: 'Отметьте хотя бы одну запись.' });
       return;
     }
+    setApproveDialog({ key, ids, comment: '' });
+  };
+
+  const submitApprove = async () => {
+    if (!approveDialog) return;
     setBusy(true);
     try {
-      const n = await approveEntries(ids, { id: user.id, name: user.name });
+      const n = await approveEntries(
+        approveDialog.ids,
+        { id: user.id, name: user.name },
+        approveDialog.comment.trim() || undefined,
+      );
       toast({ title: `Утверждено: ${n}`, description: 'Часы пойдут в расчёт бонуса.' });
+      setApproveDialog(null);
       await reload();
     } finally {
       setBusy(false);
@@ -471,7 +482,7 @@ export default function TimesheetApproval() {
                                       size="sm"
                                       className="bg-emerald-600 hover:bg-emerald-700"
                                       disabled={busy || selectedIds.length === 0}
-                                      onClick={() => doApprove(selectedIds)}
+                                      onClick={() => openApproveDialog(empKey, selectedIds)}
                                     >
                                       <CheckCircle2 className="w-4 h-4 mr-1" /> Утвердить выбранные ({selectedIds.length})
                                     </Button>
@@ -531,12 +542,29 @@ export default function TimesheetApproval() {
                                                 </Badge>
                                               )}
                                             </div>
+                                            {(e.managerRaw || e.partnerRaw) && (
+                                              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                                {e.managerRaw && (
+                                                  <span>Рук.: <span className="text-foreground/80">{e.managerRaw}</span></span>
+                                                )}
+                                                {e.partnerRaw && (
+                                                  <span>Партнёр (по файлу): <span className="text-foreground/80">{e.partnerRaw}</span></span>
+                                                )}
+                                              </div>
+                                            )}
                                             {e.notes && (
-                                              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{e.notes}</div>
+                                              <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap break-words">{e.notes}</div>
                                             )}
                                             {e.reviewerNotes && statusTab === 'rejected' && (
-                                              <div className="text-xs text-red-700 bg-red-50 rounded mt-1 px-2 py-1">
+                                              <div className="text-xs text-red-700 bg-red-50 rounded mt-1 px-2 py-1 whitespace-pre-wrap break-words">
                                                 <b>Причина отказа:</b> {e.reviewerNotes}
+                                                {e.reviewedByName && <span className="ml-1 opacity-70">— {e.reviewedByName}</span>}
+                                              </div>
+                                            )}
+                                            {e.reviewerNotes && statusTab === 'approved' && (
+                                              <div className="text-xs text-emerald-800 bg-emerald-50 rounded mt-1 px-2 py-1 whitespace-pre-wrap break-words">
+                                                <b>Коммент партнёра:</b> {e.reviewerNotes}
+                                                {e.reviewedByName && <span className="ml-1 opacity-70">— {e.reviewedByName}</span>}
                                               </div>
                                             )}
                                           </div>
@@ -559,6 +587,39 @@ export default function TimesheetApproval() {
           );
         })
       )}
+
+      {/* Диалог утверждения — опциональный коммент партнёра */}
+      <Dialog open={!!approveDialog} onOpenChange={(v) => !v && setApproveDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Утвердить записи
+            </DialogTitle>
+            <DialogDescription>
+              Будет утверждено <b>{approveDialog?.ids.length || 0}</b> зап. Часы пойдут в расчёт бонуса.
+              Коммент необязательный — но если что-то заметили (например «согласовано после устной правки»),
+              впишите сюда — останется в истории и сотрудник увидит.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Коммент партнёра (опционально)</Label>
+            <Textarea
+              rows={3}
+              value={approveDialog?.comment || ''}
+              onChange={(e) =>
+                setApproveDialog((d) => (d ? { ...d, comment: e.target.value } : d))
+              }
+              placeholder="Например: «ОК, по проекту X тратили больше из-за дополнительных процедур»"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproveDialog(null)}>Отмена</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={submitApprove} disabled={busy}>
+              <CheckCircle2 className="w-4 h-4 mr-2" /> Утвердить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Диалог отклонения с обязательной причиной */}
       <Dialog open={!!rejectDialog} onOpenChange={(v) => !v && setRejectDialog(null)}>

@@ -319,8 +319,10 @@ export async function deleteEntry(id: string): Promise<boolean> {
 export async function approveEntries(
   ids: string[],
   reviewer: { id: string; name: string },
+  reviewerNotes?: string,
 ): Promise<number> {
   if (ids.length === 0) return 0;
+  const note = reviewerNotes?.trim();
   const { data, error } = await supabase
     .from('timesheet_entries')
     .update({
@@ -328,7 +330,7 @@ export async function approveEntries(
       reviewed_by: reviewer.id,
       reviewed_by_name: reviewer.name,
       reviewed_at: new Date().toISOString(),
-      reviewer_notes: null,
+      reviewer_notes: note ? note : null,
     })
     .in('id', ids)
     .select('id');
