@@ -744,3 +744,54 @@
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   Печать: оставляем только основной контент, без сайдбара/хедера/кнопок.
+   Элементы, помеченные .no-print, скрываются явно.
+   ──────────────────────────────────────────────────────────────────────── */
+@media print {
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* App chrome */
+  header,
+  [data-sidebar],
+  [role="tablist"],
+  .no-print {
+    display: none !important;
+  }
+
+  /* Кнопки бесполезны на бумаге */
+  button {
+    display: none !important;
+  }
+
+  /* Раскрашенные «glass» карточки → плоский белый фон */
+  .glass-card,
+  [class*="glass"] {
+    background: #fff !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+  }
+
+  /* Не обрывать строки таблиц между страницами */
+  tr, .project-card {
+    page-break-inside: avoid;
+  }
+
+  /* Безопасные отступы и компактный шрифт */
+  body {
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 11pt;
+  }
+
+  main, [data-sidebar-inset], main > div {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}

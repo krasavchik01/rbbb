@@ -97,11 +97,23 @@ export default function ProjectWorkspace() {
   const isPartner = user?.role === 'partner';
   const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
+  const isDeputy = user?.role === 'deputy_director';
+  const isCEO = user?.role === 'ceo';
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
   const canSeeContracts = isProcurement || isAdmin || isPartner || isPM || isDirector;
   const projectStatus = project?.notes?.status || project?.status;
+  // Управление командой: admin/ceo — всегда, deputy_director — пока проект не
+  // ушёл в активную работу (этап распределения/сборки команды). Партнёр, PM,
+  // ассистенты и т.д. команду менять не могут. По требованию CEO 2026-05-28.
+  const hasTeamYet = !!(project?.team?.length || project?.notes?.team?.length);
+  const isAssemblyPhase = !hasTeamYet
+    || projectStatus === 'approved'
+    || projectStatus === 'team_assembled'
+    || projectStatus === 'new'
+    || projectStatus === 'pending_approval';
+  const canEditTeam = isAdmin || isCEO || (isDeputy && isAssemblyPhase);
   const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
   const isPendingPaymentApproval = projectStatus === 'pending_payment_approval';
@@ -181,13 +193,14 @@ export default function ProjectWorkspace() {
     setTeamSlots(slots);
   }, []);
 
-  // Открыть диалог назначения команды если пришли с флагом
+  // Открыть диалог назначения команды если пришли с флагом — но только если
+  // у пользователя есть право редактировать команду.
   useEffect(() => {
-    if (openTeamAssignment && project) {
+    if (openTeamAssignment && project && canEditTeam) {
       setShowTeamDialog(true);
       loadTeamIntoSlots(project);
     }
-  }, [openTeamAssignment, project, loadTeamIntoSlots]);
+  }, [openTeamAssignment, project, loadTeamIntoSlots, canEditTeam]);
 
   // Загрузка дополнительных соглашений из JSON проекта
   useEffect(() => {
@@ -637,7 +650,19 @@ export default function ProjectWorkspace() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
         <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-          <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate('/projects')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="flex-shrink-0"
+            onClick={() => {
+              // Возвращаемся в SPA-историю, чтобы сохранить фильтры/сортировку
+              // /projects в URL. Если истории нет (прямой переход по ссылке) —
+              // фолбэк на чистый /projects.
+              const hasHistory = (window.history.state as any)?.idx > 0;
+              if (hasHistory) navigate(-1);
+              else navigate('/projects');
+            }}
+          >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="min-w-0 flex-1">
@@ -889,13 +914,15 @@ export default function ProjectWorkspace() {
                     <Users className="w-6 h-6 text-primary" />
                     <h3 className="text-xl font-bold">Управление командой</h3>
                   </div>
-                  <Button onClick={() => {
-                    loadTeamIntoSlots(project);
-                    setShowTeamDialog(true);
-                  }} variant="outline">
-                    <Edit className="w-4 h-4 mr-2" />
-                    Изменить состав
-                  </Button>
+                  {canEditTeam && (
+                    <Button onClick={() => {
+                      loadTeamIntoSlots(project);
+                      setShowTeamDialog(true);
+                    }} variant="outline">
+                      <Edit className="w-4 h-4 mr-2" />
+                      Изменить состав
+                    </Button>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {(project.team || project.notes?.team || []).map((member: any, index: number) => {
@@ -1367,8 +1394,9 @@ export default function ProjectWorkspace() {
         </DialogContent>
       </Dialog>
 
-      {/* Диалог назначения команды — слоты по ролям */}
-      <Dialog open={showTeamDialog} onOpenChange={(open) => {
+      {/* Диалог назначения команды — слоты по ролям. Только для admin/ceo и
+          для зам.директора пока проект на стадии сборки команды. */}
+      <Dialog open={showTeamDialog && canEditTeam} onOpenChange={(open) => {
         setShowTeamDialog(open);
         if (!open) {
           setOpenSlotDropdown(null);

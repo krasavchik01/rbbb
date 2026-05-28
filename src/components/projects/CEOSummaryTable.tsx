@@ -41,6 +41,7 @@ import {
   EyeOff,
   Clock,
   AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import {
   computeProjectBonus,
@@ -555,7 +556,15 @@ export function CEOSummaryTable({
                             <div className="flex items-start gap-1.5">
                               {isExpanded ? <ChevronUp className="w-3 h-3 mt-0.5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-3 h-3 mt-0.5 text-muted-foreground shrink-0" />}
                               <div className="min-w-0 flex-1">
-                                <div className="font-medium text-xs leading-tight line-clamp-2">{row.name}</div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); onProjectClick?.(row.project); }}
+                                  title="Открыть карточку проекта"
+                                  className="group flex items-start gap-1 text-left font-medium text-xs leading-tight hover:text-primary transition-colors"
+                                >
+                                  <span className="line-clamp-2">{row.name}</span>
+                                  <ExternalLink className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
                                 <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[160px]">{row.company}</div>
                                 {statusPill && (
                                   <Badge variant="outline" className={`mt-1 text-[9px] py-0 px-1.5 border ${statusPill.tone}`}>

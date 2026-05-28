@@ -1,5 +1,10 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
+
+// Подвкладки «Утверждение» и «Назначение партнёров» теперь рендерятся внутри
+// /projects — старые маршруты остаются для совместимости со ссылками.
+const ProjectApproval = lazy(() => import("@/pages/ProjectApproval"));
+const AssignPartners = lazy(() => import("@/pages/AssignPartners"));
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useStringUrlState, useBoolUrlState } from "@/hooks/useUrlState";
 import { Card } from "@/components/ui/card";
@@ -17,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { TaskManager } from "@/components/tasks/TaskManager";
 import { Task, Project as ProjectType, ChecklistItem, PriorityLevel, TaskStatus } from "@/types/project";
-import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, Circle, AlertCircle, XCircle, BarChart3, Trash2, Download, Upload, FileDown, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, Circle, AlertCircle, XCircle, BarChart3, Trash2, Download, Upload, FileDown, SlidersHorizontal, ChevronDown, X, Printer } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useProjects, useEmployees, useCompanies } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
@@ -222,10 +227,6 @@ export default function Projects() {
   // Сортировка — тоже в URL (?sort=name_asc).
   type SortOption = 'deadline_asc' | 'deadline_desc' | 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc';
   const [sortBy, setSortBy] = useStringUrlState('sort', 'deadline_asc') as [SortOption, (v: SortOption) => void];
-
-  // Фильтры для вкладки "Утверждение" (короткая жизнь, не в URL)
-  const [approvalSearch, setApprovalSearch] = useState('');
-  const [approvalCompanyFilter, setApprovalCompanyFilter] = useState('all');
 
   // Часто используемые быстрые фильтры — тоже в URL.
   const [filterUpcomingDeadlines, setFilterUpcomingDeadlines] = useBoolUrlState('deadline30', false);
@@ -788,29 +789,6 @@ export default function Projects() {
     return { overdue, critical, warning, total: overdue + critical + warning, urgentProjects };
   }, [realProjects, getDeadlineUrgency]);
 
-  // Получаем все уникальные статусы для фильтра
-  const availableStatuses = useMemo(() => {
-    const statuses = new Set<string>();
-    realProjects.forEach(project => {
-      const notesStatus = project.notes?.status;
-      let status = '';
-      if (notesStatus === 'new' || notesStatus === 'pending_approval') {
-        status = 'Партнер не утвержден';
-      } else if (notesStatus === 'approved' && (!project.team || project.team.length === 0)) {
-        status = 'Ожидает распределения команды';
-      } else {
-        const statusMap: Record<string, string> = {
-          'active': 'Активный',
-          'in_progress': 'В работе',
-          'completed': 'Завершён',
-        };
-        status = statusMap[project.status || notesStatus || 'active'] || 'Активный';
-      }
-      if (status) statuses.add(status);
-    });
-    return Array.from(statuses).sort();
-  }, [realProjects]);
-
   // Функции для статусов проектов
   const getProjectStatusLabel = useCallback((project: any): string => {
     // Проверяем notes для точного статуса
@@ -844,6 +822,19 @@ export default function Projects() {
     const status = project.status || notesStatus || 'active';
     return statusMap[status] || status;
   }, []);
+
+  // Уникальные статусы для фильтра — берём через getProjectStatusLabel, чтобы
+  // дропдаун совпадал с теми же ярлыками, которыми проекты помечены в списке/
+  // карточках и по которым работает filterStatus (иначе закрытые/архивные
+  // сваливались в «Активный», т.к. project.status уже русифицирован в mapSupabaseProject).
+  const availableStatuses = useMemo(() => {
+    const statuses = new Set<string>();
+    realProjects.forEach(project => {
+      const label = getProjectStatusLabel(project);
+      if (label) statuses.add(label);
+    });
+    return Array.from(statuses).sort();
+  }, [realProjects, getProjectStatusLabel]);
 
   const getProjectStatusColor = useCallback((project: any): string => {
     const notesStatus = project.notes?.status;
@@ -1358,36 +1349,6 @@ export default function Projects() {
       return notesStatus === 'new' || notesStatus === 'pending_approval';
     });
   }, [realProjects]);
-
-  // Отфильтрованные проекты на утверждении (с поиском и фильтром по компании)
-  const filteredPendingProjects = useMemo(() => {
-    let result = pendingProjects;
-    if (approvalSearch.trim()) {
-      const q = approvalSearch.toLowerCase();
-      result = result.filter(p => {
-        const name = p.name || p.notes?.name || '';
-        const company = p.companyName || p.company || p.ourCompany || p.notes?.companyName || p.notes?.ourCompany || '';
-        return name.toLowerCase().includes(q) || company.toLowerCase().includes(q);
-      });
-    }
-    if (approvalCompanyFilter !== 'all') {
-      result = result.filter(p => {
-        const company = p.companyName || p.company || p.ourCompany || p.notes?.companyName || p.notes?.ourCompany || '';
-        return company === approvalCompanyFilter;
-      });
-    }
-    return result;
-  }, [pendingProjects, approvalSearch, approvalCompanyFilter]);
-
-  // Уникальные компании из pendingProjects для фильтра
-  const pendingCompanies = useMemo(() => {
-    const set = new Set<string>();
-    pendingProjects.forEach(p => {
-      const company = p.companyName || p.company || p.ourCompany || p.notes?.companyName || p.notes?.ourCompany || '';
-      if (company) set.add(company);
-    });
-    return Array.from(set).sort();
-  }, [pendingProjects]);
 
   // Фильтруем сотрудников для диалога распределения
   const filteredEmployeesForDistribution = useMemo(() => {
@@ -2089,7 +2050,11 @@ export default function Projects() {
         </div>
         {/* Кнопки управления - только для CEO, deputy_director и procurement */}
         {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'procurement') && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 no-print">
+            <Button variant="outline" size="sm" onClick={() => window.print()} title="Распечатать текущий список (с учётом фильтров)">
+              <Printer className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Печать</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={handleExportProjects}>
               <Download className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">Экспорт в Excel</span>
@@ -2265,7 +2230,7 @@ export default function Projects() {
 
       {/* Современная панель фильтров */}
       {/* СУПЕР-СОВРЕМЕННАЯ ПАНЕЛЬ ФИЛЬТРОВ */}
-      <Card className="overflow-hidden border-0 shadow-2xl bg-gradient-to-br from-card/90 via-card to-card/50 backdrop-blur-xl relative mb-6">
+      <Card className="no-print overflow-hidden border-0 shadow-2xl bg-gradient-to-br from-card/90 via-card to-card/50 backdrop-blur-xl relative mb-6">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-secondary/50 to-primary/50" />
 
         <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 md:space-y-8">
@@ -2797,25 +2762,22 @@ export default function Projects() {
       {/* Контент */}
       <Tabs defaultValue="summary" className="space-y-6">
         <TabsList className="flex w-full overflow-x-auto">
-          <TabsTrigger value="list" className="flex-1 min-w-0 text-xs sm:text-sm">Список</TabsTrigger>
-          <TabsTrigger value="kanban" className="flex-1 min-w-0 text-xs sm:text-sm">Kanban</TabsTrigger>
-          <TabsTrigger value="gantt" className="flex-1 min-w-0 text-xs sm:text-sm">Gantt</TabsTrigger>
           <TabsTrigger value="summary" className="flex-1 min-w-0 text-xs sm:text-sm">Свод</TabsTrigger>
-          <TabsTrigger value="reports" className="flex-1 min-w-0 text-xs sm:text-sm">Отчёты</TabsTrigger>
-          {user?.role === 'ceo' && (
-            <TabsTrigger value="ceo-summary" className="flex-1 min-w-0 text-xs sm:text-sm text-amber-600 dark:text-amber-400 font-semibold">
-              CEO Свод
-            </TabsTrigger>
-          )}
+          <TabsTrigger value="list" className="flex-1 min-w-0 text-xs sm:text-sm">Список</TabsTrigger>
           {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'admin') && (
-            <TabsTrigger value="approval" className="flex-1 min-w-0 text-xs sm:text-sm relative">
-              Утверждение
-              {pendingProjects.length > 0 && (
-                <span className="ml-1 bg-yellow-500 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
-                  {pendingProjects.length}
-                </span>
-              )}
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="approval" className="flex-1 min-w-0 text-xs sm:text-sm relative">
+                Утверждение
+                {pendingProjects.length > 0 && (
+                  <span className="ml-1 bg-yellow-500 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
+                    {pendingProjects.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="partners" className="flex-1 min-w-0 text-xs sm:text-sm">
+                Партнёры
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -2831,25 +2793,21 @@ export default function Projects() {
           />
         </TabsContent>
 
-        <TabsContent value="kanban" className="space-y-4">
-          <Card className="p-8 text-center glass-card">
-            <h3 className="text-lg font-semibold mb-2">Kanban доска</h3>
-            <p className="text-muted-foreground">
-              Kanban доска для управления задачами будет доступна после настройки базы данных
-            </p>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="gantt" className="space-y-4">
-          <Card className="p-8 text-center glass-card">
-            <h3 className="text-lg font-semibold mb-2">Диаграмма Gantt</h3>
-            <p className="text-muted-foreground">
-              Диаграмма Gantt для планирования проектов будет доступна после настройки базы данных
-            </p>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="summary" className="space-y-4">
+          {user?.role === 'ceo' ? (
+            <CEOSummaryTable
+              projects={filteredProjects}
+              employees={employees}
+              getProjectAmount={getProjectAmount}
+              getCompanyDisplayName={getCompanyDisplayName}
+              onProjectClick={(project) => {
+                const projectId = project.id || project.notes?.id;
+                if (projectId) {
+                  navigate(`/project/${projectId}`, { state: { project } });
+                }
+              }}
+            />
+          ) : (
           <Card className="glass-card">
             <div className="p-4 border-b border-border">
               <div className="flex items-center space-x-3">
@@ -3213,138 +3171,23 @@ export default function Projects() {
               </div>
             </div>
           </Card>
+          )}
         </TabsContent>
 
-        {user?.role === 'ceo' && (
-          <TabsContent value="ceo-summary" className="space-y-4">
-            <CEOSummaryTable
-              projects={filteredProjects}
-              employees={employees}
-              getProjectAmount={getProjectAmount}
-              getCompanyDisplayName={getCompanyDisplayName}
-              onProjectClick={(project) => {
-                const projectId = project.id || project.notes?.id;
-                if (projectId) {
-                  navigate(`/project/${projectId}`, { state: { project } });
-                }
-              }}
-            />
-          </TabsContent>
-        )}
-
-        <TabsContent value="reports" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="p-6 glass-card">
-              <h3 className="font-semibold mb-2">Активные проекты</h3>
-              <div className="text-3xl font-bold text-primary">3</div>
-              <p className="text-sm text-muted-foreground">в работе</p>
-            </Card>
-            <Card className="p-6 glass-card">
-              <h3 className="font-semibold mb-2">Средний прогресс</h3>
-              <div className="text-3xl font-bold text-primary">53%</div>
-              <p className="text-sm text-muted-foreground">по всем проектам</p>
-            </Card>
-            <Card className="p-6 glass-card">
-              <h3 className="font-semibold mb-2">Участников</h3>
-              <div className="text-3xl font-bold text-primary">6</div>
-              <p className="text-sm text-muted-foreground">в команде</p>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Вкладка Утверждение - только для CEO, зам. директора, admin */}
+        {/* Вкладки «Утверждение» и «Партнёры» — только для CEO/зам.директора/admin */}
         {(user?.role === 'ceo' || user?.role === 'deputy_director' || user?.role === 'admin') && (
-          <TabsContent value="approval" className="space-y-4">
-            <Card className="glass-card">
-              <div className="p-4 border-b border-border">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <h3 className="font-semibold">Проекты на утверждении</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {filteredPendingProjects.length} из {pendingProjects.length} проектов ожидают утверждения
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/project-approval')}>
-                    Полный режим утверждения
-                  </Button>
-                </div>
-                {/* Поиск и фильтры */}
-                <div className="mt-3 flex gap-2 flex-wrap">
-                  <div className="relative flex-1 min-w-[180px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Поиск по названию или компании..."
-                      value={approvalSearch}
-                      onChange={e => setApprovalSearch(e.target.value)}
-                      className="pl-9 h-9 text-sm"
-                    />
-                  </div>
-                  {pendingCompanies.length > 1 && (
-                    <Select value={approvalCompanyFilter} onValueChange={setApprovalCompanyFilter}>
-                      <SelectTrigger className="w-[200px] h-9 text-sm">
-                        <SelectValue placeholder="Все компании" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Все компании</SelectItem>
-                        {pendingCompanies.map(c => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              </div>
-
-              {filteredPendingProjects.length === 0 ? (
-                <div className="p-10 text-center text-muted-foreground">
-                  <div className="text-4xl mb-3">✅</div>
-                  <p className="font-medium">Нет проектов на утверждении</p>
-                  <p className="text-sm mt-1">Все проекты утверждены или отфильтрованы</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {filteredPendingProjects.map(project => {
-                    const name = project.name || project.notes?.name || 'Без названия';
-                    const company = project.companyName || project.company || project.ourCompany || project.notes?.companyName || project.notes?.ourCompany || '—';
-                    const notesStatus = project.notes?.status;
-                    const statusLabel = notesStatus === 'new' ? 'Новый' : 'На согласовании';
-                    const statusColor = notesStatus === 'new' ? 'bg-blue-500/10 text-blue-600 border-blue-500/30' : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30';
-                    const createdAt = project.created_at ? new Date(project.created_at).toLocaleDateString('ru-RU') : '—';
-                    const { amount, currency } = getProjectAmount(project);
-                    const amountStr = amount !== null ? `${amount.toLocaleString('ru-RU')} ${currency}` : '—';
-
-                    return (
-                      <div key={project.id} className="p-4 hover:bg-muted/30 transition-colors">
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${statusColor}`}>
-                                {statusLabel}
-                              </span>
-                              <span className="text-xs text-muted-foreground">{createdAt}</span>
-                            </div>
-                            <p className="font-medium text-sm leading-snug line-clamp-2" title={name}>{name}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{company}</p>
-                            {amount !== null && (
-                              <p className="text-xs font-medium text-primary mt-0.5">{amountStr}</p>
-                            )}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0"
-                            onClick={() => navigate('/project-approval')}
-                          >
-                            Открыть
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-          </TabsContent>
+          <>
+            <TabsContent value="approval" className="space-y-4">
+              <Suspense fallback={<div className="p-10 text-center text-muted-foreground">Загрузка…</div>}>
+                <ProjectApproval />
+              </Suspense>
+            </TabsContent>
+            <TabsContent value="partners" className="space-y-4">
+              <Suspense fallback={<div className="p-10 text-center text-muted-foreground">Загрузка…</div>}>
+                <AssignPartners />
+              </Suspense>
+            </TabsContent>
+          </>
         )}
       </Tabs>
 
