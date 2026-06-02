@@ -20,6 +20,8 @@ import {
   ClipboardCheck,
   Bot,
   CheckCircle2,
+  CalendarRange,
+  Users as UsersIcon,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -51,7 +53,21 @@ interface MenuItem {
 
 // Структура sidebar: по доменам (после user-feedback session 2026-05-21).
 // AI-ассистент в самом верху как «универсальный пульт».
+//
+// Секция «Быстрый доступ» добавлена 2026-05-29 после жалобы пользователя
+// «дай меню быстрого доступа что бы я мог нажимать!» — компактный список
+// частых действий с фильтрацией по роли. Дублирует пункты из других
+// секций намеренно: тут они под рукой, там — в логическом домене.
 const SECTIONS: { label: string; items: MenuItem[] }[] = [
+  {
+    label: 'Быстрый доступ',
+    items: [
+      { title: 'Табель и аналитика', url: '/hr?tab=timesheet',     icon: CalendarRange,  allowedRoles: ['hr','ceo','deputy_director','admin'] },
+      { title: 'Утверждение часов',  url: '/timesheet-approval',   icon: CheckCircle2,   allowedRoles: ['partner','deputy_director','ceo','admin','hr'] },
+      { title: 'Назначение партнёров', url: '/assign-partners',    icon: UsersIcon,      allowedRoles: ['deputy_director','ceo','admin'] },
+      { title: 'Тайм-щиты (мои)',    url: '/timesheets',           icon: Clock,          excludeRoles: ['procurement','ceo','deputy_director'] },
+    ],
+  },
   {
     label: 'Основное',
     items: [
@@ -88,7 +104,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     label: 'Финансы',
     items: [
       { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
-      { title: 'Утверждение часов', url: '/timesheet-approval', icon: CheckCircle2, allowedRoles: ['partner','deputy_director','ceo','admin'] },
+      { title: 'Утверждение часов', url: '/timesheet-approval', icon: CheckCircle2, allowedRoles: ['partner','deputy_director','ceo','admin','hr'] },
       { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'admin'] },
       { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['ceo', 'admin'] },
     ],

@@ -68,6 +68,7 @@ const Index = () => {
     { email: "assistant2@rbpartners.com", password: "assistant2", role: "Ассистент 2", icon: "👨‍💻", category: "Ассистенты" },
     { email: "assistant@rbpartners.com", password: "assistant", role: "Ассистент 3", icon: "👨‍💻", category: "Ассистенты" },
     { email: "tax@rbpartners.com", password: "tax", role: "Налоговик", icon: "📊", category: "Специалисты" },
+    { email: "hr@rbpartners.com", password: "hr", role: "HR", icon: "👥", category: "HR" },
     { email: "admin", password: "admin", role: "Админ", icon: "🔑", category: "Администраторы" },
   ];
 

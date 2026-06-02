@@ -238,6 +238,20 @@ const DEMO_USERS: Record<string, { password: string; user: User }> = {
       position: 'Налоговый специалист',
     },
   },
+
+  // HR — тестовый юзер для проверки HR-функций
+  // (Аида Жидебай — боевой HR в БД, его не трогаем)
+  'hr@rbpartners.com': {
+    password: 'hr',
+    user: {
+      id: 'hr_test_1',
+      email: 'hr@rbpartners.com',
+      name: 'HR Тестовый',
+      role: 'hr',
+      department: 'HR',
+      position: 'HR специалист',
+    },
+  },
 };
 
 // Обогащает пользователя данными о доступе к компаниям из Supabase

@@ -58,7 +58,22 @@ interface TimesheetEntry {
 }
 
 const getProjectName = (project: any) => project?.name || project?.title || 'Без проекта';
-const getProjectClient = (project: any) => project?.client || project?.company || project?.notes?.client || '';
+const getProjectClient = (project: any): string => {
+  // project.client пришёл из mapSupabaseProject как объект
+  // {name, website, activity, city, contacts}. Раньше функция возвращала
+  // весь объект, и {client} в JSX падал с React #31.
+  const raw = project?.client ?? project?.notes?.client;
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw === 'object' && typeof raw.name === 'string') return raw.name;
+  return (
+    project?.clientName ||
+    project?.notes?.clientName ||
+    project?.companyName ||
+    project?.notes?.companyName ||
+    project?.company ||
+    ''
+  );
+};
 
 // Combobox с поиском по проектам.
 // Группирует проекты на «Мои» (где пользователь в команде) и «Все остальные»,
@@ -183,7 +198,10 @@ export default function Timesheets() {
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'submitted' | 'approved' | 'rejected'>('all');
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  // Пустая строка = «все даты». По умолчанию показываем все, иначе при
+  // открытии страницы пользователь видит только то, что заполнил сегодня —
+  // выглядит как «фильтр не работает».
+  const [filterDate, setFilterDate] = useState('');
   const [filterProject, setFilterProject] = useState<string>('all');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingTimesheet, setEditingTimesheet] = useState<TimesheetEntry | null>(null);
@@ -268,7 +286,7 @@ export default function Timesheets() {
         ts.projectName?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesStatus = filterStatus === 'all' || ts.status === filterStatus;
-      const matchesDate = ts.date === filterDate;
+      const matchesDate = !filterDate || ts.date === filterDate;
       const matchesProject = filterProject === 'all' || ts.projectId === filterProject;
 
       return matchesSearch && matchesStatus && matchesDate && matchesProject;

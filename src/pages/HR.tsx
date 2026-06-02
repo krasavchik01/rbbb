@@ -35,14 +35,20 @@ import {
   Clock,
   Target,
   Building,
-  Edit
+  Edit,
+  CalendarRange
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import TimesheetAnalyticsTab from "@/components/hr/TimesheetAnalyticsTab";
 
 export default function HR() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { employees = [], loading, refresh } = useEmployees();
   const { projects = [] } = useProjects();
+  // /hr?tab=timesheet|employees|analytics — для deeplink из сайдбара.
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
   
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDepartment, setFilterDepartment] = useState("all");
@@ -183,6 +189,10 @@ export default function HR() {
 
   const isAdmin = user?.role === 'admin' || user?.role === 'ceo';
   const isManagement = user?.role === 'ceo' || user?.role === 'deputy_director';
+  // Доступ к табелю-аналитике: hr + руководство + admin (Аналитика сотрудников —
+  // прямая задача HR).
+  const canSeeTimesheetAnalytics =
+    !!user && ['hr', 'ceo', 'deputy_director', 'admin'].includes(user.role);
 
   // Фильтрация сотрудников
   const filteredEmployees = employees.filter((emp: any) => {
@@ -854,12 +864,30 @@ export default function HR() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="employees" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs
+        // Приоритет: ?tab= из URL → если HR/руководство → 'timesheet' → иначе 'employees'.
+        defaultValue={
+          (tabFromUrl === 'timesheet' && canSeeTimesheetAnalytics) ||
+          (tabFromUrl === 'analytics' && isManagement) ||
+          tabFromUrl === 'employees'
+            ? tabFromUrl
+            : canSeeTimesheetAnalytics
+              ? 'timesheet'
+              : 'employees'
+        }
+        className="w-full"
+      >
+        <TabsList className={`grid w-full ${canSeeTimesheetAnalytics && isManagement ? 'grid-cols-3' : canSeeTimesheetAnalytics || isManagement ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <TabsTrigger value="employees" className="flex items-center space-x-2">
             <Users className="w-4 h-4" />
             <span>Сотрудники</span>
           </TabsTrigger>
+          {canSeeTimesheetAnalytics && (
+            <TabsTrigger value="timesheet" className="flex items-center space-x-2">
+              <CalendarRange className="w-4 h-4" />
+              <span>Табель и аналитика</span>
+            </TabsTrigger>
+          )}
           {isManagement && (
             <TabsTrigger value="analytics" className="flex items-center space-x-2">
               <BarChart3 className="w-4 h-4" />
@@ -867,6 +895,12 @@ export default function HR() {
             </TabsTrigger>
           )}
         </TabsList>
+
+        {canSeeTimesheetAnalytics && (
+          <TabsContent value="timesheet" className="space-y-6">
+            <TimesheetAnalyticsTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="employees" className="space-y-6">
           {/* Stats */}

@@ -132,7 +132,7 @@ function App() {
             <Route
               path="/timesheet-approval"
               element={
-                <ProtectedRoute allowedRoles={['partner', 'deputy_director', 'ceo', 'admin']}>
+                <ProtectedRoute allowedRoles={['partner', 'deputy_director', 'ceo', 'admin', 'hr']}>
                   <Layout>
                     <TimesheetApproval />
                   </Layout>

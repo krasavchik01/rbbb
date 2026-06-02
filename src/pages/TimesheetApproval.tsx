@@ -6,6 +6,8 @@
  *  - deputy_director  → всё + отдельный таб «Без партнёра» (записи проектов без
  *                       partner_id и записи без projectId — админ-работа);
  *  - ceo / admin      → то же что зам.дир.
+ *  - hr               → только просмотр: видит все бакеты как зам.дир, но без
+ *                       кнопок утвердить/отклонить (не в цепочке апрува).
  *
  * Гранулярность апрува — гибрид: партнёр раскрывает строки сотрудника
  * (день/секция/часы/локация/заметки), снимает галочки с проблемных,
@@ -119,7 +121,11 @@ export default function TimesheetApproval() {
 
   const isPartner = user?.role === 'partner';
   const isAdminLike = !!user && ['deputy_director', 'ceo', 'admin'].includes(user.role);
-  const isPrivileged = isPartner || isAdminLike;
+  const isHR = user?.role === 'hr';
+  // HR смотрит весь список как зам.дир (три бакета, все статусы), но не утверждает.
+  const canSeeAllBuckets = isAdminLike || isHR;
+  const canApprove = isPartner || isAdminLike;
+  const isPrivileged = canApprove || isHR;
 
   // Map: projectId → partnerId (или null если у проекта partner не задан).
   // ВАЖНО: в этой системе partner_id-колонка не используется, партнёр живёт
@@ -338,7 +344,9 @@ export default function TimesheetApproval() {
           <CardDescription>
             {isPartner
               ? 'Здесь показаны таймщиты сотрудников по проектам, где вы партнёр. Подтверждённые часы пойдут в расчёт бонуса.'
-              : 'Записи по всем проектам — с фильтром «Без партнёра», где требуется ваше решение как зам.директора.'}
+              : isHR
+                ? 'Просмотр таймщитов и статусов апрува по всем проектам. Утверждение и отклонение делают партнёры и зам.директор.'
+                : 'Записи по всем проектам — с фильтром «Без партнёра», где требуется ваше решение как зам.директора.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
@@ -353,7 +361,7 @@ export default function TimesheetApproval() {
             <Button variant="outline" size="sm" onClick={reload} disabled={loading} className="ml-auto">
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Обновить
             </Button>
-            {statusTab === 'submitted' && allEntryIdsInBucket.length > 0 && (
+            {canApprove && statusTab === 'submitted' && allEntryIdsInBucket.length > 0 && (
               <Button
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700"
@@ -367,8 +375,8 @@ export default function TimesheetApproval() {
         </CardContent>
       </Card>
 
-      {/* Бакеты (для зам.дир/ceo/admin — три, для partner только один) */}
-      {isAdminLike && (
+      {/* Бакеты (для зам.дир/ceo/admin/hr — три, для partner только один) */}
+      {canSeeAllBuckets && (
         <Tabs value={bucketTab} onValueChange={(v) => setBucketTab(v as BucketKind)}>
           <TabsList>
             <TabsTrigger value="partner" className="gap-2">
@@ -435,7 +443,7 @@ export default function TimesheetApproval() {
                       <AlertTriangle className="w-3 h-3 mr-1" /> в системе нет партнёра — апрув у зам.дир
                     </Badge>
                   )}
-                  {statusTab === 'submitted' && (
+                  {canApprove && statusTab === 'submitted' && (
                     <Button
                       size="sm"
                       className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
@@ -504,14 +512,20 @@ export default function TimesheetApproval() {
                                 )}
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-xs shrink-0" title="Выбрано записей">
-                              {selectedIds.length} / {entryIds.length}
-                            </Badge>
+                            {canApprove ? (
+                              <Badge variant="outline" className="text-xs shrink-0" title="Выбрано записей">
+                                {selectedIds.length} / {entryIds.length}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {entryIds.length} зап.
+                              </Badge>
+                            )}
                           </div>
 
                           {empOpen && (
                             <div className="border-t">
-                              {statusTab === 'submitted' && (
+                              {canApprove && statusTab === 'submitted' && (
                                 <div className="p-2 flex flex-wrap items-center gap-2 border-b bg-muted/20">
                                   <label className="flex items-center gap-2 text-xs cursor-pointer">
                                     <Checkbox
@@ -553,7 +567,7 @@ export default function TimesheetApproval() {
                                         key={e.id}
                                         className={`p-3 flex items-start gap-3 text-sm ${checked ? 'bg-primary/5' : ''}`}
                                       >
-                                        {statusTab === 'submitted' && (
+                                        {canApprove && statusTab === 'submitted' && (
                                           <Checkbox
                                             checked={checked}
                                             onCheckedChange={() => toggleEntry(employeeId, e.id)}

@@ -191,26 +191,46 @@ export async function listTimesheets(filter: ListFilter = {}): Promise<Timesheet
     if (projectIdsForPartner.length === 0) return [];
   }
 
-  let q = supabase.from('timesheet_entries').select('*').order('work_date', { ascending: false });
+  // PostgREST по умолчанию режет ответ на 1000 строк. При 11k+ записей это
+  // ломает любую фильтрацию на клиенте — мы видим лишь хвост по work_date.
+  // Поэтому пагинируем сами через .range(), пока не выберем всё (или не
+  // дойдём до filter.limit, если он задан).
+  const PAGE = 1000;
+  const targetLimit = filter.limit ?? Number.POSITIVE_INFINITY;
+  const allRows: any[] = [];
+  let from = 0;
 
-  if (filter.employeeId) q = q.eq('employee_id', filter.employeeId);
-  if (filter.projectId) q = q.eq('project_id', filter.projectId);
-  if (filter.source) q = q.eq('source', filter.source);
-  if (filter.importBatchId) q = q.eq('import_batch_id', filter.importBatchId);
-  if (filter.workDateFrom) q = q.gte('work_date', filter.workDateFrom);
-  if (filter.workDateTo) q = q.lte('work_date', filter.workDateTo);
-  if (filter.status) {
-    q = Array.isArray(filter.status) ? q.in('status', filter.status) : q.eq('status', filter.status);
-  }
-  if (projectIdsForPartner) q = q.in('project_id', projectIdsForPartner);
-  if (filter.limit) q = q.limit(filter.limit);
+  const buildBase = () => {
+    let q = supabase.from('timesheet_entries').select('*').order('work_date', { ascending: false });
+    if (filter.employeeId) q = q.eq('employee_id', filter.employeeId);
+    if (filter.projectId) q = q.eq('project_id', filter.projectId);
+    if (filter.source) q = q.eq('source', filter.source);
+    if (filter.importBatchId) q = q.eq('import_batch_id', filter.importBatchId);
+    if (filter.workDateFrom) q = q.gte('work_date', filter.workDateFrom);
+    if (filter.workDateTo) q = q.lte('work_date', filter.workDateTo);
+    if (filter.status) {
+      q = Array.isArray(filter.status) ? q.in('status', filter.status) : q.eq('status', filter.status);
+    }
+    if (projectIdsForPartner) q = q.in('project_id', projectIdsForPartner);
+    return q;
+  };
 
-  const { data, error } = await q;
-  if (error) {
-    console.error('[timesheets] listTimesheets failed', error);
-    return [];
+  for (;;) {
+    const remaining = targetLimit - allRows.length;
+    if (remaining <= 0) break;
+    const size = Math.min(PAGE, remaining);
+    const { data, error } = await buildBase().range(from, from + size - 1);
+    if (error) {
+      console.error('[timesheets] listTimesheets failed', error);
+      return [];
+    }
+    const rows = data || [];
+    allRows.push(...rows);
+    if (rows.length < size) break;
+    from += rows.length;
   }
-  return (data || []).map(rowToEntry);
+
+  return allRows.map(rowToEntry);
 }
 
 // ─── Insert / update / delete ───────────────────────────────────────────────
