@@ -206,13 +206,17 @@ export default function Timesheets() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingTimesheet, setEditingTimesheet] = useState<TimesheetEntry | null>(null);
   
-  // Форма
+  // Форма. isAdminWork=true → проект не нужен, в БД сохраняем
+  // project_id=null + project_name='Административная работа' (тот же маркер
+  // что и в xlsx-импорте для админ-строк, см. project_timesheet_format).
   const [formData, setFormData] = useState({
     projectId: '',
+    isAdminWork: false,
     date: new Date().toISOString().split('T')[0],
     hours: '',
     description: ''
   });
+  const ADMIN_WORK_LABEL = 'Административная работа';
 
   // Проверяем, может ли пользователь заполнять тайм-щиты
   const canFillTimesheets = user && user.role !== 'ceo' && user.role !== 'deputy_director';
@@ -297,8 +301,10 @@ export default function Timesheets() {
   const saveTimesheet = async () => {
     if (!user) return;
 
-    if (!formData.projectId) {
-      toast({ title: 'Ошибка', description: 'Выберите проект', variant: 'destructive' });
+    // Для админ-работы проект не нужен — это часы офисной работы без
+    // привязки к конкретному проекту (см. project_timesheet_format).
+    if (!formData.isAdminWork && !formData.projectId) {
+      toast({ title: 'Ошибка', description: 'Выберите проект или отметьте «Административная работа»', variant: 'destructive' });
       return;
     }
 
@@ -307,13 +313,16 @@ export default function Timesheets() {
       return;
     }
 
-    const projectName = getProjectName(projects.find((p: any) => p.id === formData.projectId));
+    const projectName = formData.isAdminWork
+      ? ADMIN_WORK_LABEL
+      : getProjectName(projects.find((p: any) => p.id === formData.projectId));
+    const projectId = formData.isAdminWork ? null : formData.projectId;
     const hours = parseFloat(formData.hours);
-    const description = formData.description || 'Работа над проектом';
+    const description = formData.description || (formData.isAdminWork ? 'Офисная работа без проекта' : 'Работа над проектом');
 
     if (editingTimesheet) {
       const updated = await updateEntry(editingTimesheet.id, {
-        projectId: formData.projectId,
+        projectId,
         projectName,
         workDate: formData.date,
         hours,
@@ -327,7 +336,7 @@ export default function Timesheets() {
       const created = await createEntry({
         employeeId: user.id,
         employeeName: user.name,
-        projectId: formData.projectId,
+        projectId,
         projectName,
         workDate: formData.date,
         hours,
@@ -349,6 +358,7 @@ export default function Timesheets() {
     setEditingTimesheet(null);
     setFormData({
       projectId: '',
+      isAdminWork: false,
       date: new Date().toISOString().split('T')[0],
       hours: '',
       description: '',
@@ -365,6 +375,8 @@ export default function Timesheets() {
     setEditingTimesheet(timesheet);
     setFormData({
       projectId: timesheet.projectId || '',
+      // Запись без projectId или с явным маркером — это админ-работа
+      isAdminWork: !timesheet.projectId || timesheet.projectName === ADMIN_WORK_LABEL,
       date: timesheet.date,
       hours: timesheet.hours.toString(),
       description: timesheet.description
@@ -463,6 +475,7 @@ export default function Timesheets() {
                 setEditingTimesheet(null);
                 setFormData({
                   projectId: '',
+                  isAdminWork: false,
                   date: new Date().toISOString().split('T')[0],
                   hours: '',
                   description: ''
@@ -477,17 +490,39 @@ export default function Timesheets() {
                 <DialogTitle>{editingTimesheet ? 'Редактировать тайм-щит' : 'Новый тайм-щит'}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Проект *</Label>
-                  <ProjectCombobox
-                    projects={allProjects}
-                    myProjectIds={myProjectIds}
-                    value={formData.projectId}
-                    onChange={(id) => setFormData({ ...formData, projectId: id })}
-                    placeholder="Выберите проект — введите название или клиента"
-                    triggerClassName="w-full"
+                {/* Тип работы: проект ИЛИ административная (в офисе, без проекта) */}
+                <label className="flex items-start gap-3 p-3 rounded-lg border bg-amber-50/40 dark:bg-amber-900/10 cursor-pointer hover:bg-amber-50/70 dark:hover:bg-amber-900/20 transition">
+                  <input
+                    type="checkbox"
+                    checked={formData.isAdminWork}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      isAdminWork: e.target.checked,
+                      projectId: e.target.checked ? '' : formData.projectId,
+                    })}
+                    className="mt-0.5 w-4 h-4 rounded border-gray-300"
                   />
-                </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">Административная работа</div>
+                    <div className="text-xs text-muted-foreground">
+                      Часы офисной работы без привязки к конкретному проекту — обучение, совещания, операционка
+                    </div>
+                  </div>
+                </label>
+
+                {!formData.isAdminWork && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Проект *</Label>
+                    <ProjectCombobox
+                      projects={allProjects}
+                      myProjectIds={myProjectIds}
+                      value={formData.projectId}
+                      onChange={(id) => setFormData({ ...formData, projectId: id })}
+                      placeholder="Выберите проект — введите название или клиента"
+                      triggerClassName="w-full"
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Дата *</Label>
@@ -513,11 +548,15 @@ export default function Timesheets() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Описание</Label>
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Описание {formData.isAdminWork && <span className="text-amber-600 ml-1">— что именно делал в офисе</span>}
+                  </Label>
                   <Textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder="Опишите выполненную работу..."
+                    placeholder={formData.isAdminWork
+                      ? 'Например: «совещание по бюджету», «обучение новых сотрудников», «работа с документами»'
+                      : 'Опишите выполненную работу...'}
                     rows={3}
                     className="bg-muted/40 border-0 focus-visible:ring-1 resize-none"
                   />
