@@ -590,6 +590,165 @@ export default function TimesheetAnalyticsTab() {
         </Card>
       </div>
 
+      {/* Покрытие табеля — кто подал, кто нет, и когда был последний импорт.
+          Жалоба HR: «вижу только этих, а заполнял весь штат». Реальный сценарий
+          из практики: люди заполняют Google Sheets, но в БД только то, что
+          было импортировано на момент последнего прогона /import-timesheet.
+          Если файлы дописали ПОСЛЕ импорта — новые строки висят в Drive, но
+          не в системе. Эта плашка различает три категории:
+            • подали в этом месяце,
+            • подавали в прошлых месяцах, но не в этом → «возможно дописали,
+              надо перезалить файл»,
+            • никогда не подавали → «файл ни разу не загружался». */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="w-4 h-4 text-muted-foreground" /> Покрытие табеля за {month.label}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-3">
+          {(() => {
+            const submittedIds = new Set<string>(
+              Array.from(hoursByEmployee.keys()).filter((id) => employeeById.has(id)),
+            );
+            const allEmps = (employees as any[]).filter((e) => e?.id);
+
+            // По trendEntries (12 мес) видим — у кого вообще были записи в системе.
+            const everSubmittedIds = new Set<string>();
+            for (const e of trendEntries) {
+              if (e.employeeId) everSubmittedIds.add(e.employeeId);
+            }
+
+            const notSubmitted = allEmps.filter((e) => !submittedIds.has(e.id));
+            const stale = notSubmitted.filter((e) => everSubmittedIds.has(e.id));
+            const neverSubmitted = notSubmitted.filter((e) => !everSubmittedIds.has(e.id));
+            const pctSubmitted = allEmps.length > 0
+              ? Math.round((submittedIds.size / allEmps.length) * 100)
+              : 0;
+
+            // Когда был последний импорт за выбранный месяц — по created_at записей.
+            // Это «снимок данных» — если файлы в Drive обновили после этой даты,
+            // изменения в БД ещё не попали.
+            const importCreatedAts = entries
+              .filter((e) => e.source === 'import')
+              .map((e) => (e as any).createdAt || (e as any).created_at)
+              .filter(Boolean)
+              .sort();
+            const lastImportAt = importCreatedAts[importCreatedAts.length - 1] || null;
+
+            return (
+              <>
+                <div className="grid sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3 bg-emerald-50/50 dark:bg-emerald-900/10">
+                    <div className="text-xs text-emerald-700 dark:text-emerald-300">Подали часы</div>
+                    <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+                      {submittedIds.size}
+                      <span className="text-sm font-normal opacity-70 ml-1">/ {allEmps.length}</span>
+                    </div>
+                    <div className="text-xs text-emerald-700/70 dark:text-emerald-300/70 mt-0.5">{pctSubmitted}% штата</div>
+                  </div>
+                  <div className="rounded-lg border p-3 bg-amber-50/50 dark:bg-amber-900/10">
+                    <div className="text-xs text-amber-700 dark:text-amber-300">Файлы устарели</div>
+                    <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">{stale.length}</div>
+                    <div className="text-xs text-amber-700/70 dark:text-amber-300/70 mt-0.5">
+                      раньше подавали — могли дописать в Drive после импорта
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3 bg-red-50/50 dark:bg-red-900/10">
+                    <div className="text-xs text-red-700 dark:text-red-300">Ни разу не подавали</div>
+                    <div className="text-2xl font-bold text-red-700 dark:text-red-300">{neverSubmitted.length}</div>
+                    <div className="text-xs text-red-700/70 dark:text-red-300/70 mt-0.5">
+                      файл ни разу не импортировали
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Последний импорт</div>
+                    <div className="text-2xl font-bold">
+                      {lastImportAt ? format(parseISO(lastImportAt), 'd MMM', { locale: ru }) : '—'}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {entries.length} зап. ·{' '}
+                      {(() => {
+                        const bySrc = new Map<string, number>();
+                        for (const e of entries) bySrc.set(e.source, (bySrc.get(e.source) || 0) + 1);
+                        return Array.from(bySrc.entries()).map(([s, n]) => `${s}:${n}`).join(' ') || '—';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {stale.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/40 dark:bg-amber-900/10 p-3 text-xs">
+                    <div className="flex items-start gap-2">
+                      <span className="text-amber-600 dark:text-amber-400 mt-0.5">⚠️</span>
+                      <div className="flex-1">
+                        <div className="font-medium text-amber-900 dark:text-amber-200">
+                          {stale.length} сотрудник{stale.length === 1 ? '' : 'ов'} подавал{stale.length === 1 ? '' : 'и'} часы раньше, но не за этот месяц
+                        </div>
+                        <div className="text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                          Скорее всего, они дописали май в Google Drive после последнего импорта
+                          {lastImportAt ? ` (${format(parseISO(lastImportAt), 'd MMMM HH:mm', { locale: ru })})` : ''}.
+                          Зайти в <b>/import-timesheet</b>, повторно загрузить те же файлы →
+                          система перезапишет старые данные новыми (без дубликатов, т.к. ID файла тот же).
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {notSubmitted.length > 0 && (
+                  <details className="rounded-lg border bg-background">
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium select-none">
+                      Список не подавших за {month.label} ({notSubmitted.length}) — раскрыть
+                    </summary>
+                    <div className="px-3 pb-3 pt-1 max-h-72 overflow-y-auto space-y-3">
+                      {stale.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1">
+                            ⚠️ Файлы устарели ({stale.length}) — перезалить через /import-timesheet
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                            {stale
+                              .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'))
+                              .map((e) => (
+                                <div key={e.id} className="truncate">
+                                  <span>{e.name}</span>
+                                  {e.role && (
+                                    <span className="text-muted-foreground ml-1">· {e.role}</span>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                      {neverSubmitted.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
+                            🚫 Ни разу не подавали ({neverSubmitted.length}) — попросить заполнить или вбить вручную
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                            {neverSubmitted
+                              .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'))
+                              .map((e) => (
+                                <div key={e.id} className="truncate">
+                                  <span>{e.name}</span>
+                                  {e.role && (
+                                    <span className="text-muted-foreground ml-1">· {e.role}</span>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                )}
+              </>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
       {/* Табель — матрица */}
       <Card>
         <CardHeader className="pb-2">

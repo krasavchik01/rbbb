@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +41,13 @@ import { projectMatchesAllowedCompanies } from "@/lib/userCompanyAccess";
 
 export default function ProjectApproval() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
   const { employees: realEmployees = [] } = useEmployees();
   const [appSettings] = useAppSettings();
+  // Чтобы автоматически открыть диалог только один раз даже при перерисовках/повторных loadProjects.
+  const openedDeepLinkRef = useRef<string | null>(null);
 
   const [projects, setProjects] = useState<ProjectV3[]>([]);
   // Активные проекты, где зам.ГД уже утвердила команду — для контроля и
@@ -184,10 +187,17 @@ export default function ProjectApproval() {
       return s === 'new' || s === 'pending_approval';
     }) as ProjectV3[];
 
-    // Активные с назначенной командой — для зам.ГД «мои команды»
+    // Активные с назначенной командой — для зам.ГД «мои команды».
+    // 'active' и 'В работе' попадают сюда из импортных проектов
+    // (timesheets-to-projects.mjs пишет в Supabase status='active', а
+    // mapSupabaseProject отдаёт 'В работе' если в notes нет своего status).
+    // Без них «Мои команды» был пуст после массового назначения партнёров.
     const active = parsed.filter(p => {
       const s = p?.notes?.status || p?.status;
-      return ['approved', 'in_progress', 'planning', 'ready_to_complete', 'pending_payment_approval'].includes(s);
+      const hasTeam = Array.isArray(p?.notes?.team) ? p.notes.team.length > 0 : Array.isArray(p?.team) ? p.team.length > 0 : false;
+      const isActiveStatus = ['active', 'В работе', 'approved', 'in_progress', 'planning', 'ready_to_complete', 'pending_payment_approval'].includes(s);
+      // Показываем только те, где уже есть кто-то в команде (иначе таб «Мои команды» забит шумом)
+      return isActiveStatus && hasTeam;
     }) as ProjectV3[];
 
     console.log('📋 ProjectApproval:', { pending: pending.length, active: active.length });
@@ -200,6 +210,31 @@ export default function ProjectApproval() {
     const interval = setInterval(loadProjects, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Deep-link из /assign-partners: ?openId=<projectId> — открыть диалог
+  // пересоставления команды на конкретном проекте, как только loadProjects
+  // его подтянет. openedDeepLinkRef защищает от повторного открытия при
+  // тиках polling-интервала.
+  useEffect(() => {
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    if (openedDeepLinkRef.current === openId) return;
+    const all = [...projects, ...activeProjects];
+    const target = all.find((p: any) => p.id === openId);
+    if (!target) return; // ждём loadProjects
+    openedDeepLinkRef.current = openId;
+    setSelectedProject(target as any);
+    const team = (target as any)?.notes?.team || (target as any)?.team || [];
+    const memberMap: Record<string, string> = {};
+    (team as any[]).forEach((m: any) => {
+      if (m?.userId && m?.role) memberMap[m.role] = m.userId;
+    });
+    setTeamMembers(memberMap);
+    // Чистим URL — иначе кнопка «назад» возвращает на этот же deep-link.
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, projects, activeProjects, setSearchParams]);
 
   // Расчёт финансов в реальном времени
   const calculateFinances = () => {

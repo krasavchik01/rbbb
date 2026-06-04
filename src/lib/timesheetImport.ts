@@ -335,8 +335,25 @@ export function matchProject(
 
 // ─── employee matching ────────────────────────────────────────────────────
 
+// Замены казахских букв на близкие русские. Без этого matchEmployee
+// промахивается: в xlsx часто пишут «Касымбек», а в employees сохранено
+// «Қасымбек» — старая normalize вырезала Қ и оставляла «асымбек», а из
+// «Касымбек» делала «касымбек» (К русская не вырезается). Теперь обе
+// формы сводятся к «касымбек».
+const KAZAKH_TO_RUSSIAN: Record<string, string> = {
+  'ә': 'а', 'ғ': 'г', 'қ': 'к', 'ң': 'н', 'ө': 'о',
+  'ұ': 'у', 'ү': 'у', 'һ': 'х', 'і': 'и', 'ё': 'е',
+};
+
 function normalizeName(s: string): string {
-  return s.toLowerCase().replace(/[^a-zа-яё\s]/g, '').replace(/\s+/g, ' ').trim();
+  return s
+    .toLowerCase()
+    .split('')
+    .map((c) => KAZAKH_TO_RUSSIAN[c] ?? c)
+    .join('')
+    .replace(/[^a-zа-я\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function matchEmployee(
@@ -356,6 +373,17 @@ export function matchEmployee(
       const en = normalizeName(e.name);
       if (en.startsWith(key) || en.includes(key)) {
         return { id: e.id, name: e.name, role: e.role || null };
+      }
+    }
+    // Fallback: перевёрнутый порядок (xlsx «Имя Фамилия», БД «Фамилия Имя»).
+    // Берём пару токенов в обратном порядке и снова ищем.
+    if (tokens.length >= 2) {
+      const swapped = [tokens[1], tokens[0]].join(' ');
+      for (const e of employees) {
+        const en = normalizeName(e.name);
+        if (en.startsWith(swapped) || en.includes(swapped)) {
+          return { id: e.id, name: e.name, role: e.role || null };
+        }
       }
     }
   }

@@ -15,6 +15,7 @@
  */
 
 import { useMemo, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,12 +45,14 @@ import {
   CheckCircle2,
   X,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 
 type PartnerFilter = 'no_partner' | 'with_partner' | 'all';
 
 export default function AssignPartners() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { projects = [], refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
   const { toast } = useToast();
@@ -57,6 +60,7 @@ export default function AssignPartners() {
   const [filter, setFilter] = useState<PartnerFilter>('no_partner');
   const [filterPartnerId, setFilterPartnerId] = useState<string>('any');
   const [filterCompany, setFilterCompany] = useState<string>('all');
+  const [onlyMine, setOnlyMine] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPartnerId, setBulkPartnerId] = useState<string>('');
@@ -107,6 +111,11 @@ export default function AssignPartners() {
           if (!partner) return false;
           if (filterPartnerId !== 'any' && partner.userId !== filterPartnerId) return false;
         }
+        // «Только мои назначения» — partner.assignedBy записывается в withPartnerSet,
+        // поэтому можем точно отделить «что назначила я» от «что назначил коллега».
+        if (onlyMine && filter !== 'no_partner') {
+          if (!partner || partner.assignedBy !== user.id) return false;
+        }
         if (filterCompany !== 'all') {
           const c = project.companyName || project.notes?.companyName || project.notes?.ourCompany;
           if (c !== filterCompany) return false;
@@ -121,7 +130,7 @@ export default function AssignPartners() {
       .sort((a, b) =>
         (a.project.name || '').localeCompare(b.project.name || '', 'ru'),
       );
-  }, [projects, filter, filterPartnerId, filterCompany, query]);
+  }, [projects, filter, filterPartnerId, filterCompany, query, onlyMine, user.id]);
 
   const visibleIds = useMemo(
     () => enrichedRows.map((r) => r.project.id).filter(Boolean) as string[],
@@ -206,16 +215,24 @@ export default function AssignPartners() {
     }
   };
 
-  // Счётчики для шапки
+  // Счётчики для шапки.
+  // mine — назначения, сделанные текущим пользователем (partner.assignedBy === user.id).
+  // Нужен, чтобы в паре зам.ГД + CEO видеть «свою половину работы».
   const counts = useMemo(() => {
     let withP = 0;
     let withoutP = 0;
+    let mine = 0;
     for (const p of projects as any[]) {
       const partner = findPartner(getProjectTeam(p));
-      if (partner) withP += 1; else withoutP += 1;
+      if (partner) {
+        withP += 1;
+        if (partner.assignedBy === user.id) mine += 1;
+      } else {
+        withoutP += 1;
+      }
     }
-    return { total: projects.length, withP, withoutP };
-  }, [projects]);
+    return { total: projects.length, withP, withoutP, mine };
+  }, [projects, user.id]);
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-32">
@@ -230,7 +247,7 @@ export default function AssignPartners() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="rounded-lg border p-3">
               <div className="text-xs text-muted-foreground">Всего проектов</div>
               <div className="text-2xl font-bold">{counts.total}</div>
@@ -243,6 +260,23 @@ export default function AssignPartners() {
               <div className="text-xs text-emerald-700">С партнёром</div>
               <div className="text-2xl font-bold text-emerald-700">{counts.withP}</div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setOnlyMine((v) => !v);
+                if (!onlyMine && filter === 'no_partner') setFilter('with_partner');
+              }}
+              className={`rounded-lg border p-3 text-left transition ${
+                onlyMine ? 'border-primary bg-primary/10' : 'bg-blue-50/50 hover:bg-blue-100/60'
+              }`}
+              title="Показать только проекты, где партнёра назначила(а) Я"
+            >
+              <div className="text-xs text-blue-700 flex items-center justify-between">
+                Назначил(а) я
+                {onlyMine && <CheckCircle2 className="w-3 h-3" />}
+              </div>
+              <div className="text-2xl font-bold text-blue-700">{counts.mine}</div>
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -340,15 +374,23 @@ export default function AssignPartners() {
                 const checked = selected.has(id);
                 const client = project.clientName || project.client?.name;
                 const company = project.companyName || project.notes?.companyName;
+                const mineMark = partner && partner.assignedBy === user.id;
                 return (
-                  <label
+                  <div
                     key={id}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-accent/40 ${
+                    className={`flex items-center gap-3 px-4 py-2.5 hover:bg-accent/40 ${
                       checked ? 'bg-primary/5' : ''
                     }`}
                   >
-                    <Checkbox checked={checked} onCheckedChange={() => toggleOne(id)} />
-                    <div className="flex-1 min-w-0">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggleOne(id)}
+                      aria-label={`Выбрать ${project.name}`}
+                    />
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => toggleOne(id)}
+                    >
                       <div className="text-sm font-medium truncate">{project.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {client && <>Клиент: {client}</>}
@@ -357,15 +399,39 @@ export default function AssignPartners() {
                       </div>
                     </div>
                     {partner ? (
-                      <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs border ${
+                          mineMark
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}
+                        title={mineMark ? 'Это назначение — твоё' : undefined}
+                      >
                         <CheckCircle2 className="w-3 h-3 mr-1" /> {partner.userName}
+                        {mineMark && <span className="ml-1 opacity-70">· я</span>}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
                         <AlertTriangle className="w-3 h-3 mr-1" /> нет партнёра
                       </Badge>
                     )}
-                  </label>
+                    {partner && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/project-approval?openId=${encodeURIComponent(id)}`);
+                        }}
+                        title="Доназначить команду в /project-approval"
+                      >
+                        <Users className="w-3 h-3 mr-1" /> Команда
+                      </Button>
+                    )}
+                  </div>
                 );
               })}
             </div>
