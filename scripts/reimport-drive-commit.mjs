@@ -21,8 +21,8 @@ const sb = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbnZxc25pdHphdXJwd25oenduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NjE2NzUsImV4cCI6MjA2OTUzNzY3NX0.vK2JrnJJrlwag7zOMJBgPWbUnodwsYBouFxViu5PZFY',
 );
 
-const OLD_BATCH = '2026-05-27-drive-bulk';
-const NEW_BATCH = '2026-06-04-drive-bulk';
+const OLD_BATCH = '2026-06-04-drive-bulk-v2';
+const NEW_BATCH = '2026-06-04-drive-bulk-v3';
 
 console.log('Загружаю drafts из tmp/reimport-drafts.json…');
 const { drafts } = JSON.parse(readFileSync(path.resolve('tmp/reimport-drafts.json'), 'utf8'));

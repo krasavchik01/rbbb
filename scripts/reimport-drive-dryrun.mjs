@@ -129,33 +129,45 @@ for (const item of index) {
     for (const r of result.rows) {
       if (r.employee !== emp.employee) continue;
       if (r.kind === 'absence') continue;
-      if (!r.effectiveProject) continue;
       if (!r.isoDate) continue;
-      if (!r.hours || r.hours === 0) {
-        const cur = skippedZeroHours.get(emp.employee) || 0;
-        skippedZeroHours.set(emp.employee, cur + 1);
-        continue;
+      // Часы: если 0 — ставим 8 (партнёры/менеджеры не отмечают).
+      let effectiveHours = r.hours;
+      if (!effectiveHours || effectiveHours === 0) {
+        effectiveHours = 8;
       }
-      const nameKey = normalizeProjectName(r.effectiveProject) || r.effectiveProject.toLowerCase();
-      const matchedProjectId =
-        r.preMatchFromNotes?.id && !String(r.preMatchFromNotes.id).startsWith('self:')
-          ? r.preMatchFromNotes.id
-          : projectIdByName.get(nameKey) || null;
-      if (!matchedProjectId) {
-        const cur = unmatchedProjects.get(r.effectiveProject) || { rows: 0, employees: new Set() };
-        cur.rows++;
-        cur.employees.add(emp.matchedUserName || emp.employee);
-        unmatchedProjects.set(r.effectiveProject, cur);
-        continue;
+      // Проект: если пустой или kind=admin без распознанного проекта в notes —
+      // это административная работа (офис, обучение, не на проекте).
+      // Сохраняем как маркер 'Административная работа' с project_id=null —
+      // это видно в табеле как часы данного сотрудника.
+      const isAdminWork = r.kind === 'admin' || !r.effectiveProject;
+      let projectName = r.effectiveProject;
+      let matchedProjectId = null;
+      if (isAdminWork) {
+        projectName = 'Административная работа';
+        matchedProjectId = null;
+      } else {
+        const nameKey = normalizeProjectName(r.effectiveProject) || r.effectiveProject.toLowerCase();
+        matchedProjectId =
+          r.preMatchFromNotes?.id && !String(r.preMatchFromNotes.id).startsWith('self:')
+            ? r.preMatchFromNotes.id
+            : projectIdByName.get(nameKey) || null;
+        if (!matchedProjectId) {
+          // Проект упомянут в xlsx, но в системе его нет. Не теряем строку —
+          // сохраняем с null projectId, но реальным project_name (для домапа потом).
+          const cur = unmatchedProjects.get(r.effectiveProject) || { rows: 0, employees: new Set() };
+          cur.rows++;
+          cur.employees.add(emp.matchedUserName || emp.employee);
+          unmatchedProjects.set(r.effectiveProject, cur);
+        }
       }
       fileDrafts.push({
         driveFileId: item.id,
         employeeId: emp.matchedUserId,
         employeeName: emp.matchedUserName || emp.employee,
         projectId: matchedProjectId,
-        projectName: r.effectiveProject,
+        projectName,
         workDate: r.isoDate,
-        hours: r.hours,
+        hours: effectiveHours,
         section: r.section || undefined,
         position: r.position || undefined,
         location: r.location || undefined,

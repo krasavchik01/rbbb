@@ -476,12 +476,23 @@ export function parseTimesheetFile(
     kind: 'project' | 'admin' | 'absence';
   }
   const raw: RawRow[] = [];
+  // Forward-fill для колонки «Сотрудник»: многие заполняют имя только
+  // в первой строке, потом колонка пустая до конца файла. Если этого не
+  // сделать, парсер группирует такие строки в «несуществующего сотрудника»
+  // с employee="" и матчер их выкидывает. По факту это один и тот же
+  // человек, чьё имя видно только сверху.
+  let lastEmployee = '';
   for (let i = 1; i < arr.length; i++) {
     const r = arr[i];
-    const employee = String(r[cols.employee] ?? '').trim();
+    let employee = String(r[cols.employee] ?? '').trim();
     const rawProject = String(r[cols.project] ?? '').trim();
     const notes = String(r[cols.notes] ?? '').trim();
     if (!employee && !rawProject && !notes) continue;
+    if (employee) {
+      lastEmployee = employee;
+    } else if (lastEmployee) {
+      employee = lastEmployee;
+    }
 
     raw.push({
       rowIndex: i + 1,
