@@ -25,12 +25,37 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // task #8 — миграция на Supabase Auth. До этого ручки НЕ должны делать
 // серверные mutation-actions без отдельной строгой проверки.
 const getUserFromRequest = (req) => {
+  const id = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'].trim() : '';
+  const name = typeof req.headers['x-user-name'] === 'string' ? req.headers['x-user-name'].trim() : '';
+  const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].trim() : '';
+
   return {
-    id: req.headers['x-user-id'] || 'unknown',
-    name: req.headers['x-user-name'] || 'Unknown',
-    role: req.headers['x-user-role'] || 'member',
+    id,
+    name: name || 'Unknown',
+    role,
   };
 };
+
+const hasAuthenticatedUserContext = (user) => Boolean(user.id && user.role);
+
+function requireAuthenticatedUser(req, res) {
+  const user = getUserFromRequest(req);
+  if (!hasAuthenticatedUserContext(user)) {
+    res.status(401).json({ error: 'Требуется авторизация для доступа к файлам' });
+    return null;
+  }
+  return user;
+}
+
+function requireAnyRole(req, res, allowedRoles) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return null;
+  if (!allowedRoles.includes(user.role)) {
+    res.status(403).json({ error: 'Недостаточно прав для операции с файлом' });
+    return null;
+  }
+  return user;
+}
 
 // Защита от path traversal: имя проекта/файла не должно вытаскивать нас за
 // пределы baseDir. Поможет если кто-то пришлёт projectId="../../etc" или
@@ -121,6 +146,8 @@ if (multer) {
 
 // Загрузка файла
 app.post('/api/upload', (req, res, next) => {
+  if (!requireAnyRole(req, res, ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'])) return;
+
   if (!multer || !upload) {
     return res.status(503).json({ error: 'Сервис загрузки временно недоступен (отсутствует зависимость multer). Запустите npm install.' });
   }
@@ -159,6 +186,8 @@ app.post('/api/upload', (req, res, next) => {
 
 // Скачивание/Просмотр файла
 app.get('/api/files/:projectId/:filename', (req, res) => {
+  if (!requireAuthenticatedUser(req, res)) return;
+
   const { projectId, filename } = req.params;
   let filePath;
   try {
@@ -168,9 +197,9 @@ app.get('/api/files/:projectId/:filename', (req, res) => {
   }
 
   if (fs.existsSync(filePath)) {
-    // TODO(auth-migration): добавить проверку прав доступа к проекту после
-    // миграции на Supabase Auth (task #8). Сейчас любой, кто знает имя файла,
-    // может его скачать.
+    // TODO(auth-migration): сейчас это defense-in-depth на основе user context
+    // из заголовков. Полная защита требует Supabase JWT + проверки доступа к
+    // конкретному проекту на сервере.
     res.sendFile(filePath);
   } else {
     res.status(404).json({ error: 'Файл не найден' });
@@ -179,6 +208,8 @@ app.get('/api/files/:projectId/:filename', (req, res) => {
 
 // Удаление файла
 app.delete('/api/files/:projectId/:filename', (req, res) => {
+  if (!requireAnyRole(req, res, ['admin', 'ceo', 'deputy_director', 'procurement'])) return;
+
   const { projectId, filename } = req.params;
   let filePath;
   try {
