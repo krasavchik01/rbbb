@@ -37,6 +37,8 @@ const getUserFromRequest = (req) => {
 };
 
 const hasAuthenticatedUserContext = (user) => Boolean(user.id && user.role);
+const FILE_UPLOAD_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
+const FILE_DELETE_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
 
 function requireAuthenticatedUser(req, res) {
   const user = getUserFromRequest(req);
@@ -67,6 +69,24 @@ function isSafeSeafilePath(storagePath) {
   if (!storagePath.startsWith('/')) return false;
   if (storagePath.includes('\0')) return false;
   return storagePath.split('/').every((part) => part !== '..');
+}
+
+function isSafeSeafileRelativePath(relativePath) {
+  if (typeof relativePath !== 'string') return false;
+  if (!relativePath || relativePath.startsWith('/')) return false;
+  if (relativePath.includes('\0')) return false;
+  return relativePath.split('/').every((part) => part && part !== '..');
+}
+
+function getSeafileConfig(res) {
+  const seafileUrl = getRequiredEnv('SEAFILE_URL');
+  const seafileToken = getRequiredEnv('SEAFILE_TOKEN');
+  const repoId = getRequiredEnv('SEAFILE_REPO_ID');
+  if (!seafileUrl || !seafileToken || !repoId) {
+    res.status(503).json({ error: 'Seafile не настроен на сервере' });
+    return null;
+  }
+  return { seafileUrl, seafileToken, repoId };
 }
 
 // Защита от path traversal: имя проекта/файла не должно вытаскивать нас за
@@ -122,7 +142,7 @@ if (!fs.existsSync(storagePath)) {
 }
 
 // Настройка хранилища (только если multer доступен)
-let storage, upload;
+let storage, upload, seafileUpload;
 if (multer) {
   storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -152,13 +172,18 @@ if (multer) {
     storage,
     limits: { fileSize: 50 * 1024 * 1024 } // 50MB
   });
+
+  seafileUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+  });
 }
 
 // ========== API РАБОТЫ С ФАЙЛАМИ ==========
 
 // Загрузка файла
 app.post('/api/upload', (req, res, next) => {
-  if (!requireAnyRole(req, res, ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'])) return;
+  if (!requireAnyRole(req, res, FILE_UPLOAD_ROLES)) return;
 
   if (!multer || !upload) {
     return res.status(503).json({ error: 'Сервис загрузки временно недоступен (отсутствует зависимость multer). Запустите npm install.' });
@@ -227,12 +252,9 @@ app.get('/api/seafile/download-url', async (req, res) => {
     return res.status(400).json({ error: 'Некорректный путь к файлу Seafile' });
   }
 
-  const seafileUrl = getRequiredEnv('SEAFILE_URL');
-  const seafileToken = getRequiredEnv('SEAFILE_TOKEN');
-  const repoId = getRequiredEnv('SEAFILE_REPO_ID');
-  if (!seafileUrl || !seafileToken || !repoId) {
-    return res.status(503).json({ error: 'Seafile не настроен на сервере' });
-  }
+  const config = getSeafileConfig(res);
+  if (!config) return;
+  const { seafileUrl, seafileToken, repoId } = config;
 
   try {
     const encodedPath = encodeURIComponent(storagePath);
@@ -248,6 +270,143 @@ app.get('/api/seafile/download-url', async (req, res) => {
   } catch (err) {
     console.error('❌ Ошибка получения ссылки Seafile:', err);
     res.status(502).json({ error: 'Не удалось получить ссылку из Seafile' });
+  }
+});
+
+// Получить список файлов/папок Seafile без раскрытия SEAFILE_TOKEN во frontend.
+app.get('/api/seafile/list', async (req, res) => {
+  if (!requireAuthenticatedUser(req, res)) return;
+
+  const dirPath = String(req.query.path || '');
+  if (!isSafeSeafilePath(dirPath)) {
+    return res.status(400).json({ error: 'Некорректный путь к папке Seafile' });
+  }
+
+  const config = getSeafileConfig(res);
+  if (!config) return;
+  const { seafileUrl, seafileToken, repoId } = config;
+
+  try {
+    const response = await fetch(`${seafileUrl}/api2/repos/${repoId}/dir/?p=${encodeURIComponent(dirPath)}`, {
+      headers: { Authorization: `Token ${seafileToken}` },
+    });
+    if (!response.ok) {
+      return res.status(response.status === 404 ? 404 : 502).json({ error: `Ошибка получения списка из Seafile: ${response.status}` });
+    }
+
+    const entries = await response.json();
+    res.json({ entries: Array.isArray(entries) ? entries : [] });
+  } catch (err) {
+    console.error('❌ Ошибка получения списка Seafile:', err);
+    res.status(502).json({ error: 'Не удалось получить список из Seafile' });
+  }
+});
+
+// Загрузить файл в Seafile через backend, чтобы не раскрывать SEAFILE_TOKEN.
+app.post('/api/seafile/upload', (req, res, next) => {
+  if (!requireAnyRole(req, res, FILE_UPLOAD_ROLES)) return;
+
+  if (!multer || !seafileUpload) {
+    return res.status(503).json({ error: 'Сервис загрузки временно недоступен (отсутствует зависимость multer). Запустите npm install.' });
+  }
+
+  seafileUpload.single('file')(req, res, async (err) => {
+    if (err) return next(err);
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл не получен' });
+    }
+
+    const projectId = String(req.body.projectId || '').trim();
+    const taskId = String(req.body.taskId || '').trim();
+    const relativePath = taskId ? `tasks/${taskId}` : projectId;
+    if (!isSafeSeafileRelativePath(relativePath)) {
+      return res.status(400).json({ error: 'Некорректная папка Seafile для загрузки' });
+    }
+
+    const config = getSeafileConfig(res);
+    if (!config) return;
+    const { seafileUrl, seafileToken, repoId } = config;
+
+    try {
+      const uploadLinkRes = await fetch(`${seafileUrl}/api2/repos/${repoId}/upload-link/?p=/`, {
+        headers: { Authorization: `Token ${seafileToken}` },
+      });
+      if (!uploadLinkRes.ok) {
+        return res.status(502).json({ error: `Ошибка получения ссылки Seafile: ${uploadLinkRes.status}` });
+      }
+
+      const uploadUrlRaw = await uploadLinkRes.text();
+      const uploadUrl = uploadUrlRaw.replace(/"/g, '').replace(/^https?:\/\/[^/]+/, seafileUrl);
+      const formData = new FormData();
+      formData.append('file', new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' }), req.file.originalname);
+      formData.append('parent_dir', '/');
+      formData.append('relative_path', relativePath);
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { Authorization: `Token ${seafileToken}` },
+        body: formData,
+      });
+      if (!uploadRes.ok) {
+        return res.status(502).json({ error: `Ошибка загрузки файла в Seafile: ${uploadRes.status}` });
+      }
+
+      const storagePath = `/${relativePath}/${req.file.originalname}`;
+      const now = new Date().toISOString();
+      res.json({
+        success: true,
+        file: taskId ? {
+          id: `${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+          name: req.file.originalname,
+          size: req.file.size,
+          storagePath,
+          uploadedAt: now,
+          uploadedBy: req.body.uploadedBy || getUserFromRequest(req).id || 'system',
+        } : {
+          id: `${Date.now()}-${Math.round(Math.random() * 100000)}`,
+          fileName: req.file.originalname,
+          fileType: req.file.mimetype || 'application/octet-stream',
+          fileSize: req.file.size,
+          storagePath,
+          category: req.body.category || 'other',
+          uploadedBy: req.body.uploadedBy || getUserFromRequest(req).id || 'system',
+          uploadedAt: now,
+          isSeafile: true,
+          publicUrl: `seafile://${storagePath}`,
+        },
+      });
+    } catch (error) {
+      console.error('❌ Ошибка загрузки файла в Seafile:', error);
+      res.status(502).json({ error: 'Не удалось загрузить файл в Seafile' });
+    }
+  });
+});
+
+// Удалить файл из Seafile через backend, чтобы не раскрывать SEAFILE_TOKEN.
+app.delete('/api/seafile/file', async (req, res) => {
+  if (!requireAnyRole(req, res, FILE_DELETE_ROLES)) return;
+
+  const storagePath = String(req.query.path || '');
+  if (!isSafeSeafilePath(storagePath)) {
+    return res.status(400).json({ error: 'Некорректный путь к файлу Seafile' });
+  }
+
+  const config = getSeafileConfig(res);
+  if (!config) return;
+  const { seafileUrl, seafileToken, repoId } = config;
+
+  try {
+    const response = await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodeURIComponent(storagePath)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Token ${seafileToken}` },
+    });
+    if (!response.ok) {
+      return res.status(response.status === 404 ? 404 : 502).json({ error: `Ошибка удаления файла из Seafile: ${response.status}` });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Ошибка удаления файла Seafile:', err);
+    res.status(502).json({ error: 'Не удалось удалить файл из Seafile' });
   }
 });
 
@@ -511,3 +670,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+

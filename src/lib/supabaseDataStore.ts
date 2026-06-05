@@ -6,7 +6,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
-import { apiGet } from '@/lib/api';
+import { apiDelete, apiGet, apiPostFormData } from '@/lib/api';
 
 // Типы из Supabase
 type SupabaseEmployee = Database['public']['Tables']['employees']['Row'];
@@ -611,67 +611,19 @@ class SupabaseDataStore {
     uploadedBy: string
   ): Promise<{ id: string; storagePath: string; publicUrl: string }> {
     try {
-      const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
-      const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
-      const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
-
-      if (!seafileUrl || !seafileToken || !repoId) {
-        throw new Error('❌ Не настроены переменные VITE_SEAFILE_URL, VITE_SEAFILE_TOKEN или VITE_SEAFILE_REPO_ID.');
-      }
-
-      console.log(`📡 Получение ссылки для загрузки от Seafile...`);
-      // Шаг 1: Получаем одноразовую ссылку для загрузки файла
-      const uploadLinkRes = await fetch(`${seafileUrl}/api2/repos/${repoId}/upload-link/?p=/`, {
-        headers: { 'Authorization': `Token ${seafileToken}` }
-      });
-
-      if (!uploadLinkRes.ok) {
-        throw new Error(`Ошибка получения ссылки Seafile: ${uploadLinkRes.status}`);
-      }
-
-      const uploadUrlRaw = await uploadLinkRes.text();
-      let uploadUrl = uploadUrlRaw.replace(/"/g, ''); // Seafile возвращает строку в кавычках
-
-      // Заменяем оригинальный домен Seafile на наш прокси, чтобы избежать CORS
-      uploadUrl = uploadUrl.replace(/^https?:\/\/[^/]+/, seafileUrl);
-
-      // Шаг 2: Отправляем сам файл
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('parent_dir', '/');
-      formData.append('relative_path', projectId); // Создаем подпапку под проект
+      formData.append('projectId', projectId);
+      formData.append('category', category);
+      formData.append('uploadedBy', uploadedBy);
 
-      console.log(`📤 Загрузка файла ${file.name} в Seafile, папка: /${projectId}...`);
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Authorization': `Token ${seafileToken}` }, // На всякий случай
-        body: formData
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error(`Ошибка загрузки файла в Seafile: ${uploadRes.status}`);
+      console.log(`📤 Загрузка файла ${file.name} в Seafile через backend proxy, папка: /${projectId}...`);
+      const uploadResponse = await apiPostFormData<{ file: any }>('/api/seafile/upload', formData);
+      if (uploadResponse.error || !uploadResponse.data?.file) {
+        throw new Error(uploadResponse.error || 'Пустой ответ сервера Seafile upload proxy');
       }
 
-      // После успешной загрузки файл лежит по пути: /projectId/file.name
-      // Готовим записи для нашей БД (Supabase)
-      const storagePath = `/${projectId}/${file.name}`;
-      const fileId = `${Date.now()}-${Math.round(Math.random() * 100000)}`;
-
-      // Для фронтенда мы не можем сохранить постоянную ссылку на скачивание,
-      // потому что Seafile-ссылки временные. Мы будем генерировать их при скачивании по требованию.
-      // Сохраняем просто путь в Seafile и специальный флаг `isSeafile`
-      const fileRecord = {
-        id: fileId,
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        storagePath: storagePath,
-        category: category,
-        uploadedBy: uploadedBy,
-        uploadedAt: new Date().toISOString(),
-        isSeafile: true,
-        publicUrl: `seafile://${storagePath}` // Псевдо-ссылка
-      };
+      const fileRecord = uploadResponse.data.file;
 
       const project = await this.getProject(projectId);
       const existingNotes = (project as any)?.notes || {};
@@ -785,21 +737,11 @@ class SupabaseDataStore {
    * Получить список файлов из Seafile для папки проекта и синхронизировать с notes.files
    */
   async syncProjectFilesFromSeafile(projectId: string, supabaseUUID?: string): Promise<any[]> {
-    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
-    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
-    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
-
-    if (!seafileUrl || !seafileToken || !repoId) return [];
-
     try {
-      const dirPath = encodeURIComponent(`/${projectId}`);
-      const res = await fetch(`${seafileUrl}/api2/repos/${repoId}/dir/?p=${dirPath}`, {
-        headers: { 'Authorization': `Token ${seafileToken}` }
-      });
+      const listResponse = await apiGet<{ entries: any[] }>(`/api/seafile/list?path=${encodeURIComponent(`/${projectId}`)}`);
+      if (listResponse.error || !listResponse.data?.entries) return [];
 
-      if (!res.ok) return []; // Папки нет — значит файлов нет
-
-      const entries: any[] = await res.json();
+      const entries = listResponse.data.entries;
       const seafileFiles = entries
         .filter((e: any) => e.type === 'file')
         .map((e: any) => ({
@@ -854,57 +796,32 @@ class SupabaseDataStore {
     file: File,
     uploadedBy: string
   ): Promise<{ id: string; name: string; size: number; storagePath: string; uploadedAt: string; uploadedBy: string }> {
-    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
-    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
-    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
-
-    if (!seafileUrl || !seafileToken || !repoId) {
-      throw new Error('Не настроены переменные Seafile (VITE_SEAFILE_URL, VITE_SEAFILE_TOKEN, VITE_SEAFILE_REPO_ID)');
-    }
-
-    const uploadLinkRes = await fetch(`${seafileUrl}/api2/repos/${repoId}/upload-link/?p=/`, {
-      headers: { 'Authorization': `Token ${seafileToken}` }
-    });
-    if (!uploadLinkRes.ok) throw new Error(`Ошибка получения ссылки Seafile: ${uploadLinkRes.status}`);
-
-    let uploadUrl = (await uploadLinkRes.text()).replace(/"/g, '');
-    uploadUrl = uploadUrl.replace(/^https?:\/\/[^/]+/, seafileUrl);
-
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('parent_dir', '/');
-    formData.append('relative_path', `tasks/${taskId}`);
+    formData.append('taskId', taskId);
+    formData.append('uploadedBy', uploadedBy);
 
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Token ${seafileToken}` },
-      body: formData,
-    });
-    if (!uploadRes.ok) throw new Error(`Ошибка загрузки в Seafile: ${uploadRes.status}`);
+    const uploadResponse = await apiPostFormData<{ file: { id: string; name: string; size: number; storagePath: string; uploadedAt: string; uploadedBy: string } }>(
+      '/api/seafile/upload',
+      formData
+    );
+    if (uploadResponse.error || !uploadResponse.data?.file) {
+      throw new Error(uploadResponse.error || 'Пустой ответ сервера Seafile upload proxy');
+    }
 
-    return {
-      id: `${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-      name: file.name,
-      size: file.size,
-      storagePath: `/tasks/${taskId}/${file.name}`,
-      uploadedAt: new Date().toISOString(),
-      uploadedBy,
-    };
+    return uploadResponse.data.file;
   }
 
   /**
  * Удаляет файл задачи из Seafile (только физическое удаление)
  */
   async deleteTaskFileFromSeafile(storagePath: string): Promise<void> {
-    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
-    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
-    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
-    if (!seafileUrl || !seafileToken || !repoId) return;
+    if (!storagePath) return;
     try {
-      await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodeURIComponent(storagePath)}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Token ${seafileToken}` },
-      });
+      const response = await apiDelete(`/api/seafile/file?path=${encodeURIComponent(storagePath)}`);
+      if (response.error) {
+        console.warn('Не удалось удалить файл задачи из Seafile:', response.error);
+      }
     } catch (e) {
       console.warn('Не удалось удалить файл задачи из Seafile:', e);
     }
@@ -925,17 +842,7 @@ class SupabaseDataStore {
         // 1. Физическое удаление
         try {
           if (file.isSeafile) {
-            // Удаляем из Seafile API
-            const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
-            const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
-            const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
-            if (seafileUrl && seafileToken && repoId) {
-              const encodedPath = encodeURIComponent(file.storagePath);
-              await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Token ${seafileToken}` }
-              });
-            }
+            await apiDelete(`/api/seafile/file?path=${encodeURIComponent(file.storagePath)}`);
           } else if (!fileId.startsWith('old_contract_') && this.fileApiUrl) {
             // Удаляем со старого локального NAS (легаси поддержка)
             await fetch(`${this.fileApiUrl}/files/${file.storagePath}`, {
@@ -1447,4 +1354,6 @@ class SupabaseDataStore {
 
 // Экспорт singleton
 export const supabaseDataStore = new SupabaseDataStore();
+
+
 

@@ -23,13 +23,16 @@ export async function apiRequest<T = any>(
 ): Promise<ApiResponse<T>> {
   try {
     const url = `${API_BASE}${endpoint}`;
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...options.headers,
     };
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     // Add user context from localStorage if available
-    const userStr = localStorage.getItem('user');
+    const userStr = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
@@ -86,6 +89,18 @@ export function apiPost<T = any>(endpoint: string, body?: any, options?: Request
 }
 
 /**
+ * POST multipart/form-data request. Do not set Content-Type manually: fetch adds
+ * the boundary automatically.
+ */
+export function apiPostFormData<T = any>(endpoint: string, formData: FormData, options?: RequestOptions) {
+  return apiRequest<T>(endpoint, {
+    ...options,
+    method: 'POST',
+    body: formData,
+  });
+}
+
+/**
  * PUT request
  */
 export function apiPut<T = any>(endpoint: string, body?: any, options?: RequestOptions) {
@@ -102,3 +117,4 @@ export function apiPut<T = any>(endpoint: string, body?: any, options?: RequestO
 export function apiDelete<T = any>(endpoint: string, options?: RequestOptions) {
   return apiRequest<T>(endpoint, { ...options, method: 'DELETE' });
 }
+

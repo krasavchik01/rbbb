@@ -168,3 +168,166 @@ test('seafile download-url proxy calls Seafile with server-side token', async ()
     });
   }
 });
+
+test('seafile list proxy calls Seafile with server-side token', async () => {
+  let seenAuthorization = '';
+  let seenPath = '';
+
+  const fakeSeafile = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    seenAuthorization = req.headers.authorization || '';
+    seenPath = url.searchParams.get('p') || '';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([{ id: 'file-1', type: 'file', name: 'contract.pdf', size: 123, mtime: 1700000000 }]));
+  });
+  await new Promise((resolve) => fakeSeafile.listen(0, '127.0.0.1', resolve));
+  const { port } = fakeSeafile.address();
+
+  const ctx = await startServer({
+    SEAFILE_URL: `http://127.0.0.1:${port}`,
+    SEAFILE_TOKEN: 'server-only-token',
+    SEAFILE_REPO_ID: 'repo-1',
+  });
+
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/seafile/list?path=${encodeURIComponent('/project-a')}`, {
+      headers: {
+        'x-user-id': 'admin-1',
+        'x-user-role': 'admin',
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      entries: [{ id: 'file-1', type: 'file', name: 'contract.pdf', size: 123, mtime: 1700000000 }],
+    });
+    assert.equal(seenAuthorization, 'Token server-only-token');
+    assert.equal(seenPath, '/project-a');
+  } finally {
+    await ctx.stop();
+    await new Promise((resolve, reject) => {
+      fakeSeafile.close((error) => error ? reject(error) : resolve());
+    });
+  }
+});
+
+test('seafile delete proxy requires privileged role and calls Seafile with server-side token', async () => {
+  let deleteAuthorization = '';
+  let deletePath = '';
+
+  const fakeSeafile = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (req.method === 'DELETE') {
+      deleteAuthorization = req.headers.authorization || '';
+      deletePath = url.searchParams.get('p') || '';
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise((resolve) => fakeSeafile.listen(0, '127.0.0.1', resolve));
+  const { port } = fakeSeafile.address();
+
+  const ctx = await startServer({
+    SEAFILE_URL: `http://127.0.0.1:${port}`,
+    SEAFILE_TOKEN: 'server-only-token',
+    SEAFILE_REPO_ID: 'repo-1',
+  });
+
+  try {
+    const denied = await fetch(`${ctx.baseUrl}/api/seafile/file?path=${encodeURIComponent('/project-a/secret.txt')}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': 'employee-1',
+        'x-user-role': 'employee',
+      },
+    });
+    assert.equal(denied.status, 403);
+
+    const allowed = await fetch(`${ctx.baseUrl}/api/seafile/file?path=${encodeURIComponent('/project-a/secret.txt')}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': 'manager-1',
+        'x-user-role': 'manager',
+      },
+    });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(await allowed.json(), { success: true });
+    assert.equal(deleteAuthorization, 'Token server-only-token');
+    assert.equal(deletePath, '/project-a/secret.txt');
+  } finally {
+    await ctx.stop();
+    await new Promise((resolve, reject) => {
+      fakeSeafile.close((error) => error ? reject(error) : resolve());
+    });
+  }
+});
+
+test('seafile upload proxy uploads through server-side token', async () => {
+  const seen = [];
+
+  const fakeSeafile = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    seen.push({ method: req.method, path: url.pathname, queryPath: url.searchParams.get('p') || '', auth: req.headers.authorization || '' });
+
+    if (req.method === 'GET' && url.pathname === '/api2/repos/repo-1/upload-link/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end(`"http://127.0.0.1:${fakeSeafile.address().port}/upload-target"`);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/upload-target') {
+      let body = Buffer.alloc(0);
+      req.on('data', (chunk) => { body = Buffer.concat([body, chunk]); });
+      req.on('end', () => {
+        assert.match(body.toString('latin1'), /hello from upload/);
+        assert.match(body.toString('latin1'), /relative_path/);
+        assert.match(body.toString('latin1'), /project-a/);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      });
+      return;
+    }
+
+    res.writeHead(404).end();
+  });
+  await new Promise((resolve) => fakeSeafile.listen(0, '127.0.0.1', resolve));
+  const { port } = fakeSeafile.address();
+
+  const ctx = await startServer({
+    SEAFILE_URL: `http://127.0.0.1:${port}`,
+    SEAFILE_TOKEN: 'server-only-token',
+    SEAFILE_REPO_ID: 'repo-1',
+  });
+
+  try {
+    const form = new FormData();
+    form.append('file', new Blob(['hello from upload'], { type: 'text/plain' }), 'note.txt');
+    form.append('projectId', 'project-a');
+    form.append('category', 'document');
+    form.append('uploadedBy', 'manager-1');
+
+    const response = await fetch(`${ctx.baseUrl}/api/seafile/upload`, {
+      method: 'POST',
+      headers: {
+        'x-user-id': 'manager-1',
+        'x-user-role': 'manager',
+      },
+      body: form,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.file.fileName, 'note.txt');
+    assert.equal(payload.file.storagePath, '/project-a/note.txt');
+    assert.equal(payload.file.isSeafile, true);
+    assert.equal(payload.file.publicUrl, 'seafile:///project-a/note.txt');
+    assert.equal(seen[0].auth, 'Token server-only-token');
+    assert.equal(seen[1].auth, 'Token server-only-token');
+  } finally {
+    await ctx.stop();
+    await new Promise((resolve, reject) => {
+      fakeSeafile.close((error) => error ? reject(error) : resolve());
+    });
+  }
+});
