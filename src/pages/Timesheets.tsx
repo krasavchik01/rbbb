@@ -57,6 +57,72 @@ interface TimesheetEntry {
   reviewedAt?: string;
 }
 
+/**
+ * Аудиторские секции из xlsx-таймщитов. Соответствует колонке
+ * «Категория Секция» которую заполняют ассистенты/менеджеры в Drive-файлах.
+ * Сгруппированы по фазе аудита для удобства выбора в дропдауне.
+ */
+const AUDIT_SECTIONS_GROUPED: { group: string; items: string[] }[] = [
+  {
+    group: 'Планирование',
+    items: [
+      'Планирование — Подготовка процедур оценки риска',
+      'Планирование — Существенность',
+      'Планирование — Общая стратегия аудита',
+      'Планирование — Понимание клиента и среды',
+      'Планирование — Оценка рисков',
+    ],
+  },
+  {
+    group: 'Активы',
+    items: [
+      'Процедуры — Активы — Основные средства',
+      'Процедуры — Активы — Запасы',
+      'Процедуры — Активы — Дебиторская задолженность',
+      'Процедуры — Активы — Денежные средства',
+      'Процедуры — Активы — Прочие активы',
+      'Процедуры — Активы — НМА',
+      'Процедуры — Активы — Инвестиции',
+    ],
+  },
+  {
+    group: 'Обязательства и капитал',
+    items: [
+      'Процедуры — Обязательства — Кредиторская задолженность',
+      'Процедуры — Обязательства — Займы',
+      'Процедуры — Обязательства — Налоги',
+      'Процедуры — Капитал',
+    ],
+  },
+  {
+    group: 'Доходы и расходы',
+    items: [
+      'Процедуры — Доходы',
+      'Процедуры — Себестоимость',
+      'Процедуры — Расходы по реализации',
+      'Процедуры — Прочие доходы и расходы',
+    ],
+  },
+  {
+    group: 'Завершение',
+    items: [
+      'Завершение аудита — Завершение аудиторского задания',
+      'Завершение аудита — Подготовка отчёта',
+      'Завершение аудита — События после отчётной даты',
+    ],
+  },
+  {
+    group: 'Прочее',
+    items: [
+      'Налоговая работа',
+      'Консультации',
+      'Обучение',
+      'Документирование',
+      'Прочее',
+    ],
+  },
+];
+
 const getProjectName = (project: any) => project?.name || project?.title || 'Без проекта';
 const getProjectClient = (project: any): string => {
   // project.client пришёл из mapSupabaseProject как объект
@@ -213,10 +279,18 @@ export default function Timesheets() {
     projectId: '',
     isAdminWork: false,
     date: new Date().toISOString().split('T')[0],
-    hours: '',
-    description: ''
+    hours: '8',
+    description: '',
+    section: '',
   });
-  const ADMIN_WORK_LABEL = 'Административная работа';
+
+  // Режим: список (старый) или календарь (новый, быстрый ввод).
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
+  // Месяц для календаря.
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
 
   // Проверяем, может ли пользователь заполнять тайм-щиты
   const canFillTimesheets = user && user.role !== 'ceo' && user.role !== 'deputy_director';
@@ -327,6 +401,7 @@ export default function Timesheets() {
         workDate: formData.date,
         hours,
         notes: description,
+        section: formData.section || undefined,
       });
       if (!updated) {
         toast({ title: 'Ошибка', description: 'Не удалось обновить запись', variant: 'destructive' });
@@ -344,6 +419,7 @@ export default function Timesheets() {
         source: 'manual',
         status: 'draft',
         createdBy: user.id,
+        section: formData.section || undefined,
       });
       if (!created) {
         toast({ title: 'Ошибка', description: 'Не удалось создать запись', variant: 'destructive' });
@@ -360,8 +436,9 @@ export default function Timesheets() {
       projectId: '',
       isAdminWork: false,
       date: new Date().toISOString().split('T')[0],
-      hours: '',
+      hours: '8',
       description: '',
+      section: '',
     });
   };
 
@@ -379,7 +456,8 @@ export default function Timesheets() {
       isAdminWork: !timesheet.projectId || timesheet.projectName === ADMIN_WORK_LABEL,
       date: timesheet.date,
       hours: timesheet.hours.toString(),
-      description: timesheet.description
+      description: timesheet.description,
+      section: (timesheet as any).section || '',
     });
     setShowAddDialog(true);
   };
@@ -477,8 +555,9 @@ export default function Timesheets() {
                   projectId: '',
                   isAdminWork: false,
                   date: new Date().toISOString().split('T')[0],
-                  hours: '',
-                  description: ''
+                  hours: '8',
+                  description: '',
+                  section: '',
                 });
               }}>
                 <Plus className="w-4 h-4" />
@@ -547,6 +626,36 @@ export default function Timesheets() {
                     />
                   </div>
                 </div>
+                {!formData.isAdminWork && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Секция аудита <span className="text-muted-foreground/60">— что именно делал на проекте</span>
+                    </Label>
+                    <Select
+                      value={formData.section || 'none'}
+                      onValueChange={(v) => setFormData({ ...formData, section: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger className="bg-muted/40 border-0 focus-visible:ring-1">
+                        <SelectValue placeholder="— Не указано —" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-80">
+                        <SelectItem value="none">— Не указано —</SelectItem>
+                        {AUDIT_SECTIONS_GROUPED.map((g) => (
+                          <div key={g.group}>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
+                              {g.group}
+                            </div>
+                            {g.items.map((s) => (
+                              <SelectItem key={s} value={s} className="pl-4">
+                                {s.replace(/^[^—]+—\s*/, '')}
+                              </SelectItem>
+                            ))}
+                          </div>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Описание {formData.isAdminWork && <span className="text-amber-600 ml-1">— что именно делал в офисе</span>}
@@ -601,7 +710,42 @@ export default function Timesheets() {
         ))}
       </div>
 
-      {/* Фильтры */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'list' | 'calendar')} className="w-full">
+        <TabsList className="grid grid-cols-2 w-full sm:w-auto">
+          <TabsTrigger value="calendar" className="gap-2">
+            <Calendar className="w-4 h-4" /> Календарь
+          </TabsTrigger>
+          <TabsTrigger value="list" className="gap-2">
+            <Filter className="w-4 h-4" /> Список
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Календарь — быстрое заполнение по дням месяца */}
+        <TabsContent value="calendar" className="space-y-3 mt-3">
+          {canFillTimesheets && user && (
+            <MonthCalendar
+              year={calendarMonth.year}
+              month={calendarMonth.month}
+              onMonthChange={setCalendarMonth}
+              entries={visibleTimesheets.filter((t) => t.employeeId === user.id)}
+              onCellClick={(date) => {
+                setEditingTimesheet(null);
+                setFormData({
+                  projectId: '',
+                  isAdminWork: false,
+                  date,
+                  hours: '8',
+                  description: '',
+                  section: '',
+                });
+                setShowAddDialog(true);
+              }}
+            />
+          )}
+        </TabsContent>
+
+        {/* Список — старый вид с фильтрами */}
+        <TabsContent value="list" className="space-y-3 mt-3">
       <Card className="p-3 sm:p-4 border-0 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
@@ -742,6 +886,185 @@ export default function Timesheets() {
           })}
         </div>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
+
+/**
+ * Календарная сетка месяца для быстрого заполнения тайм-щитов.
+ * Каждая ячейка = один день. Цвет = заполнено/нет, выходной/будний.
+ * Клик по дню → открывает диалог с предзаполненной датой.
+ */
+function MonthCalendar({
+  year,
+  month,
+  onMonthChange,
+  entries,
+  onCellClick,
+}: {
+  year: number;
+  month: number;
+  onMonthChange: (m: { year: number; month: number }) => void;
+  entries: TimesheetEntry[];
+  onCellClick: (date: string) => void;
+}) {
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const daysInMonth = last.getDate();
+  // Понедельник = 0 для нашей сетки (стандартная неделя в KZ)
+  const firstDow = (first.getDay() + 6) % 7;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const isoOf = (d: number) => `${year}-${pad(month + 1)}-${pad(d)}`;
+
+  // Маппим entries → дата → массив записей
+  const byDate = new Map<string, TimesheetEntry[]>();
+  for (const e of entries) {
+    const arr = byDate.get(e.date) || [];
+    arr.push(e);
+    byDate.set(e.date, arr);
+  }
+
+  const monthLabel = format(first, 'LLLL yyyy', { locale: ru });
+  const today = new Date().toISOString().split('T')[0];
+
+  // Заполняем выходные за месяц (чтобы стало 8 ч × рабочие дни)
+  let workdays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month, d).getDay();
+    if (dow !== 0 && dow !== 6) workdays++;
+  }
+  const norm = workdays * 8;
+  const totalHours = entries
+    .filter((e) => e.date.startsWith(`${year}-${pad(month + 1)}`))
+    .reduce((s, e) => s + e.hours, 0);
+
+  // Заполнить весь месяц 8ч/день админ-работа разом (по будням)
+  const fillAdminAll = async () => {
+    // Открываем диалог по первому НЕ заполненному рабочему дню
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month, d).getDay();
+      if (dow === 0 || dow === 6) continue;
+      const iso = isoOf(d);
+      if (!byDate.has(iso)) {
+        onCellClick(iso);
+        return;
+      }
+    }
+  };
+
+  return (
+    <Card className="p-3 sm:p-4 border-0 shadow-sm">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onMonthChange({ year: month === 0 ? year - 1 : year, month: month === 0 ? 11 : month - 1 })}
+            className="h-8"
+          >
+            ←
+          </Button>
+          <div className="font-semibold capitalize text-base px-2">{monthLabel}</div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onMonthChange({ year: month === 11 ? year + 1 : year, month: month === 11 ? 0 : month + 1 })}
+            className="h-8"
+          >
+            →
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const d = new Date();
+              onMonthChange({ year: d.getFullYear(), month: d.getMonth() });
+            }}
+            className="h-8 text-xs"
+          >
+            Сегодня
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          <span className="font-semibold">{totalHours.toFixed(0)}</span> / {norm} ч ·{' '}
+          <span className="font-semibold">{byDate.size}</span> дней заполнено
+        </div>
+      </div>
+
+      {/* Сетка дней недели */}
+      <div className="grid grid-cols-7 gap-1 text-[10px] text-muted-foreground mb-1 font-medium uppercase">
+        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => (
+          <div key={d} className="text-center py-1">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {/* Пустые ячейки до первого дня */}
+        {Array.from({ length: firstDow }).map((_, i) => (
+          <div key={`empty-${i}`} className="aspect-square" />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const iso = isoOf(day);
+          const dow = new Date(year, month, day).getDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const isToday = iso === today;
+          const dayEntries = byDate.get(iso) || [];
+          const dayHours = dayEntries.reduce((s, e) => s + e.hours, 0);
+          const hasAdmin = dayEntries.some((e) => !e.projectId || e.projectName === ADMIN_WORK_LABEL);
+          const hasProject = dayEntries.some((e) => e.projectId);
+          const tone = dayHours > 0
+            ? hasProject
+              ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-100'
+              : 'bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-100'
+            : isWeekend
+              ? 'bg-muted/30 hover:bg-muted/60 text-muted-foreground'
+              : 'bg-background hover:bg-accent border border-dashed border-muted-foreground/30 text-foreground';
+          return (
+            <button
+              key={day}
+              type="button"
+              onClick={() => onCellClick(iso)}
+              className={`aspect-square rounded-md p-1 transition relative ${tone} ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+              title={dayEntries.length > 0 ? `${dayEntries.length} запис${dayEntries.length === 1 ? 'ь' : 'ей'} / ${dayHours} ч` : 'Кликни, чтобы добавить'}
+            >
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-xs font-semibold leading-none">{day}</div>
+                {dayHours > 0 && (
+                  <div className="text-[10px] mt-0.5 leading-none font-bold">
+                    {dayHours % 1 === 0 ? dayHours.toFixed(0) : dayHours.toFixed(1)}ч
+                  </div>
+                )}
+                {hasProject && hasAdmin && (
+                  <div className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Подсказки + быстрая кнопка */}
+      <div className="mt-3 flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-emerald-100 dark:bg-emerald-900/30 inline-block" /> Проект
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-amber-100 dark:bg-amber-900/30 inline-block" /> Админ-работа
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded border border-dashed border-muted-foreground/40 inline-block" /> Пустой день
+          </span>
+        </div>
+        <Button variant="ghost" size="sm" onClick={fillAdminAll} className="h-7 text-xs">
+          Заполнить ближайший пустой день →
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+const ADMIN_WORK_LABEL = 'Административная работа';

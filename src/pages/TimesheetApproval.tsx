@@ -44,6 +44,7 @@ import {
   type TimesheetEntry,
   type TimesheetStatus,
 } from '@/lib/timesheets';
+import { addApprovedEntriesToProjectTeams } from '@/lib/projectTeam';
 import {
   CheckCircle2,
   Clock,
@@ -268,7 +269,30 @@ export default function TimesheetApproval() {
         { id: user.id, name: user.name },
         approveDialog.comment.trim() || undefined,
       );
-      toast({ title: `Утверждено: ${n}`, description: 'Часы пойдут в расчёт бонуса.' });
+
+      // Авто-добавление в команду проекта: если сотрудник подал часы по
+      // проекту X и партнёр их утвердил — он официально становится участником
+      // проекта (попадает в notes.team[]). Подбираем employee+project из тех
+      // entries, что были в этом апруве.
+      const approvedEntries = entries
+        .filter((e) => approveDialog.ids.includes(e.id))
+        .map((e) => ({ employeeId: e.employeeId, projectId: e.projectId }));
+      const teamResult = await addApprovedEntriesToProjectTeams(
+        approvedEntries,
+        employees as any[],
+        user.id,
+      );
+
+      const teamSuffix = teamResult.added > 0
+        ? ` · +${teamResult.added} в командах ${teamResult.affectedProjects} проектов`
+        : '';
+      toast({
+        title: `Утверждено: ${n}${teamSuffix}`,
+        description: 'Часы пойдут в расчёт бонуса.' +
+          (teamResult.added > 0
+            ? ` Авто-добавили ${teamResult.added} участник${teamResult.added === 1 ? 'а' : 'ов'} в команды проектов.`
+            : ''),
+      });
       setApproveDialog(null);
       await reload();
     } finally {
