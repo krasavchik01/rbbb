@@ -94,7 +94,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
   {
     label: 'Команда',
     items: [
-      { title: 'HR',           url: '/hr',         icon: UserCheck, allowedRoles: ['hr'] },
+      { title: 'HR',           url: '/hr',         icon: UserCheck, allowedRoles: ['hr','ceo','deputy_director','admin'] },
       { title: 'Посещаемость', url: '/attendance', icon: Activity },
       { title: 'Служебные записки', url: '/service-memos', icon: ClipboardList, excludeRoles: ['procurement'] },
     ],
@@ -104,8 +104,8 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
       { title: 'Утверждение часов', url: '/timesheet-approval', icon: CheckCircle2, allowedRoles: ['partner','deputy_director','ceo','admin','hr'] },
-      { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'admin'] },
-      { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['ceo', 'admin'] },
+      { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'deputy_director', 'admin'] },
+      { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['ceo', 'deputy_director', 'admin'] },
     ],
   },
   {

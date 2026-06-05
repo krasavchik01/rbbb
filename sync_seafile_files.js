@@ -1,11 +1,22 @@
 // Скрипт синхронизации файлов из Seafile в notes.files всех проектов
 // Запуск: node sync_seafile_files.js
 
-const SUPABASE_URL = 'https://mknvqsnitzaurpwnhzwn.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rbnZxc25pdHphdXJwd25oenduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NjE2NzUsImV4cCI6MjA2OTUzNzY3NX0.vK2JrnJJrlwag7zOMJBgPWbUnodwsYBouFxViu5PZFY';
-const SEAFILE_URL = 'https://cloud.rbpartners.kz';
-const SEAFILE_TOKEN = '30e0b5fefd5e432797820f53858dbf1640225a51';
-const REPO_ID = 'c650ff5f-d8f3-4b99-be85-065015662261';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const SEAFILE_URL = process.env.SEAFILE_URL;
+const SEAFILE_TOKEN = process.env.SEAFILE_TOKEN;
+const REPO_ID = process.env.SEAFILE_REPO_ID || 'c650ff5f-d8f3-4b99-be85-065015662261';
+
+const missingEnv = [
+  ['SUPABASE_URL or VITE_SUPABASE_URL', SUPABASE_URL],
+  ['SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY', SUPABASE_KEY],
+  ['SEAFILE_URL', SEAFILE_URL],
+  ['SEAFILE_TOKEN', SEAFILE_TOKEN],
+].filter(([, value]) => !value).map(([name]) => name);
+
+if (missingEnv.length > 0) {
+  throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
+}
 
 async function main() {
   console.log('=== Синхронизация файлов Seafile → Supabase notes.files ===\n');

@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -23,7 +26,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
-.env
 
 # Реальные таймщиты сотрудников (используются только локально для диагностики
 # парсера через scripts/diagnose_timesheet.mjs) — содержат PII, в гит не уходят.

@@ -262,29 +262,73 @@ export async function bulkInsert(drafts: TimesheetEntryDraft[]): Promise<number>
 }
 
 /**
- * Идемпотентный bulk-импорт: удаляет все строки пачки (по import_batch_id)
- * и вставляет новые. Используется в ImportTimesheet — повторная загрузка
- * того же xlsx не дублирует записи.
+ * Идемпотентный bulk-импорт: заменяет только неутверждённые строки пачки
+ * (по import_batch_id) и вставляет новые. Используется в ImportTimesheet —
+ * повторная загрузка того же xlsx не дублирует записи.
  *
- * Внимание: если по этой пачке были approved записи — они тоже удалятся.
- * В UI импорта это должно быть отображено как предупреждение.
+ * Важно: approved-записи нельзя удалять повторным импортом, потому что они уже
+ * попадают в расчёт фактических часов и бонусов. Если строка из нового файла
+ * совпадает с уже approved-строкой этой пачки, она пропускается: источник
+ * истины для неё — утверждённая запись в БД.
  */
 export async function replaceBatch(
   importBatchId: string,
   drafts: TimesheetEntryDraft[],
 ): Promise<{ deleted: number; inserted: number }> {
-  // 1) delete old
+  const approvedKey = (row: {
+    employee_id?: string | null;
+    project_id?: string | null;
+    project_name?: string | null;
+    work_date?: string | null;
+    section?: string | null;
+  }) => [
+    row.employee_id ?? '',
+    row.project_id ?? '',
+    row.project_name ?? '',
+    row.work_date ?? '',
+    row.section ?? '',
+  ].join('__');
+
+  const draftKey = (draft: TimesheetEntryDraft) => approvedKey({
+    employee_id: draft.employeeId,
+    project_id: draft.projectId,
+    project_name: draft.projectName,
+    work_date: draft.workDate,
+    section: draft.section ?? null,
+  });
+
+  // 1) Сначала фиксируем approved-строки этой пачки, чтобы не удалить и не
+  // продублировать их при повторном импорте.
+  const { data: approvedRows, error: approvedErr } = await supabase
+    .from('timesheet_entries')
+    .select('employee_id, project_id, project_name, work_date, section')
+    .eq('import_batch_id', importBatchId)
+    .eq('source', 'import')
+    .eq('status', 'approved');
+  if (approvedErr) {
+    console.error('[timesheets] replaceBatch: approved rows fetch failed', approvedErr);
+    return { deleted: 0, inserted: 0 };
+  }
+
+  const approvedKeys = new Set((approvedRows || []).map(approvedKey));
+
+  // 2) Удаляем только строки, которые ещё можно безопасно заменить.
   const { count: deletedCount, error: delErr } = await supabase
     .from('timesheet_entries')
     .delete({ count: 'exact' })
     .eq('import_batch_id', importBatchId)
-    .eq('source', 'import');
+    .eq('source', 'import')
+    .neq('status', 'approved');
   if (delErr) {
     console.error('[timesheets] replaceBatch: delete failed', delErr);
     return { deleted: 0, inserted: 0 };
   }
-  // 2) insert new
-  const inserted = await bulkInsert(drafts.map((d) => ({ ...d, importBatchId })));
+
+  // 3) Вставляем новые строки, кроме тех, чьи approved-версии уже сохранены.
+  const draftsToInsert = drafts
+    .map((d) => ({ ...d, importBatchId }))
+    .filter((d) => !approvedKeys.has(draftKey(d)));
+  const inserted = await bulkInsert(draftsToInsert);
   return { deleted: deletedCount || 0, inserted };
 }
 

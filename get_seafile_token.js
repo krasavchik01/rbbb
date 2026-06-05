@@ -1,9 +1,19 @@
 const fetch = require('node-fetch');
 
 // Замените эти данные на админские (или специально созданного пользователя CRM)
-const SEAFILE_URL = 'https://cloud.rbpartners.kz';
-const USERNAME = 'ВАШ_ЛОГИН_ОТ_SEAFILE';
-const PASSWORD = 'ВАШ_ПАРОЛЬ_ОТ_SEAFILE';
+const SEAFILE_URL = process.env.SEAFILE_URL;
+const USERNAME = process.env.SEAFILE_USERNAME;
+const PASSWORD = process.env.SEAFILE_PASSWORD;
+
+const missingEnv = [
+    ['SEAFILE_URL', SEAFILE_URL],
+    ['SEAFILE_USERNAME', USERNAME],
+    ['SEAFILE_PASSWORD', PASSWORD],
+].filter(([, value]) => !value).map(([name]) => name);
+
+if (missingEnv.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
+}
 
 async function getToken() {
     console.log(`📡 Подключение к ${SEAFILE_URL}/api2/auth-token/ ...`);
@@ -32,7 +42,7 @@ async function getToken() {
         console.log('\n=========================================');
         console.log(data.token);
         console.log('=========================================\n');
-        console.log('Сохраните этот токен! Мы будем использовать его в коде.');
+        console.log('Сохраните этот токен в переменную окружения SEAFILE_TOKEN, не вставляйте его в код.');
 
     } catch (error) {
         console.error('❌ Ошибка выполнения запроса:', error.message);

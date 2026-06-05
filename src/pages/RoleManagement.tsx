@@ -5,40 +5,63 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RoleBasedAccess, RoleAccess } from "@/components/RoleBasedAccess";
+import { RoleBasedAccess } from "@/components/RoleBasedAccess";
 import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSIONS, UserRole, ROLE_LABELS } from "@/types/roles";
-import { 
-  Shield, 
-  Users, 
-  Settings, 
-  Plus, 
-  Edit, 
-  Trash2, 
+import {
+  Shield,
+  Users,
+  Plus,
+  Edit,
   Save,
   X,
-  Check,
-  AlertTriangle
+  Check
 } from "lucide-react";
 
+// Детерминированные цвета ролей (локально, без зависимости от внешних данных)
+const ROLE_COLOR_PALETTE = [
+  "bg-blue-500",
+  "bg-indigo-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-purple-500",
+  "bg-cyan-500",
+  "bg-teal-500",
+];
+
+function getRoleColor(role: UserRole): string {
+  let hash = 0;
+  for (let i = 0; i < role.length; i++) {
+    hash = (hash * 31 + role.charCodeAt(i)) >>> 0;
+  }
+  return ROLE_COLOR_PALETTE[hash % ROLE_COLOR_PALETTE.length];
+}
+
 export default function RoleManagement() {
-  const { user, checkPermission } = useAuth();
+  const { user } = useAuth();
   const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const allRoles = Object.entries(ROLE_LABELS).map(([key, value]) => ({
-    id: key as UserRole,
-    name: value,
-    description: `Role: ${value}`,
+  const permissionKeys = Object.keys(PERMISSIONS) as (keyof typeof PERMISSIONS)[];
+
+  const allRoles = (Object.keys(ROLE_LABELS) as UserRole[]).map((key) => ({
+    id: key,
+    name: ROLE_LABELS[key],
+    description: `Роль: ${ROLE_LABELS[key]}`,
+    color: getRoleColor(key),
+    permissions: permissionKeys.filter((perm) => PERMISSIONS[perm].includes(key)),
   }));
 
   const filteredRoles = allRoles.filter(role =>
     role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     role.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const currentRole =
+    allRoles.find((role) => role.id === selectedRole) ?? allRoles[0];
 
   const handleEditRole = () => {
     setIsEditing(true);
@@ -51,11 +74,6 @@ export default function RoleManagement() {
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-  };
-
-  const handleDeleteRole = (roleId: UserRole) => {
-    // В реальном приложении здесь был бы API вызов
-    console.log('Delete role:', roleId);
   };
 
   const handleCreateRole = () => {
@@ -76,7 +94,7 @@ export default function RoleManagement() {
           </p>
         </div>
         <RoleBasedAccess
-          permission={PERMISSIONS.MANAGE_USERS}
+          allowedRoles={PERMISSIONS.MANAGE_USERS}
           userRole={user?.role || 'admin'}
         >
           <Button onClick={handleCreateRole} className="btn-gradient">
@@ -133,8 +151,8 @@ export default function RoleManagement() {
                           <Badge variant="secondary" className="text-xs">
                             {role.permissions.length} разрешений
                           </Badge>
-                          <RoleBasedAccess 
-                            permission={PERMISSIONS.MANAGE_ROLES}
+                          <RoleBasedAccess
+                            allowedRoles={PERMISSIONS.MANAGE_USERS}
                             userRole={user?.role || 'employee'}
                           >
                             <Button
@@ -172,8 +190,8 @@ export default function RoleManagement() {
                     <Badge variant="secondary">
                       {currentRole.permissions.length} разрешений
                     </Badge>
-                    <RoleBasedAccess 
-                      permission={PERMISSIONS.MANAGE_ROLES}
+                    <RoleBasedAccess
+                      allowedRoles={PERMISSIONS.MANAGE_USERS}
                       userRole={user?.role || 'employee'}
                     >
                       <Button
@@ -224,11 +242,11 @@ export default function RoleManagement() {
                     <div>
                       <h3 className="font-semibold mb-3">Разрешения роли</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Object.entries(PERMISSIONS).map(([key, permission]) => {
-                          const hasPermission = currentRole.permissions.includes(permission);
+                        {Object.entries(PERMISSIONS).map(([key, roles]) => {
+                          const hasPermission = roles.includes(selectedRole);
                           return (
                             <div
-                              key={permission}
+                              key={key}
                               className={`p-3 rounded-lg border flex items-center space-x-3 ${
                                 hasPermission
                                   ? "border-green-200 bg-green-50"
@@ -242,7 +260,7 @@ export default function RoleManagement() {
                               </div>
                               <div className="flex-1">
                                 <p className="font-medium text-sm">{key}</p>
-                                <p className="text-xs text-muted-foreground">{permission}</p>
+                                <p className="text-xs text-muted-foreground">{roles.join(', ')}</p>
                               </div>
                             </div>
                           );
@@ -260,13 +278,13 @@ export default function RoleManagement() {
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Все разрешения системы</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(PERMISSIONS).map(([key, permission]) => (
-                <div key={permission} className="p-4 border rounded-lg">
+              {Object.entries(PERMISSIONS).map(([key, roles]) => (
+                <div key={key} className="p-4 border rounded-lg">
                   <div className="flex items-center space-x-2 mb-2">
                     <Shield className="w-4 h-4 text-primary" />
                     <span className="font-medium">{key}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">{permission}</p>
+                  <p className="text-sm text-muted-foreground">{roles.join(', ')}</p>
                 </div>
               ))}
             </div>

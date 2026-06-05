@@ -91,7 +91,7 @@ function App() {
             <Route
               path="/hr"
               element={
-                <ProtectedRoute allowedRoles={['hr']}>
+                <ProtectedRoute allowedRoles={['hr', 'ceo', 'deputy_director', 'admin']}>
                   <Layout>
                     <HR />
                   </Layout>
@@ -101,7 +101,7 @@ function App() {
             <Route
               path="/analytics"
               element={
-                <ProtectedRoute allowedRoles={['ceo', 'admin']}>
+                <ProtectedRoute allowedRoles={['ceo', 'deputy_director', 'admin']}>
                   <Layout>
                     <Analytics />
                   </Layout>
@@ -111,7 +111,7 @@ function App() {
             <Route
               path="/employees"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['hr', 'ceo', 'deputy_director', 'admin']}>
                   <Layout>
                     <Employees />
                   </Layout>
@@ -151,7 +151,7 @@ function App() {
             <Route
               path="/bonuses"
               element={
-                <ProtectedRoute allowedRoles={['ceo', 'admin']}>
+                <ProtectedRoute allowedRoles={['ceo', 'deputy_director', 'admin']}>
                   <Layout>
                     <Bonuses />
                   </Layout>
@@ -245,7 +245,7 @@ function App() {
             <Route
               path="/create-project-procurement"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['procurement', 'admin']}>
                   <Layout>
                     <CreateProjectProcurement />
                   </Layout>
@@ -255,7 +255,7 @@ function App() {
             <Route
               path="/project-approval"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin']}>
                   <Layout>
                     <WidgetErrorBoundary fullPage label="Утверждение проектов">
                       <ProjectApproval />
