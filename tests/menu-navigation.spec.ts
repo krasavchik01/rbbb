@@ -15,7 +15,7 @@ test.describe('Menu Navigation Tests', () => {
       localStorage.clear();
       const user = {
         id: 'ceo_1',
-        email: 'ceo@rbpartners.com',
+        email: 'ceo@example.invalid',
         name: 'Генеральный Директор',
         role: 'ceo',
         position: 'Генеральный директор (CEO)'
@@ -38,8 +38,8 @@ test.describe('Menu Navigation Tests', () => {
       await page.waitForSelector('input[type="email"], input[placeholder*="email" i], input[name="email"]', { timeout: 10000 }).catch(() => {});
       const emailInput = page.locator('input[type="email"], input[placeholder*="email" i], input[name="email"]').first();
       if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await emailInput.fill('ceo@rbpartners.com');
-        await page.locator('input[type="password"], input[name="password"]').first().fill('ceo');
+        await emailInput.fill('ceo@example.invalid');
+        await page.locator('input[type="password"], input[name="password"]').first().fill('test-password');
         await page.locator('button:has-text("Войти"), button[type="submit"]').first().click();
         await page.waitForTimeout(3000);
       }

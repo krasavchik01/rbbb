@@ -13,7 +13,7 @@ test.describe('Полная проверка всех пунктов меню', 
       localStorage.clear();
       const user = {
         id: 'ceo_1',
-        email: 'ceo@rbpartners.com',
+        email: 'ceo@example.invalid',
         name: 'Генеральный Директор',
         role: 'ceo',
         position: 'Генеральный директор (CEO)'

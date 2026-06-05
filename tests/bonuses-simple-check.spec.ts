@@ -10,7 +10,7 @@ test.describe('Простая проверка доступа к бонусам'
       localStorage.clear();
       localStorage.setItem('user', JSON.stringify({
         id: 'ceo_1',
-        email: 'ceo@rbpartners.com',
+        email: 'ceo@example.invalid',
         name: 'Генеральный Директор',
         role: 'ceo',
         position: 'Генеральный директор (CEO)'
@@ -55,7 +55,7 @@ test.describe('Простая проверка доступа к бонусам'
     await page.evaluate(() => {
       localStorage.setItem('user', JSON.stringify({
         id: 'partner_1',
-        email: 'partner@rbpartners.com',
+        email: 'partner@example.invalid',
         name: 'Партнер',
         role: 'partner',
         position: 'Партнер'

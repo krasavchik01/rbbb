@@ -33,7 +33,7 @@ const LOCATION_LABELS: Record<LocationType, string> = {
   remote: 'Удалённо',
 };
 
-// employee_id в таблице attendance — UUID. Демо-юзеры (id вида "ceo_1", "partner_1")
+// employee_id в таблице attendance — UUID. Некорректные legacy/local id
 // валидно не вставятся — Postgres вернёт 22P02 invalid input syntax for type uuid.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

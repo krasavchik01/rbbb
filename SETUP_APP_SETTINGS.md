@@ -15,7 +15,7 @@
 -- Создаем таблицу глобальных настроек приложения
 CREATE TABLE IF NOT EXISTS public.app_settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  show_demo_users BOOLEAN DEFAULT true,
+  show_demo_users BOOLEAN DEFAULT false,
   office_location_enabled BOOLEAN DEFAULT false,
   office_latitude DOUBLE PRECISION DEFAULT 43.238949,
   office_longitude DOUBLE PRECISION DEFAULT 76.945465,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
 INSERT INTO public.app_settings (id, show_demo_users, office_location_enabled, office_latitude, office_longitude, office_radius_meters, office_address)
 SELECT
   gen_random_uuid(),
-  true,
+  false,
   false,
   43.238949,
   76.945465,

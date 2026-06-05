@@ -129,43 +129,6 @@ class SupabaseDataStore {
 
   // === EMPLOYEES ===
 
-  // Инициализация демо-пользователей в системе
-  private initializeDemoEmployees(): Employee[] {
-    const demoUsers = [
-      { id: 'ceo_1', email: 'ceo@rbpartners.com', name: 'Генеральный Директор', role: 'ceo', position: 'Генеральный директор (CEO)', department: 'Руководство' },
-      { id: 'deputy_1', email: 'deputy@mak.kz', name: 'Заместитель ген. директора МАК', role: 'deputy_director', position: 'Заместитель генерального директора', department: 'Руководство' },
-      { id: 'procurement_1', email: 'procurement@rbpartners.com', name: 'Отдел Закупок', role: 'procurement', position: 'Специалист отдела закупок', department: 'Закупки' },
-      { id: 'partner_1', email: 'partner@rbpartners.com', name: 'Партнер Иванов', role: 'partner', position: 'Партнер', department: 'Партнеры' },
-      { id: 'manager_1', email: 'manager@rbpartners.com', name: 'Петров П.П.', role: 'manager_1', position: 'Менеджер 1', department: 'Проекты' },
-      { id: 'manager_2', email: 'manager2@rbpartners.com', name: 'Менеджер 2 Смирнов', role: 'manager_2', position: 'Менеджер 2', department: 'Проекты' },
-      { id: 'manager_3', email: 'manager3@rbpartners.com', name: 'Менеджер 3 Козлов', role: 'manager_3', position: 'Менеджер 3', department: 'Проекты' },
-      { id: 'supervisor_1', email: 'supervisor1@rbpartners.com', name: 'Супервайзер 1 Волков', role: 'supervisor_1', position: 'Супервайзер 1', department: 'Аудит' },
-      { id: 'supervisor_2', email: 'supervisor2@rbpartners.com', name: 'Супервайзер 2 Новиков', role: 'supervisor_2', position: 'Супервайзер 2', department: 'Аудит' },
-      { id: 'supervisor_3', email: 'supervisor@rbpartners.com', name: 'Сидоров С.С.', role: 'supervisor_3', position: 'Супервайзер 3', department: 'Аудит' },
-      { id: 'assistant_1', email: 'assistant1@rbpartners.com', name: 'Ассистент 1 Лебедев', role: 'assistant_1', position: 'Ассистент 1', department: 'Аудит' },
-      { id: 'assistant_2', email: 'assistant2@rbpartners.com', name: 'Ассистент 2 Соколов', role: 'assistant_2', position: 'Ассистент 2', department: 'Аудит' },
-      { id: 'assistant_3', email: 'assistant@rbpartners.com', name: 'Ассистент Кузнецов', role: 'assistant_3', position: 'Ассистент 3', department: 'Аудит' },
-      { id: 'tax_1', email: 'tax@rbpartners.com', name: 'Налоговик Орлов', role: 'tax_specialist', position: 'Налоговый специалист', department: 'Налоги' },
-      { id: 'admin_1', email: 'admin@rbpartners.com', name: 'Администратор', role: 'admin', position: 'Системный администратор', department: 'IT' },
-    ];
-
-    const now = new Date().toISOString();
-    return demoUsers.map(user => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      level: 'senior' as any,
-      department: user.department,
-      position: user.position,
-      phone: undefined,
-      avatar: undefined,
-      companyId: undefined,
-      created_at: now,
-      updated_at: now,
-    } as Employee));
-  }
-
   async getEmployees(): Promise<Employee[]> {
     if (this.isOnline) {
       try {
@@ -175,18 +138,7 @@ class SupabaseDataStore {
           .order('name', { ascending: true });
 
         if (!error && data) {
-          let employees = data.map(emp => this.mapSupabaseEmployee(emp));
-
-          // Добавляем демо-пользователей если их нет
-          const demoEmployees = this.initializeDemoEmployees();
-          const existingIds = new Set(employees.map(e => e.id));
-          const missingEmployees = demoEmployees.filter(e => !existingIds.has(e.id));
-
-          if (missingEmployees.length > 0) {
-            console.log('🔧 Adding', missingEmployees.length, 'missing demo employees to Supabase list...');
-            employees = [...employees, ...missingEmployees];
-            console.log('✅ Added missing demo employees. Total:', employees.length);
-          }
+          const employees = data.map(emp => this.mapSupabaseEmployee(emp));
 
           this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
           console.log('✅ Loaded employees from Supabase:', employees.length);
@@ -198,44 +150,7 @@ class SupabaseDataStore {
     }
 
     console.log('📦 Loading employees from localStorage (fallback)');
-    let employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
-
-    // Всегда проверяем и добавляем демо-пользователей
-    const demoEmployees = this.initializeDemoEmployees();
-    const existingIds = new Set(employees.map(e => e.id));
-    const missingEmployees = demoEmployees.filter(e => !existingIds.has(e.id));
-
-    if (missingEmployees.length > 0) {
-      console.log('🔧 Adding', missingEmployees.length, 'missing demo employees...');
-      employees = [...employees, ...missingEmployees];
-      this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
-      console.log('✅ Added missing demo employees. Total:', employees.length);
-    }
-
-    // Также обновляем существующих демо-пользователей если их данные изменились
-    const demoIds = new Set(demoEmployees.map(e => e.id));
-    employees = employees.map(emp => {
-      if (demoIds.has(emp.id)) {
-        const demoEmp = demoEmployees.find(e => e.id === emp.id);
-        if (demoEmp) {
-          // Обновляем данные демо-пользователя
-          return {
-            ...emp,
-            name: demoEmp.name,
-            email: demoEmp.email,
-            role: demoEmp.role,
-            position: demoEmp.position,
-            department: demoEmp.department,
-            updated_at: new Date().toISOString()
-          };
-        }
-      }
-      return emp;
-    });
-
-    if (missingEmployees.length > 0) {
-      this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees);
-    }
+    const employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
 
     console.log('📦 Loaded', employees.length, 'employees from localStorage');
     return employees;

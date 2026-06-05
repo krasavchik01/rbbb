@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Pencil, UserPlus, Users, Shield, Eye, EyeOff, Key, Copy, RefreshCw } from "lucide-react";
+import { Loader2, Pencil, UserPlus, Users, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { UserRole, ROLE_LABELS, normalizeUserRole, getLevelForUserRole, getEmployeeDbRoleForUserRole } from "@/types/roles";
@@ -84,31 +84,6 @@ export default function UserManagement() {
     password: "",
   });
   const { toast } = useToast();
-
-  // Управление паролями
-  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-  const [selectedEmployeeForPassword, setSelectedEmployeeForPassword] = useState<Employee | null>(null);
-  const [newPassword, setNewPassword] = useState("");
-
-  // Демо-пароли (в реальном приложении это было бы в базе данных)
-  const [demoPasswords, setDemoPasswords] = useState<Record<string, string>>({
-    'ceo@rbpartners.com': 'ceo',
-    'deputy@mak.kz': 'deputy',
-    'procurement@rbpartners.com': 'procurement',
-    'partner@rbpartners.com': 'partner',
-    'manager@rbpartners.com': 'manager',
-    'manager2@rbpartners.com': 'manager2',
-    'manager3@rbpartners.com': 'manager3',
-    'supervisor@rbpartners.com': 'supervisor',
-    'supervisor1@rbpartners.com': 'supervisor1',
-    'supervisor2@rbpartners.com': 'supervisor2',
-    'assistant@rbpartners.com': 'assistant',
-    'assistant1@rbpartners.com': 'assistant1',
-    'assistant2@rbpartners.com': 'assistant2',
-    'tax@rbpartners.com': 'tax',
-    'admin': 'admin',
-  });
 
   useEffect(() => {
     fetchEmployees();
@@ -299,63 +274,6 @@ export default function UserManagement() {
     setError("");
   };
 
-  // Функции для управления паролями
-  const getPasswordForEmail = (email: string | null): string => {
-    if (!email) return '—';
-    return demoPasswords[email] || demoPasswords[email.toLowerCase()] || '—';
-  };
-
-  const togglePasswordVisibility = (id: string) => {
-    setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const copyPassword = (password: string) => {
-    navigator.clipboard.writeText(password);
-    toast({
-      title: "Скопировано",
-      description: "Пароль скопирован в буфер обмена",
-    });
-  };
-
-  const openPasswordDialog = (employee: Employee) => {
-    setSelectedEmployeeForPassword(employee);
-    setNewPassword(getPasswordForEmail(employee.email));
-    setPasswordDialogOpen(true);
-  };
-
-  const handleChangePassword = () => {
-    if (!selectedEmployeeForPassword || !newPassword.trim()) {
-      toast({
-        title: "Ошибка",
-        description: "Введите новый пароль",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const email = selectedEmployeeForPassword.email;
-    if (email) {
-      setDemoPasswords(prev => ({ ...prev, [email]: newPassword.trim() }));
-      toast({
-        title: "Пароль изменён",
-        description: `Пароль для ${selectedEmployeeForPassword.name} успешно изменён`,
-      });
-    }
-
-    setPasswordDialogOpen(false);
-    setSelectedEmployeeForPassword(null);
-    setNewPassword("");
-  };
-
-  const generateRandomPassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setNewPassword(password);
-  };
-
   const openEditDialog = (employee: Employee) => {
     setEditingEmployee(employee);
 
@@ -398,7 +316,7 @@ export default function UserManagement() {
       level: employee.level,
       phone: employee.whatsapp || "",
       department: "",
-      password: getPasswordForEmail(employee.email),
+      password: "",
     });
     setIsDialogOpen(true);
   };
@@ -593,7 +511,6 @@ export default function UserManagement() {
                     <TableRow>
                       <TableHead>ФИО</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Пароль</TableHead>
                       <TableHead>Роль</TableHead>
                       <TableHead>Уровень</TableHead>
                       <TableHead>Телефон</TableHead>
@@ -601,40 +518,10 @@ export default function UserManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {employees.map((employee) => {
-                      const password = getPasswordForEmail(employee.email);
-                      const isPasswordVisible = showPasswords[employee.id];
-                      return (
+                    {employees.map((employee) => (
                         <TableRow key={employee.id}>
                           <TableCell className="font-medium">{employee.name}</TableCell>
                           <TableCell>{employee.email || '—'}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
-                                {isPasswordVisible ? password : '••••••'}
-                              </code>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => togglePasswordVisibility(employee.id)}
-                                title={isPasswordVisible ? "Скрыть пароль" : "Показать пароль"}
-                                className="h-7 w-7 p-0"
-                              >
-                                {isPasswordVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                              </Button>
-                              {password !== '—' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyPassword(password)}
-                                  title="Копировать пароль"
-                                  className="h-7 w-7 p-0"
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
                           <TableCell>
                             <Badge variant={getRoleBadgeVariant(employee.role)}>
                               {getRoleLabel(employee.role, employee.level)}
@@ -646,14 +533,6 @@ export default function UserManagement() {
                           <TableCell>{employee.whatsapp || '—'}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openPasswordDialog(employee)}
-                                title="Изменить пароль"
-                              >
-                                <Key className="h-4 w-4" />
-                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -673,8 +552,7 @@ export default function UserManagement() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
+                    ))}
                   </TableBody>
                 </Table>
               )}
@@ -729,55 +607,6 @@ export default function UserManagement() {
         </TabsContent>
       </Tabs>
 
-      {/* Диалог изменения пароля */}
-      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Key className="w-5 h-5" />
-              Изменение пароля
-            </DialogTitle>
-            <DialogDescription>
-              {selectedEmployeeForPassword && (
-                <>Изменение пароля для сотрудника: <strong>{selectedEmployeeForPassword.name}</strong></>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">Новый пароль</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="newPassword"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Введите новый пароль"
-                />
-                <Button
-                  variant="outline"
-                  onClick={generateRandomPassword}
-                  title="Сгенерировать пароль"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Текущий пароль: <code className="bg-muted px-1 rounded">{selectedEmployeeForPassword ? getPasswordForEmail(selectedEmployeeForPassword.email) : '—'}</code>
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
-              Отмена
-            </Button>
-            <Button onClick={handleChangePassword} className="btn-gradient">
-              Сохранить пароль
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export interface SMTPConfig {
 }
 
 export interface AppSettings {
-  // Показывать ли демо-пользователей на странице входа
+  // Legacy-флаг оставлен для совместимости со схемой app_settings; демо-пользователи отключены.
   showDemoUsers: boolean;
   // Координаты офиса для геолокации
   officeLocation: {
@@ -30,7 +30,7 @@ export interface AppSettings {
   maintenanceMode: boolean;
   maintenanceMessage: string;
   // Роли, которым показывается блок «Последние активности» на дашборде.
-  // Пустой массив = блок скрыт у всех. Демо-юзеры не видят его в любом случае.
+  // Пустой массив = блок скрыт у всех.
   recentActivityVisibleRoles: UserRole[];
   // Список компаний (управляемый администратором)
   companies: Company[];
@@ -39,7 +39,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  showDemoUsers: true, // По умолчанию показываем демо для тестирования
+  showDemoUsers: false,
   officeLocation: {
     enabled: false,
     latitude: 43.238949, // Алматы, Казахстан (примерные координаты)
@@ -81,15 +81,19 @@ export async function getAppSettings(): Promise<AppSettings> {
     }
 
     if (data) {
+      const companies = Array.isArray(data.companies)
+        ? (data.companies as unknown as Company[])
+        : DEFAULT_SETTINGS.companies;
+
       console.log('getAppSettings: данные из Supabase:', {
         hasCompanies: !!data.companies,
         isArray: Array.isArray(data.companies),
-        companiesCount: data.companies?.length,
+        companiesCount: companies.length,
         companies: data.companies
       });
 
       const settings: AppSettings = {
-        showDemoUsers: data.show_demo_users ?? DEFAULT_SETTINGS.showDemoUsers,
+        showDemoUsers: false,
         officeLocation: {
           enabled: data.office_location_enabled ?? DEFAULT_SETTINGS.officeLocation.enabled,
           latitude: Number(data.office_latitude) ?? DEFAULT_SETTINGS.officeLocation.latitude,
@@ -102,7 +106,7 @@ export async function getAppSettings(): Promise<AppSettings> {
         recentActivityVisibleRoles: Array.isArray((data as any).recent_activity_visible_roles)
           ? ((data as any).recent_activity_visible_roles as UserRole[])
           : DEFAULT_SETTINGS.recentActivityVisibleRoles,
-        companies: (data.companies && Array.isArray(data.companies)) ? data.companies : DEFAULT_SETTINGS.companies
+        companies
       };
 
       // Обновляем кеш
@@ -132,7 +136,7 @@ function getLocalSettings(): AppSettings {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      return { ...DEFAULT_SETTINGS, ...parsed, showDemoUsers: false };
     }
   } catch (error) {
     console.error('Ошибка чтения из localStorage:', error);
@@ -143,7 +147,7 @@ function getLocalSettings(): AppSettings {
 export async function saveAppSettings(settings: Partial<AppSettings>): Promise<void> {
   try {
     const current = await getAppSettings();
-    const updated = { ...current, ...settings };
+    const updated = { ...current, ...settings, showDemoUsers: false };
 
     // Получаем id записи
     const { data: settingsRow, error: fetchError } = await supabase
@@ -163,7 +167,7 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
     const { data: updateResult, error } = await supabase
       .from('app_settings')
       .update({
-        show_demo_users: updated.showDemoUsers,
+        show_demo_users: false,
         office_location_enabled: updated.officeLocation.enabled,
         office_latitude: updated.officeLocation.latitude,
         office_longitude: updated.officeLocation.longitude,

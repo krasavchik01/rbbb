@@ -22,9 +22,6 @@ import {
   CheckCircle,
   Settings2,
   MapPin,
-  Users,
-  Eye,
-  EyeOff,
   Building2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -55,8 +52,6 @@ export default function Settings() {
     address: appSettings.officeLocation.address
   });
 
-  // Локальное состояние для демо-аккаунтов
-  const [showDemoUsers, setShowDemoUsers] = useState(appSettings.showDemoUsers);
   // Список ролей, которым видно блок «Последние активности» на дашборде
   const [recentActivityVisibleRoles, setRecentActivityVisibleRoles] = useState<UserRole[]>(appSettings.recentActivityVisibleRoles);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -65,7 +60,6 @@ export default function Settings() {
 
   // Синхронизация с appSettings при изменении
   useEffect(() => {
-    setShowDemoUsers(appSettings.showDemoUsers);
     setRecentActivityVisibleRoles(appSettings.recentActivityVisibleRoles);
     setOfficeSettings({
       enabled: appSettings.officeLocation.enabled,
@@ -114,7 +108,6 @@ export default function Settings() {
     setIsSaving(true);
     try {
       await updateAppSettings({
-        showDemoUsers: showDemoUsers,
         recentActivityVisibleRoles: recentActivityVisibleRoles,
         officeLocation: {
           enabled: officeSettings.enabled,
@@ -459,43 +452,18 @@ export default function Settings() {
         {/* Вкладка системных настроек - только для админа */}
         {isAdmin && (
           <TabsContent value="system" className="space-y-4">
-            {/* Демо-пользователи */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Демо-пользователи
+                <Settings2 className="w-5 h-5" />
+                Системные настройки
               </h3>
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label className="text-base">Показывать демо-аккаунты</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Отображать список демо-пользователей на странице входа для тестирования
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {showDemoUsers ? (
-                      <Eye className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <EyeOff className="w-4 h-4 text-muted-foreground" />
-                    )}
-                    <Switch
-                      checked={showDemoUsers}
-                      onCheckedChange={(checked) => {
-                        setShowDemoUsers(checked);
-                        setHasUnsavedChanges(true);
-                      }}
-                    />
-                  </div>
-                </div>
-
                 {/* Видимость «Последние активности» — выбор ролей */}
-                <div className="pt-4 border-t space-y-3">
+                <div className="space-y-3">
                   <div className="space-y-1">
                     <Label className="text-base">Блок «Последние активности» на дашборде</Label>
                     <p className="text-sm text-muted-foreground">
-                      Отметьте роли, которым показывать блок. Демо-пользователи не видят его в любом случае.
-                      Снимите все галочки, чтобы скрыть блок у всех.
+                      Отметьте роли, которым показывать блок. Снимите все галочки, чтобы скрыть блок у всех.
                     </p>
                   </div>
 
@@ -708,12 +676,6 @@ export default function Settings() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Copyright:</span>
                   <span className="text-muted-foreground">© 2026 All Rights Reserved</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Демо-режим:</span>
-                  <span className={appSettings.showDemoUsers ? 'text-green-500' : 'text-muted-foreground'}>
-                    {appSettings.showDemoUsers ? 'Включен' : 'Выключен'}
-                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Проверка геолокации:</span>

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAppSettings } from '@/lib/appSettings';
 
 export default function SettingsDiagnostics() {
-  const [appSettings, updateAppSettings] = useAppSettings();
+  const [appSettings] = useAppSettings();
   const [supabaseData, setSupabaseData] = useState<any>(null);
   const [localStorageData, setLocalStorageData] = useState<any>(null);
   const [error, setError] = useState<string>('');
@@ -40,15 +40,6 @@ export default function SettingsDiagnostics() {
     }
   };
 
-  const testToggleDemoUsers = async () => {
-    try {
-      await updateAppSettings({ showDemoUsers: !appSettings.showDemoUsers });
-      alert('Настройка изменена! Проверь другую вкладку/устройство');
-    } catch (err: any) {
-      alert(`Ошибка: ${err.message}`);
-    }
-  };
-
   useEffect(() => {
     checkSupabase();
     checkLocalStorage();
@@ -72,9 +63,6 @@ export default function SettingsDiagnostics() {
         <pre className="bg-slate-800 p-4 rounded text-xs overflow-auto">
           {JSON.stringify(appSettings, null, 2)}
         </pre>
-        <Button onClick={testToggleDemoUsers} className="mt-4">
-          Переключить showDemoUsers (тест)
-        </Button>
       </Card>
 
       {/* Данные из Supabase */}
@@ -119,7 +107,6 @@ export default function SettingsDiagnostics() {
         <ol className="list-decimal list-inside space-y-2 text-sm">
           <li>Если "Данные из Supabase" показывает ❌ - значит SQL миграция НЕ выполнена</li>
           <li>Если данные есть, но не совпадают с React State - проблема с кешем</li>
-          <li>Нажми "Переключить showDemoUsers" - должно обновиться во всех вкладках</li>
           <li>Открой эту страницу на другом устройстве/браузере - должны быть те же данные</li>
         </ol>
       </Card>

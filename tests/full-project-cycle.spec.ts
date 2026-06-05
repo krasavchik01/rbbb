@@ -6,32 +6,32 @@ import { test, expect } from '@playwright/test';
  */
 const BASE_URL = 'http://localhost:8080';
 
-// Демо пользователи для тестирования
-const DEMO_USERS = {
+// Тестовые ролевые фикстуры для тестирования
+const ROLE_FIXTURES = {
   procurement: {
     id: 'procurement_1',
-    email: 'procurement@rbpartners.com',
+    email: 'procurement@example.invalid',
     name: 'Отдел закупок',
     role: 'procurement',
     position: 'Отдел закупок'
   },
   deputy_director: {
     id: 'deputy_1',
-    email: 'deputy@mak.kz',
+    email: 'deputy@example.invalid',
     name: 'Заместитель ген. директора МАК',
     role: 'deputy_director',
     position: 'Заместитель генерального директора'
   },
   partner: {
     id: 'partner_1',
-    email: 'partner@rbpartners.com',
+    email: 'partner@example.invalid',
     name: 'Партнер Иванов',
     role: 'partner',
     position: 'Партнер'
   },
   manager_1: {
     id: 'manager_1',
-    email: 'manager1@rbpartners.com',
+    email: 'manager1@example.invalid',
     name: 'Менеджер 1 Петров',
     role: 'manager_1',
     position: 'Менеджер 1'
@@ -45,7 +45,7 @@ const DEMO_USERS = {
   },
   ceo: {
     id: 'ceo_1',
-    email: 'ceo@rbpartners.com',
+    email: 'ceo@example.invalid',
     name: 'Генеральный Директор',
     role: 'ceo',
     position: 'Генеральный директор (CEO)'
@@ -77,7 +77,7 @@ test.describe('Полный цикл проекта до бонуса', () => {
   test('Этап 1: Отдел закупок создает проект', async ({ page }) => {
     console.log('📋 Этап 1: Создание проекта отделом закупок');
     
-    await quickLogin(page, DEMO_USERS.procurement);
+    await quickLogin(page, ROLE_FIXTURES.procurement);
     
     // Переходим на страницу создания проекта
     await page.goto(`${BASE_URL}/create-project-procurement`);
@@ -184,7 +184,7 @@ test.describe('Полный цикл проекта до бонуса', () => {
     
     console.log('📋 Этап 2: Утверждение проекта и назначение команды');
     
-    await quickLogin(page, DEMO_USERS.deputy_director);
+    await quickLogin(page, ROLE_FIXTURES.deputy_director);
     
     // Переходим на страницу утверждения проектов
     await page.goto(`${BASE_URL}/project-approval`);
@@ -237,7 +237,7 @@ test.describe('Полный цикл проекта до бонуса', () => {
     
     console.log('📋 Этап 3: Партнер распределяет задачи');
     
-    await quickLogin(page, DEMO_USERS.partner);
+    await quickLogin(page, ROLE_FIXTURES.partner);
     
     // Переходим в карточку проекта
     await page.goto(`${BASE_URL}/project/${projectId}`);
@@ -283,7 +283,7 @@ test.describe('Полный цикл проекта до бонуса', () => {
     
     console.log('📋 Этап 4: Заполнение тайм-щита менеджером');
     
-    await quickLogin(page, DEMO_USERS.manager_1);
+    await quickLogin(page, ROLE_FIXTURES.manager_1);
     
     // Переходим на страницу тайм-щитов
     await page.goto(`${BASE_URL}/timesheets`);
@@ -336,7 +336,7 @@ test.describe('Полный цикл проекта до бонуса', () => {
     
     console.log('📋 Этап 5: Завершение проекта партнером');
     
-    await quickLogin(page, DEMO_USERS.partner);
+    await quickLogin(page, ROLE_FIXTURES.partner);
     
     // Переходим в карточку проекта
     await page.goto(`${BASE_URL}/project/${projectId}`);
@@ -370,7 +370,7 @@ test.describe('Полный цикл проекта до бонуса', () => {
     
     console.log('📋 Этап 6: Проверка бонусов CEO');
     
-    await quickLogin(page, DEMO_USERS.ceo);
+    await quickLogin(page, ROLE_FIXTURES.ceo);
     
     // Переходим на страницу бонусов
     await page.goto(`${BASE_URL}/bonuses`);
@@ -399,11 +399,11 @@ test.describe('Полный цикл проекта до бонуса', () => {
     console.log('📋 Проверка доступа всех ролей к функциям');
     
     const roles = [
-      { user: DEMO_USERS.procurement, allowedPages: ['/projects', '/create-project-procurement', '/tenders'] },
-      { user: DEMO_USERS.deputy_director, allowedPages: ['/dashboard', '/projects', '/project-approval', '/bonuses'] },
-      { user: DEMO_USERS.partner, allowedPages: ['/dashboard', '/projects', '/project'] },
-      { user: DEMO_USERS.manager_1, allowedPages: ['/dashboard', '/projects', '/timesheets'] },
-      { user: DEMO_USERS.ceo, allowedPages: ['/dashboard', '/projects', '/bonuses', '/analytics'] },
+      { user: ROLE_FIXTURES.procurement, allowedPages: ['/projects', '/create-project-procurement', '/tenders'] },
+      { user: ROLE_FIXTURES.deputy_director, allowedPages: ['/dashboard', '/projects', '/project-approval', '/bonuses'] },
+      { user: ROLE_FIXTURES.partner, allowedPages: ['/dashboard', '/projects', '/project'] },
+      { user: ROLE_FIXTURES.manager_1, allowedPages: ['/dashboard', '/projects', '/timesheets'] },
+      { user: ROLE_FIXTURES.ceo, allowedPages: ['/dashboard', '/projects', '/bonuses', '/analytics'] },
     ];
     
     for (const roleTest of roles) {

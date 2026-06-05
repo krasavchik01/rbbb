@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:8080';
 
-// Демо-пользователи
-const DEMO_USERS = {
-  ceo: { email: 'ceo@rbpartners.com', password: 'ceo', role: 'CEO' },
-  deputy: { email: 'deputy@mak.kz', password: 'deputy', role: 'Заместитель директора' },
-  partner: { email: 'partner@rbpartners.com', password: 'partner', role: 'Партнер' },
-  manager: { email: 'manager@rbpartners.com', password: 'manager', role: 'Менеджер 1' },
+// Тестовые ролевые фикстуры
+const ROLE_FIXTURES = {
+  ceo: { email: 'ceo@example.invalid', password: 'test-password', role: 'CEO' },
+  deputy: { email: 'deputy@example.invalid', password: 'test-password', role: 'Заместитель директора' },
+  partner: { email: 'partner@example.invalid', password: 'test-password', role: 'Партнер' },
+  manager: { email: 'manager@example.invalid', password: 'test-password', role: 'Менеджер 1' },
 };
 
 // Функция быстрого входа через localStorage
@@ -65,7 +65,7 @@ async function quickLogin(page: any, user: { email: string; password: string; ro
 
 test.describe('Проверка доступа к бонусам', () => {
   test('CEO должен видеть страницу бонусов', async ({ page }) => {
-    await quickLogin(page, DEMO_USERS.ceo);
+    await quickLogin(page, ROLE_FIXTURES.ceo);
     
     // Переходим на страницу бонусов
     await page.goto(`${BASE_URL}/bonuses`, { waitUntil: 'domcontentloaded' });
@@ -96,7 +96,7 @@ test.describe('Проверка доступа к бонусам', () => {
   });
 
   test('Заместитель директора должен видеть страницу бонусов', async ({ page }) => {
-    await quickLogin(page, DEMO_USERS.deputy);
+    await quickLogin(page, ROLE_FIXTURES.deputy);
     
     // Переходим на страницу бонусов
     await page.goto(`${BASE_URL}/bonuses`);
@@ -112,7 +112,7 @@ test.describe('Проверка доступа к бонусам', () => {
   });
 
   test('Партнер НЕ должен видеть бонусы - показывается сообщение об отсутствии доступа', async ({ page }) => {
-    await quickLogin(page, DEMO_USERS.partner);
+    await quickLogin(page, ROLE_FIXTURES.partner);
     
     // Переходим на страницу бонусов
     await page.goto(`${BASE_URL}/bonuses`, { waitUntil: 'networkidle' });
@@ -135,7 +135,7 @@ test.describe('Проверка доступа к бонусам', () => {
   });
 
   test('Менеджер НЕ должен видеть бонусы', async ({ page }) => {
-    await quickLogin(page, DEMO_USERS.manager);
+    await quickLogin(page, ROLE_FIXTURES.manager);
     
     // Переходим на страницу бонусов
     await page.goto(`${BASE_URL}/bonuses`);
@@ -148,7 +148,7 @@ test.describe('Проверка доступа к бонусам', () => {
 
   test('Вкладка "Бонусы" в Analytics видна только CEO и deputy_director', async ({ page }) => {
     // Проверяем для CEO
-    await quickLogin(page, DEMO_USERS.ceo);
+    await quickLogin(page, ROLE_FIXTURES.ceo);
     await page.goto(`${BASE_URL}/analytics`);
     await page.waitForTimeout(3000);
     
@@ -157,7 +157,7 @@ test.describe('Проверка доступа к бонусам', () => {
     expect(bonusesTabCount).toBeGreaterThan(0);
     
     // Проверяем для deputy
-    await quickLogin(page, DEMO_USERS.deputy);
+    await quickLogin(page, ROLE_FIXTURES.deputy);
     await page.goto(`${BASE_URL}/analytics`);
     await page.waitForTimeout(3000);
     
@@ -166,7 +166,7 @@ test.describe('Проверка доступа к бонусам', () => {
     expect(bonusesTabDeputyCount).toBeGreaterThan(0);
     
     // Проверяем для partner - вкладка должна быть скрыта
-    await quickLogin(page, DEMO_USERS.partner);
+    await quickLogin(page, ROLE_FIXTURES.partner);
     await page.goto(`${BASE_URL}/analytics`);
     await page.waitForTimeout(3000);
     
@@ -177,7 +177,7 @@ test.describe('Проверка доступа к бонусам', () => {
 
   test('Пункт "Бонусы" в сайдбаре виден только CEO и deputy_director', async ({ page }) => {
     // Проверяем для CEO
-    await quickLogin(page, DEMO_USERS.ceo);
+    await quickLogin(page, ROLE_FIXTURES.ceo);
     await page.goto(BASE_URL);
     await page.waitForTimeout(2000);
     
@@ -185,7 +185,7 @@ test.describe('Проверка доступа к бонусам', () => {
     await expect(bonusesMenuItem).toBeVisible();
     
     // Проверяем для deputy
-    await quickLogin(page, DEMO_USERS.deputy);
+    await quickLogin(page, ROLE_FIXTURES.deputy);
     await page.goto(BASE_URL);
     await page.waitForTimeout(2000);
     
@@ -193,7 +193,7 @@ test.describe('Проверка доступа к бонусам', () => {
     await expect(bonusesMenuItemDeputy).toBeVisible();
     
     // Проверяем для partner - пункт должен быть скрыт
-    await quickLogin(page, DEMO_USERS.partner);
+    await quickLogin(page, ROLE_FIXTURES.partner);
     await page.goto(BASE_URL);
     await page.waitForTimeout(2000);
     

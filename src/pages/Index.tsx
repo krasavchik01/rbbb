@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye, EyeOff, LogIn, Sparkles, UserPlus, Building2, Users, FolderKanban, BarChart3 } from 'lucide-react';
-import { useAppSettings } from '@/lib/appSettings';
 
 const Index = () => {
   const [email, setEmail] = useState('');
@@ -17,7 +16,6 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [appSettings] = useAppSettings();
 
   useEffect(() => {
     if (user) {
@@ -39,63 +37,6 @@ const Index = () => {
       }
     } catch (error) {
       setError('Произошла ошибка при входе');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Демо-аккаунты для быстрого входа
-  type DemoAccount = {
-    email: string;
-    password: string;
-    role: string;
-    icon: string;
-    category: string;
-  };
-
-  const demoAccounts: DemoAccount[] = [
-    { email: "ceo@rbpartners.com", password: "ceo", role: "CEO", icon: "👔", category: "Руководство" },
-    { email: "deputy@mak.kz", password: "deputy", role: "Зам. директора", icon: "🏢", category: "Руководство" },
-    { email: "procurement@rbpartners.com", password: "procurement", role: "Отдел закупок", icon: "📦", category: "Отдел закупок" },
-    { email: "partner@rbpartners.com", password: "partner", role: "Партнер", icon: "🤝", category: "Партнеры" },
-    { email: "manager@rbpartners.com", password: "manager", role: "Менеджер 1", icon: "👨‍💼", category: "Менеджеры" },
-    { email: "manager2@rbpartners.com", password: "manager2", role: "Менеджер 2", icon: "👨‍💼", category: "Менеджеры" },
-    { email: "manager3@rbpartners.com", password: "manager3", role: "Менеджер 3", icon: "👨‍💼", category: "Менеджеры" },
-    { email: "supervisor1@rbpartners.com", password: "supervisor1", role: "Супервайзер 1", icon: "👨‍🔬", category: "Супервайзеры" },
-    { email: "supervisor2@rbpartners.com", password: "supervisor2", role: "Супервайзер 2", icon: "👨‍🔬", category: "Супервайзеры" },
-    { email: "supervisor@rbpartners.com", password: "supervisor", role: "Супервайзер 3", icon: "👨‍🔬", category: "Супервайзеры" },
-    { email: "assistant1@rbpartners.com", password: "assistant1", role: "Ассистент 1", icon: "👨‍💻", category: "Ассистенты" },
-    { email: "assistant2@rbpartners.com", password: "assistant2", role: "Ассистент 2", icon: "👨‍💻", category: "Ассистенты" },
-    { email: "assistant@rbpartners.com", password: "assistant", role: "Ассистент 3", icon: "👨‍💻", category: "Ассистенты" },
-    { email: "tax@rbpartners.com", password: "tax", role: "Налоговик", icon: "📊", category: "Специалисты" },
-    { email: "hr@rbpartners.com", password: "hr", role: "HR", icon: "👥", category: "HR" },
-    { email: "admin", password: "admin", role: "Админ", icon: "🔑", category: "Администраторы" },
-  ];
-
-  const groupedAccounts = demoAccounts.reduce((acc, account) => {
-    const category = account.category;
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(account);
-    return acc;
-  }, {} as Record<string, DemoAccount[]>);
-
-  const quickLogin = async (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const success = await login(demoEmail, demoPassword);
-      if (success) {
-        navigate("/dashboard");
-      } else {
-        setError("Ошибка входа");
-      }
-    } catch (error: any) {
-      setError(error.message || "Произошла ошибка при входе");
     } finally {
       setIsLoading(false);
     }
@@ -181,7 +122,7 @@ const Index = () => {
                     <Input
                       id="email"
                       type="text"
-                      placeholder="admin или your@email.com"
+                      placeholder="your@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -242,55 +183,6 @@ const Index = () => {
               </CardContent>
             </Card>
 
-            {/* Демо-вход - показывается только если включено в настройках */}
-            {appSettings.showDemoUsers && (
-              <details className="group">
-                <summary className="cursor-pointer list-none">
-                  <Card className="border-blue-500/20 bg-slate-900/80 backdrop-blur-lg hover:border-blue-500/40 transition-colors">
-                    <CardContent className="py-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="w-5 h-5 text-yellow-400" />
-                          <span className="text-white font-medium text-sm">Демо-аккаунты</span>
-                        </div>
-                        <div className="text-slate-400 group-open:rotate-180 transition-transform text-sm">▼</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </summary>
-                <Card className="border-blue-500/20 bg-slate-900/80 backdrop-blur-lg mt-2">
-                  <CardContent className="space-y-2 max-h-[300px] overflow-y-auto pt-4">
-                    {Object.entries(groupedAccounts).map(([category, accounts]) => (
-                      <div key={category} className="space-y-1">
-                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
-                          {category}
-                        </div>
-                        {accounts.map((account) => (
-                          <Button
-                            key={account.email}
-                            variant="outline"
-                            size="sm"
-                            className="w-full justify-start text-left h-auto py-1.5 bg-slate-800/30 border-slate-700 hover:bg-blue-900/20 hover:border-blue-500/50 transition-all"
-                            onClick={() => quickLogin(account.email, account.password)}
-                            disabled={isLoading}
-                          >
-                            <div className="flex items-center gap-2 w-full">
-                              <span className="text-base flex-shrink-0">{account.icon}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-white text-xs truncate">{account.role}</div>
-                              </div>
-                              <div className="text-xs text-slate-500 font-mono bg-slate-800/50 px-1.5 py-0.5 rounded flex-shrink-0">
-                                {account.password}
-                              </div>
-                            </div>
-                          </Button>
-                        ))}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </details>
-            )}
           </div>
         </div>
       </div>

@@ -36,7 +36,6 @@ const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
 // Audit и IFRS9 удалены из навигации по решению юзера (2026-05-21):
 // «усложнил с аудитом и процедурами МСФО, нагружает систему, убрать».
 // Файлы src/pages/Audit.tsx и src/pages/IFRS9.tsx сохранены на случай восстановления.
-const DemoUsersManagement = lazy(() => import('@/pages/DemoUsersManagement'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
@@ -347,16 +346,7 @@ function App() {
             />
             {/* /audit удалён по решению юзера. Redirect на главную, чтобы старые ссылки не падали. */}
             <Route path="/audit" element={<Navigate to="/" replace />} />
-            <Route
-              path="/demo-users"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <Layout>
-                    <DemoUsersManagement />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/demo-users" element={<Navigate to="/404" replace />} />
             <Route
               path="/role-management"
               element={

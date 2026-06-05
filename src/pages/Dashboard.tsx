@@ -626,11 +626,8 @@ export default function Dashboard() {
   const isPartner = user?.role === 'partner';
   const isManager = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isProcurement = user?.role === 'procurement';
-  // Демо-юзеры из DEMO_USERS имеют id вида "ceo_1", "partner_1" — не UUID.
-  // У них нет реальных данных в БД (attendance.employee_id не свяжется),
-  // поэтому блок «Последние активности» для них смысла не имеет.
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const isDemoUser = !!user && !UUID_RE.test(user.id);
+  const hasDatabaseUserId = !!user && UUID_RE.test(user.id);
 
   return (
     <div className="space-y-4 sm:space-y-6 page-enter">
@@ -895,7 +892,7 @@ export default function Dashboard() {
         )}
 
         {/* Последняя активность — только ролям, отмеченным в Настройках админом */}
-        {recentProjects.length > 0 && !isDemoUser && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) && (
+        {recentProjects.length > 0 && hasDatabaseUserId && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) && (
           <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm lg:col-span-3">
             <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl" />
             <div className="relative z-10">
@@ -1093,14 +1090,14 @@ export default function Dashboard() {
 
       {/* Виджет отметки посещений */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={!isDemoUser && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) ? "lg:col-span-1" : "lg:col-span-3"}>
+        <div className={hasDatabaseUserId && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) ? "lg:col-span-1" : "lg:col-span-3"}>
           <WidgetErrorBoundary label="Отметка посещений">
             <CheckInWidget />
           </WidgetErrorBoundary>
         </div>
 
         {/* Последние активности — ролям, отмеченным в Настройках админом */}
-        {!isDemoUser && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) && (
+        {hasDatabaseUserId && !!user?.role && appSettings.recentActivityVisibleRoles.includes(user.role as any) && (
           <div className="lg:col-span-2">
             <Card className="p-4 sm:p-6 relative overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
               <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl" />
