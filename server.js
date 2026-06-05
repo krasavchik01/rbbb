@@ -57,6 +57,18 @@ function requireAnyRole(req, res, allowedRoles) {
   return user;
 }
 
+function getRequiredEnv(name) {
+  const value = process.env[name]?.trim();
+  return value || '';
+}
+
+function isSafeSeafilePath(storagePath) {
+  if (typeof storagePath !== 'string') return false;
+  if (!storagePath.startsWith('/')) return false;
+  if (storagePath.includes('\0')) return false;
+  return storagePath.split('/').every((part) => part !== '..');
+}
+
 // Защита от path traversal: имя проекта/файла не должно вытаскивать нас за
 // пределы baseDir. Поможет если кто-то пришлёт projectId="../../etc" или
 // filename="..\\..\\windows\\system32". После path.resolve проверяем префикс.
@@ -203,6 +215,39 @@ app.get('/api/files/:projectId/:filename', (req, res) => {
     res.sendFile(filePath);
   } else {
     res.status(404).json({ error: 'Файл не найден' });
+  }
+});
+
+// Получить временную ссылку Seafile без раскрытия SEAFILE_TOKEN во frontend.
+app.get('/api/seafile/download-url', async (req, res) => {
+  if (!requireAuthenticatedUser(req, res)) return;
+
+  const storagePath = String(req.query.path || '');
+  if (!isSafeSeafilePath(storagePath)) {
+    return res.status(400).json({ error: 'Некорректный путь к файлу Seafile' });
+  }
+
+  const seafileUrl = getRequiredEnv('SEAFILE_URL');
+  const seafileToken = getRequiredEnv('SEAFILE_TOKEN');
+  const repoId = getRequiredEnv('SEAFILE_REPO_ID');
+  if (!seafileUrl || !seafileToken || !repoId) {
+    return res.status(503).json({ error: 'Seafile не настроен на сервере' });
+  }
+
+  try {
+    const encodedPath = encodeURIComponent(storagePath);
+    const response = await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}`, {
+      headers: { Authorization: `Token ${seafileToken}` },
+    });
+    if (!response.ok) {
+      return res.status(502).json({ error: `Ошибка получения ссылки из Seafile: ${response.status}` });
+    }
+
+    const rawUrl = await response.text();
+    res.json({ url: rawUrl.replace(/"/g, '') });
+  } catch (err) {
+    console.error('❌ Ошибка получения ссылки Seafile:', err);
+    res.status(502).json({ error: 'Не удалось получить ссылку из Seafile' });
   }
 });
 
@@ -454,10 +499,12 @@ app.use(express.static(path.join(__dirname, 'dist')));
 
 // SPA fallback - важно для React Router (Express 5 syntax)
 app.get('/{*path}', (req, res) => {
-  // Если это не API запрос, отправляем index.html
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  // Явно отвечаем на неизвестные API, чтобы запросы не зависали.
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API endpoint не найден' });
   }
+
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;

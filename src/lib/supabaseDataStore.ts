@@ -6,6 +6,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
+import { apiGet } from '@/lib/api';
 
 // Типы из Supabase
 type SupabaseEmployee = Database['public']['Tables']['employees']['Row'];
@@ -762,25 +763,18 @@ class SupabaseDataStore {
   }
 
   /**
- * Получить временную прямую ссылку на скачивание файла из Seafile
+ * Получить временную прямую ссылку на скачивание файла из Seafile.
+ * Важно: токен Seafile хранится только на сервере; frontend ходит в наш proxy.
  */
   async getSeafileDownloadUrl(storagePath: string): Promise<string> {
-    const seafileUrl = import.meta.env.VITE_SEAFILE_URL;
-    const seafileToken = import.meta.env.VITE_SEAFILE_TOKEN;
-    const repoId = import.meta.env.VITE_SEAFILE_REPO_ID;
-
-    if (!seafileUrl || !seafileToken || !repoId) return '';
+    if (!storagePath) return '';
 
     try {
-      // storagePath у нас вида /projectId/filename.pdf
-      const encodedPath = encodeURIComponent(storagePath);
-      const res = await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}`, {
-        headers: { 'Authorization': `Token ${seafileToken}` }
-      });
-
-      if (!res.ok) throw new Error(`Ошибка получения ссылки из Seafile: ${res.status}`);
-      const rawUrl = await res.text();
-      return rawUrl.replace(/"/g, ''); // Получаем чистый URL
+      const response = await apiGet<{ url: string }>(`/api/seafile/download-url?path=${encodeURIComponent(storagePath)}`);
+      if (response.error || !response.data?.url) {
+        throw new Error(response.error || 'Пустой ответ сервера Seafile proxy');
+      }
+      return response.data.url;
     } catch (e) {
       console.error('Ошибка в getSeafileDownloadUrl:', e);
       return '';
