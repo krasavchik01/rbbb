@@ -141,6 +141,84 @@ const getProjectClient = (project: any): string => {
   );
 };
 
+// Combobox с поиском по аудиторским секциям. Группы (Планирование, Активы,…)
+// рендерятся через CommandGroup. Подходит для длинных списков, который не
+// влезают в shadcn-Select из-за <div>-обёрток.
+function SectionCombobox({
+  value,
+  onChange,
+  triggerClassName,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  triggerClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const displayed = value || '— Не указано —';
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            'w-full max-w-full min-w-0 justify-between bg-muted/40 border-0 font-normal',
+            !value && 'text-muted-foreground',
+            triggerClassName,
+          )}
+        >
+          <span className="truncate flex-1 text-left">{displayed}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="p-0 w-[--radix-popover-trigger-width] min-w-[280px] max-h-[60vh] overflow-hidden"
+      >
+        <Command>
+          <CommandInput placeholder="Найти секцию..." />
+          <CommandList>
+            <CommandEmpty>Не найдено</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="не указано none"
+                onSelect={() => {
+                  onChange('');
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn('mr-2 h-4 w-4', !value ? 'opacity-100' : 'opacity-0')} />
+                — Не указано —
+              </CommandItem>
+            </CommandGroup>
+            {AUDIT_SECTIONS_GROUPED.map((g) => (
+              <CommandGroup key={g.group} heading={g.group}>
+                {g.items.map((s) => {
+                  const short = s.replace(/^[^—]+—\s*/, '');
+                  return (
+                    <CommandItem
+                      key={s}
+                      value={s}
+                      onSelect={() => {
+                        onChange(s);
+                        setOpen(false);
+                      }}
+                    >
+                      <Check className={cn('mr-2 h-4 w-4', value === s ? 'opacity-100' : 'opacity-0')} />
+                      <span className="truncate">{short}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // Combobox с поиском по проектам.
 // Группирует проекты на «Мои» (где пользователь в команде) и «Все остальные»,
 // чтобы из любого количества проектов можно было найти нужный по названию/клиенту.
@@ -208,12 +286,12 @@ function ProjectCombobox({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'justify-between bg-muted/40 border-0 font-normal',
+            'w-full max-w-full min-w-0 justify-between bg-muted/40 border-0 font-normal',
             !selected && 'text-muted-foreground',
             triggerClassName,
           )}
         >
-          <span className="truncate">{selected ? getProjectName(selected) : placeholder}</span>
+          <span className="truncate flex-1 text-left">{selected ? getProjectName(selected) : placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -564,7 +642,7 @@ export default function Timesheets() {
                 Добавить
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg w-[calc(100vw-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingTimesheet ? 'Редактировать тайм-щит' : 'Новый тайм-щит'}</DialogTitle>
               </DialogHeader>
@@ -631,29 +709,10 @@ export default function Timesheets() {
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Секция аудита <span className="text-muted-foreground/60">— что именно делал на проекте</span>
                     </Label>
-                    <Select
-                      value={formData.section || 'none'}
-                      onValueChange={(v) => setFormData({ ...formData, section: v === 'none' ? '' : v })}
-                    >
-                      <SelectTrigger className="bg-muted/40 border-0 focus-visible:ring-1">
-                        <SelectValue placeholder="— Не указано —" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-80">
-                        <SelectItem value="none">— Не указано —</SelectItem>
-                        {AUDIT_SECTIONS_GROUPED.map((g) => (
-                          <div key={g.group}>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
-                              {g.group}
-                            </div>
-                            {g.items.map((s) => (
-                              <SelectItem key={s} value={s} className="pl-4">
-                                {s.replace(/^[^—]+—\s*/, '')}
-                              </SelectItem>
-                            ))}
-                          </div>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SectionCombobox
+                      value={formData.section}
+                      onChange={(v) => setFormData({ ...formData, section: v })}
+                    />
                   </div>
                 )}
                 <div className="space-y-1.5">
