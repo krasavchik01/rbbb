@@ -93,6 +93,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error('❌ Wrong password for:', employeeData.email);
         return false;
       }
+
+      // Создаём Supabase Auth session, если для сотрудника уже есть Auth-аккаунт.
+      // Пока не валим legacy-вход, чтобы не заблокировать действующих пользователей
+      // до полной миграции аккаунтов; backend strict JWT mode включать только после
+      // этой миграции.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) {
+        console.warn('⚠️ Supabase Auth session was not created for employee login:', signInError.message);
+      }
+
       console.log('✅ Employee found:', employeeData.name);
       
       // Создаем объект пользователя из данных сотрудника
@@ -127,6 +140,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    void supabase.auth.signOut();
   };
 
   const updateUser = async (updates: Partial<User>) => {

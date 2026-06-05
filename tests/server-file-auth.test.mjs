@@ -7,6 +7,44 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import test from 'node:test';
 
+function startFakeSupabaseAuth({ token = 'valid-token', user = {} } = {}) {
+  const requests = [];
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    requests.push({ method: req.method, path: url.pathname, authorization: req.headers.authorization || '', apikey: req.headers.apikey || '' });
+    if (req.method === 'GET' && url.pathname === '/auth/v1/user' && req.headers.authorization === `Bearer ${token}`) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        id: 'jwt-user-1',
+        email: 'jwt-user@example.com',
+        app_metadata: { role: 'admin', ...(user.app_metadata || {}) },
+        user_metadata: { name: 'JWT User', ...(user.user_metadata || {}) },
+        ...user,
+      }));
+      return;
+    }
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid token' }));
+  });
+
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      resolve({
+        url: `http://127.0.0.1:${port}`,
+        requests,
+        async stop() {
+          await new Promise((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()));
+        },
+      });
+    });
+  });
+}
+
+function jwtAuthHeaders(token = 'valid-token') {
+  return { Authorization: `Bearer ${token}` };
+}
+
 let nextServerOffset = 0;
 
 async function startServer(extraEnv = {}) {
@@ -329,5 +367,79 @@ test('seafile upload proxy uploads through server-side token', async () => {
     await new Promise((resolve, reject) => {
       fakeSeafile.close((error) => error ? reject(error) : resolve());
     });
+  }
+});
+
+
+
+test('strict JWT mode rejects spoofed x-user headers without bearer token', async () => {
+  const fakeAuth = await startFakeSupabaseAuth();
+  const ctx = await startServer({
+    REQUIRE_SUPABASE_JWT: 'true',
+    SUPABASE_URL: fakeAuth.url,
+    SUPABASE_ANON_KEY: 'test-anon-key',
+  });
+
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/files/project-a/secret.txt`, {
+      headers: {
+        'x-user-id': 'admin-1',
+        'x-user-role': 'admin',
+      },
+    });
+    assert.equal(response.status, 401);
+    assert.equal(fakeAuth.requests.length, 0);
+  } finally {
+    await ctx.stop();
+    await fakeAuth.stop();
+  }
+});
+
+test('strict JWT mode derives user and role from validated Supabase JWT', async () => {
+  const fakeAuth = await startFakeSupabaseAuth({ token: 'valid-token' });
+  const ctx = await startServer({
+    REQUIRE_SUPABASE_JWT: 'true',
+    SUPABASE_URL: fakeAuth.url,
+    SUPABASE_ANON_KEY: 'test-anon-key',
+  });
+
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/files/project-a/secret.txt`, {
+      headers: jwtAuthHeaders('valid-token'),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'classified project file');
+    assert.equal(fakeAuth.requests[0].authorization, 'Bearer valid-token');
+    assert.equal(fakeAuth.requests[0].apikey, 'test-anon-key');
+  } finally {
+    await ctx.stop();
+    await fakeAuth.stop();
+  }
+});
+
+test('strict JWT mode ignores spoofed x-user-role when checking privileges', async () => {
+  const fakeAuth = await startFakeSupabaseAuth({
+    token: 'employee-token',
+    user: { app_metadata: { role: 'employee' } },
+  });
+  const ctx = await startServer({
+    REQUIRE_SUPABASE_JWT: 'true',
+    SUPABASE_URL: fakeAuth.url,
+    SUPABASE_ANON_KEY: 'test-anon-key',
+  });
+
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/files/project-a/secret.txt`, {
+      method: 'DELETE',
+      headers: {
+        ...jwtAuthHeaders('employee-token'),
+        'x-user-role': 'admin',
+      },
+    });
+    assert.equal(response.status, 403);
+    assert.equal(fs.existsSync(path.join(ctx.storageDir, 'project-a', 'secret.txt')), true);
+  } finally {
+    await ctx.stop();
+    await fakeAuth.stop();
   }
 });

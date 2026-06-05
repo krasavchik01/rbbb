@@ -19,12 +19,20 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // In-memory storage removed (Migrated to Supabase)
 
-// Helper function to parse auth user from request
-// TODO(auth-migration): сейчас доверяем заголовкам x-user-* — это подделывается
-// клиентом. Безопасный вариант: валидация Supabase JWT из Authorization. См.
-// task #8 — миграция на Supabase Auth. До этого ручки НЕ должны делать
-// серверные mutation-actions без отдельной строгой проверки.
-const getUserFromRequest = (req) => {
+const FILE_UPLOAD_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
+const FILE_DELETE_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
+
+const isStrictJwtMode = () => process.env.REQUIRE_SUPABASE_JWT === 'true';
+
+const getBearerToken = (req) => {
+  const authorization = typeof req.headers.authorization === 'string' ? req.headers.authorization.trim() : '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+};
+
+const normalizeJwtRole = (role) => typeof role === 'string' ? role.trim() : '';
+
+const getLegacyUserFromHeaders = (req) => {
   const id = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'].trim() : '';
   const name = typeof req.headers['x-user-name'] === 'string' ? req.headers['x-user-name'].trim() : '';
   const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].trim() : '';
@@ -33,15 +41,58 @@ const getUserFromRequest = (req) => {
     id,
     name: name || 'Unknown',
     role,
+    authSource: 'legacy-headers',
   };
 };
 
-const hasAuthenticatedUserContext = (user) => Boolean(user.id && user.role);
-const FILE_UPLOAD_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
-const FILE_DELETE_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
+async function getSupabaseUserFromToken(req) {
+  const token = getBearerToken(req);
+  if (!token) return null;
 
-function requireAuthenticatedUser(req, res) {
-  const user = getUserFromRequest(req);
+  const supabaseUrl = getRequiredEnv('SUPABASE_URL');
+  const supabaseAnonKey = getRequiredEnv('SUPABASE_ANON_KEY') || getRequiredEnv('SUPABASE_PUBLISHABLE_KEY');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase auth is not configured on the server');
+  }
+
+  const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) return null;
+
+  const authUser = await response.json();
+  const role = normalizeJwtRole(authUser.app_metadata?.role || authUser.user_metadata?.role || authUser.role);
+  return {
+    id: authUser.id || '',
+    email: authUser.email || '',
+    name: authUser.user_metadata?.name || authUser.user_metadata?.full_name || authUser.email || 'Unknown',
+    role,
+    authSource: 'supabase-jwt',
+  };
+}
+
+const hasAuthenticatedUserContext = (user) => Boolean(user?.id && user?.role);
+
+async function getUserFromRequest(req) {
+  const jwtUser = await getSupabaseUserFromToken(req);
+  if (jwtUser) return jwtUser;
+  if (isStrictJwtMode()) return null;
+  return getLegacyUserFromHeaders(req);
+}
+
+async function requireAuthenticatedUser(req, res) {
+  let user;
+  try {
+    user = await getUserFromRequest(req);
+  } catch (error) {
+    console.error('❌ Ошибка проверки Supabase JWT:', error.message);
+    res.status(503).json({ error: 'Проверка авторизации временно недоступна' });
+    return null;
+  }
+
   if (!hasAuthenticatedUserContext(user)) {
     res.status(401).json({ error: 'Требуется авторизация для доступа к файлам' });
     return null;
@@ -49,8 +100,8 @@ function requireAuthenticatedUser(req, res) {
   return user;
 }
 
-function requireAnyRole(req, res, allowedRoles) {
-  const user = requireAuthenticatedUser(req, res);
+async function requireAnyRole(req, res, allowedRoles) {
+  const user = await requireAuthenticatedUser(req, res);
   if (!user) return null;
   if (!allowedRoles.includes(user.role)) {
     res.status(403).json({ error: 'Недостаточно прав для операции с файлом' });
@@ -182,8 +233,8 @@ if (multer) {
 // ========== API РАБОТЫ С ФАЙЛАМИ ==========
 
 // Загрузка файла
-app.post('/api/upload', (req, res, next) => {
-  if (!requireAnyRole(req, res, FILE_UPLOAD_ROLES)) return;
+app.post('/api/upload', async (req, res, next) => {
+  if (!await requireAnyRole(req, res, FILE_UPLOAD_ROLES)) return;
 
   if (!multer || !upload) {
     return res.status(503).json({ error: 'Сервис загрузки временно недоступен (отсутствует зависимость multer). Запустите npm install.' });
@@ -222,8 +273,8 @@ app.post('/api/upload', (req, res, next) => {
 });
 
 // Скачивание/Просмотр файла
-app.get('/api/files/:projectId/:filename', (req, res) => {
-  if (!requireAuthenticatedUser(req, res)) return;
+app.get('/api/files/:projectId/:filename', async (req, res) => {
+  if (!await requireAuthenticatedUser(req, res)) return;
 
   const { projectId, filename } = req.params;
   let filePath;
@@ -245,7 +296,7 @@ app.get('/api/files/:projectId/:filename', (req, res) => {
 
 // Получить временную ссылку Seafile без раскрытия SEAFILE_TOKEN во frontend.
 app.get('/api/seafile/download-url', async (req, res) => {
-  if (!requireAuthenticatedUser(req, res)) return;
+  if (!await requireAuthenticatedUser(req, res)) return;
 
   const storagePath = String(req.query.path || '');
   if (!isSafeSeafilePath(storagePath)) {
@@ -275,7 +326,7 @@ app.get('/api/seafile/download-url', async (req, res) => {
 
 // Получить список файлов/папок Seafile без раскрытия SEAFILE_TOKEN во frontend.
 app.get('/api/seafile/list', async (req, res) => {
-  if (!requireAuthenticatedUser(req, res)) return;
+  if (!await requireAuthenticatedUser(req, res)) return;
 
   const dirPath = String(req.query.path || '');
   if (!isSafeSeafilePath(dirPath)) {
@@ -303,8 +354,8 @@ app.get('/api/seafile/list', async (req, res) => {
 });
 
 // Загрузить файл в Seafile через backend, чтобы не раскрывать SEAFILE_TOKEN.
-app.post('/api/seafile/upload', (req, res, next) => {
-  if (!requireAnyRole(req, res, FILE_UPLOAD_ROLES)) return;
+app.post('/api/seafile/upload', async (req, res, next) => {
+  if (!await requireAnyRole(req, res, FILE_UPLOAD_ROLES)) return;
 
   if (!multer || !seafileUpload) {
     return res.status(503).json({ error: 'Сервис загрузки временно недоступен (отсутствует зависимость multer). Запустите npm install.' });
@@ -361,7 +412,7 @@ app.post('/api/seafile/upload', (req, res, next) => {
           size: req.file.size,
           storagePath,
           uploadedAt: now,
-          uploadedBy: req.body.uploadedBy || getUserFromRequest(req).id || 'system',
+          uploadedBy: req.body.uploadedBy || getLegacyUserFromHeaders(req).id || 'system',
         } : {
           id: `${Date.now()}-${Math.round(Math.random() * 100000)}`,
           fileName: req.file.originalname,
@@ -369,7 +420,7 @@ app.post('/api/seafile/upload', (req, res, next) => {
           fileSize: req.file.size,
           storagePath,
           category: req.body.category || 'other',
-          uploadedBy: req.body.uploadedBy || getUserFromRequest(req).id || 'system',
+          uploadedBy: req.body.uploadedBy || getLegacyUserFromHeaders(req).id || 'system',
           uploadedAt: now,
           isSeafile: true,
           publicUrl: `seafile://${storagePath}`,
@@ -384,7 +435,7 @@ app.post('/api/seafile/upload', (req, res, next) => {
 
 // Удалить файл из Seafile через backend, чтобы не раскрывать SEAFILE_TOKEN.
 app.delete('/api/seafile/file', async (req, res) => {
-  if (!requireAnyRole(req, res, FILE_DELETE_ROLES)) return;
+  if (!await requireAnyRole(req, res, FILE_DELETE_ROLES)) return;
 
   const storagePath = String(req.query.path || '');
   if (!isSafeSeafilePath(storagePath)) {
@@ -411,8 +462,8 @@ app.delete('/api/seafile/file', async (req, res) => {
 });
 
 // Удаление файла
-app.delete('/api/files/:projectId/:filename', (req, res) => {
-  if (!requireAnyRole(req, res, ['admin', 'ceo', 'deputy_director', 'procurement'])) return;
+app.delete('/api/files/:projectId/:filename', async (req, res) => {
+  if (!await requireAnyRole(req, res, ['admin', 'ceo', 'deputy_director', 'procurement'])) return;
 
   const { projectId, filename } = req.params;
   let filePath;
@@ -670,4 +721,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 

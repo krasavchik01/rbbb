@@ -1,6 +1,7 @@
 /**
  * API client utilities for communicating with the backend server
  */
+import { supabase } from '@/integrations/supabase/client';
 
 const API_BASE = typeof window !== 'undefined' ? '' : process.env.API_BASE || 'http://localhost:3000';
 
@@ -31,7 +32,15 @@ export async function apiRequest<T = any>(
       headers['Content-Type'] = 'application/json';
     }
 
-    // Add user context from localStorage if available
+    // Prefer a real Supabase JWT when a session exists. Legacy x-user-* headers
+    // remain only as compatibility fallback until REQUIRE_SUPABASE_JWT is enabled
+    // on the backend after all users have Auth accounts.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    }
+
+    // Add legacy user context from localStorage if available
     const userStr = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
     if (userStr) {
       try {
@@ -117,4 +126,5 @@ export function apiPut<T = any>(endpoint: string, body?: any, options?: RequestO
 export function apiDelete<T = any>(endpoint: string, options?: RequestOptions) {
   return apiRequest<T>(endpoint, { ...options, method: 'DELETE' });
 }
+
 
