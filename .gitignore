@@ -32,3 +32,6 @@ dist-ssr
 *.xlsx
 *.xls
 tmp/
+
+# Локальные read-only отчёты аудита auth могут содержать masked email/id сотрудников.
+reports/auth-readiness-audit*.json
