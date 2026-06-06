@@ -12,7 +12,7 @@
  * и не плодить хрупкие подписки). Цифры на дашборде «живые» — но не до
  * долей секунды.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -227,7 +227,7 @@ export function PartnerApprovalWidget() {
             <Button
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => navigate('/timesheets/approval')}
+              onClick={() => navigate('/timesheet-approval')}
             >
               Утвердить <ArrowRight className="w-3 h-3 ml-1" />
             </Button>

@@ -19,7 +19,8 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "audit:auth-readiness": "node scripts/audit-supabase-auth-readiness.mjs",
-    "test:access": "playwright test tests/access/role-page-access.spec.ts --project=chromium --reporter=line"
+    "test:access": "playwright test tests/access/role-page-access.spec.ts --project=chromium --reporter=line",
+    "test:routes": "node --test tests/navigation-routes.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

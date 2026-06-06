@@ -27,13 +27,11 @@ import {
 import { 
   Clock,
   Calendar,
-  User,
   Briefcase,
   CheckCircle,
   XCircle,
   Search,
   Filter,
-  Download,
   Plus,
   Edit,
   Trash2,
@@ -56,7 +54,6 @@ interface TimesheetEntry {
   reviewedBy?: string;
   reviewedAt?: string;
 }
-
 /**
  * Аудиторские секции из xlsx-таймщитов. Соответствует колонке
  * «Категория Секция» которую заполняют ассистенты/менеджеры в Drive-файлах.
@@ -485,6 +482,8 @@ export default function Timesheets() {
         toast({ title: 'Ошибка', description: 'Не удалось обновить запись', variant: 'destructive' });
         return;
       }
+      const uiEntry = toUiEntry(updated);
+      setTimesheets((prev) => prev.map((entry) => (entry.id === uiEntry.id ? uiEntry : entry)));
     } else {
       const created = await createEntry({
         employeeId: user.id,
@@ -503,9 +502,9 @@ export default function Timesheets() {
         toast({ title: 'Ошибка', description: 'Не удалось создать запись', variant: 'destructive' });
         return;
       }
+      const uiEntry = toUiEntry(created);
+      setTimesheets((prev) => [uiEntry, ...prev]);
     }
-
-    await reload();
 
     toast({ title: 'Успешно', description: editingTimesheet ? 'Тайм-щит обновлен' : 'Тайм-щит создан' });
     setShowAddDialog(false);
@@ -552,7 +551,7 @@ export default function Timesheets() {
       toast({ title: 'Ошибка', description: 'Не удалось удалить', variant: 'destructive' });
       return;
     }
-    await reload();
+    setTimesheets((prev) => prev.filter((entry) => entry.id !== timesheet.id));
     toast({ title: 'Успешно', description: 'Тайм-щит удален' });
   };
 
@@ -564,7 +563,8 @@ export default function Timesheets() {
       toast({ title: 'Ошибка', description: 'Не удалось отправить', variant: 'destructive' });
       return;
     }
-    await reload();
+    const uiEntry = toUiEntry(updated);
+    setTimesheets((prev) => prev.map((entry) => (entry.id === uiEntry.id ? uiEntry : entry)));
     toast({ title: 'Успешно', description: 'Тайм-щит отправлен на проверку' });
   };
 
