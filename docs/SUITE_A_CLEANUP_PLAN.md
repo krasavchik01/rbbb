@@ -128,6 +128,8 @@ git commit -m "fix(product): hide legacy survey and template entry points"
 
 ### Phase 2 — удалить мёртвые страницы и imports
 
+**Status:** done — legacy survey/template files removed after references check.
+
 Цель: кодовая база становится проще, bundle легче.
 
 После Phase 1 проверить, какие файлы больше не используются:
