@@ -36,10 +36,8 @@ const routeMatrix: Array<{ path: string; allowed: readonly Role[] }> = [
   { path: '/settings', allowed: allRoles },
   { path: '/calendar', allowed: allRoles },
   { path: '/tasks', allowed: allRoles },
-  { path: '/survey', allowed: allRoles },
   { path: '/attendance', allowed: allRoles },
   { path: '/user-management', allowed: ['admin'] },
-  { path: '/create-project', allowed: allRoles },
   { path: '/create-project-procurement', allowed: ['admin', 'procurement'] },
   { path: '/project-approval', allowed: ['admin', 'ceo', 'deputy_director'] },
   { path: '/tenders', allowed: ['procurement'] },
@@ -113,6 +111,28 @@ test.describe('production-safe role route access matrix', () => {
           }
         });
       }
+    });
+  }
+});
+
+
+test.describe('legacy workflow redirects', () => {
+  const redirects = [
+    ['/survey', /\/projects(?:[?#].*)?$/],
+    ['/project-survey', /\/projects(?:[?#].*)?$/],
+    ['/project-survey-results', /\/projects(?:[?#].*)?$/],
+    ['/import-timesheet', /\/timesheets(?:[?#].*)?$/],
+    ['/create-project', /\/create-project-procurement(?:[?#].*)?$/],
+    ['/template-constructor/new', /\/create-project-procurement(?:[?#].*)?$/],
+  ] as const;
+
+  for (const [from, to] of redirects) {
+    test(`${from} redirects to active workflow`, async ({ page }) => {
+      await loginAs(page, 'admin');
+      await page.goto(from);
+      await expect(page).toHaveURL(to);
+      await expect(page.locator('body')).not.toContainText('Опрос и команды');
+      await expect(page.locator('body')).not.toContainText('Создать шаблон');
     });
   }
 });

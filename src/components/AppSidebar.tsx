@@ -16,7 +16,6 @@ import {
   Award,
   Mail,
   ClipboardList,
-  ClipboardCheck,
   Bot,
   CheckCircle2,
   CalendarRange,
@@ -79,7 +78,6 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     label: 'Проекты',
     items: [
       { title: 'Проекты',              url: '/projects',                   icon: FolderOpen },
-      { title: 'Опрос и команды',      url: '/survey',                     icon: ClipboardCheck, excludeRoles: ['procurement'] },
       { title: 'Создать проект',       url: '/create-project-procurement', icon: FileText,    allowedRoles: ['procurement'] },
       { title: 'Тендеры',              url: '/tenders',                    icon: Award,       allowedRoles: ['procurement'] },
     ],

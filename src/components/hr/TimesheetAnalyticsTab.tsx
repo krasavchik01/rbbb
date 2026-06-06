@@ -590,16 +590,10 @@ export default function TimesheetAnalyticsTab() {
         </Card>
       </div>
 
-      {/* Покрытие табеля — кто подал, кто нет, и когда был последний импорт.
-          Жалоба HR: «вижу только этих, а заполнял весь штат». Реальный сценарий
-          из практики: люди заполняют Google Sheets, но в БД только то, что
-          было импортировано на момент последнего прогона /import-timesheet.
-          Если файлы дописали ПОСЛЕ импорта — новые строки висят в Drive, но
-          не в системе. Эта плашка различает три категории:
-            • подали в этом месяце,
-            • подавали в прошлых месяцах, но не в этом → «возможно дописали,
-              надо перезалить файл»,
-            • никогда не подавали → «файл ни разу не загружался». */}
+      {/* Покрытие табеля — кто подал, кто нет, и когда данные последний раз
+          попали в систему. Legacy-импорт через пользовательский UI удаляется
+          из основного workflow, поэтому этот блок только показывает качество
+          имеющихся данных и не отправляет людей в старые формы/опросники. */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -686,10 +680,9 @@ export default function TimesheetAnalyticsTab() {
                           {stale.length} сотрудник{stale.length === 1 ? '' : 'ов'} подавал{stale.length === 1 ? '' : 'и'} часы раньше, но не за этот месяц
                         </div>
                         <div className="text-amber-800/80 dark:text-amber-300/80 mt-0.5">
-                          Скорее всего, они дописали май в Google Drive после последнего импорта
-                          {lastImportAt ? ` (${format(parseISO(lastImportAt), 'd MMMM HH:mm', { locale: ru })})` : ''}.
-                          Зайти в <b>/import-timesheet</b>, повторно загрузить те же файлы →
-                          система перезапишет старые данные новыми (без дубликатов, т.к. ID файла тот же).
+                          Данные за этот месяц отличаются от прошлых периодов
+                          {lastImportAt ? ` (последнее попадание импортных данных в систему: ${format(parseISO(lastImportAt), 'd MMMM HH:mm', { locale: ru })})` : ''}.
+                          Проверьте источник часов и при необходимости внесите/исправьте записи в актуальном workflow тайм-щитов.
                         </div>
                       </div>
                     </div>
@@ -705,7 +698,7 @@ export default function TimesheetAnalyticsTab() {
                       {stale.length > 0 && (
                         <div>
                           <div className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1">
-                            ⚠️ Файлы устарели ({stale.length}) — перезалить через /import-timesheet
+                            ⚠️ Возможны неполные данные ({stale.length}) — проверить актуальный workflow тайм-щитов
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-xs">
                             {stale

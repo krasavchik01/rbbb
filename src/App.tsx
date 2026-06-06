@@ -19,8 +19,6 @@ const TimesheetApproval = lazy(() => import('@/pages/TimesheetApproval'));
 const AssignPartners = lazy(() => import('@/pages/AssignPartners'));
 const Bonuses = lazy(() => import('@/pages/Bonuses'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
-const TemplateConstructor = lazy(() => import('@/pages/TemplateConstructor'));
-const CreateProjectFromTemplate = lazy(() => import('@/pages/CreateProjectFromTemplate'));
 const CreateProjectProcurement = lazy(() => import('@/pages/CreateProjectProcurement'));
 const ProjectApproval = lazy(() => import('@/pages/ProjectApproval'));
 const ProjectWorkspace = lazy(() => import('@/pages/ProjectWorkspace'));
@@ -42,7 +40,6 @@ const Register = lazy(() => import('@/pages/Register'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
 const AIChat = lazy(() => import('@/pages/AIChat'));
 const TasksHub = lazy(() => import('@/pages/TasksHub'));
-const SurveyHub = lazy(() => import('@/pages/SurveyHub'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -189,19 +186,12 @@ function App() {
               }
             />
             <Route path="/my-tasks" element={<Navigate to="/tasks?tab=mine" replace />} />
-            <Route
-              path="/survey"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <SurveyHub />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/project-survey" element={<Navigate to="/survey?tab=fill" replace />} />
-            <Route path="/project-survey-results" element={<Navigate to="/survey?tab=results" replace />} />
-            <Route path="/import-timesheet" element={<Navigate to="/survey?tab=import" replace />} />
+            {/* Legacy survey/questionnaire/import workflows removed from the product UI.
+                Keep redirects so old saved links do not 404. */}
+            <Route path="/survey" element={<Navigate to="/projects" replace />} />
+            <Route path="/project-survey" element={<Navigate to="/projects" replace />} />
+            <Route path="/project-survey-results" element={<Navigate to="/projects" replace />} />
+            <Route path="/import-timesheet" element={<Navigate to="/timesheets" replace />} />
             <Route
               path="/attendance"
               element={
@@ -222,26 +212,10 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/template-constructor/:id"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <TemplateConstructor />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/create-project"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <CreateProjectFromTemplate />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* Legacy template constructor removed from the product UI.
+                Procurement project creation is the active supported workflow. */}
+            <Route path="/template-constructor/:id" element={<Navigate to="/create-project-procurement" replace />} />
+            <Route path="/create-project" element={<Navigate to="/create-project-procurement" replace />} />
             <Route
               path="/create-project-procurement"
               element={
@@ -369,8 +343,6 @@ function App() {
             />
             {/* /ifrs9 удалён по решению юзера. Redirect на главную. */}
             <Route path="/ifrs9" element={<Navigate to="/" replace />} />
-            {/* Старые маршруты /project-survey*, /import-timesheet — теперь
-                redirect → /survey?tab=... (определены выше в файле). */}
             <Route
               path="/ai"
               element={

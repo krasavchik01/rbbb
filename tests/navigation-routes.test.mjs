@@ -70,3 +70,59 @@ test('literal internal navigation targets point to registered App routes', () =>
 
   assert.deepEqual(failures, []);
 });
+
+test('legacy survey and template workflows are not exposed in primary UI', () => {
+  const checkedFiles = [
+    'src/components/AppSidebar.tsx',
+    'src/components/Layout.tsx',
+    'src/components/MobileNavigation.tsx',
+  ];
+
+  const forbiddenMarkers = [
+    '/survey',
+    '/project-survey',
+    '/project-survey-results',
+    '/import-timesheet',
+    '/template-constructor',
+    "url: '/create-project'",
+    'to="/create-project"',
+    'navigate(\'/create-project\')',
+    'navigate("/create-project")',
+    'ProjectSurveyBanner',
+    'Опрос и команды',
+    'Создать шаблон',
+  ];
+
+  const failures = [];
+  for (const rel of checkedFiles) {
+    const source = readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const marker of forbiddenMarkers) {
+      if (source.includes(marker)) failures.push(`${rel} exposes ${marker}`);
+    }
+  }
+
+  assert.deepEqual(failures, []);
+});
+
+test('legacy routes redirect to active product workflows instead of rendering legacy pages', () => {
+  const appSource = readFileSync(APP, 'utf8');
+  const expectations = [
+    ['path="/survey"', 'to="/projects"'],
+    ['path="/project-survey"', 'to="/projects"'],
+    ['path="/project-survey-results"', 'to="/projects"'],
+    ['path="/import-timesheet"', 'to="/timesheets"'],
+    ['path="/template-constructor/:id"', 'to="/create-project-procurement"'],
+    ['path="/create-project"', 'to="/create-project-procurement"'],
+  ];
+
+  for (const [route, target] of expectations) {
+    const routeIndex = appSource.indexOf(route);
+    assert.notEqual(routeIndex, -1, `${route} route should remain as safe redirect`);
+    const routeSnippet = appSource.slice(routeIndex, routeIndex + 220);
+    assert.ok(routeSnippet.includes(target), `${route} should redirect to ${target}`);
+  }
+
+  assert.equal(appSource.includes('<SurveyHub />'), false);
+  assert.equal(appSource.includes('<TemplateConstructor />'), false);
+  assert.equal(appSource.includes('<CreateProjectFromTemplate />'), false);
+});
