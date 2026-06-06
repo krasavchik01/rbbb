@@ -221,6 +221,10 @@ export default function CreateProjectProcurement() {
       toast({ title: "Ошибка", description: "Укажите сумму без НДС", variant: "destructive" });
       return false;
     }
+    if (Number.isNaN(parseFloat(vatRate))) {
+      toast({ title: "Ошибка", description: "Выберите ставку НДС", variant: "destructive" });
+      return false;
+    }
     
     // Валидация консорциума
     if (isConsortium) {
@@ -262,6 +266,9 @@ export default function CreateProjectProcurement() {
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    const amountValue = parseFloat(amountWithoutVAT) || 0;
+    const vatRateValue = parseFloat(vatRate) || 0;
+
     // Создаём объект проекта
     const project = {
       id: `proj_${Date.now()}`,
@@ -276,7 +283,7 @@ export default function CreateProjectProcurement() {
         companyId: m.companyId,
         companyName: companies.find(c => c.id === m.companyId)?.name || "",
         sharePercentage: m.sharePercentage,
-        shareAmount: (parseFloat(amountWithoutVAT) * m.sharePercentage) / 100,
+        shareAmount: (amountValue * m.sharePercentage) / 100,
       })) : undefined,
       
       status: 'new' as const,
@@ -296,10 +303,10 @@ export default function CreateProjectProcurement() {
         subject: contractSubject,
         serviceStartDate: serviceStartDate,
         serviceEndDate: serviceEndDate,
-        amountWithoutVAT: parseFloat(amountWithoutVAT),
-        vatRate: parseFloat(vatRate), // Ставка НДС (0, 12, 16)
-        vatAmount: parseFloat(amountWithoutVAT) * parseFloat(vatRate) / 100, // Сумма НДС
-        amountWithVAT: parseFloat(amountWithoutVAT) * (1 + parseFloat(vatRate) / 100), // Сумма с НДС
+        amountWithoutVAT: amountValue,
+        vatRate: vatRateValue, // Ставка НДС (0, 12, 16)
+        vatAmount: amountValue * vatRateValue / 100, // Сумма НДС
+        amountWithVAT: amountValue * (1 + vatRateValue / 100), // Сумма с НДС
         currency: currency, // Валюта проекта
         // Сохраняем информацию о файлах (URL создаются позже при загрузке в Storage)
         contractScanUrl: contractFiles.length > 0 ? 'pending_upload' : undefined,
@@ -322,18 +329,18 @@ export default function CreateProjectProcurement() {
       additionalServices: hasAdditionalServices && additionalServices.length > 0 ? additionalServices : undefined,
       
       finances: {
-        amountWithoutVAT: parseFloat(amountWithoutVAT),
+        amountWithoutVAT: amountValue,
         preExpensePercent: 30,
-        preExpenseAmount: parseFloat(amountWithoutVAT) * 0.3,
+        preExpenseAmount: amountValue * 0.3,
         contractors: [],
         totalContractorsAmount: 0,
-        bonusBase: parseFloat(amountWithoutVAT) * 0.7,
+        bonusBase: amountValue * 0.7,
         bonusPercent: 10,
-        totalBonusAmount: parseFloat(amountWithoutVAT) * 0.7 * 0.1,
+        totalBonusAmount: amountValue * 0.7 * 0.1,
         teamBonuses: {},
         totalPaidBonuses: 0,
-        totalCosts: parseFloat(amountWithoutVAT) * 0.3,
-        grossProfit: parseFloat(amountWithoutVAT) * 0.7,
+        totalCosts: amountValue * 0.3,
+        grossProfit: amountValue * 0.7,
         profitMargin: 70,
         
         // Для консорциума - разбивка по компаниям
@@ -341,9 +348,9 @@ export default function CreateProjectProcurement() {
           companyId: m.companyId,
           companyName: companies.find(c => c.id === m.companyId)?.name || "",
           sharePercentage: m.sharePercentage,
-          shareAmount: (parseFloat(amountWithoutVAT) * m.sharePercentage) / 100,
-          bonusBase: ((parseFloat(amountWithoutVAT) * m.sharePercentage) / 100) * 0.7,
-          totalBonusAmount: ((parseFloat(amountWithoutVAT) * m.sharePercentage) / 100) * 0.7 * 0.1,
+          shareAmount: (amountValue * m.sharePercentage) / 100,
+          bonusBase: ((amountValue * m.sharePercentage) / 100) * 0.7,
+          totalBonusAmount: ((amountValue * m.sharePercentage) / 100) * 0.7 * 0.1,
         })) : undefined,
       },
       

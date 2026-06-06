@@ -149,7 +149,9 @@ export default function Projects() {
     let active = true;
     allProjectsHoursTotals()
       .then((m) => { if (active) setHoursByProject(m); })
-      .catch(() => {});
+      .catch((error) => {
+        console.error('[Projects] failed to load project hours totals', error);
+      });
     return () => { active = false; };
   }, []);
 

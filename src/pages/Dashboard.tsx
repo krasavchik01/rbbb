@@ -199,7 +199,9 @@ export default function Dashboard() {
     let active = true;
     allProjectsHoursTotals()
       .then((m) => { if (active) setHoursByProject(m); })
-      .catch(() => {});
+      .catch((error) => {
+        console.error('[Dashboard] failed to load project hours totals', error);
+      });
     return () => { active = false; };
   }, []);
 

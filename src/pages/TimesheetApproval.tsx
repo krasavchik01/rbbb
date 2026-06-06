@@ -262,6 +262,10 @@ export default function TimesheetApproval() {
 
   const submitApprove = async () => {
     if (!approveDialog) return;
+    if (!canApprove) {
+      toast({ title: 'Нет прав', description: 'У вас нет прав утверждать тайм-щиты.', variant: 'destructive' });
+      return;
+    }
     setBusy(true);
     try {
       const n = await approveEntries(
@@ -269,6 +273,10 @@ export default function TimesheetApproval() {
         { id: user.id, name: user.name },
         approveDialog.comment.trim() || undefined,
       );
+      if (n === 0) {
+        toast({ title: 'Не утверждено', description: 'Supabase не обновил ни одной записи. Проверьте права или выбранные записи.', variant: 'destructive' });
+        return;
+      }
 
       // Авто-добавление в команду проекта: если сотрудник подал часы по
       // проекту X и партнёр их утвердил — он официально становится участником
@@ -295,6 +303,9 @@ export default function TimesheetApproval() {
       });
       setApproveDialog(null);
       await reload();
+    } catch (error: any) {
+      console.error('[TimesheetApproval] approve failed', error);
+      toast({ title: 'Ошибка утверждения', description: error?.message || 'Не удалось утвердить часы.', variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -310,6 +321,10 @@ export default function TimesheetApproval() {
 
   const submitReject = async () => {
     if (!rejectDialog) return;
+    if (!canApprove) {
+      toast({ title: 'Нет прав', description: 'У вас нет прав отклонять тайм-щиты.', variant: 'destructive' });
+      return;
+    }
     const reason = rejectDialog.reason.trim();
     if (!reason) {
       toast({ title: 'Нужна причина', description: 'Сотрудник увидит её и поправит запись.', variant: 'destructive' });
@@ -318,9 +333,16 @@ export default function TimesheetApproval() {
     setBusy(true);
     try {
       const n = await rejectEntries(rejectDialog.ids, { id: user.id, name: user.name }, reason);
+      if (n === 0) {
+        toast({ title: 'Не отклонено', description: 'Supabase не обновил ни одной записи. Проверьте права или выбранные записи.', variant: 'destructive' });
+        return;
+      }
       toast({ title: `Отклонено: ${n}`, description: 'Сотрудник увидит причину и сможет поправить.' });
       setRejectDialog(null);
       await reload();
+    } catch (error: any) {
+      console.error('[TimesheetApproval] reject failed', error);
+      toast({ title: 'Ошибка отклонения', description: error?.message || 'Не удалось отклонить часы.', variant: 'destructive' });
     } finally {
       setBusy(false);
     }

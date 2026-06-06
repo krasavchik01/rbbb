@@ -141,7 +141,9 @@ export default function ProjectWorkspace() {
     let active = true;
     allProjectsHoursTotals()
       .then((m) => { if (active) setProjectHours(m.get(id)); })
-      .catch(() => {});
+      .catch((error) => {
+        console.error('[ProjectWorkspace] failed to load project hours totals', error);
+      });
     return () => { active = false; };
   }, [id]);
 

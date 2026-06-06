@@ -55,6 +55,7 @@ export default function ProjectApproval() {
   const [activeProjects, setActiveProjects] = useState<ProjectV3[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<ProjectV3 | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -318,6 +319,10 @@ export default function ProjectApproval() {
 
   const handleApprove = async () => {
     if (!selectedProject) return;
+    if (!canManageProjects) {
+      toast({ title: "Ошибка", description: "У вас нет прав утверждать проекты", variant: "destructive" });
+      return;
+    }
 
     // Проверяем что назначен хотя бы партнер
     if (!teamMembers['partner']) {
@@ -391,7 +396,7 @@ export default function ProjectApproval() {
         }
         console.log('✅ Project approved and saved to Supabase:', supabaseId);
       } else {
-        console.warn('⚠️ Project ID not found, cannot save to Supabase');
+        throw new Error('Project ID not found, cannot save to Supabase');
       }
 
       // Отправляем уведомления всем членам команды параллельно
@@ -520,49 +525,65 @@ export default function ProjectApproval() {
   };
 
   const handleReject = async () => {
-    if (!selectedProject) return;
+    if (!selectedProject || isRejecting) return;
+    if (!canManageProjects) {
+      toast({ title: "Ошибка", description: "У вас нет прав отклонять проекты", variant: "destructive" });
+      return;
+    }
 
-    // Спрашиваем причину у пользователя (раньше была hardcoded заглушка).
     const reason = window.prompt('Укажи причину отклонения проекта (будет видна procurement):', '');
     if (!reason || !reason.trim()) {
       toast({ title: 'Отмена', description: 'Причина не указана, проект не отклонён.' });
       return;
     }
 
-    // Реальный procurement-юзер = создатель проекта (notes.createdBy), а не
-    // hardcoded 'procurement_1'. Fallback на любого procurement если ID не найден.
-    const notes = (selectedProject as any).notes || {};
-    let procurementId = notes.createdBy || (selectedProject as any).createdBy || '';
-    if (!procurementId) {
-      const fallback = (availableEmployees || []).find((e: any) => e.role === 'procurement');
-      procurementId = fallback?.id || '';
-    }
-
-    // Обновляем статус в Supabase (раньше писал только в localStorage)
+    setIsRejecting(true);
     try {
+      const notes = (selectedProject as any).notes || {};
+      let procurementId = notes.createdBy || (selectedProject as any).createdBy || '';
+      if (!procurementId) {
+        const fallback = (availableEmployees || []).find((e: any) => e.role === 'procurement');
+        procurementId = fallback?.id || '';
+      }
+
+      const supabaseId = selectedProject.id || (selectedProject as any).supabaseId;
+      if (!supabaseId) {
+        throw new Error('Project ID not found, cannot save rejection to Supabase');
+      }
+
       const nextNotes = { ...notes, status: 'cancelled', rejectionReason: reason, rejectedBy: user?.id, rejectedByName: user?.name, rejectedAt: new Date().toISOString() };
-      await supabaseDataStore.updateProject(selectedProject.id, { ...(selectedProject as any), status: 'cancelled', notes: nextNotes });
-    } catch (e) {
-      console.error('handleReject: updateProject failed', e);
-    }
+      const saved = await supabaseDataStore.updateProject(supabaseId, { ...(selectedProject as any), status: 'cancelled', notes: nextNotes });
+      if (!saved) {
+        throw new Error('Не удалось сохранить отклонение проекта в Supabase');
+      }
 
-    if (procurementId) {
-      notifyProjectRejected({
-        projectName: selectedProject.name,
-        reason,
-        procurementUserId: procurementId,
-        rejectorName: user?.name || 'Зам. директора',
+      if (procurementId) {
+        notifyProjectRejected({
+          projectName: selectedProject.name,
+          reason,
+          procurementUserId: procurementId,
+          rejectorName: user?.name || 'Зам. директора',
+        });
+      }
+
+      toast({
+        title: 'Проект отклонён',
+        description: procurementId ? 'Procurement получит уведомление с причиной.' : 'Procurement-сотрудник не найден — сообщи отделу закупок вручную.',
+        variant: 'destructive',
       });
+
+      setProjects(projects.filter(p => p.id !== selectedProject.id));
+      setSelectedProject(null);
+    } catch (error: any) {
+      console.error('handleReject: updateProject failed', error);
+      toast({
+        title: 'Ошибка отклонения проекта',
+        description: error?.message || 'Не удалось отклонить проект',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsRejecting(false);
     }
-
-    toast({
-      title: 'Проект отклонён',
-      description: procurementId ? 'Procurement получит уведомление с причиной.' : 'Procurement-сотрудник не найден — сообщи отделу закупок вручную.',
-      variant: 'destructive',
-    });
-
-    setProjects(projects.filter(p => p.id !== selectedProject.id));
-    setSelectedProject(null);
   };
 
   // Удаление проекта (для админа и зам. директора)
@@ -1216,13 +1237,13 @@ export default function ProjectApproval() {
 
               {/* Действия */}
               <div className="flex gap-4">
-                <Button onClick={handleReject} variant="outline" className="flex-1">
+                <Button onClick={handleReject} variant="outline" className="flex-1" disabled={isRejecting || isApproving}>
                   <XCircle className="w-4 h-4 mr-2" />
-                  Отклонить
+                  {isRejecting ? 'Отклонение...' : 'Отклонить'}
                 </Button>
-                <Button onClick={handleApprove} className="flex-1" size="lg" disabled={isApproving}>
+                <Button onClick={handleApprove} className="flex-1" size="lg" disabled={isApproving || isRejecting}>
                   <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Утвердить проект
+                  {isApproving ? 'Утверждение...' : 'Утвердить проект'}
                 </Button>
               </div>
             </div>

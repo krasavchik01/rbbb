@@ -400,7 +400,7 @@ export async function approveEntries(
     .select('id');
   if (error) {
     console.error('[timesheets] approveEntries failed', error);
-    return 0;
+    throw new Error(error.message || 'Не удалось утвердить тайм-щиты');
   }
   return data?.length || 0;
 }
@@ -424,7 +424,7 @@ export async function rejectEntries(
     .select('id');
   if (error) {
     console.error('[timesheets] rejectEntries failed', error);
-    return 0;
+    throw new Error(error.message || 'Не удалось отклонить тайм-щиты');
   }
   return data?.length || 0;
 }

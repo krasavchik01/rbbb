@@ -56,9 +56,18 @@ export default function Bonuses() {
         setApprovedIdx(a);
         setPendingIdx(p);
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error('[Bonuses] failed to load timesheet hours indexes', error);
+        if (active) {
+          toast({
+            title: 'Часы не загрузились',
+            description: 'Бонусы могут показывать неполные часы. Обновите страницу или проверьте соединение.',
+            variant: 'destructive',
+          });
+        }
+      });
     return () => { active = false; };
-  }, []);
+  }, [toast]);
   const getHoursFor = (userId: string, projectId: string): number =>
     approvedIdx.get(`${userId}__${projectId}`) || 0;
   const getPendingHoursFor = (userId: string, projectId: string): number =>
