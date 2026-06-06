@@ -178,6 +178,8 @@ git commit -m "docs(ui): remove legacy timesheet import guidance"
 
 ### Phase 4 — audit legacy bundle cleanup
 
+**Status:** done — `src/_legacy/audit-and-ifrs9` removed after confirming no runtime imports.
+
 Цель: понять, можно ли полностью удалить `src/_legacy/audit-and-ifrs9`.
 
 Действия:

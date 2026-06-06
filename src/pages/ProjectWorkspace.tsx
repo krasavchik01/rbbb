@@ -38,7 +38,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
 // MethodologySelector removed
-// import { RUSSELL_BEDFORD_AUDIT_METHODOLOGY } from "@/lib/auditMethodology"; — удалено по решению юзера
 import { ProjectV3 } from "@/types/project-v3";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole, TEAM_ROLE_SLOTS } from "@/types/roles";
 import { useEmployees } from "@/hooks/useSupabaseData";

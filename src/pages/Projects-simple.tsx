@@ -32,7 +32,6 @@ import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate,
 import { supabase } from "@/integrations/supabase/client";
 import { notifyTeamAssembled, notifyTeamMemberAdded, notifyBulkProjectsImported } from "@/lib/projectNotifications";
 import { useAppSettings } from "@/lib/appSettings";
-// import { ALL_AUDIT_TEMPLATES } from "@/lib/auditTemplates"; — удалено по решению юзера
 import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
 import { ContractStagesEditor } from "@/components/projects/ContractStagesEditor";
 import { CEOSummaryTable } from "@/components/projects/CEOSummaryTable";
