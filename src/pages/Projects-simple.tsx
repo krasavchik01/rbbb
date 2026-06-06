@@ -183,7 +183,19 @@ export default function Projects() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const navigate = useNavigate();
 
-  // State для распределения команды (только для зам. директора)
+  // Безопасный переход на страницу проекта.
+  // У проектов в статусе ожидания верхнеуровневый id может быть пустым,
+  // а реальный id лежит в notes.id / projectId. Без guard переход уходил
+  // на /project/undefined и давал битую страницу.
+  const openProject = (project: any, options?: { state?: any }) => {
+    const pid = project?.id || project?.projectId || project?.notes?.id;
+    if (!pid) {
+      navigate('/project-approval', { state: { project, ...(options?.state || {}) } });
+      return;
+    }
+    navigate(`/project/${pid}`, { state: { project, ...(options?.state || {}) } });
+  };
+
   const [projectForTeamDistribution, setProjectForTeamDistribution] = useState<any | null>(null);
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
   const [teamDistributionRoleFilter, setTeamDistributionRoleFilter] = useState<string>('all');
@@ -2017,7 +2029,7 @@ export default function Projects() {
                           </span>
                           <span
                             className="hover:underline cursor-pointer truncate max-w-[300px]"
-                            onClick={() => navigate(`/project/${project.id || project.notes?.id}`, { state: { project } })}
+                            onClick={() => openProject(project)}
                           >
                             {project.name || project.client?.name || 'Без названия'}
                           </span>
@@ -2916,7 +2928,7 @@ export default function Projects() {
                                   className={`text-[10px] text-white ${getProjectStatusColor(project)} ${getProjectStatusLabel(project) === 'Ожидает распределения команды' ? 'cursor-pointer hover:opacity-80' : ''} whitespace-nowrap`}
                                   onClick={() => {
                                     if (getProjectStatusLabel(project) === 'Ожидает распределения команды') {
-                                      navigate(`/project/${project.id || project.projectId}`, { state: { project, openTeamAssignment: true } });
+                                      openProject(project, { state: { openTeamAssignment: true } });
                                     }
                                   }}
                                 >
@@ -3087,7 +3099,7 @@ export default function Projects() {
                               variant="outline"
                               size="sm"
                               className="h-6 px-2 text-xs"
-                              onClick={() => navigate(`/project/${project.id}`, { state: { project } })}
+                              onClick={() => openProject(project)}
                             >
                               ➡️
                             </Button>

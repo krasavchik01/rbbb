@@ -837,7 +837,7 @@ export default function ProjectApproval() {
                   {/* Кнопки: на мобилке во всю ширину под содержимым,
                       на md+ — узкая колонка справа. */}
                   <div className="flex flex-col gap-2 w-full md:w-auto md:min-w-[180px]">
-                    <Button onClick={() => navigate(`/project/${project.id}`)} variant="outline" className="w-full whitespace-nowrap">
+                    <Button disabled={!project.id} onClick={() => project.id && navigate(`/project/${project.id}`)} variant="outline" className="w-full whitespace-nowrap">
                       <Eye className="w-4 h-4 mr-2" />
                       Открыть
                     </Button>
@@ -942,7 +942,7 @@ export default function ProjectApproval() {
                       )}
                     </div>
                     <div className="flex flex-col gap-2 shrink-0">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/project/${p.id}`)} className="h-8 text-xs">
+                      <Button size="sm" variant="outline" disabled={!p.id} onClick={() => p.id && navigate(`/project/${p.id}`)} className="h-8 text-xs">
                         <Eye className="w-3 h-3 mr-1" /> Открыть проект
                       </Button>
                       {canStillChangeTeam && canManageProjects && (

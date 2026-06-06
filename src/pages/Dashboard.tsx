@@ -909,8 +909,8 @@ export default function Dashboard() {
                 {recentProjects.map((proj, idx) => (
                   <div
                     key={proj.id || idx}
+                    onClick={() => proj.id && navigate(`/project/${proj.id}`)}
                     className="flex items-center gap-3 p-3 rounded-lg bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group"
-                    onClick={() => navigate(`/project/${proj.id}`)}
                   >
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <FileText className="w-4 h-4 text-primary" />
@@ -986,8 +986,8 @@ export default function Dashboard() {
                 {topProjectsData.map((proj, idx) => (
                   <div
                     key={proj.id || idx}
+                    onClick={() => proj.id && navigate(`/project/${proj.id}`)}
                     className="bg-white dark:bg-slate-900 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-800 hover:border-amber-300 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/project/${proj.id}`)}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-3">
