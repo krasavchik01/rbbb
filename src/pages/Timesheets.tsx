@@ -578,7 +578,18 @@ export default function Timesheets() {
       toast({ title: 'Ошибка', description: 'Не удалось изменить статус', variant: 'destructive' });
       return;
     }
-    await reload();
+    setTimesheets((prev) =>
+      prev.map((entry) =>
+        entry.id === timesheet.id
+          ? {
+              ...entry,
+              status,
+              reviewedBy: reviewer.name,
+              reviewedAt: new Date().toISOString(),
+            }
+          : entry,
+      ),
+    );
     toast({
       title: status === 'approved' ? 'Тайм-щит утверждён' : 'Тайм-щит отклонён',
       description: `${timesheet.employeeName}: ${(timesheet.hours || 0).toFixed(1)} ч`,

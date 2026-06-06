@@ -146,7 +146,7 @@ export default function TemplateConstructor() {
       updateTemplate(id, templateData);
     }
 
-    navigate('/template-editor');
+    navigate('/create-project');
   };
 
   // ========== ПАСПОРТ ПРОЕКТА ==========
@@ -363,7 +363,7 @@ export default function TemplateConstructor() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/template-editor')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/create-project')}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>

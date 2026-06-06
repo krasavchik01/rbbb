@@ -234,7 +234,7 @@ export default function CreateProjectFromTemplate() {
             <Card className="p-12 text-center">
               <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">Нет доступных шаблонов</p>
-              <Button onClick={() => navigate('/template-editor')}>
+              <Button onClick={() => navigate('/template-constructor/new')}>
                 Создать шаблон
               </Button>
             </Card>

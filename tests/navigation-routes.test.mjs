@@ -28,10 +28,10 @@ function normalizeTarget(target) {
 
 function routeToRegExp(route) {
   const normalized = normalizeTarget(route);
-  if (normalized === '*') return /^.*$/;
+  if (normalized === '*') return null;
   const escaped = normalized
     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\\:([^/]+)/g, '[^/]+');
+    .replace(/:([^/]+)/g, '[^/]+');
   return new RegExp(`^${escaped}$`);
 }
 
@@ -42,12 +42,14 @@ function lineNumber(source, index) {
 test('literal internal navigation targets point to registered App routes', () => {
   const appSource = readFileSync(APP, 'utf8');
   const routePaths = [...appSource.matchAll(/<Route\s+path=["']([^"']+)["']/g)].map((m) => m[1]);
-  const routeMatchers = routePaths.map(routeToRegExp);
+  const routeMatchers = routePaths.map(routeToRegExp).filter(Boolean);
 
   const patterns = [
     /navigate\(\s*["'](\/[^"'`]+)["']/g,
     /\bto=\{?["'](\/[^"'`]+)["']\}?/g,
     /\burl:\s*["'](\/[^"'`]+)["']/g,
+    /\bhref=\{?["'](\/[^"'`]+)["']\}?/g,
+    /window\.location\.href\s*=\s*["'](\/[^"'`]+)["']/g,
   ];
 
   const failures = [];
