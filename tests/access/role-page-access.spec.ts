@@ -45,7 +45,6 @@ const routeMatrix: Array<{ path: string; allowed: readonly Role[] }> = [
   { path: '/database-test', allowed: ['admin'] },
   { path: '/notifications', allowed: allRoles },
   { path: '/smtp-settings', allowed: ['admin'] },
-  { path: '/msuk-compliance', allowed: ['admin', 'ceo', 'deputy_director', 'partner'] },
   { path: '/service-memos', allowed: allRoles },
   { path: '/role-management', allowed: ['admin'] },
   { path: '/settings-diagnostics', allowed: ['admin'] },
@@ -124,6 +123,7 @@ test.describe('legacy workflow redirects', () => {
     ['/import-timesheet', /\/timesheets(?:[?#].*)?$/],
     ['/create-project', /\/create-project-procurement(?:[?#].*)?$/],
     ['/template-constructor/new', /\/create-project-procurement(?:[?#].*)?$/],
+    ['/msuk-compliance', /\/projects(?:[?#].*)?$/],
   ] as const;
 
   for (const [from, to] of redirects) {

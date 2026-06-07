@@ -29,19 +29,18 @@ import {
   Search,
   Plus
 } from "lucide-react";
-import { useTemplates, useProjects } from "@/hooks/useDataStore";
+import { useProjects } from "@/hooks/useDataStore";
 import { ProjectVitals } from "@/components/projects/ProjectVitals";
 import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheets";
-import { ProjectTemplate, ProcedureElement, ELEMENT_TYPE_ICONS } from "@/types/methodology";
-import { ProjectData, ElementData } from "@/types/methodology";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
-// MethodologySelector removed
 import { ProjectV3 } from "@/types/project-v3";
-import { PROJECT_ROLES, ROLE_LABELS, UserRole, TEAM_ROLE_SLOTS } from "@/types/roles";
+import { TEAM_ROLE_SLOTS } from "@/types/roles";
+
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
+
 import { supabase } from "@/integrations/supabase/client";
 import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses } from "@/lib/projectNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -64,7 +63,6 @@ export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { templates } = useTemplates();
   const { projects, tasks: allTasks } = useProjects();
   const { employees } = useEmployees();
   const { toast } = useToast();
@@ -74,10 +72,8 @@ export default function ProjectWorkspace() {
   const projectFromState = (location.state as any)?.project;
   const openTeamAssignment = (location.state as any)?.openTeamAssignment;
 
-  const [projectData, setProjectData] = useState<ProjectData | null>(null);
-  const [template, setTemplate] = useState<ProjectTemplate | null>(null);
+  const [projectData, setProjectData] = useState<any | null>(null);
   const [project, setProject] = useState<any>(null);
-  const [currentStageIndex] = useState(0);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showTeamDialog, setShowTeamDialog] = useState(false);
   // Слоты команды: роль → ID сотрудника (или null)
@@ -253,15 +249,6 @@ export default function ProjectWorkspace() {
         loadProjectData().then(data => {
           if (data) {
             setProjectData(data);
-            const foundTemplate = templates.find(t => t.id === data.templateId);
-            if (foundTemplate) {
-              setTemplate(foundTemplate);
-            }
-          }
-          // Проверяем тип проекта для автоматического выбора шаблона
-          const projectType = projectFromState.type || projectFromState.notes?.type;
-          if (projectType === 'audit' || projectFromState.name?.toLowerCase().includes('аудит')) {
-            /* Russell Bedford audit methodology удалена по решению юзера. */
           }
         });
         return;
@@ -294,15 +281,6 @@ export default function ProjectWorkspace() {
       loadProjectData().then(data => {
         if (data) {
           setProjectData(data);
-          const foundTemplate = templates.find(t => t.id === data.templateId);
-          if (foundTemplate) {
-            setTemplate(foundTemplate);
-          }
-        }
-        // Проверяем тип проекта
-        const projectType = foundProject.type || foundProject.notes?.type;
-        if (projectType === 'audit' || foundProject.name?.toLowerCase().includes('аудит')) {
-          /* Russell Bedford audit methodology удалена по решению юзера. */
         }
       });
     } else if (projects.length > 0) {
@@ -318,10 +296,6 @@ export default function ProjectWorkspace() {
           setProject(directProject);
           loadProjectData().then(data => {
             if (data) setProjectData(data);
-            const projectType = directProject.type || directProject.notes?.type;
-            if (projectType === 'audit' || directProject.name?.toLowerCase().includes('аудит')) {
-              /* Russell Bedford audit methodology удалена по решению юзера. */
-            }
           });
         } else {
           console.error('❌ [ProjectWorkspace] Проект не найден, перенаправление...');
@@ -330,274 +304,7 @@ export default function ProjectWorkspace() {
       });
     }
     // Если projects.length === 0, просто ждем следующего рендера (проекты еще загружаются)
-  }, [id, projects, templates, loadProjectData, projectFromState, project]);
-
-  const saveProjectDataLocal = (data: ProjectData) => {
-    setProjectData(data);
-    // Автоматически синхронизируем с Supabase (если доступен)
-    syncSaveProjectData(data);
-  };
-
-  const handleElementUpdate = (stageId: string, elementId: string, updates: Partial<ElementData>) => {
-    if (!projectData) return;
-
-    const newData = { ...projectData };
-
-    if (!newData.stagesData[stageId]) {
-      newData.stagesData[stageId] = {};
-    }
-
-    const existingData = newData.stagesData[stageId][elementId] || {
-      elementId,
-      completed: false
-    };
-
-    newData.stagesData[stageId][elementId] = {
-      ...existingData,
-      ...updates
-    };
-
-    // Пересчитываем прогресс
-    const totalElements = template?.stages.reduce((sum, stage) => sum + stage.elements.length, 0) || 0;
-    let completedElements = 0;
-
-    Object.values(newData.stagesData).forEach(stageData => {
-      Object.values(stageData).forEach(elementData => {
-        if (elementData.completed) completedElements++;
-      });
-    });
-
-    newData.completionStatus = {
-      totalElements,
-      completedElements,
-      percentage: totalElements > 0 ? Math.round((completedElements / totalElements) * 100) : 0
-    };
-
-    saveProjectDataLocal(newData);
-
-    toast({
-      title: "Сохранено",
-      description: "Изменения сохранены",
-    });
-  };
-
-  const toggleElementComplete = (stageId: string, elementId: string) => {
-    if (!projectData) return;
-
-    const elementData = projectData.stagesData[stageId]?.[elementId];
-    const isCompleted = elementData?.completed || false;
-
-    handleElementUpdate(stageId, elementId, {
-      completed: !isCompleted,
-      completedAt: !isCompleted ? new Date().toISOString() : undefined,
-      completedBy: !isCompleted ? user?.id : undefined
-    });
-  };
-
-  // Функция сохранения выбранных процедур методологии
-  // displayStages определяется ниже после activeTemplate
-
-  const renderElementInput = (stageId: string, element: ProcedureElement) => {
-    const elementData = projectData?.stagesData[stageId]?.[element.id];
-    const isCompleted = elementData?.completed || false;
-
-    switch (element.type) {
-      case 'header':
-        return (
-          <div className="py-4">
-            <h3 className="text-lg font-semibold text-primary">{element.title}</h3>
-            {element.description && (
-              <p className="text-sm text-muted-foreground mt-1">{element.description}</p>
-            )}
-          </div>
-        );
-
-      case 'question':
-        return (
-          <Card className={`p-4 ${isCompleted ? 'bg-green-50 border-green-200' : ''}`}>
-            <div className="flex items-start gap-3">
-              <Button
-                variant={isCompleted ? "default" : "outline"}
-                size="icon"
-                className={isCompleted ? "bg-green-500 hover:bg-green-600" : ""}
-                onClick={() => toggleElementComplete(stageId, element.id)}
-              >
-                {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-              </Button>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">{ELEMENT_TYPE_ICONS[element.type]}</span>
-                    <h4 className="font-semibold">{element.title}</h4>
-                    {element.required && <Badge variant="destructive">Обязательно</Badge>}
-                  </div>
-                  <p className="text-sm text-muted-foreground font-medium">{element.question}</p>
-                </div>
-                <div>
-                  <Label htmlFor={`answer-${element.id}`}>Ваш ответ:</Label>
-                  <Textarea
-                    id={`answer-${element.id}`}
-                    value={elementData?.answer || ''}
-                    onChange={(e) => handleElementUpdate(stageId, element.id, { answer: e.target.value })}
-                    placeholder="Введите ваш ответ..."
-                    rows={4}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            </div>
-          </Card>
-        );
-
-      case 'procedure':
-        return (
-          <Card className={`p-4 ${isCompleted ? 'bg-green-50 border-green-200' : ''}`}>
-            <div className="flex items-start gap-3">
-              <Button
-                variant={isCompleted ? "default" : "outline"}
-                size="icon"
-                className={isCompleted ? "bg-green-500 hover:bg-green-600" : ""}
-                onClick={() => toggleElementComplete(stageId, element.id)}
-              >
-                {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-              </Button>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">{ELEMENT_TYPE_ICONS[element.type]}</span>
-                    <h4 className="font-semibold">{element.title}</h4>
-                    {element.required && <Badge variant="destructive">Обязательно</Badge>}
-                  </div>
-                  {element.description && (
-                    <p className="text-sm text-muted-foreground">{element.description}</p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor={`work-${element.id}`}>Описание выполненной работы:</Label>
-                  <Textarea
-                    id={`work-${element.id}`}
-                    value={elementData?.workDescription || ''}
-                    onChange={(e) => handleElementUpdate(stageId, element.id, { workDescription: e.target.value })}
-                    placeholder="Опишите что было сделано..."
-                    rows={3}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`comments-${element.id}`}>Комментарии / Несоответствия:</Label>
-                  <Textarea
-                    id={`comments-${element.id}`}
-                    value={elementData?.comments || ''}
-                    onChange={(e) => handleElementUpdate(stageId, element.id, { comments: e.target.value })}
-                    placeholder="Укажите комментарии или найденные несоответствия..."
-                    rows={2}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            </div>
-          </Card>
-        );
-
-      case 'file':
-        return (
-          <Card className={`p-4 ${isCompleted ? 'bg-green-50 border-green-200' : ''}`}>
-            <div className="flex items-start gap-3">
-              <Button
-                variant={isCompleted ? "default" : "outline"}
-                size="icon"
-                className={isCompleted ? "bg-green-500 hover:bg-green-600" : ""}
-                onClick={() => toggleElementComplete(stageId, element.id)}
-              >
-                {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-              </Button>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl">{ELEMENT_TYPE_ICONS[element.type]}</span>
-                    <h4 className="font-semibold">{element.title}</h4>
-                    {element.required && <Badge variant="destructive">Обязательно</Badge>}
-                  </div>
-                  {element.description && (
-                    <p className="text-sm text-muted-foreground">{element.description}</p>
-                  )}
-                </div>
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm font-medium mb-1">Нажмите для загрузки файла</p>
-                  <p className="text-xs text-muted-foreground">
-                    {element.config?.allowedFileTypes?.join(', ') || 'Любой формат'} •
-                    Макс. {element.config?.maxFileSize || 10} МБ
-                  </p>
-                  <input type="file" className="hidden" accept={element.config?.allowedFileTypes?.join(',')} />
-                </div>
-                {elementData?.files && elementData.files.length > 0 && (
-                  <div className="space-y-2">
-                    {elementData.files.map((file, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
-                        <FileText className="w-4 h-4" />
-                        <span className="text-sm flex-1">{file.name}</span>
-                        <Badge variant="outline">{(file.size / 1024).toFixed(1)} КБ</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        );
-
-      case 'signature':
-        return (
-          <Card className={`p-4 ${isCompleted ? 'bg-green-50 border-green-200' : 'border-yellow-200 bg-yellow-50'}`}>
-            <div className="flex items-start gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">{ELEMENT_TYPE_ICONS[element.type]}</span>
-                  <h4 className="font-semibold">{element.title}</h4>
-                  {element.required && <Badge variant="destructive">Обязательно</Badge>}
-                </div>
-                {element.description && (
-                  <p className="text-sm text-muted-foreground mb-3">{element.description}</p>
-                )}
-                {isCompleted ? (
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="font-medium">Утверждено</span>
-                    {elementData?.signedAt && (
-                      <span className="text-sm text-muted-foreground">
-                        • {new Date(elementData.signedAt).toLocaleString('ru-RU')}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-yellow-600">
-                    <AlertCircle className="w-5 h-5" />
-                    <span className="font-medium">Ожидает утверждения ({element.requiredRole})</span>
-                  </div>
-                )}
-              </div>
-              {user?.role === element.requiredRole && !isCompleted && (
-                <Button
-                  onClick={() => handleElementUpdate(stageId, element.id, {
-                    completed: true,
-                    signedBy: user.id,
-                    signedAt: new Date().toISOString()
-                  })}
-                  className="bg-green-500 hover:bg-green-600"
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Утвердить
-                </Button>
-              )}
-            </div>
-          </Card>
-        );
-
-      default:
-        return null;
-    }
-  };
+  }, [id, projects, loadProjectData, projectFromState, project]);
 
   if (!project) {
     return (
@@ -608,43 +315,6 @@ export default function ProjectWorkspace() {
       </div>
     );
   }
-
-  // Audit-methodology (Russell Bedford) удалена. activeTemplate = только то,
-  // что пришло из БД через useTemplates. Если в БД пусто — null, секции
-  // методологии не рендерятся.
-  const activeTemplate = template;
-
-  // Если шаблон все еще не найден, но есть проект - показываем карточку без шаблона
-  // (можно работать с задачами и файлами)
-
-  // Используем displayStages для навигации (только если есть шаблон)
-  const displayStages = activeTemplate ? (projectData?.methodology ?
-    activeTemplate.stages
-      .filter(stage =>
-        projectData.methodology.stages.some((ms: any) => ms.stageId === stage.id)
-      )
-      .map(stage => {
-        const stageData = projectData.methodology.stages.find((ms: any) => ms.stageId === stage.id);
-        const procedures = projectData.methodology.selectedProcedures || [];
-        return {
-          ...stage,
-          elements: stage.elements
-            .filter(el => procedures.some((p: any) => p.elementId === el.id && p.stageId === stage.id))
-            .map(el => {
-              const procedure = procedures.find((p: any) => p.elementId === el.id && p.stageId === stage.id);
-              return {
-                ...el,
-                responsibleRole: procedure?.responsibleRole,
-                responsibleUserId: procedure?.responsibleUserId
-              };
-            })
-        };
-      }) : activeTemplate.stages) : [];
-
-  const currentStage = displayStages[currentStageIndex] || displayStages[0];
-  const stageProgress = currentStage ?
-    (Object.values((projectData?.stagesData[currentStage.id] || {})).filter((e: any) => e.completed).length / currentStage.elements.length) * 100
-    : 0;
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in p-2 sm:p-4 md:p-0 w-full overflow-hidden">
@@ -669,7 +339,7 @@ export default function ProjectWorkspace() {
           <div className="min-w-0 flex-1">
             <h1 className="text-base sm:text-xl font-bold truncate max-w-full" title={project.name || project.client?.name || 'Проект'}>{project.name || project.client?.name || 'Проект'}</h1>
             <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              {activeTemplate?.name || project.contract?.subject || 'Проект'}
+              {project.contract?.subject || project.notes?.contract?.subject || 'Проект'}
               {projectTasks.length > 0 && ` • ${projectTasks.length} задач`}
             </p>
           </div>
@@ -716,23 +386,8 @@ export default function ProjectWorkspace() {
         />
       </Card>
 
-      {/* Общий прогресс (только если есть шаблон) */}
-      {projectData && projectData.completionStatus && activeTemplate && (
-        <Card className="p-6">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Общий прогресс</span>
-              <span className="text-sm text-muted-foreground">
-                {projectData.completionStatus.completedElements || 0} из {projectData.completionStatus.totalElements || 0} выполнено
-              </span>
-            </div>
-            <Progress value={projectData.completionStatus.percentage || 0} className="h-3" />
-          </div>
-        </Card>
-      )}
-
-      {/* Статистика задач (если нет шаблона, но есть задачи) */}
-      {!activeTemplate && projectTasks.length > 0 && (
+      {/* Статистика задач */}
+      {projectTasks.length > 0 && (
         <Card className="p-6">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -790,37 +445,14 @@ export default function ProjectWorkspace() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* Активный этап */}
-                  {(() => {
-                    let activeStageName = 'Этапы не определены';
-                    let activeStageProgress = 0;
-                    if (displayStages.length > 0 && projectData?.stagesData) {
-                      const activeStage = displayStages.find(stage => {
-                        const stageData = projectData.stagesData[stage.id] || {};
-                        const completed = Object.values(stageData).filter((e: any) => e.completed).length;
-                        return completed < stage.elements.length;
-                      });
-                      if (activeStage) {
-                        activeStageName = activeStage.name;
-                        const stageData = projectData.stagesData[activeStage.id] || {};
-                        const completed = Object.values(stageData).filter((e: any) => e.completed).length;
-                        activeStageProgress = activeStage.elements.length > 0 ? Math.round((completed / activeStage.elements.length) * 100) : 0;
-                      } else {
-                        activeStageName = 'Все этапы завершены';
-                        activeStageProgress = 100;
-                      }
-                    }
-                    return (
-                      <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Текущий этап (методология)</span>
-                          <span className="text-sm font-bold">{activeStageProgress}%</span>
-                        </div>
-                        <p className="font-semibold text-lg mb-2 truncate" title={activeStageName}>{activeStageName}</p>
-                        <Progress value={activeStageProgress} className="h-2" />
-                      </div>
-                    );
-                  })()}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Статус проекта</span>
+                      <span className="text-sm font-bold">{project.completionPercent || project.completion || 0}%</span>
+                    </div>
+                    <p className="font-semibold text-lg mb-2 truncate">{getProjectStatusLabel(projectStatus)}</p>
+                    <Progress value={project.completionPercent || project.completion || 0} className="h-2" />
+                  </div>
 
                   {/* Сводка по задачам */}
                   {(() => {

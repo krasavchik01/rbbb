@@ -91,6 +91,11 @@ test('legacy survey and template workflows are not exposed in primary UI', () =>
     'ProjectSurveyBanner',
     'Опрос и команды',
     'Создать шаблон',
+    '/msuk-compliance',
+    'МСУК',
+    'MSUKCompliance',
+    'MethodologySelector',
+    'Текущий этап (методология)',
   ];
 
   const failures = [];
@@ -113,6 +118,7 @@ test('legacy routes redirect to active product workflows instead of rendering le
     ['path="/import-timesheet"', 'to="/timesheets"'],
     ['path="/template-constructor/:id"', 'to="/create-project-procurement"'],
     ['path="/create-project"', 'to="/create-project-procurement"'],
+    ['path="/msuk-compliance"', 'to="/projects"'],
   ];
 
   for (const [route, target] of expectations) {
@@ -125,4 +131,6 @@ test('legacy routes redirect to active product workflows instead of rendering le
   assert.equal(appSource.includes('<SurveyHub />'), false);
   assert.equal(appSource.includes('<TemplateConstructor />'), false);
   assert.equal(appSource.includes('<CreateProjectFromTemplate />'), false);
+  assert.equal(appSource.includes('<MSUKCompliance />'), false);
+  assert.equal(appSource.includes('<MethodologySelector />'), false);
 });

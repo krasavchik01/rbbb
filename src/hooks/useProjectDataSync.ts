@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { ProjectData } from '@/types/methodology';
+type ProjectData = Record<string, any>;
 import { useToast } from '@/hooks/use-toast';
 
 interface SyncStatus {
