@@ -16,6 +16,7 @@ import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 import { MyHoursWidget, PartnerApprovalWidget, BonusesOverviewWidget } from '@/components/dashboard/TimesheetWidgets';
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
+import { buildDashboardMetrics } from '@/lib/dashboardMetrics';
 import {
   TrendingUp,
   Users,
@@ -229,7 +230,11 @@ export default function Dashboard() {
       .from('attendance')
       .select('*')
       .eq('date', today)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Dashboard] failed to load attendance', error);
+          return;
+        }
         if (data) {
           // Маппим в формат, совместимый с остальным кодом Dashboard
           const mapped = data.map((row: any) => ({
@@ -239,11 +244,36 @@ export default function Dashboard() {
             checkOut: row.check_out || undefined,
             status: row.location_type === 'office' ? 'in_office' : 'remote',
             date: new Date(row.date).toDateString(),
+            rawDate: row.date,
+            location_type: row.location_type,
           }));
           setAttendanceRecords(mapped);
         }
       });
   }, []);
+
+  // Лёгкая выборка часов для верхнего операционного дашборда:
+  // pending берём все, approved/rejected — за текущий месяц.
+  const [dashboardTimesheets, setDashboardTimesheets] = useState<any[]>([]);
+  useEffect(() => {
+    if (!['ceo', 'deputy_director', 'admin'].includes(user?.role || '')) {
+      setDashboardTimesheets([]);
+      return;
+    }
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    supabase
+      .from('timesheet_entries')
+      .select('id,status,hours,project_id,employee_id,work_date')
+      .or(`status.eq.submitted,work_date.gte.${monthStart}`)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Dashboard] failed to load operational timesheets', error);
+          return;
+        }
+        setDashboardTimesheets(data || []);
+      });
+  }, [user?.role]);
 
   // Безопасные вычисления
   const safeNumber = (value: any): number => {
@@ -613,6 +643,16 @@ export default function Dashboard() {
     return { overdue, critical, warning, total: overdue + critical + warning, urgentList };
   }, [userProjects]);
 
+  const operationalMetrics = useMemo(() => buildDashboardMetrics({
+    user,
+    projects: userProjects,
+    employees,
+    tasks,
+    attendance: attendanceRecords,
+    timesheets: dashboardTimesheets,
+    today: new Date().toISOString().slice(0, 10),
+  }), [user, userProjects, employees, tasks, attendanceRecords, dashboardTimesheets]);
+
   if (projectsLoading || employeesLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -738,6 +778,110 @@ export default function Dashboard() {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Операционный центр: реальные числа + быстрые действия */}
+      {(isDirector || user?.role === 'admin') && (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Что требует внимания</h2>
+            <p className="text-sm text-muted-foreground">Живые показатели из проектов, задач, посещаемости и таймшитов.</p>
+          </div>
+          <Badge variant={operationalMetrics.actions.total > 0 ? 'destructive' : 'outline'} className="px-3 py-1">
+            {operationalMetrics.actions.total > 0 ? `${operationalMetrics.actions.total} действий` : 'Всё спокойно'}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+          {[
+            { title: 'Проекты на утверждении', value: operationalMetrics.actions.projectApprovals, hint: 'procurement → руководство', icon: FileText, to: '/project-approval', iconClass: 'bg-amber-500/10 text-amber-600' },
+            { title: 'Без команды', value: operationalMetrics.actions.projectsWithoutTeam, hint: 'нужно назначить партнёра/команду', icon: Users, to: '/assign-partners', iconClass: 'bg-orange-500/10 text-orange-600' },
+            { title: 'Часы ждут апрува', value: operationalMetrics.actions.pendingTimesheetRows, hint: `${operationalMetrics.timesheets.submittedHours.toFixed(1)} ч`, icon: Timer, to: '/timesheet-approval', iconClass: 'bg-emerald-500/10 text-emerald-600' },
+            { title: 'Просрочены', value: operationalMetrics.actions.overdueProjects, hint: 'дедлайны проектов', icon: AlertTriangle, to: '/projects', iconClass: 'bg-red-500/10 text-red-600' },
+            { title: 'Заблокировано задач', value: operationalMetrics.actions.blockedTasks, hint: 'мешает движению', icon: XCircle, to: '/tasks', iconClass: 'bg-rose-500/10 text-rose-600' },
+          ].map(({ title, value, hint, icon: Icon, to, iconClass }) => (
+            <Card
+              key={title}
+              onClick={() => navigate(to)}
+              className={`p-4 cursor-pointer border-l-4 hover:bg-secondary/30 transition-colors ${
+                value > 0 ? 'border-l-primary' : 'border-l-muted'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">{title}</p>
+                  <p className="text-3xl font-bold mt-1">{value}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hint}</p>
+                </div>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconClass}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2"><Briefcase className="w-4 h-4" /> Проекты</h3>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>Открыть →</Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.projects.active}</div><div className="text-xs text-muted-foreground">активные</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.projects.pendingApproval}</div><div className="text-xs text-muted-foreground">на утверждении</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.projects.completed}</div><div className="text-xs text-muted-foreground">завершены</div></div>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Люди сегодня</h3>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/attendance')}>Открыть →</Button>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.attendanceToday.checkedIn}</div><div className="text-xs text-muted-foreground">отметились</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.attendanceToday.inOffice}</div><div className="text-xs text-muted-foreground">офис</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.attendanceToday.remote}</div><div className="text-xs text-muted-foreground">удалённо</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.attendanceToday.missing}</div><div className="text-xs text-muted-foreground">нет отметки</div></div>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2"><Clock className="w-4 h-4" /> Таймшиты</h3>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/timesheet-approval')}>Апрув →</Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.timesheets.submittedHours.toFixed(1)}</div><div className="text-xs text-muted-foreground">ч ждёт</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.timesheets.approvedHours.toFixed(1)}</div><div className="text-xs text-muted-foreground">ч принято</div></div>
+              <div className="rounded-lg bg-secondary/30 p-3"><div className="text-2xl font-bold">{operationalMetrics.timesheets.projectsWithSubmittedHours}</div><div className="text-xs text-muted-foreground">проектов</div></div>
+            </div>
+          </Card>
+        </div>
+
+        {isDirector && operationalMetrics.teamByRole.length > 0 && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Команда по ролям</h3>
+              <span className="text-xs text-muted-foreground">роль · всего · отметились · на активных проектах</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {operationalMetrics.teamByRole.slice(0, 8).map((row) => (
+                <div key={row.role} className="rounded-lg bg-secondary/25 p-3 border border-border/50">
+                  <div className="font-medium text-sm truncate">{row.label}</div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{row.total} чел.</span>
+                    <span>{row.checkedInToday} сегодня</span>
+                    <span>{row.assignedToActiveProjects} в проектах</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
       )}
 
       {/* Виджеты часов/апрува/бонусов — реальные данные из БД, обновляются раз в 30 сек */}
