@@ -96,7 +96,10 @@ test('legacy survey and template workflows are not exposed in primary UI', () =>
     'MSUKCompliance',
     'MethodologySelector',
     'Текущий этап (методология)',
-  ];
+    '/service-memos',
+    'Служебные записки',
+    'ServiceMemos',
+    ];
 
   const failures = [];
   for (const rel of checkedFiles) {
@@ -119,6 +122,7 @@ test('legacy routes redirect to active product workflows instead of rendering le
     ['path="/template-constructor/:id"', 'to="/create-project-procurement"'],
     ['path="/create-project"', 'to="/create-project-procurement"'],
     ['path="/msuk-compliance"', 'to="/projects"'],
+    ['path="/service-memos"', 'to="/projects"'],
   ];
 
   for (const [route, target] of expectations) {
@@ -133,4 +137,5 @@ test('legacy routes redirect to active product workflows instead of rendering le
   assert.equal(appSource.includes('<CreateProjectFromTemplate />'), false);
   assert.equal(appSource.includes('<MSUKCompliance />'), false);
   assert.equal(appSource.includes('<MethodologySelector />'), false);
+  assert.equal(appSource.includes('<ServiceMemos />'), false);
 });

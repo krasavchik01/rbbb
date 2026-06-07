@@ -64,7 +64,6 @@ const activeAdminRoutes = [
   '/diagnostics',
   '/database-test',
   '/smtp-settings',
-  '/service-memos',
   '/ai',
 ];
 
@@ -76,6 +75,7 @@ const removedLegacyRoutes = [
   '/create-project',
   '/template-constructor/new',
   '/msuk-compliance',
+  '/service-memos',
   '/audit',
   '/ifrs9',
 ];

@@ -21,7 +21,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/calendar': 'Календарь',
   '/tasks': 'Задачи',
   '/notifications': 'Уведомления',
-  '/service-memos': 'Служебные записки',
   '/project-approval': 'Утверждение проектов',
   '/tenders': 'Тендеры',
   '/settings': 'Настройки',

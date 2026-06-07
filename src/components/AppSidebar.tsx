@@ -15,7 +15,6 @@ import {
   LogOut,
   Award,
   Mail,
-  ClipboardList,
   Bot,
   CheckCircle2,
   CalendarRange,
@@ -94,7 +93,6 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: 'HR',           url: '/hr',         icon: UserCheck, allowedRoles: ['hr','ceo','deputy_director','admin'] },
       { title: 'Посещаемость', url: '/attendance', icon: Activity },
-      { title: 'Служебные записки', url: '/service-memos', icon: ClipboardList, excludeRoles: ['procurement'] },
     ],
   },
   {

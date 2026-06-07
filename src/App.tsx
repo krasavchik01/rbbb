@@ -29,7 +29,6 @@ const Calendar = lazy(() => import('@/pages/Calendar'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
-const ServiceMemos = lazy(() => import('@/pages/ServiceMemos'));
 // Audit и IFRS9 удалены из навигации по решению юзера (2026-05-21):
 // «усложнил с аудитом и процедурами МСФО, нагружает систему, убрать».
 // Файлы src/pages/Audit.tsx и src/pages/IFRS9.tsx сохранены на случай восстановления.
@@ -298,16 +297,7 @@ function App() {
               }
             />
             <Route path="/msuk-compliance" element={<Navigate to="/projects" replace />} />
-            <Route
-              path="/service-memos"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ServiceMemos />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/service-memos" element={<Navigate to="/projects" replace />} />
             {/* /audit удалён по решению юзера. Redirect на главную, чтобы старые ссылки не падали. */}
             <Route path="/audit" element={<Navigate to="/" replace />} />
             <Route path="/demo-users" element={<Navigate to="/404" replace />} />
