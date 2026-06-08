@@ -386,7 +386,10 @@ export default function Timesheets() {
     if (!user) return ids;
     for (const p of projects as any[]) {
       const team = p.team || [];
-      if (team.some((m: any) => m.userId === user.id || m.id === user.id)) {
+      if (team.some((m: any) => {
+        const memberId = m.userId || m.id || m.employeeId;
+        return memberId === user.id;
+      })) {
         ids.add(p.id);
       }
     }

@@ -533,7 +533,11 @@ export function parseTimesheetFile(
     // Случаи, когда смотрим в примечание:
     //  - kind='admin' (явный «---Административная работа---»)
     //  - kind='project' с ПУСТОЙ колонкой «Проект» (аудитор не нашёл проект в дропдауне и оставил поле пустым)
-    const lookInNotes = r.kind === 'admin' || (r.kind === 'project' && !r.rawProject);
+    //  - kind='project' с явной меткой «Проект: ...» в примечании. Это реальный
+    //    аварийный обход: сотрудник выбрал доступный/неверный проект, а правильный
+    //    написал в notes, потому что его не было в списке.
+    const hasExplicitProjectInNotes = /(?:^|[\s,;])проект\s*[:：-]/i.test(r.notes);
+    const lookInNotes = r.kind === 'admin' || (r.kind === 'project' && (!r.rawProject || hasExplicitProjectInNotes));
 
     if (lookInNotes) {
       // Сначала пробуем сматчить с внешним списком (проекты в системе).
@@ -553,13 +557,15 @@ export function parseTimesheetFile(
           preMatchedFromNotes = { id: m.id, name: m.name };
         }
         fromNotesFlag = true;
-      } else if (r.kind === 'admin') {
-        // Запасной regex-извлекатель по юр.форме — только для admin-строк.
+      } else if (r.kind === 'admin' || hasExplicitProjectInNotes) {
+        // Запасной regex-извлекатель по юр.форме. Для обычных строк используем
+        // его только при явной метке «Проект:», чтобы случайный текст notes не
+        // перебивал выбранный проект.
         const fromNotes = extractProjectFromNotes(r.notes);
         if (fromNotes) {
           effectiveProject = fromNotes;
           fromNotesFlag = true;
-        } else {
+        } else if (r.kind === 'admin' || !r.rawProject) {
           effectiveProject = '';
         }
       } else {

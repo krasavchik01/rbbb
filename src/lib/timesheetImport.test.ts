@@ -416,6 +416,36 @@ describe('parseTimesheetFile — пустая колонка «Проект» с
     expect(emp.adminHours).toBe(8);
     expect(emp.projects).toHaveLength(0);
   });
+  it('явная метка «Проект:» в примечании перебивает неверно выбранный проект из колонки', () => {
+    // Реальный кейс: проекта не было в списке работника, он выбрал доступный
+    // «Проект-Энс», а правильный проект написал в примечании.
+    const projectsInSystem = [
+      { id: 'ens', name: 'ТОО «Проект-Энс»' },
+      { id: 'crown', name: 'ТОО «Группа компаний Crown Star»' },
+    ];
+    const rows = [
+      [
+        'Иванов Иван Иванович',
+        '01.06.2025',
+        'ТОО «Проект-Энс»',
+        'ассистент',
+        '',
+        8,
+        'Офис',
+        '',
+        '',
+        '',
+        'Проект: ТОО "Группа компаний "Crown Star" — планирование',
+      ],
+    ];
+
+    const res = parseTimesheetFile(toXlsx(rows), projectsInSystem, EMPLOYEES);
+    const proj = res.employees[0].projects[0];
+
+    expect(proj.matchedProjectId).toBe('crown');
+    expect(proj.projectName).toBe('ТОО «Группа компаний Crown Star»');
+    expect(proj.fromNotes).toBe(true);
+  });
 });
 
 describe('parseTimesheetFile — идемпотентность парсера', () => {

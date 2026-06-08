@@ -81,6 +81,29 @@ export function useEmployees() {
   };
 }
 
+function getProjectTeamMembers(project: any): any[] {
+  if (Array.isArray(project?.team)) return project.team;
+  const raw = project?.notes;
+  if (raw && typeof raw === 'object' && Array.isArray(raw.team)) return raw.team;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed?.team) ? parsed.team : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function projectHasTeamMember(project: any, userId?: string | null): boolean {
+  if (!userId) return false;
+  return getProjectTeamMembers(project).some((member: any) => {
+    const memberId = member?.userId || member?.id || member?.employeeId;
+    return memberId === userId;
+  });
+}
+
 // Хук для проектов
 export function useProjects() {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
@@ -114,8 +137,10 @@ export function useProjects() {
       .map((id: string) => (companies as any[]).find((c: any) => c.id === id)?.name)
       .filter(Boolean) as string[];
     if (allowedNames.length === 0) return allProjects;
-    return allProjects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));
-  }, [allProjects, user?.allowedCompanyIds, appSettings.companies]);
+    return allProjects.filter((p) =>
+      projectMatchesAllowedCompanies(p, allowedNames) || projectHasTeamMember(p, user.id),
+    );
+  }, [allProjects, user?.allowedCompanyIds, user?.id, appSettings.companies]);
 
   useEffect(() => {
     loadProjects();
