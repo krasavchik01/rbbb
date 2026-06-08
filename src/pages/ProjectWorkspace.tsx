@@ -42,7 +42,7 @@ import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 
 import { supabase } from "@/integrations/supabase/client";
-import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses } from "@/lib/projectNotifications";
+import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses, notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { calculateProjectFinances } from "@/types/project-v3";
 // TaskManager removed (using Tasks page component instead)
@@ -1165,6 +1165,10 @@ export default function ProjectWorkspace() {
                 onClick={async () => {
                   try {
                     // Формируем команду из слотов
+                    const existingTeam = project?.team || project?.notes?.team || [];
+                    const existingMemberIds = new Set(
+                      existingTeam.map((m: any) => m?.userId || m?.id || m?.employeeId).filter(Boolean),
+                    );
                     const fullTeam = TEAM_ROLE_SLOTS
                       .filter(slot => teamSlots[slot.key])
                       .map(slot => {
@@ -1174,26 +1178,65 @@ export default function ProjectWorkspace() {
                         return {
                           userId: empId,
                           name: emp?.name || '',
+                          userName: emp?.name || '',
                           role: emp?.role || slot.label,
                           slotKey: slot.key,
                           type: isGph ? (newEmployeeType || 'gph') : 'staff',
+                          assignedAt: new Date().toISOString(),
+                          assignedBy: user?.id || '',
                         };
                       });
 
                     const projectId = project?.id || project?.notes?.id || id;
+                    const nextStatus = fullTeam.length > 0 ? 'in_progress' : (project?.notes?.status || project?.status || 'approved');
                     const updatedNotes = {
                       ...(project?.notes || {}),
                       team: fullTeam,
-                      status: fullTeam.length > 0 ? 'team_assembled' : (project?.notes?.status || 'approved')
+                      status: nextStatus,
+                      teamAssembledAt: fullTeam.length > 0 ? new Date().toISOString() : project?.notes?.teamAssembledAt,
+                      teamAssembledBy: fullTeam.length > 0 ? (user?.id || '') : project?.notes?.teamAssembledBy,
                     };
 
                     await supabaseDataStore.updateProject(projectId, {
                       team: fullTeam,
+                      status: nextStatus,
                       notes: updatedNotes
                     });
 
+                    const projectName = project?.name || project?.title || project?.notes?.name || 'Проект';
+                    const notifyIds = fullTeam
+                      .map((m: any) => m.userId)
+                      .filter(Boolean);
+                    const isInitialTeamAssignment = existingMemberIds.size === 0 && notifyIds.length > 0;
+
+                    try {
+                      if (isInitialTeamAssignment) {
+                        await notifyTeamAssembled({
+                          projectName,
+                          teamIds: notifyIds,
+                          projectId,
+                          pmName: user?.name || 'Зам. директора',
+                        });
+                      } else {
+                        const newlyAdded = fullTeam.filter((m: any) => m.userId && !existingMemberIds.has(m.userId));
+                        await Promise.all(newlyAdded.map((member: any) =>
+                          notifyTeamMemberAdded({
+                            projectName,
+                            memberId: member.userId,
+                            memberName: member.userName || member.name || 'Участник',
+                            role: member.slotKey || member.role || 'участник команды',
+                            assignerName: user?.name || 'Зам. директора',
+                            projectId,
+                          })
+                        ));
+                      }
+                    } catch (notifyError) {
+                      console.error('[ProjectWorkspace] team notifications failed', notifyError);
+                    }
+
                     setProject((prev: any) => ({
                       ...prev,
+                      status: nextStatus,
                       team: fullTeam,
                       notes: updatedNotes
                     }));
@@ -1202,7 +1245,7 @@ export default function ProjectWorkspace() {
 
                     toast({
                       title: 'Команда назначена',
-                      description: `${fullTeam.length} участников добавлены в проект`
+                      description: `${fullTeam.length} участников добавлены в проект. Статус переведён в работу, уведомления отправлены.`
                     });
                   } catch (error: any) {
                     console.error('Ошибка назначения команды:', error);
