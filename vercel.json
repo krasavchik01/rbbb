@@ -9,7 +9,7 @@
       "destination": "https://cloud.rbpartners.kz/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|favicon\\.svg|favicon\\.ico|apple-touch-icon\\.png|manifest\\.json).*)",
       "destination": "/index.html"
     }
   ]

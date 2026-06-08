@@ -22,7 +22,38 @@
     <!-- PDFMake через CDN для поддержки кириллицы -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/pdfmake.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/vfs_fonts.min.js" defer></script>
-    
+
+    <script>
+      // Восстановление после stale frontend bundle: после деплоя старый HTML/route
+      // может попросить уже удалённый JS chunk и получить HTML вместо JavaScript.
+      // Один раз делаем hard refresh, чтобы браузер забрал свежий index.html.
+      (function () {
+        var reloadKey = 'suiteA:lastAssetRecoveryReload';
+        var staleAssetPatterns = [
+          'valid javascript mime type',
+          'failed to fetch dynamically imported module',
+          'importing a module script failed',
+          'error loading dynamically imported module',
+          'expected a javascript-or-wasm module script',
+        ];
+        function isStaleAssetError(value) {
+          var message = String(value && (value.message || value.reason?.message || value.error?.message) || value || '').toLowerCase();
+          return staleAssetPatterns.some(function (pattern) { return message.indexOf(pattern) !== -1; });
+        }
+        function recover(value) {
+          if (!isStaleAssetError(value)) return;
+          var lastReload = Number(sessionStorage.getItem(reloadKey) || '0');
+          var now = Date.now();
+          if (now - lastReload < 5 * 60 * 1000) return;
+          sessionStorage.setItem(reloadKey, String(now));
+          var url = new URL(window.location.href);
+          url.searchParams.set('__suite_refresh', String(now));
+          window.location.replace(url.toString());
+        }
+        window.addEventListener('error', function (event) { recover(event.error || event.message); }, true);
+        window.addEventListener('unhandledrejection', function (event) { recover(event.reason); }, true);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       // Минимальное отключение Service Worker

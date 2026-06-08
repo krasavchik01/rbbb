@@ -15,6 +15,32 @@ interface State {
   err: Error | null;
 }
 
+const STALE_ASSET_ERROR_PATTERNS = [
+  'valid javascript mime type',
+  'failed to fetch dynamically imported module',
+  'importing a module script failed',
+  'error loading dynamically imported module',
+  'expected a javascript-or-wasm module script',
+];
+
+function isStaleAssetError(err: Error | null) {
+  const msg = (err?.message || String(err || '')).toLowerCase();
+  return STALE_ASSET_ERROR_PATTERNS.some((pattern) => msg.includes(pattern));
+}
+
+function recoverFromStaleAssetError() {
+  if (typeof window === 'undefined') return;
+  const reloadKey = 'suiteA:lastAssetRecoveryReload';
+  const lastReload = Number(window.sessionStorage.getItem(reloadKey) || '0');
+  const now = Date.now();
+  if (now - lastReload < 5 * 60 * 1000) return;
+
+  window.sessionStorage.setItem(reloadKey, String(now));
+  const url = new URL(window.location.href);
+  url.searchParams.set('__suite_refresh', String(now));
+  window.location.replace(url.toString());
+}
+
 // ErrorBoundary: ловит runtime-ошибку внутри блока (виджета или целой страницы)
 // и показывает понятную плашку вместо белого экрана.
 export class WidgetErrorBoundary extends React.Component<Props, State> {
@@ -26,6 +52,7 @@ export class WidgetErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(err: Error, info: React.ErrorInfo) {
     console.error(`[WidgetErrorBoundary${this.props.label ? `:${this.props.label}` : ''}]`, err, info);
+    if (isStaleAssetError(err)) recoverFromStaleAssetError();
   }
 
   render() {
