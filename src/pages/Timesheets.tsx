@@ -24,6 +24,11 @@ import {
   rejectEntries,
   type TimesheetEntry as DbTimesheetEntry,
 } from '@/lib/timesheets';
+import {
+  ADMIN_WORK_LABEL,
+  findBlockingTimesheetDuplicates,
+  resolveTimesheetProjectName,
+} from '@/lib/timesheetUi';
 import { 
   Clock,
   Calendar,
@@ -399,7 +404,7 @@ export default function Timesheets() {
         employeeId: e.employeeId,
         employeeName: employee?.name || e.employeeName || 'Неизвестный сотрудник',
         projectId: e.projectId || undefined,
-        projectName: getProjectName(project) || e.projectName,
+        projectName: resolveTimesheetProjectName(e.projectName, project),
         date: e.workDate,
         hours: e.hours,
         description: e.notes || '',
@@ -468,6 +473,28 @@ export default function Timesheets() {
     const projectId = formData.isAdminWork ? null : formData.projectId;
     const hours = parseFloat(formData.hours);
     const description = formData.description || (formData.isAdminWork ? 'Офисная работа без проекта' : 'Работа над проектом');
+
+    const duplicates = findBlockingTimesheetDuplicates(
+      timesheets,
+      {
+        employeeId: user.id,
+        projectId,
+        projectName,
+        date: formData.date,
+      },
+      editingTimesheet?.id,
+    );
+    if (duplicates.length > 0) {
+      const existingHours = duplicates.reduce((sum, entry) => sum + (Number(entry.hours) || 0), 0);
+      toast({
+        title: 'Часы уже есть',
+        description:
+          `${projectName} за ${formData.date}: уже ${existingHours.toFixed(1)} ч. ` +
+          'Не создаю дубль, чтобы не получить 16 часов вместо 8. Откройте существующую запись или обратитесь к проверяющему.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (editingTimesheet) {
       const updated = await updateEntry(editingTimesheet.id, {
@@ -1136,5 +1163,3 @@ function MonthCalendar({
     </Card>
   );
 }
-
-const ADMIN_WORK_LABEL = 'Административная работа';
