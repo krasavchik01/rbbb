@@ -55,6 +55,7 @@ interface TimesheetEntry {
   date: string;
   hours: number;
   description: string;
+  section?: string;
   status: 'draft' | 'submitted' | 'approved' | 'rejected';
   reviewedBy?: string;
   reviewedAt?: string;
@@ -351,6 +352,7 @@ export default function Timesheets() {
   const [filterProject, setFilterProject] = useState<string>('all');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingTimesheet, setEditingTimesheet] = useState<TimesheetEntry | null>(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
   
   // Форма. isAdminWork=true → проект не нужен, в БД сохраняем
   // project_id=null + project_name='Административная работа' (тот же маркер
@@ -408,6 +410,7 @@ export default function Timesheets() {
         date: e.workDate,
         hours: e.hours,
         description: e.notes || '',
+        section: e.section,
         status: e.status as TimesheetEntry['status'],
         reviewedBy: e.reviewedByName,
         reviewedAt: e.reviewedAt,
@@ -626,13 +629,41 @@ export default function Timesheets() {
   // Статистика
   const stats = useMemo(() => {
     const safeNumber = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
-    const total = safeNumber(filteredTimesheets.reduce((sum, ts) => sum + (ts.hours || 0), 0));
-    const draft = filteredTimesheets.filter(ts => ts.status === 'draft').length;
-    const submitted = filteredTimesheets.filter(ts => ts.status === 'submitted').length;
-    const approved = filteredTimesheets.filter(ts => ts.status === 'approved').length;
+    const source = viewMode === 'calendar' && user
+      ? visibleTimesheets.filter((ts) => ts.employeeId === user.id)
+      : filteredTimesheets;
+    const total = safeNumber(source.reduce((sum, ts) => sum + (ts.hours || 0), 0));
+    const draft = source.filter(ts => ts.status === 'draft').length;
+    const submitted = source.filter(ts => ts.status === 'submitted').length;
+    const approved = source.filter(ts => ts.status === 'approved').length;
 
-    return { total, draft, submitted, approved, count: filteredTimesheets.length };
-  }, [filteredTimesheets]);
+    return { total, draft, submitted, approved, count: source.length };
+  }, [filteredTimesheets, visibleTimesheets, viewMode, user]);
+
+  const openNewTimesheetDialog = (date = new Date().toISOString().split('T')[0]) => {
+    setEditingTimesheet(null);
+    setFormData({
+      projectId: '',
+      isAdminWork: false,
+      date,
+      hours: '8',
+      description: '',
+      section: '',
+    });
+    setShowAddDialog(true);
+  };
+
+  const ownCalendarEntries = useMemo(
+    () => (user ? visibleTimesheets.filter((t) => t.employeeId === user.id) : []),
+    [visibleTimesheets, user],
+  );
+
+  const selectedDayEntries = useMemo(
+    () => selectedCalendarDate
+      ? ownCalendarEntries.filter((entry) => entry.date === selectedCalendarDate)
+      : [],
+    [ownCalendarEntries, selectedCalendarDate],
+  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -665,17 +696,7 @@ export default function Timesheets() {
         {canFillTimesheets && (
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-2" onClick={() => {
-                setEditingTimesheet(null);
-                setFormData({
-                  projectId: '',
-                  isAdminWork: false,
-                  date: new Date().toISOString().split('T')[0],
-                  hours: '8',
-                  description: '',
-                  section: '',
-                });
-              }}>
+              <Button size="sm" className="gap-2" onClick={() => openNewTimesheetDialog()}>
                 <Plus className="w-4 h-4" />
                 Добавить
               </Button>
@@ -787,7 +808,7 @@ export default function Timesheets() {
       {/* Статистика */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Всего часов', value: (stats.total || 0).toFixed(1) + ' ч', sub: 'за день', icon: Clock, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+          { label: 'Всего часов', value: (stats.total || 0).toFixed(1) + ' ч', sub: 'в текущем фильтре', icon: Clock, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
           { label: 'Черновики', value: stats.draft, sub: 'не отправлено', icon: Edit, color: 'text-gray-500', bg: 'bg-gray-500/10' },
           { label: 'На проверке', value: stats.submitted, sub: 'ожидают', icon: Filter, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Утверждено', value: stats.approved, sub: 'принято', icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
@@ -820,24 +841,62 @@ export default function Timesheets() {
         {/* Календарь — быстрое заполнение по дням месяца */}
         <TabsContent value="calendar" className="space-y-3 mt-3">
           {canFillTimesheets && user && (
-            <MonthCalendar
-              year={calendarMonth.year}
-              month={calendarMonth.month}
-              onMonthChange={setCalendarMonth}
-              entries={visibleTimesheets.filter((t) => t.employeeId === user.id)}
-              onCellClick={(date) => {
-                setEditingTimesheet(null);
-                setFormData({
-                  projectId: '',
-                  isAdminWork: false,
-                  date,
-                  hours: '8',
-                  description: '',
-                  section: '',
-                });
-                setShowAddDialog(true);
-              }}
-            />
+            <>
+              <MonthCalendar
+                year={calendarMonth.year}
+                month={calendarMonth.month}
+                onMonthChange={setCalendarMonth}
+                entries={ownCalendarEntries}
+                onCellClick={(date) => {
+                  const dayEntries = ownCalendarEntries.filter((entry) => entry.date === date);
+                  if (dayEntries.length > 0) {
+                    setSelectedCalendarDate(date);
+                    return;
+                  }
+                  setSelectedCalendarDate(null);
+                  openNewTimesheetDialog(date);
+                }}
+              />
+
+              {selectedCalendarDate && selectedDayEntries.length > 0 && (
+                <Card className="p-3 sm:p-4 border-0 shadow-sm">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="font-semibold text-sm">Записи за {format(new Date(selectedCalendarDate), 'dd MMMM yyyy', { locale: ru })}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Уже есть {selectedDayEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0).toFixed(1)} ч. по проектам — не создавайте дубль поверх импорта.
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => openNewTimesheetDialog(selectedCalendarDate)}>
+                      Добавить другой проект
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDayEntries.map((entry) => (
+                      <div key={entry.id} className="rounded-lg border bg-background p-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm truncate flex items-center gap-1.5">
+                            <Briefcase className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            {entry.projectName || ADMIN_WORK_LABEL}
+                          </div>
+                          {entry.section && <div className="text-xs text-muted-foreground mt-0.5 truncate">{entry.section}</div>}
+                          {entry.description && <div className="text-xs text-muted-foreground/80 mt-0.5 truncate">{entry.description}</div>}
+                          <div className="mt-1">{getStatusBadge(entry.status)}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-bold text-primary">{(entry.hours || 0).toFixed(1)} ч</div>
+                          {entry.status === 'draft' && (
+                            <Button variant="ghost" size="sm" className="h-7 mt-1" onClick={() => handleEdit(entry)}>
+                              Изменить
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -1110,6 +1169,9 @@ function MonthCalendar({
           const isToday = iso === today;
           const dayEntries = byDate.get(iso) || [];
           const dayHours = dayEntries.reduce((s, e) => s + e.hours, 0);
+          const projectLabels = Array.from(
+            new Set(dayEntries.map((entry) => entry.projectName || ADMIN_WORK_LABEL)),
+          ).slice(0, 2);
           const hasAdmin = dayEntries.some((e) => !e.projectId || e.projectName === ADMIN_WORK_LABEL);
           const hasProject = dayEntries.some((e) => e.projectId);
           const tone = dayHours > 0
@@ -1125,13 +1187,25 @@ function MonthCalendar({
               type="button"
               onClick={() => onCellClick(iso)}
               className={`aspect-square rounded-md p-1 transition relative ${tone} ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}`}
-              title={dayEntries.length > 0 ? `${dayEntries.length} запис${dayEntries.length === 1 ? 'ь' : 'ей'} / ${dayHours} ч` : 'Кликни, чтобы добавить'}
+              title={dayEntries.length > 0 ? `${dayEntries.length} запис${dayEntries.length === 1 ? 'ь' : 'ей'} / ${dayHours} ч · ${projectLabels.join(', ')}` : 'Кликни, чтобы добавить'}
             >
-              <div className="flex flex-col items-center justify-center h-full">
+              <div className="flex flex-col items-center justify-center h-full min-w-0">
                 <div className="text-xs font-semibold leading-none">{day}</div>
                 {dayHours > 0 && (
                   <div className="text-[10px] mt-0.5 leading-none font-bold">
                     {dayHours % 1 === 0 ? dayHours.toFixed(0) : dayHours.toFixed(1)}ч
+                  </div>
+                )}
+                {projectLabels.length > 0 && (
+                  <div className="mt-1 w-full space-y-0.5 px-0.5">
+                    {projectLabels.map((label) => (
+                      <div key={label} className="text-[9px] leading-tight truncate opacity-85">
+                        {label}
+                      </div>
+                    ))}
+                    {dayEntries.length > projectLabels.length && (
+                      <div className="text-[9px] leading-tight opacity-70">+ ещё</div>
+                    )}
                   </div>
                 )}
                 {hasProject && hasAdmin && (
