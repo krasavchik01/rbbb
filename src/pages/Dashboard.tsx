@@ -17,6 +17,7 @@ import { MyHoursWidget, PartnerApprovalWidget, BonusesOverviewWidget } from '@/c
 import { useAppSettings } from '@/lib/appSettings';
 import { supabase } from '@/integrations/supabase/client';
 import { buildDashboardMetrics } from '@/lib/dashboardMetrics';
+import { buildProjectStageMetrics } from '@/lib/projectStages';
 import {
   TrendingUp,
   Users,
@@ -37,7 +38,8 @@ import {
   Award,
   Timer,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ArrowRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -653,6 +655,8 @@ export default function Dashboard() {
     today: new Date().toISOString().slice(0, 10),
   }), [user, userProjects, employees, tasks, attendanceRecords, dashboardTimesheets]);
 
+  const projectStageMetrics = useMemo(() => buildProjectStageMetrics(userProjects), [userProjects]);
+
   if (projectsLoading || employeesLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -776,6 +780,56 @@ export default function Dashboard() {
                 Перейти к проектам →
               </Button>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Дорожная карта проекта для CEO/замдира: закупки → команда → работа → закрытие */}
+      {(isDirector || user?.role === 'admin') && (
+        <Card className="p-4 sm:p-5 border-2 border-primary/15 bg-gradient-to-br from-background via-background to-primary/5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Target className="w-5 h-5 text-primary" />
+                Дорожная карта проектов
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Закупки → Замдиректор → Команда → Закрытие → CEO фиксация
+              </p>
+            </div>
+            <Badge variant="outline" className="w-fit">Всего: {projectStageMetrics.reduce((sum, item) => sum + item.count, 0)}</Badge>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+            {projectStageMetrics.map((stage, index) => {
+              const toneClass = {
+                amber: 'border-amber-300 bg-amber-500/10 text-amber-700',
+                orange: 'border-orange-300 bg-orange-500/10 text-orange-700',
+                blue: 'border-blue-300 bg-blue-500/10 text-blue-700',
+                violet: 'border-violet-300 bg-violet-500/10 text-violet-700',
+                green: 'border-green-300 bg-green-500/10 text-green-700',
+                slate: 'border-slate-300 bg-slate-500/10 text-slate-700',
+              }[stage.tone];
+
+              return (
+                <button
+                  key={stage.stage}
+                  type="button"
+                  onClick={() => navigate(stage.route)}
+                  className={`text-left rounded-xl border p-4 hover:shadow-md hover:-translate-y-0.5 transition-all ${toneClass}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium opacity-80">Стадия {index + 1}</div>
+                      <div className="text-sm font-semibold mt-1 leading-tight">{stage.title}</div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 flex-shrink-0 mt-1 opacity-70" />
+                  </div>
+                  <div className="text-3xl font-bold mt-3">{stage.count}</div>
+                  <div className="text-xs mt-1 opacity-80 line-clamp-2">{stage.hint}</div>
+                </button>
+              );
+            })}
           </div>
         </Card>
       )}
