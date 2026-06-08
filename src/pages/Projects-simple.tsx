@@ -39,6 +39,7 @@ import { ProjectVitals } from "@/components/projects/ProjectVitals";
 import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheets";
 import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
+import { getProjectStage, getProjectStageLabel, type ProjectStage as RoadmapProjectStage } from "@/lib/projectStages";
 
 // Простые типы
 interface SimpleProject {
@@ -216,6 +217,7 @@ export default function Projects() {
   // Это значит обновление страницы НЕ сбрасывает фильтры, и ссылку можно скинуть.
   const [filterYear, setFilterYear] = useStringUrlState('year', 'all');
   const [filterCompany, setFilterCompany] = useStringUrlState('company', 'all');
+  const [filterStage, setFilterStage] = useStringUrlState('stage', 'all');
   // filterLongTerm имеет три состояния — храним как строку в URL ('long'|'short'|'all').
   const [filterLongTermRaw, setFilterLongTermRaw] = useStringUrlState('term', 'all');
   const filterLongTerm: boolean | 'all' =
@@ -1150,6 +1152,11 @@ export default function Projects() {
       });
     }
 
+    // 5a. Фильтр по управленческой стадии из дорожной карты CEO
+    if (filterStage !== 'all') {
+      filtered = filtered.filter(project => getProjectStage(project) === filterStage);
+    }
+
     // 6. Фильтр по прогрессу
     if (filterProgressMin !== '' || filterProgressMax !== '') {
       filtered = filtered.filter(project => {
@@ -1342,7 +1349,7 @@ export default function Projects() {
     });
 
     setFilteredProjects(filtered);
-  }, [realProjects, debouncedSearchQuery, filterYear, filterCompany, filterLongTerm, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterHasContract, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount, filterUpcomingDeadlines, filterAuditPeriod]);
+  }, [realProjects, debouncedSearchQuery, filterYear, filterCompany, filterLongTerm, filterStage, filterStatus, filterProgressMin, filterProgressMax, filterAmountMin, filterAmountMax, filterHasTeam, filterHasTasks, filterHasContract, filterDeadlineFrom, filterDeadlineTo, sortBy, getProjectStatusLabel, getProjectAmount, filterUpcomingDeadlines, filterAuditPeriod]);
 
 
   // Получаем уникальные роли сотрудников для фильтра распределения команды
@@ -2395,6 +2402,7 @@ export default function Projects() {
           {(() => {
             const advChips: { key: string; label: string; onClear: () => void }[] = [];
             if (filterStatus !== 'all') advChips.push({ key: 'status', label: `Статус: ${filterStatus}`, onClear: () => setFilterStatus('all') });
+            if (filterStage !== 'all') advChips.push({ key: 'stage', label: `Стадия: ${getProjectStageLabel(filterStage as RoadmapProjectStage)}`, onClear: () => setFilterStage('all') });
             if (filterProgressMin !== '' || filterProgressMax !== '') advChips.push({ key: 'progress', label: `Прогресс: ${filterProgressMin || 0}–${filterProgressMax || 100}%`, onClear: () => { setFilterProgressMin(''); setFilterProgressMax(''); } });
             if (filterAmountMin !== '' || filterAmountMax !== '') advChips.push({ key: 'amount', label: `Сумма: ${filterAmountMin || '0'}–${filterAmountMax || '∞'}`, onClear: () => { setFilterAmountMin(''); setFilterAmountMax(''); } });
             if (filterHasTeam !== 'all') advChips.push({ key: 'team', label: filterHasTeam ? 'Есть команда' : 'Нет команды', onClear: () => setFilterHasTeam('all') });
