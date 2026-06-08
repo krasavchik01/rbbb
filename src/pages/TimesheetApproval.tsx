@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -101,6 +101,12 @@ const STATUS_LABEL: Record<TimesheetStatus, string> = {
   approved: 'Утверждённые',
   rejected: 'Отклонённые',
 };
+
+const TEAM_SYNC_INLINE_LIMIT = 25;
+
+function isReviewedStatus(status: TimesheetStatus): status is 'approved' | 'rejected' {
+  return status === 'approved' || status === 'rejected';
+}
 
 export default function TimesheetApproval() {
   const { user } = useAuth();
@@ -260,6 +266,36 @@ export default function TimesheetApproval() {
     setApproveDialog({ key, ids, comment: '' });
   };
 
+  const applyReviewedEntriesLocally = (
+    ids: string[],
+    nextStatus: 'approved' | 'rejected',
+    reviewerNotes?: string,
+  ) => {
+    const idSet = new Set(ids);
+    const reviewedAt = new Date().toISOString();
+    setEntries((current) => {
+      if (statusTab === 'submitted') {
+        return current.filter((entry) => !idSet.has(entry.id));
+      }
+      if (isReviewedStatus(statusTab) && statusTab === nextStatus) {
+        return current.map((entry) =>
+          idSet.has(entry.id)
+            ? {
+                ...entry,
+                status: nextStatus,
+                reviewedBy: user.id,
+                reviewedByName: user.name,
+                reviewedAt,
+                reviewerNotes,
+              }
+            : entry,
+        );
+      }
+      return current;
+    });
+    setSelected({});
+  };
+
   const submitApprove = async () => {
     if (!approveDialog) return;
     if (!canApprove) {
@@ -280,29 +316,57 @@ export default function TimesheetApproval() {
 
       // Авто-добавление в команду проекта: если сотрудник подал часы по
       // проекту X и партнёр их утвердил — он официально становится участником
-      // проекта (попадает в notes.team[]). Подбираем employee+project из тех
-      // entries, что были в этом апруве.
+      // проекта (попадает в notes.team[]). Для больших bulk-апрувов не держим
+      // пользователя на спиннере: статус уже записан в БД, а синхронизацию
+      // команды делаем в фоне.
+      const approvedIdSet = new Set(approveDialog.ids);
       const approvedEntries = entries
-        .filter((e) => approveDialog.ids.includes(e.id))
+        .filter((e) => approvedIdSet.has(e.id))
         .map((e) => ({ employeeId: e.employeeId, projectId: e.projectId }));
-      const teamResult = await addApprovedEntriesToProjectTeams(
+      const comment = approveDialog.comment.trim() || undefined;
+
+      const syncTeams = () => addApprovedEntriesToProjectTeams(
         approvedEntries,
         employees as any[],
         user.id,
       );
 
-      const teamSuffix = teamResult.added > 0
-        ? ` · +${teamResult.added} в командах ${teamResult.affectedProjects} проектов`
-        : '';
+      let teamSuffix = '';
+      let teamDescription = '';
+      if (approvedEntries.length > 0 && approvedEntries.length <= TEAM_SYNC_INLINE_LIMIT) {
+        const teamResult = await syncTeams();
+        teamSuffix = teamResult.added > 0
+          ? ` · +${teamResult.added} в командах ${teamResult.affectedProjects} проектов`
+          : '';
+        teamDescription = teamResult.added > 0
+          ? ` Авто-добавили ${teamResult.added} участник${teamResult.added === 1 ? 'а' : 'ов'} в команды проектов.`
+          : '';
+      } else if (approvedEntries.length > TEAM_SYNC_INLINE_LIMIT) {
+        void syncTeams()
+          .then((teamResult) => {
+            if (teamResult.added > 0) {
+              toast({
+                title: `Команды проектов обновлены: +${teamResult.added}`,
+                description: `Затронуто проектов: ${teamResult.affectedProjects}.`,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error('[TimesheetApproval] background team sync failed', error);
+            toast({
+              title: 'Часы утверждены, но команда проекта не обновилась',
+              description: error?.message || 'Повторите обновление или назначьте участника вручную.',
+              variant: 'destructive',
+            });
+          });
+      }
+
       toast({
         title: `Утверждено: ${n}${teamSuffix}`,
-        description: 'Часы пойдут в расчёт бонуса.' +
-          (teamResult.added > 0
-            ? ` Авто-добавили ${teamResult.added} участник${teamResult.added === 1 ? 'а' : 'ов'} в команды проектов.`
-            : ''),
+        description: 'Часы пойдут в расчёт бонуса.' + teamDescription,
       });
+      applyReviewedEntriesLocally(approveDialog.ids, 'approved', comment);
       setApproveDialog(null);
-      await reload();
     } catch (error: any) {
       console.error('[TimesheetApproval] approve failed', error);
       toast({ title: 'Ошибка утверждения', description: error?.message || 'Не удалось утвердить часы.', variant: 'destructive' });
@@ -338,8 +402,8 @@ export default function TimesheetApproval() {
         return;
       }
       toast({ title: `Отклонено: ${n}`, description: 'Сотрудник увидит причину и сможет поправить.' });
+      applyReviewedEntriesLocally(rejectDialog.ids, 'rejected', reason);
       setRejectDialog(null);
-      await reload();
     } catch (error: any) {
       console.error('[TimesheetApproval] reject failed', error);
       toast({ title: 'Ошибка отклонения', description: error?.message || 'Не удалось отклонить часы.', variant: 'destructive' });
@@ -468,7 +532,9 @@ export default function TimesheetApproval() {
       ) : (
         activeBucketGroups.map((group) => {
           const projKey = group.projectId || '__no_project__';
-          const isOpen = openProjects[projKey] ?? true;
+          // На admin/CEO экране могут быть тысячи строк. По умолчанию держим
+          // большие группы свернутыми, чтобы список не зависал от огромного DOM.
+          const isOpen = openProjects[projKey] ?? activeBucketGroups.length <= 5;
           return (
             <Card key={projKey}>
               <CardHeader className="pb-3 cursor-pointer" onClick={() => setOpenProjects((p) => ({ ...p, [projKey]: !isOpen }))}>

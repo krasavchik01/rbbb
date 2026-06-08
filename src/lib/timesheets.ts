@@ -380,6 +380,16 @@ export async function deleteEntry(id: string): Promise<boolean> {
 
 // ─── Approval helpers ───────────────────────────────────────────────────────
 
+export const BULK_REVIEW_CHUNK_SIZE = 300;
+
+export function chunkReviewIds(ids: string[], chunkSize = BULK_REVIEW_CHUNK_SIZE): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    chunks.push(ids.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
 export async function approveEntries(
   ids: string[],
   reviewer: { id: string; name: string },
@@ -387,22 +397,29 @@ export async function approveEntries(
 ): Promise<number> {
   if (ids.length === 0) return 0;
   const note = reviewerNotes?.trim();
-  const { data, error } = await supabase
-    .from('timesheet_entries')
-    .update({
-      status: 'approved',
-      reviewed_by: reviewer.id,
-      reviewed_by_name: reviewer.name,
-      reviewed_at: new Date().toISOString(),
-      reviewer_notes: note ? note : null,
-    })
-    .in('id', ids)
-    .select('id');
-  if (error) {
-    console.error('[timesheets] approveEntries failed', error);
-    throw new Error(error.message || 'Не удалось утвердить тайм-щиты');
+  const reviewedAt = new Date().toISOString();
+  let updated = 0;
+
+  for (const chunk of chunkReviewIds(ids)) {
+    const { data, error } = await supabase
+      .from('timesheet_entries')
+      .update({
+        status: 'approved',
+        reviewed_by: reviewer.id,
+        reviewed_by_name: reviewer.name,
+        reviewed_at: reviewedAt,
+        reviewer_notes: note ? note : null,
+      })
+      .in('id', chunk)
+      .select('id');
+    if (error) {
+      console.error('[timesheets] approveEntries failed', error);
+      throw new Error(error.message || 'Не удалось утвердить тайм-щиты');
+    }
+    updated += data?.length || 0;
   }
-  return data?.length || 0;
+
+  return updated;
 }
 
 export async function rejectEntries(
@@ -411,22 +428,29 @@ export async function rejectEntries(
   reason: string,
 ): Promise<number> {
   if (ids.length === 0) return 0;
-  const { data, error } = await supabase
-    .from('timesheet_entries')
-    .update({
-      status: 'rejected',
-      reviewed_by: reviewer.id,
-      reviewed_by_name: reviewer.name,
-      reviewed_at: new Date().toISOString(),
-      reviewer_notes: reason || null,
-    })
-    .in('id', ids)
-    .select('id');
-  if (error) {
-    console.error('[timesheets] rejectEntries failed', error);
-    throw new Error(error.message || 'Не удалось отклонить тайм-щиты');
+  const reviewedAt = new Date().toISOString();
+  let updated = 0;
+
+  for (const chunk of chunkReviewIds(ids)) {
+    const { data, error } = await supabase
+      .from('timesheet_entries')
+      .update({
+        status: 'rejected',
+        reviewed_by: reviewer.id,
+        reviewed_by_name: reviewer.name,
+        reviewed_at: reviewedAt,
+        reviewer_notes: reason || null,
+      })
+      .in('id', chunk)
+      .select('id');
+    if (error) {
+      console.error('[timesheets] rejectEntries failed', error);
+      throw new Error(error.message || 'Не удалось отклонить тайм-щиты');
+    }
+    updated += data?.length || 0;
   }
-  return data?.length || 0;
+
+  return updated;
 }
 
 // ─── Aggregation helpers (для Bonuses и сводок) ─────────────────────────────
