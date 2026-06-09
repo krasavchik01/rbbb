@@ -40,7 +40,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 import { getProjectStage, getProjectStageLabel, type ProjectStage as RoadmapProjectStage } from "@/lib/projectStages";
-import { getAuditPeriods, groupProjectsByAuditRoot } from "@/lib/auditPeriods";
+import { getDisplayAuditPeriods, groupProjectsByAuditRoot } from "@/lib/auditPeriods";
 
 // Простые типы
 interface SimpleProject {
@@ -259,6 +259,7 @@ export default function Projects() {
   const [isDeletingMultiple, setIsDeletingMultiple] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [bulkStatusDialogOpen, setBulkStatusDialogOpen] = useState(false);
+  const [expandedPeriodGroups, setExpandedPeriodGroups] = useState<Set<string>>(new Set());
 
   // Проверка прав администратора
   const isAdmin = user?.role === 'ceo';
@@ -1359,15 +1360,31 @@ export default function Projects() {
     [filteredProjects],
   );
   const displayedProjects = useMemo(
-    () => displayedProjectGroups.map((group) => ({
-      ...group.canonical,
-      name: group.displayName || group.canonical.name,
-      auditPeriods: group.periods,
-      duplicateProjects: group.duplicates,
-      duplicateCount: group.duplicates.length,
-    })),
+    () => displayedProjectGroups.map((group) => {
+      const periods = getDisplayAuditPeriods(group);
+      return {
+        ...group.canonical,
+        name: group.displayName || group.canonical.name,
+        auditPeriods: periods,
+        duplicateProjects: group.duplicates,
+        duplicateCount: group.duplicates.length,
+        periodGroupKey: group.key,
+      };
+    }),
     [displayedProjectGroups],
   );
+
+  const togglePeriodGroup = useCallback((groupKey: string) => {
+    setExpandedPeriodGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }, []);
 
   const employeeRoles = useMemo(() => {
     const roles = new Set<string>();
@@ -2886,8 +2903,10 @@ export default function Projects() {
                 <tbody className="divide-y divide-border">
                   {displayedProjects.map((project) => {
                     const projectId = project.id || project.notes?.id;
-                    const periods = getAuditPeriods(project);
-                    const periodCount = periods.length || project.duplicateCount || 0;
+                    const periods = project.auditPeriods || [];
+                    const periodCount = periods.length;
+                    const periodGroupKey = project.periodGroupKey || String(projectId || project.name);
+                    const isPeriodsOpen = expandedPeriodGroups.has(periodGroupKey);
 
                     return (
                       <Fragment key={projectId || `project-${project.name}`}>
@@ -2927,6 +2946,22 @@ export default function Projects() {
                               </div>
                               <div className="text-[10px] text-muted-foreground mt-0.5">#{String(project.id).substring(0, 8)}</div>
                             </div>
+                            {periodCount > 0 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 flex-shrink-0"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  togglePeriodGroup(periodGroupKey);
+                                }}
+                                title={isPeriodsOpen ? 'Скрыть периоды' : 'Показать периоды'}
+                                aria-expanded={isPeriodsOpen}
+                              >
+                                <ChevronDown className={`h-4 w-4 transition-transform ${isPeriodsOpen ? 'rotate-180' : ''}`} />
+                              </Button>
+                            )}
                           </div>
                         </td>
 
@@ -3152,7 +3187,7 @@ export default function Projects() {
                           </div>
                         </td>
                       </tr>
-                      {periods.map((period: any) => (
+                      {isPeriodsOpen && periods.map((period: any) => (
                         <tr key={`${projectId || project.name}-${period.id}`} className="bg-muted/20">
                           {isAdmin && <td className="px-2 py-1" />}
                           <td className="px-2 py-2 text-xs text-muted-foreground" colSpan={2}>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUDIT_PERIOD_TYPE_LABELS,
   buildAuditPeriod,
+  getDisplayAuditPeriods,
   getAuditPeriods,
   getEffectivePartnerId,
   groupProjectsByAuditRoot,
@@ -94,5 +95,36 @@ describe('auditPeriods', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].duplicates).toHaveLength(2);
     expect(rows[0].displayName).toBe('TOO Oil Construction Company');
+  });
+
+  it('builds visible period rows from grouped duplicate projects', () => {
+    const rows = groupProjectsByAuditRoot([
+      {
+        id: 'p1',
+        name: 'TOO Oil Construction Company (за период 2022-2024)',
+        companyName: 'MAK',
+        deadline: '2025-02-15',
+        status: 'in_progress',
+        notes: {
+          team: [{ role: 'partner', userId: 'partner-1', userName: 'Partner One' }],
+        },
+      },
+      {
+        id: 'p2',
+        name: 'TOO Oil Construction Company (за период 2025)',
+        companyName: 'MAK',
+        deadline: '2026-02-20',
+        notes: {
+          team: [{ role: 'partner', userId: 'partner-2', userName: 'Partner Two' }],
+        },
+      },
+    ]);
+
+    const periods = getDisplayAuditPeriods(rows[0]);
+
+    expect(periods).toHaveLength(2);
+    expect(periods.map((period) => period.name)).toEqual(['2022-2024', '2025']);
+    expect(periods.map((period) => period.partnerName)).toEqual(['Partner One', 'Partner Two']);
+    expect(periods[0].deadline).toBe('2025-02-15');
   });
 });
