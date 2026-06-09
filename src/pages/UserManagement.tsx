@@ -154,15 +154,18 @@ export default function UserManagement() {
 
       const dbRole = getEmployeeDbRoleForUserRole(formData.role) as DbAppRole;
 
+      const insertPayload: any = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        role: dbRole,
+        level: level,
+        whatsapp: formData.phone || null,
+      };
+      if (formData.password.trim()) insertPayload.password = formData.password.trim();
+
       const { error: insertError } = await supabase
         .from('employees')
-        .insert({
-          name: formData.name.trim(),
-          email: formData.email.trim().toLowerCase(),
-          role: dbRole,
-          level: level,
-          whatsapp: formData.phone || null,
-        });
+        .insert(insertPayload);
 
       if (insertError) throw insertError;
 
@@ -201,15 +204,18 @@ export default function UserManagement() {
 
       const dbRole = getEmployeeDbRoleForUserRole(formData.role) as DbAppRole;
 
+      const updatePayload: any = {
+        name: formData.name.trim(),
+        email: formData.email?.trim().toLowerCase() || null,
+        role: dbRole,
+        level: level,
+        whatsapp: formData.phone || null,
+      };
+      if (formData.password.trim()) updatePayload.password = formData.password.trim();
+
       const { error } = await supabase
         .from('employees')
-        .update({
-          name: formData.name.trim(),
-          email: formData.email?.trim().toLowerCase() || null,
-          role: dbRole,
-          level: level,
-          whatsapp: formData.phone || null,
-        })
+        .update(updatePayload)
         .eq('id', editingEmployee.id);
 
       if (error) throw error;
@@ -459,6 +465,23 @@ export default function UserManagement() {
                   placeholder="+7 (xxx) xxx-xx-xx"
                   disabled={loading}
                 />
+              </div>
+
+              <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-3">
+                <Label htmlFor="password">{editingEmployee ? 'Новый пароль' : 'Пароль'}</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder={editingEmployee ? 'Оставьте пустым, если пароль не меняется' : 'Задайте пароль для входа'}
+                  disabled={loading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {editingEmployee
+                    ? 'Если заполнить поле и нажать «Сохранить», пароль сотрудника будет заменён.'
+                    : 'Если оставить пустым, сотрудник будет создан без отдельного пароля в employees.password.'}
+                </p>
               </div>
             </div>
 
