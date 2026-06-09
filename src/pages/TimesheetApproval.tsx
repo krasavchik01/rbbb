@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -118,6 +119,8 @@ export default function TimesheetApproval() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [statusTab, setStatusTab] = useState<TimesheetStatus>('submitted');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [bucketTab, setBucketTab] = useState<BucketKind>('partner');
   // employeeId → entryId → selected
   const [selected, setSelected] = useState<Record<string, Record<string, boolean>>>({});
@@ -167,15 +170,15 @@ export default function TimesheetApproval() {
       // Партнёр — загружаем только записи по его проектам через filter partnerId.
       // Зам.дир/ceo/admin — все записи, потом сами раскладываем по бакетам.
       const filter = isPartner
-        ? { partnerId: user.id, status: statusTab }
-        : { status: statusTab };
+        ? { partnerId: user.id, status: statusTab, workDateFrom: dateFrom || undefined, workDateTo: dateTo || undefined }
+        : { status: statusTab, workDateFrom: dateFrom || undefined, workDateTo: dateTo || undefined };
       const rows = await listTimesheets(filter);
       setEntries(rows);
       setSelected({});
     } finally {
       setLoading(false);
     }
-  }, [user, isPartner, statusTab]);
+  }, [user, isPartner, statusTab, dateFrom, dateTo]);
 
   useEffect(() => {
     reload();
@@ -468,6 +471,31 @@ export default function TimesheetApproval() {
                 <TabsTrigger value="rejected">{STATUS_LABEL.rejected}</TabsTrigger>
               </TabsList>
             </Tabs>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">с</Label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="h-9 w-[150px] bg-muted/40 border-0 text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">по</Label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="h-9 w-[150px] bg-muted/40 border-0 text-sm"
+                />
+              </div>
+              {(dateFrom || dateTo) && (
+                <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); }}>
+                  Сбросить даты
+                </Button>
+              )}
+            </div>
             <Button variant="outline" size="sm" onClick={reload} disabled={loading} className="ml-auto">
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Обновить
             </Button>

@@ -348,7 +348,8 @@ export default function Timesheets() {
   // Пустая строка = «все даты». По умолчанию показываем все, иначе при
   // открытии страницы пользователь видит только то, что заполнил сегодня —
   // выглядит как «фильтр не работает».
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [filterProject, setFilterProject] = useState<string>('all');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingTimesheet, setEditingTimesheet] = useState<TimesheetEntry | null>(null);
@@ -450,12 +451,14 @@ export default function Timesheets() {
         ts.projectName?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesStatus = filterStatus === 'all' || ts.status === filterStatus;
-      const matchesDate = !filterDate || ts.date === filterDate;
+      const matchesDate =
+        (!filterDateFrom || ts.date >= filterDateFrom) &&
+        (!filterDateTo || ts.date <= filterDateTo);
       const matchesProject = filterProject === 'all' || ts.projectId === filterProject;
 
       return matchesSearch && matchesStatus && matchesDate && matchesProject;
     });
-  }, [visibleTimesheets, searchTerm, filterStatus, filterDate, filterProject]);
+  }, [visibleTimesheets, searchTerm, filterStatus, filterDateFrom, filterDateTo, filterProject]);
 
   // Сохранение тайм-щита
   const saveTimesheet = async () => {
@@ -632,16 +635,14 @@ export default function Timesheets() {
   // Статистика
   const stats = useMemo(() => {
     const safeNumber = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
-    const source = viewMode === 'calendar' && user
-      ? visibleTimesheets.filter((ts) => ts.employeeId === user.id)
-      : filteredTimesheets;
+    const source = filteredTimesheets;
     const total = safeNumber(source.reduce((sum, ts) => sum + (ts.hours || 0), 0));
     const draft = source.filter(ts => ts.status === 'draft').length;
     const submitted = source.filter(ts => ts.status === 'submitted').length;
     const approved = source.filter(ts => ts.status === 'approved').length;
 
     return { total, draft, submitted, approved, count: source.length };
-  }, [filteredTimesheets, visibleTimesheets, viewMode, user]);
+  }, [filteredTimesheets]);
 
   const openNewTimesheetDialog = (date = new Date().toISOString().split('T')[0]) => {
     setEditingTimesheet(null);
@@ -657,8 +658,8 @@ export default function Timesheets() {
   };
 
   const ownCalendarEntries = useMemo(
-    () => (user ? visibleTimesheets.filter((t) => t.employeeId === user.id) : []),
-    [visibleTimesheets, user],
+    () => (user ? filteredTimesheets.filter((t) => t.employeeId === user.id) : []),
+    [filteredTimesheets, user],
   );
 
   const selectedDayEntries = useMemo(
@@ -916,12 +917,20 @@ export default function Timesheets() {
               className="pl-9 bg-muted/40 border-0 focus-visible:ring-1"
             />
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Input
               type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
               className="bg-muted/40 border-0 focus-visible:ring-1 text-sm"
+              title="Дата с"
+            />
+            <Input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="bg-muted/40 border-0 focus-visible:ring-1 text-sm"
+              title="Дата по"
             />
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
               <SelectTrigger className="bg-muted/40 border-0 text-sm">
