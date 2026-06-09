@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Pencil, UserPlus, Users, Shield } from "lucide-react";
+import { Loader2, Pencil, UserPlus, Users, Shield, Search, FileText, Briefcase, Clock3, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { UserRole, ROLE_LABELS, normalizeUserRole, getLevelForUserRole, getEmployeeDbRoleForUserRole } from "@/types/roles";
 import { Database } from "@/integrations/supabase/types";
+import { useProjects } from "@/hooks/useProjects";
+import { useTasks } from "@/hooks/useTasks";
 
 type DbAppRole = Database['public']['Enums']['app_role'];
 type DbEmployeeLevel = Database['public']['Enums']['employee_level'];
@@ -40,7 +42,18 @@ interface Profile {
   created_at: string;
 }
 
-// Все роли системы для админки
+interface AttendanceRow {
+  id: string;
+  employee_id: string | null;
+  date: string | null;
+  status: string | null;
+  location_type: string | null;
+  notes: string | null;
+  project_name: string | null;
+  project_id: string | null;
+  created_at: string | null;
+}
+
 const ALL_ROLES: { value: UserRole; label: string; adminOnly?: boolean }[] = [
   // Административные роли (только админ может назначать)
   { value: 'ceo', label: ROLE_LABELS.ceo, adminOnly: true },
@@ -66,14 +79,66 @@ const ALL_ROLES: { value: UserRole; label: string; adminOnly?: boolean }[] = [
   { value: 'contractor', label: ROLE_LABELS.contractor },
 ];
 
+function normalizeText(value: unknown): string {
+  return String(value || '').toLowerCase();
+}
+
+function getEmployeeRoleLabel(employee: Employee): string {
+  return getRoleLabel(employee.role, employee.level);
+}
+
+function employeeSearchText(employee: Employee): string {
+  return [
+    employee.name,
+    employee.email,
+    employee.whatsapp,
+    employee.role,
+    employee.level,
+    getEmployeeRoleLabel(employee),
+  ].map(normalizeText).join(' ');
+}
+
+function statusLabel(status: string | null | undefined): string {
+  const value = normalizeText(status);
+  const map: Record<string, string> = {
+    in_office: 'В офисе',
+    remote: 'Удалённо',
+    on_project: 'На проекте',
+    vacation: 'Отпуск',
+    sick_leave: 'Больничный',
+    day_off: 'Выходной',
+    present: 'На работе',
+    late: 'Опоздание',
+    absent: 'Отсутствует',
+  };
+  return map[value] || (status || '—');
+}
+
+function attendancePriority(row: AttendanceRow): number {
+  const raw = normalizeText(row.status || row.location_type);
+  if (raw.includes('vacation')) return 5;
+  if (raw.includes('sick')) return 4;
+  if (raw.includes('day_off')) return 3;
+  if (raw.includes('project') || raw.includes('on_project')) return 2;
+  if (raw.includes('remote')) return 1;
+  return 0;
+}
+
+
 export default function UserManagement() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("employees");
+  const { projects = [] } = useProjects();
+  const { tasks = [] } = useTasks();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -126,7 +191,42 @@ export default function UserManagement() {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedEmployeeId) {
+      setAttendanceRows([]);
+      return;
+    }
+
+    const loadEmployeeAttendance = async () => {
+      setAttendanceLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('attendance')
+          .select('id, employee_id, date, status, location_type, notes, project_name, project_id, created_at')
+          .eq('employee_id', selectedEmployeeId)
+          .order('date', { ascending: false })
+          .limit(20);
+
+        if (error) throw error;
+        if (!cancelled) setAttendanceRows((data || []) as AttendanceRow[]);
+      } catch (err) {
+        console.error('Error loading employee attendance:', err);
+        if (!cancelled) setAttendanceRows([]);
+      } finally {
+        if (!cancelled) setAttendanceLoading(false);
+      }
+    };
+
+    void loadEmployeeAttendance();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEmployeeId]);
+
   const handleCreateEmployee = async () => {
+
     if (!formData.name || !formData.email) {
       setError("Заполните ФИО и Email");
       return;
@@ -356,6 +456,57 @@ export default function UserManagement() {
     return dbRole;
   };
 
+  const filteredEmployees = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter((employee) => employeeSearchText(employee).includes(q));
+  }, [employees, searchTerm]);
+
+  const selectedEmployee = useMemo(
+    () => employees.find((employee) => employee.id === selectedEmployeeId) || null,
+    [employees, selectedEmployeeId],
+  );
+
+  const selectedEmployeeTasks = useMemo(() => {
+    if (!selectedEmployee) return [];
+    return tasks.filter((task: any) => Array.isArray(task.assignees) && task.assignees.includes(selectedEmployee.id));
+  }, [tasks, selectedEmployee]);
+
+  const selectedEmployeeProjects = useMemo(() => {
+    const ids = new Set<string>();
+    const list: Array<{ id: string; name: string; status: string | null }> = [];
+    for (const task of selectedEmployeeTasks as any[]) {
+      if (!task.project_id || ids.has(task.project_id)) continue;
+      ids.add(task.project_id);
+      const project = projects.find((p: any) => p.id === task.project_id);
+      list.push({
+        id: task.project_id,
+        name: project?.name || task.project?.name || 'Проект без названия',
+        status: project?.status || null,
+      });
+    }
+    return list;
+  }, [projects, selectedEmployeeTasks]);
+
+  const latestAttendance = useMemo(() => {
+    return [...attendanceRows]
+      .sort((a, b) => {
+        const aDate = String(a.date || a.created_at || '');
+        const bDate = String(b.date || b.created_at || '');
+        if (aDate !== bDate) return bDate.localeCompare(aDate);
+        return attendancePriority(b) - attendancePriority(a);
+      })[0] || null;
+  }, [attendanceRows]);
+
+  const taskBuckets = useMemo(() => {
+    const summary = { in_progress: 0, in_review: 0, todo: 0, blocked: 0, done: 0 } as Record<string, number>;
+    for (const task of selectedEmployeeTasks as any[]) {
+      const status = String(task.status || '').toLowerCase();
+      if (summary[status] !== undefined) summary[status] += 1;
+    }
+    return summary;
+  }, [selectedEmployeeTasks]);
+
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" | "outline" => {
     if (role === 'ceo' || role === 'deputy_director') return 'destructive';
     if (role === 'admin' || role === 'partner') return 'destructive';
@@ -514,74 +665,258 @@ export default function UserManagement() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="employees">
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle>Сотрудники системы</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading && employees.length === 0 ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin" />
+        <TabsContent value="employees" className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
+            <Card className="glass-card">
+              <CardHeader>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <CardTitle>Сотрудники системы</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Поиск, фильтрация и быстрый переход в карточку сотрудника.
+                    </p>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:min-w-[360px]">
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Поиск: ФИО, email, телефон, роль..."
+                        className="pl-9"
+                      />
+                    </div>
+                    <Badge variant="secondary" className="justify-center whitespace-nowrap px-3 py-2">
+                      {filteredEmployees.length} / {employees.length}
+                    </Badge>
+                  </div>
                 </div>
-              ) : employees.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Нет сотрудников. Добавьте первого сотрудника.
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ФИО</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Роль</TableHead>
-                      <TableHead>Уровень</TableHead>
-                      <TableHead>Телефон</TableHead>
-                      <TableHead>Действия</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employees.map((employee) => (
-                        <TableRow key={employee.id}>
-                          <TableCell className="font-medium">{employee.name}</TableCell>
-                          <TableCell>{employee.email || '—'}</TableCell>
-                          <TableCell>
-                            <Badge variant={getRoleBadgeVariant(employee.role)}>
-                              {getRoleLabel(employee.role, employee.level)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">Уровень {employee.level}</Badge>
-                          </TableCell>
-                          <TableCell>{employee.whatsapp || '—'}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditDialog(employee)}
-                                title="Редактировать"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDeleteEmployee(employee)}
-                                title="Удалить"
-                              >
-                                Удалить
-                              </Button>
-                            </div>
-                          </TableCell>
+              </CardHeader>
+              <CardContent>
+                {loading && employees.length === 0 ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : filteredEmployees.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                    {employees.length === 0 ? 'Нет сотрудников. Добавьте первого сотрудника.' : 'По запросу ничего не найдено.'}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ФИО</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Роль</TableHead>
+                          <TableHead>Уровень</TableHead>
+                          <TableHead>Телефон</TableHead>
+                          <TableHead>Действия</TableHead>
                         </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredEmployees.map((employee) => {
+                          const isSelected = selectedEmployeeId === employee.id;
+                          return (
+                            <TableRow
+                              key={employee.id}
+                              className={isSelected ? 'bg-primary/5' : 'cursor-pointer hover:bg-muted/50'}
+                              onClick={() => setSelectedEmployeeId(employee.id)}
+                            >
+                              <TableCell className="font-medium">{employee.name}</TableCell>
+                              <TableCell>{employee.email || '—'}</TableCell>
+                              <TableCell>
+                                <Badge variant={getRoleBadgeVariant(employee.role)}>
+                                  {getRoleLabel(employee.role, employee.level)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">Уровень {employee.level}</Badge>
+                              </TableCell>
+                              <TableCell>{employee.whatsapp || '—'}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedEmployeeId(employee.id);
+                                    }}
+                                    title="Открыть карточку"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditDialog(employee);
+                                    }}
+                                    title="Редактировать"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteEmployee(employee);
+                                    }}
+                                    title="Удалить"
+                                  >
+                                    Удалить
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card h-fit">
+              <CardHeader>
+                <CardTitle>Личное дело</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedEmployee ? (
+                  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                    Выберите сотрудника в таблице слева, чтобы увидеть его загрузку, проекты и последние отметки.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold">{selectedEmployee.name}</h3>
+                          <p className="text-sm text-muted-foreground">{selectedEmployee.email || 'Email не указан'}</p>
+                        </div>
+                        <Badge variant={getRoleBadgeVariant(selectedEmployee.role)}>
+                          {getRoleLabel(selectedEmployee.role, selectedEmployee.level)}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-lg bg-background p-3">
+                          <p className="text-xs text-muted-foreground">Уровень</p>
+                          <p className="font-semibold">{selectedEmployee.level}</p>
+                        </div>
+                        <div className="rounded-lg bg-background p-3">
+                          <p className="text-xs text-muted-foreground">Телефон</p>
+                          <p className="font-semibold">{selectedEmployee.whatsapp || '—'}</p>
+                        </div>
+                        <div className="rounded-lg bg-background p-3 col-span-2">
+                          <p className="text-xs text-muted-foreground">Создан</p>
+                          <p className="font-semibold">{selectedEmployee.created_at ? new Date(selectedEmployee.created_at).toLocaleString('ru-RU') : '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Задач в работе</p>
+                        <p className="text-2xl font-bold">{taskBuckets.in_progress + taskBuckets.in_review}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Всего задач</p>
+                        <p className="text-2xl font-bold">{selectedEmployeeTasks.length}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Проектов</p>
+                        <p className="text-2xl font-bold">{selectedEmployeeProjects.length}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Сегодня</p>
+                        <p className="text-sm font-semibold">{attendanceLoading ? 'Загрузка...' : latestAttendance ? statusLabel(latestAttendance.status || latestAttendance.location_type) : 'Нет отметки'}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <Activity className="h-4 w-4" />
+                        Сейчас занят
+                      </div>
+                      {selectedEmployeeTasks.filter((task: any) => ['in_progress', 'in_review', 'todo'].includes(String(task.status || '').toLowerCase())).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Нет активных задач.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedEmployeeTasks
+                            .filter((task: any) => ['in_progress', 'in_review', 'todo'].includes(String(task.status || '').toLowerCase()))
+                            .slice(0, 4)
+                            .map((task: any) => (
+                              <div key={task.id} className="rounded-lg border p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-sm font-medium">{task.title}</p>
+                                  <Badge variant="outline">{task.status}</Badge>
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {task.project_id ? (projects.find((p: any) => p.id === task.project_id)?.name || 'Проект') : 'Без проекта'}
+                                </p>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <Briefcase className="h-4 w-4" />
+                        Проекты
+                      </div>
+                      {selectedEmployeeProjects.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Пока не привязан к активным проектам через задачи.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedEmployeeProjects.slice(0, 6).map((project) => (
+                            <div key={project.id} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                              <span className="truncate">{project.name}</span>
+                              {project.status ? <Badge variant="secondary">{project.status}</Badge> : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <Clock3 className="h-4 w-4" />
+                        Последние отметки
+                      </div>
+                      {attendanceLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Загружаем...
+                        </div>
+                      ) : attendanceRows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Нет данных посещаемости.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {attendanceRows.slice(0, 5).map((row) => (
+                            <div key={row.id} className="rounded-lg border p-3 text-sm">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium">{row.date || '—'}</span>
+                                <Badge variant="outline">{statusLabel(row.status || row.location_type)}</Badge>
+                              </div>
+                              <p className="mt-1 text-xs text-muted-foreground">{row.notes || row.project_name || 'Без примечаний'}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
+
 
         <TabsContent value="profiles">
           <Card className="glass-card">
