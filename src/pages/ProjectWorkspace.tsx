@@ -103,17 +103,17 @@ export default function ProjectWorkspace() {
   const canSeeContracts = isProcurement || isAdmin || isPartner || isPM || isDirector;
   const projectStatus = project?.notes?.status || project?.status;
   // Управление командой: admin/ceo — всегда, deputy_director — пока проект не
-  // ушёл в активную работу (этап распределения/сборки команды). Партнёр проекта
-  // тоже может менять состав команды, чтобы не упираться в отсутствие кнопки на
-  // рабочем экране. PM, ассистенты и т.д. — без права редактирования.
+  // ушёл в активную работу (этап распределения/сборки команды). Партнёр, PM,
+  // ассистенты и т.д. команду менять не могут.
   const hasTeamYet = !!(project?.team?.length || project?.notes?.team?.length);
   const isAssemblyPhase = !hasTeamYet
     || projectStatus === 'approved'
     || projectStatus === 'team_assembled'
     || projectStatus === 'new'
     || projectStatus === 'pending_approval';
-  const canEditTeam = isAdmin || isCEO || isPartner || (isDeputy && isAssemblyPhase);
+  const canEditTeam = isAdmin || isCEO || (isDeputy && isAssemblyPhase);
 
+  const isCompleted = projectStatus === 'completed';
   const isInProgress = projectStatus === 'in_progress';
   const isPendingPaymentApproval = projectStatus === 'pending_payment_approval';
   const isReadyToComplete = projectStatus === 'ready_to_complete';
