@@ -24,11 +24,13 @@ type Task = Database['public']['Tables']['tasks']['Row'] & {
   reporter_employee?: Employee;
   assignee_employees?: Employee[];
 };
+type ProjectTeam = Database['public']['Tables']['project_team']['Row'];
 export function useProjects() {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [projectTeams, setProjectTeams] = useState<ProjectTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -73,11 +75,20 @@ export function useProjects() {
 
       if (tasksError) throw tasksError;
 
+      // Загружаем команды проектов: именно здесь часто хранится партнёр,
+      // а не в плоском projects.partner_id.
+      const { data: projectTeamsData, error: projectTeamsError } = await supabase
+        .from('project_team')
+        .select('*');
+
+      if (projectTeamsError) throw projectTeamsError;
+
       // Используем базовые данные для демонстрации
       setCompanies(companiesData || []);
       setEmployees(employeesData || []);
       setAllProjects(projectsData || []);
       setTasks(tasksData || []);
+      setProjectTeams(projectTeamsData || []);
 
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -292,6 +303,7 @@ export function useProjects() {
     tasks,
     employees,
     companies,
+    projectTeams,
     loading,
     error,
     fetchData,

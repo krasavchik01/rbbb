@@ -84,7 +84,29 @@ function normalizeText(value: unknown): string {
 }
 
 function getEmployeeRoleLabel(employee: Employee): string {
-  return getRoleLabel(employee.role, employee.level);
+  const directRoles: Record<string, string> = {
+    ceo: 'CEO / Генеральный директор',
+    deputy_director: 'Заместитель директора',
+    hr: 'HR специалист',
+    procurement: 'Отдел закупок',
+    partner: 'Партнер',
+    admin: 'Администратор',
+    accountant: 'Бухгалтер',
+    contractor: 'ГПХ (Подрядчик)',
+  };
+
+  if (directRoles[employee.role]) {
+    return directRoles[employee.role];
+  }
+
+  const roleKey = `${employee.role}_${employee.level}`;
+  const found = ALL_ROLES.find((role) => role.value === roleKey);
+  if (found) return found.label;
+
+  const foundSimple = ALL_ROLES.find((role) => role.value === employee.role);
+  if (foundSimple) return foundSimple.label;
+
+  return employee.role;
 }
 
 function employeeSearchText(employee: Employee): string {
@@ -210,7 +232,7 @@ export default function UserManagement() {
           .limit(20);
 
         if (error) throw error;
-        if (!cancelled) setAttendanceRows((data || []) as AttendanceRow[]);
+        if (!cancelled) setAttendanceRows((data || []) as unknown as AttendanceRow[]);
       } catch (err) {
         console.error('Error loading employee attendance:', err);
         if (!cancelled) setAttendanceRows([]);
@@ -472,21 +494,63 @@ export default function UserManagement() {
     return tasks.filter((task: any) => Array.isArray(task.assignees) && task.assignees.includes(selectedEmployee.id));
   }, [tasks, selectedEmployee]);
 
-  const selectedEmployeeProjects = useMemo(() => {
+  const selectedEmployeePartnerProjects = useMemo(() => {
+    if (!selectedEmployee) return [];
+
     const ids = new Set<string>();
     const list: Array<{ id: string; name: string; status: string | null }> = [];
-    for (const task of selectedEmployeeTasks as any[]) {
-      if (!task.project_id || ids.has(task.project_id)) continue;
-      ids.add(task.project_id);
-      const project = projects.find((p: any) => p.id === task.project_id);
+
+    for (const project of projects as any[]) {
+      const projectId = project.id;
+      if (!projectId || ids.has(projectId)) continue;
+
+      const partnerId = project.partner_id || project.partnerId || project.notes?.partner_id || project.notes?.partnerId;
+      if (partnerId !== selectedEmployee.id) continue;
+
+      ids.add(projectId);
       list.push({
-        id: task.project_id,
-        name: project?.name || task.project?.name || 'Проект без названия',
-        status: project?.status || null,
+        id: projectId,
+        name: project.name || project.clientName || project.client?.name || 'Проект без названия',
+        status: project.status || project.notes?.status || null,
       });
     }
+
     return list;
-  }, [projects, selectedEmployeeTasks]);
+  }, [projects, selectedEmployee]);
+
+  const selectedEmployeeTeamProjects = useMemo(() => {
+    if (!selectedEmployee) return [];
+
+    const ids = new Set<string>();
+    const list: Array<{ id: string; name: string; status: string | null }> = [];
+
+    for (const project of projects as any[]) {
+      const projectId = project.id;
+      if (!projectId || ids.has(projectId)) continue;
+
+      const team = Array.isArray(project.team) ? project.team : Array.isArray(project.notes?.team) ? project.notes.team : [];
+      const partnerId = project.partner_id || project.partnerId || project.notes?.partner_id || project.notes?.partnerId;
+      if (partnerId === selectedEmployee.id) continue;
+
+      const isInTeam = team.some((member: any) => {
+        const memberId = member.userId || member.id || member.employeeId;
+        return memberId === selectedEmployee.id;
+      });
+
+      if (!isInTeam) continue;
+
+      ids.add(projectId);
+      list.push({
+        id: projectId,
+        name: project.name || project.clientName || project.client?.name || 'Проект без названия',
+        status: project.status || project.notes?.status || null,
+      });
+    }
+
+    return list;
+  }, [projects, selectedEmployee]);
+
+  const selectedEmployeeProjectsCount = selectedEmployeePartnerProjects.length + selectedEmployeeTeamProjects.length;
 
   const latestAttendance = useMemo(() => {
     return [...attendanceRows]
@@ -497,7 +561,6 @@ export default function UserManagement() {
         return attendancePriority(b) - attendancePriority(a);
       })[0] || null;
   }, [attendanceRows]);
-
   const taskBuckets = useMemo(() => {
     const summary = { in_progress: 0, in_review: 0, todo: 0, blocked: 0, done: 0 } as Record<string, number>;
     for (const task of selectedEmployeeTasks as any[]) {
@@ -506,7 +569,6 @@ export default function UserManagement() {
     }
     return summary;
   }, [selectedEmployeeTasks]);
-
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" | "outline" => {
     if (role === 'ceo' || role === 'deputy_director') return 'destructive';
     if (role === 'admin' || role === 'partner') return 'destructive';
@@ -830,7 +892,10 @@ export default function UserManagement() {
                       </div>
                       <div className="rounded-lg border p-3">
                         <p className="text-xs text-muted-foreground">Проектов</p>
-                        <p className="text-2xl font-bold">{selectedEmployeeProjects.length}</p>
+                        <p className="text-2xl font-bold">{selectedEmployeeProjectsCount}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Партнёр: {selectedEmployeePartnerProjects.length} · Команда: {selectedEmployeeTeamProjects.length}
+                        </p>
                       </div>
                       <div className="rounded-lg border p-3">
                         <p className="text-xs text-muted-foreground">Сегодня</p>
@@ -865,21 +930,57 @@ export default function UserManagement() {
                       )}
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-semibold">
                         <Briefcase className="h-4 w-4" />
                         Проекты
                       </div>
-                      {selectedEmployeeProjects.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Пока не привязан к активным проектам через задачи.</p>
+
+                      {selectedEmployeePartnerProjects.length === 0 && selectedEmployeeTeamProjects.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Пока нет связанных проектов.</p>
                       ) : (
-                        <div className="space-y-2">
-                          {selectedEmployeeProjects.slice(0, 6).map((project) => (
-                            <div key={project.id} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
-                              <span className="truncate">{project.name}</span>
-                              {project.status ? <Badge variant="secondary">{project.status}</Badge> : null}
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Где сотрудник указан партнёром
                             </div>
-                          ))}
+                            {selectedEmployeePartnerProjects.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Нет проектов по partner_id.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {selectedEmployeePartnerProjects.slice(0, 6).map((project) => (
+                                  <div key={`partner-${project.id}`} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                                    <span className="truncate">{project.name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline">Партнёр</Badge>
+                                      {project.status ? <Badge variant="secondary">{project.status}</Badge> : null}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Где сотрудник в team
+                            </div>
+                            {selectedEmployeeTeamProjects.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Нет проектов по team.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {selectedEmployeeTeamProjects.slice(0, 6).map((project) => (
+                                  <div key={`team-${project.id}`} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                                    <span className="truncate">{project.name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline">Команда</Badge>
+                                      {project.status ? <Badge variant="secondary">{project.status}</Badge> : null}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
