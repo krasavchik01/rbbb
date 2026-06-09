@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 
 // Подвкладки «Утверждение» и «Назначение партнёров» теперь рендерятся внутри
@@ -40,6 +40,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 import { getProjectStage, getProjectStageLabel, type ProjectStage as RoadmapProjectStage } from "@/lib/projectStages";
+import { getAuditPeriods, groupProjectsByAuditRoot } from "@/lib/auditPeriods";
 
 // Простые типы
 interface SimpleProject {
@@ -1353,6 +1354,21 @@ export default function Projects() {
 
 
   // Получаем уникальные роли сотрудников для фильтра распределения команды
+  const displayedProjectGroups = useMemo(
+    () => groupProjectsByAuditRoot(filteredProjects),
+    [filteredProjects],
+  );
+  const displayedProjects = useMemo(
+    () => displayedProjectGroups.map((group) => ({
+      ...group.canonical,
+      name: group.displayName || group.canonical.name,
+      auditPeriods: group.periods,
+      duplicateProjects: group.duplicates,
+      duplicateCount: group.duplicates.length,
+    })),
+    [displayedProjectGroups],
+  );
+
   const employeeRoles = useMemo(() => {
     const roles = new Set<string>();
     employees.forEach((emp: any) => {
@@ -2868,13 +2884,14 @@ export default function Projects() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filteredProjects.map((project) => {
-                    const stats = getProjectStats(project);
-                    const tasks = getProjectTasks(project);
+                  {displayedProjects.map((project) => {
                     const projectId = project.id || project.notes?.id;
+                    const periods = getAuditPeriods(project);
+                    const periodCount = periods.length || project.duplicateCount || 0;
 
                     return (
-                      <tr key={projectId || `project-${project.name}`} className="hover:bg-secondary/20 transition-colors">
+                      <Fragment key={projectId || `project-${project.name}`}>
+                      <tr className="hover:bg-secondary/20 transition-colors">
                         {isAdmin && (
                           <td className="px-2 py-2">
                             <input
@@ -2900,7 +2917,14 @@ export default function Projects() {
                               📄
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-xs group-hover:underline leading-tight line-clamp-3">{project.name}</div>
+                              <div className="font-medium text-xs group-hover:underline leading-tight line-clamp-3">
+                                {project.name}
+                                {periodCount > 0 && (
+                                  <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0">
+                                    {periodCount} период(а)
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-[10px] text-muted-foreground mt-0.5">#{String(project.id).substring(0, 8)}</div>
                             </div>
                           </div>
@@ -3128,6 +3152,25 @@ export default function Projects() {
                           </div>
                         </td>
                       </tr>
+                      {periods.map((period: any) => (
+                        <tr key={`${projectId || project.name}-${period.id}`} className="bg-muted/20">
+                          {isAdmin && <td className="px-2 py-1" />}
+                          <td className="px-2 py-2 text-xs text-muted-foreground" colSpan={2}>
+                            <div className="pl-8">
+                              <span className="font-medium text-foreground">{period.name}</span>
+                              <span className="ml-2">{period.startDate} - {period.endDate}</span>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-xs text-muted-foreground">Период</td>
+                          <td className="px-2 py-2 text-xs">{period.status || 'planned'}</td>
+                          <td className="px-2 py-2 text-xs text-muted-foreground">—</td>
+                          <td className="px-2 py-2 text-xs text-muted-foreground">—</td>
+                          <td className="px-2 py-2 text-xs">{period.partnerName || 'Партнер не назначен'}</td>
+                          <td className="px-2 py-2 text-xs">{period.deadline || '—'}</td>
+                          <td className="px-2 py-2" />
+                        </tr>
+                      ))}
+                      </Fragment>
                     );
                   })}
                 </tbody>

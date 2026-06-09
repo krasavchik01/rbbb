@@ -14,6 +14,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { getEffectivePartnerId } from '@/lib/auditPeriods';
 
 export type TimesheetSource = 'manual' | 'import' | 'survey';
 export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
@@ -24,6 +25,7 @@ export interface TimesheetEntry {
   employeeName: string;
   projectId: string | null;
   projectName: string;
+  auditPeriodId?: string;
   workDate: string;            // ISO date (YYYY-MM-DD)
   hours: number;
   section?: string;
@@ -54,6 +56,7 @@ export interface TimesheetEntryDraft {
   employeeName: string;
   projectId: string | null;
   projectName: string;
+  auditPeriodId?: string;
   workDate: string;
   hours: number;
   section?: string;
@@ -145,27 +148,8 @@ export interface ListFilter {
  * Принимает либо raw row из supabase (notes — строка), либо уже распарсенный
  * project (team — массив), и работает в обоих случаях.
  */
-export function getProjectPartnerId(project: any): string | null {
-  if (!project) return null;
-  // На фронте useProjects уже распарсил notes и положил team в project.team
-  let team = Array.isArray(project.team) ? project.team : null;
-  if (!team) {
-    // Прямо из БД: notes — строка с JSON
-    const raw = project.notes;
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw);
-        team = Array.isArray(parsed?.team) ? parsed.team : null;
-      } catch {
-        team = null;
-      }
-    } else if (raw && Array.isArray(raw.team)) {
-      team = raw.team;
-    }
-  }
-  if (!team) return null;
-  const partner = team.find((m: any) => m?.role === 'partner');
-  return partner?.userId || partner?.id || null;
+export function getProjectPartnerId(project: any, auditPeriodId?: string | null): string | null {
+  return getEffectivePartnerId(project, auditPeriodId);
 }
 
 /**

@@ -13,6 +13,7 @@
 
 import { PROJECT_ROLES, normalizeUserRole } from '@/types/roles';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
+export { getEffectivePartnerId } from '@/lib/auditPeriods';
 
 export interface TeamMember {
   userId: string;

@@ -4,6 +4,7 @@
  */
 
 import { UserRole } from './roles';
+import type { AuditPeriod } from '@/lib/auditPeriods';
 
 // Статусы проекта
 export type ProjectStatus = 
@@ -322,6 +323,7 @@ export interface ProjectV3 {
   // Новые поля: файлы, этапы, услуги, доп соглашения
   files?: ProjectFile[];                       // Файлы проекта (хранятся в отдельной таблице)
   stages?: ProjectStage[];                     // Этапы проекта (хранятся в JSONB notes)
+  auditPeriods?: AuditPeriod[];                // Периоды аудита внутри одного проекта
   additionalServices?: AdditionalService[];   // Дополнительные услуги (хранятся в JSONB notes)
   amendments?: ProjectAmendment[];             // Доп соглашения (хранятся в отдельной таблице)
   

@@ -51,10 +51,12 @@ import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 // TemplateManager, WorkPaperTree, WorkPaperViewer removed
 import { ContractEditor } from "@/components/projects/ContractEditor";
 import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
+import { AuditPeriodsEditor } from "@/components/projects/AuditPeriodsEditor";
 import Tasks from "@/pages/Tasks";
 import { Task, ChecklistItem } from "@/types/project";
 // WorkPaper types removed
 import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
+import type { AuditPeriod } from "@/lib/auditPeriods";
 import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { useMemo } from "react";
 import { getProjectStatusLabel, isTaskDoneStatus } from "@/lib/projectWorkflow";
@@ -97,6 +99,7 @@ export default function ProjectWorkspace() {
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
+  const canEditAuditPeriods = isPartner || isAdmin || isCEO || isDeputy;
   const canSeeContracts = isProcurement || isAdmin || isPartner || isPM || isDirector;
   const projectStatus = project?.notes?.status || project?.status;
   // Управление командой: admin/ceo — всегда, deputy_director — пока проект не
@@ -306,6 +309,25 @@ export default function ProjectWorkspace() {
     // Если projects.length === 0, просто ждем следующего рендера (проекты еще загружаются)
   }, [id, projects, loadProjectData, projectFromState, project]);
 
+  const saveAuditPeriods = async (periods: AuditPeriod[]) => {
+    const projectId = project?.id || project?.notes?.id || id;
+    if (!projectId) return;
+
+    await supabaseDataStore.updateProject(projectId, {
+      ...(project?.notes || {}),
+      auditPeriods: periods,
+    });
+    setProject((prev: any) => ({
+      ...prev,
+      auditPeriods: periods,
+      notes: { ...(prev?.notes || {}), auditPeriods: periods },
+    }));
+    toast({
+      title: 'Периоды обновлены',
+      description: 'Изменения сохранены внутри проекта.',
+    });
+  };
+
   if (!project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -412,6 +434,7 @@ export default function ProjectWorkspace() {
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           {!isProcurement && <TabsTrigger value="dashboard" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📊 <span className="hidden sm:inline">Дашборд</span><span className="sm:hidden">Обзор</span></TabsTrigger>}
           {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">✅ Задачи</TabsTrigger>}
+          <TabsTrigger value="periods" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📆 Периоды</TabsTrigger>
           <TabsTrigger value="files" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📁 Файлы</TabsTrigger>
           <TabsTrigger value="contract" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📜 Договор</TabsTrigger>
         </TabsList>
@@ -664,6 +687,16 @@ export default function ProjectWorkspace() {
             <Tasks projectId={project?.id || id} embedded />
           </TabsContent>
         )}
+
+        <TabsContent value="periods" className="space-y-4 mt-4">
+          <AuditPeriodsEditor
+            project={project}
+            employees={employees || []}
+            currentUserId={user?.id}
+            canEdit={canEditAuditPeriods}
+            onSave={saveAuditPeriods}
+          />
+        </TabsContent>
 
         {/* Вкладка файлов */}
         <TabsContent value="files" className="space-y-4 mt-4">
