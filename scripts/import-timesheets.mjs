@@ -100,6 +100,13 @@ function classifyProject(projectRaw) {
   return { kind: 'project', cleaned: s };
 }
 
+function extractExplicitProjectLabel(notesRaw) {
+  const notes = String(notesRaw || '').trim();
+  if (!notes) return null;
+  const match = notes.match(/(?:^|\n)\s*(?:project|проект)\s*[:：-]\s*(.+?)(?:\n|$)/i);
+  return match?.[1]?.trim() || null;
+}
+
 function buildProjectIndex(projects) {
   const idx = [];
   for (const p of projects) {
@@ -241,12 +248,27 @@ function parseFile(filePath, fileName, employees, projectIndex) {
     if (hours == null) { warnings.push(`row ${i + 1}: bad hours "${hoursRaw}"`); continue; }
 
     const cls = classifyProject(projectRaw);
+    const explicitProjectLabel = extractExplicitProjectLabel(notesRaw);
 
     let resolvedProjectId = null;
     let resolvedProjectName = projectRaw;
     let projectSource = 'direct';
 
-    if (cls.kind === 'project') {
+    // If the notes explicitly say `Проект: ...`, trust that label before the
+    // raw project column. This covers imported files where users selected a
+    // placeholder/wrong project in the dropdown and wrote the real project in
+    // notes (e.g. Тинай: raw `ТОО «Проект-ЭнС»`, notes `Проект: ... Crown Star`).
+    if (explicitProjectLabel) {
+      const hit = matchProject(explicitProjectLabel, projectIndex) || matchProject(notesRaw, projectIndex);
+      if (hit) {
+        resolvedProjectId = hit.id;
+        resolvedProjectName = hit.name;
+        projectSource = 'explicit_notes';
+      } else {
+        resolvedProjectName = explicitProjectLabel;
+        projectSource = 'explicit_notes_unmatched';
+      }
+    } else if (cls.kind === 'project') {
       const hit = matchProject(projectRaw, projectIndex);
       if (hit) {
         resolvedProjectId = hit.id;
