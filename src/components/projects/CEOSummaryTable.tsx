@@ -558,6 +558,9 @@ export function CEOSummaryTable({
                   <p className="text-sm text-muted-foreground">
                     Проекты, бонусы команды, аналитика по сотрудникам
                   </p>
+                  <Badge variant="outline" className="mt-1">
+                    Предварительный расчёт · технические проценты
+                  </Badge>
                 </div>
               </div>
               <div className="flex items-center gap-2">

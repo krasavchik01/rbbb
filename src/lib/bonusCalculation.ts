@@ -21,6 +21,7 @@
  */
 
 import { PROJECT_ROLES, type UserRole } from '@/types/roles';
+import { getProjectNotes } from '@/lib/projectNotes';
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
 
@@ -66,9 +67,12 @@ export interface BonusComputeMember {
   paidByName: string | null;
   /** История изменений (аудит). */
   history: Array<{ type: string; by?: string; byName?: string; at: string; from?: unknown; to?: unknown }>;
+  approvedHours: number;
 }
 
 export interface BonusComputeResult {
+  calculationKind: 'preliminary';
+  formulaVersion: 'technical-defaults-v1';
   base: number;
   overheadPercent: number;
   overhead: number;
@@ -94,12 +98,12 @@ export interface BonusComputeResult {
 
 /** Сумма ГПХ — пробуем несколько мест, где она исторически хранилась. */
 function readContractorsAmount(project: any): number {
-  const fromFinances = project?.finances?.totalContractorsAmount;
+  const notes = getProjectNotes(project);
+  const fromFinances = notes.finances?.totalContractorsAmount;
   if (typeof fromFinances === 'number' && fromFinances > 0) return fromFinances;
   const arr =
-    project?.finances?.contractors ||
-    project?.notes?.finances?.contractors ||
-    project?.notes?.contractors ||
+    notes.finances?.contractors ||
+    notes.contractors ||
     [];
   if (Array.isArray(arr)) {
     return arr.reduce((s: number, c: any) => s + (Number(c?.amount) || 0), 0);
@@ -109,24 +113,23 @@ function readContractorsAmount(project: any): number {
 
 /** Сумма без НДС — приоритет project.contract.amountWithoutVAT, fallback на поля. */
 function readAmountWithoutVAT(project: any): number {
+  const notes = getProjectNotes(project);
   return (
-    Number(project?.contract?.amountWithoutVAT) ||
-    Number(project?.amountWithoutVAT) ||
-    Number(project?.notes?.contract?.amountWithoutVAT) ||
-    Number(project?.notes?.amountWithoutVAT) ||
+    Number(notes.contract?.amountWithoutVAT) ||
+    Number(notes.finances?.amountWithoutVAT) ||
+    Number(notes.amountWithoutVAT) ||
     0
   );
 }
 
 function readTeam(project: any): any[] {
-  if (Array.isArray(project?.team)) return project.team;
-  if (Array.isArray(project?.notes?.team)) return project.notes.team;
-  return [];
+  const team = getProjectNotes(project).team;
+  return Array.isArray(team) ? team : [];
 }
 
 /** Эффективные настройки = settings → project.finances overrides → defaults. */
 function effectiveSettings(project: any, settings?: BonusSettings) {
-  const finances = project?.finances || {};
+  const finances = getProjectNotes(project).finances || {};
   const overheadPercent =
     finances.preExpensePercent ??
     settings?.overheadPercent ??
@@ -143,11 +146,22 @@ function effectiveSettings(project: any, settings?: BonusSettings) {
   return { overheadPercent, bonusPercent, distribution };
 }
 
+export interface BonusCalculationContext {
+  approvedHoursByEmployee?: ReadonlyMap<string, number>;
+}
+
+function isBonusHistoryEntry(value: unknown): value is BonusComputeMember['history'][number] {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.type === 'string' && typeof entry.at === 'string';
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 export function computeProjectBonus(
   project: any,
   settings?: BonusSettings,
+  context: BonusCalculationContext = {},
 ): BonusComputeResult {
   const base = readAmountWithoutVAT(project);
   const contractors = readContractorsAmount(project);
@@ -158,7 +172,7 @@ export function computeProjectBonus(
   const bonusPool = remainder * (bonusPercent / 100);
 
   const team = readTeam(project);
-  const teamBonuses: Record<string, any> = project?.finances?.teamBonuses || {};
+  const teamBonuses = getProjectNotes(project).finances?.teamBonuses || {};
 
   // Расчёт по членам команды.
   //   pct = member.bonusPercent (если задан в project.team[]) — это per-проект
@@ -194,7 +208,8 @@ export function computeProjectBonus(
       hiddenFromEmployee: !!existing.hiddenFromEmployee,
       paidAt: existing.paidAt || null,
       paidByName: existing.paidByName || null,
-      history: Array.isArray(existing.history) ? existing.history : [],
+      history: Array.isArray(existing.history) ? existing.history.filter(isBonusHistoryEntry) : [],
+      approvedHours: context.approvedHoursByEmployee?.get(userId) || 0,
     });
   }
 
@@ -218,6 +233,8 @@ export function computeProjectBonus(
   }
 
   return {
+    calculationKind: 'preliminary',
+    formulaVersion: 'technical-defaults-v1',
     base,
     overheadPercent,
     overhead,

@@ -445,22 +445,36 @@ export interface HoursByPair {
   hours: number;
 }
 
+export interface HoursSourceRow {
+  employee_id?: string | null;
+  project_id: string | null;
+  hours: number | null;
+  status: string | null;
+}
+
+export function aggregateHoursByPair(
+  rows: readonly HoursSourceRow[],
+  status: TimesheetStatus,
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const row of rows) {
+    if (row.status !== status || !row.employee_id || !row.project_id) continue;
+    const key = `${row.employee_id}__${row.project_id}`;
+    result.set(key, (result.get(key) || 0) + (Number(row.hours) || 0));
+  }
+  return result;
+}
+
 async function hoursIndexByStatus(status: TimesheetStatus): Promise<Map<string, number>> {
   const { data, error } = await supabase
     .from('timesheet_entries')
-    .select('employee_id, project_id, hours')
+    .select('employee_id, project_id, hours, status')
     .eq('status', status);
   if (error) {
     console.error(`[timesheets] hoursIndexByStatus(${status}) failed`, error);
     return new Map();
   }
-  const idx = new Map<string, number>();
-  for (const r of data || []) {
-    if (!r.project_id) continue;
-    const key = `${r.employee_id}__${r.project_id}`;
-    idx.set(key, (idx.get(key) || 0) + (Number(r.hours) || 0));
-  }
-  return idx;
+  return aggregateHoursByPair(data || [], status);
 }
 
 /**
@@ -485,6 +499,20 @@ export interface ProjectHoursTotals {
   pending: number;
 }
 
+export function aggregateProjectHours(
+  rows: readonly HoursSourceRow[],
+): Map<string, ProjectHoursTotals> {
+  const result = new Map<string, ProjectHoursTotals>();
+  for (const row of rows) {
+    if (!row.project_id || (row.status !== 'approved' && row.status !== 'submitted')) continue;
+    const current = result.get(row.project_id) || { approved: 0, pending: 0 };
+    if (row.status === 'approved') current.approved += Number(row.hours) || 0;
+    if (row.status === 'submitted') current.pending += Number(row.hours) || 0;
+    result.set(row.project_id, current);
+  }
+  return result;
+}
+
 /**
  * Сразу по всем проектам — Map<projectId, {approved, pending}>.
  * Используется в карточках списка проектов и на дашборде, чтобы не делать
@@ -499,16 +527,7 @@ export async function allProjectsHoursTotals(): Promise<Map<string, ProjectHours
     console.error('[timesheets] allProjectsHoursTotals failed', error);
     return new Map();
   }
-  const m = new Map<string, ProjectHoursTotals>();
-  for (const r of data || []) {
-    if (!r.project_id) continue;
-    const cur = m.get(r.project_id) || { approved: 0, pending: 0 };
-    const h = Number(r.hours) || 0;
-    if (r.status === 'approved') cur.approved += h;
-    else if (r.status === 'submitted') cur.pending += h;
-    m.set(r.project_id, cur);
-  }
-  return m;
+  return aggregateProjectHours(data || []);
 }
 
 // ─── Утилиты для импорта ────────────────────────────────────────────────────

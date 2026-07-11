@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BULK_REVIEW_CHUNK_SIZE, chunkReviewIds } from './timesheets';
+import {
+  BULK_REVIEW_CHUNK_SIZE,
+  aggregateHoursByPair,
+  aggregateProjectHours,
+  chunkReviewIds,
+} from './timesheets';
 
 describe('timesheet review helpers', () => {
   it('chunks bulk review ids to avoid oversized Supabase IN requests', () => {
@@ -16,5 +21,16 @@ describe('timesheet review helpers', () => {
 
   it('returns no chunks for an empty review batch', () => {
     expect(chunkReviewIds([])).toEqual([]);
+  });
+
+  it('counts only the requested timesheet status', () => {
+    const rows = [
+      { employee_id: 'u1', project_id: 'p1', hours: 4, status: 'approved' as const },
+      { employee_id: 'u1', project_id: 'p1', hours: 8, status: 'submitted' as const },
+      { employee_id: 'u1', project_id: 'p1', hours: 2, status: 'rejected' as const },
+    ];
+
+    expect(aggregateHoursByPair(rows, 'approved').get('u1__p1')).toBe(4);
+    expect(aggregateProjectHours(rows).get('p1')).toEqual({ approved: 4, pending: 8 });
   });
 });

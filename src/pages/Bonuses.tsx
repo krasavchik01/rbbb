@@ -593,6 +593,9 @@ export default function Bonuses() {
           </span>
           Бонусы
         </h1>
+        <Badge variant="outline" className="mt-2">
+          Предварительный расчёт · технические проценты
+        </Badge>
         <p className="text-muted-foreground mt-1 text-sm">Система бонусов и поощрений</p>
       </div>
 
