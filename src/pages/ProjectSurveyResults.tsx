@@ -580,7 +580,7 @@ export default function ProjectSurveyResults() {
                       {/* Сводка голосов от сотрудников: кого помнят как партнёра /
                           руководителя / в команде. Помогает восстановить
                           прошедшие проекты, где team пустая. */}
-                      {votes && (votes.partner.length || votes.leader.length || votes.teammateMentions.length > 0 || votes.teammates.length > 0) ? (
+                      {votes && (votes.partner.length > 0 || votes.leader.length > 0 || votes.teammates.length > 0) ? (
                         <div className="rounded border p-2 space-y-2 bg-amber-50/30">
                           <div className="text-xs font-medium text-amber-800 flex items-center gap-1">
                             <Sparkles className="w-3 h-3" /> Что вспомнили сотрудники

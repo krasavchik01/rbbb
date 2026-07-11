@@ -16,6 +16,15 @@ import { calculateProjectFinances } from '@/types/project-v3';
 import { PROJECT_ROLES } from '@/types/roles';
 import { notifyBonusesApproved, notifyProjectClosed } from '@/lib/projectNotifications';
 import { CEOSummaryTable, type CEOSummaryActions } from '@/components/projects/CEOSummaryTable';
+
+type BonusHistoryEntry = {
+  type: string;
+  by?: string;
+  byName?: string;
+  at: string;
+  from?: unknown;
+  to?: unknown;
+};
 import {
   Gift,
   TrendingUp,
@@ -361,8 +370,8 @@ export default function Bonuses() {
       ...currentTeam,
       {
         userId: employeeId,
-        userName: employee.name || employee.full_name || employee.email || employeeId,
-        name: employee.name || employee.full_name || employee.email || employeeId,
+        userName: employee.name || employee.email || employeeId,
+        name: employee.name || employee.email || employeeId,
         role,
         bonusPercent: roleSpec?.bonusPercent ?? 0,
         assignedAt: new Date().toISOString(),
@@ -409,7 +418,7 @@ export default function Bonuses() {
       paidAt?: string | null;
       paidByName?: string | null;
       role?: string | null;
-      history?: Array<{ type: string; by?: string; byName?: string; at: string; from?: unknown; to?: unknown }>;
+      history?: BonusHistoryEntry[];
     }> = [];
 
     projects.forEach((project: any) => {
@@ -855,7 +864,7 @@ export default function Bonuses() {
                       )}
                       {historyOpen[bonus.id] && (bonus.history?.length || 0) > 0 && (
                         <div className="mt-2 ml-1 border-l-2 border-muted pl-3 space-y-1">
-                          {(bonus.history || []).slice().reverse().map((h, idx) => {
+                          {(bonus.history || []).slice().reverse().map((h: BonusHistoryEntry, idx: number) => {
                             const label = h.type === 'paid' ? '💰 выплата зафиксирована'
                               : h.type === 'unmark_paid' ? '↩️ отметка выплаты снята'
                               : h.type === 'hide' ? '🙈 скрыт от сотрудника'

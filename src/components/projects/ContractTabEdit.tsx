@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Save } from "lucide-react";
-import { ProjectV3, ProjectType, PROJECT_TYPE_LABELS } from "@/types/project-v3";
+import { ProjectV3, ProjectCurrency, ProjectType, PROJECT_TYPE_LABELS } from "@/types/project-v3";
 import { DEFAULT_COMPANIES } from "@/types/companies";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useToast } from "@/hooks/use-toast";
@@ -182,7 +182,7 @@ export function ContractTabEdit({ project, onSave }: ContractTabEditProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Валюта договора</Label>
-              <Select value={currency} onValueChange={setCurrency}>
+              <Select value={currency} onValueChange={(value) => setCurrency(value as ProjectCurrency)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -197,7 +197,7 @@ export function ContractTabEdit({ project, onSave }: ContractTabEditProps) {
 
             <div>
               <Label>Вид проекта</Label>
-              <Select value={projectType} onValueChange={setProjectType}>
+              <Select value={projectType} onValueChange={(value) => setProjectType(value as ProjectType)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Выберите вид проекта" />
                 </SelectTrigger>

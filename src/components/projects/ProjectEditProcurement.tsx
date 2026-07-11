@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { ProjectV3, ContractAmendment, YearlyAmount, ProjectType, PROJECT_TYPE_LABELS } from "@/types/project-v3";
+import { ProjectV3, ContractAmendment, ProjectCurrency, YearlyAmount, ProjectType, PROJECT_TYPE_LABELS } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { ProjectFileManager } from "./ProjectFileManager";
 import { DEFAULT_COMPANIES } from "@/types/companies";
@@ -381,7 +381,7 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Валюта договора</Label>
-                  <Select value={currency} onValueChange={setCurrency}>
+                  <Select value={currency} onValueChange={(value) => setCurrency(value as ProjectCurrency)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -396,7 +396,7 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
 
                 <div>
                   <Label>Вид проекта</Label>
-                  <Select value={projectType} onValueChange={setProjectType}>
+                  <Select value={projectType} onValueChange={(value) => setProjectType(value as ProjectType)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Выберите вид проекта" />
                     </SelectTrigger>

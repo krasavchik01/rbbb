@@ -29,7 +29,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { exportProjectsToExcel, importProjectsFromExcel, downloadImportTemplate, saveImportedProjects } from "@/lib/excelExport";
-import { supabase } from "@/integrations/supabase/client";
 import { notifyTeamAssembled, notifyTeamMemberAdded, notifyBulkProjectsImported } from "@/lib/projectNotifications";
 import { useAppSettings } from "@/lib/appSettings";
 import { QuickPriceEditor } from "@/components/projects/QuickPriceEditor";
@@ -469,33 +468,9 @@ export default function Projects() {
             continue;
           }
 
-          // Обновляем статус в notes
-          const notes = project.notes || {};
-          const updatedNotes = {
-            ...notes,
-            status: newStatus
-          };
-
-          // Обновляем проект в Supabase
           const supabaseId = project.id;
           if (supabaseId) {
-            // Определяем статус для Supabase
-            let supabaseStatus = 'active';
-            if (newStatus === 'archived' || newStatus === 'completed') {
-              supabaseStatus = 'completed';
-            } else if (newStatus === 'in_progress') {
-              supabaseStatus = 'in_progress';
-            }
-
-            const { error } = await supabase
-              .from('projects')
-              .update({
-                notes: updatedNotes,
-                status: supabaseStatus
-              })
-              .eq('id', supabaseId);
-
-            if (error) throw error;
+            await supabaseDataStore.updateProject(supabaseId, { status: newStatus });
             success++;
           } else {
             failed++;
@@ -589,7 +564,7 @@ export default function Projects() {
   const availableCompanies = useMemo(() => {
     const companies = new Set<string>();
     realProjects.forEach(project => {
-      const company = project.companyName || project.ourCompany || project.company || project.notes?.companyName || project.notes?.ourCompany;
+      const company = projectCompanyName(project);
       if (company && company.trim()) {
         const cleanCompany = company.trim();
         // Сохраняем оригинальное название для фильтрации, но используем красивое отображение
@@ -1129,8 +1104,7 @@ export default function Projects() {
       const filterCore = stripLegal(filterCompany);
 
       filtered = filtered.filter(project => {
-        const rawCompany = project.companyName || project.ourCompany || project.company
-          || project.notes?.companyName || project.notes?.ourCompany || '';
+        const rawCompany = projectCompanyName(project);
         if (!rawCompany) return false;
         const projectCore = stripLegal(rawCompany);
         // Совпадение если одно содержит другое (оба направления)
@@ -3486,4 +3460,15 @@ export default function Projects() {
       </AlertDialog>
     </div>
   );
+}
+
+function projectCompanyName(project: any): string {
+  const values = [
+    project?.companyName,
+    project?.ourCompany,
+    project?.company,
+    project?.notes?.companyName,
+    project?.notes?.ourCompany,
+  ];
+  return values.find((value) => typeof value === 'string' && value.trim()) || '';
 }

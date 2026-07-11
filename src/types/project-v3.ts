@@ -193,6 +193,11 @@ export interface ReportInfo {
 
 // Финансовая информация проекта
 export interface ProjectFinances {
+  vatRate?: number;
+  vatAmount?: number;
+  amountWithVAT?: number;
+  currency?: string;
+  distribution?: Record<string, number>;
   // Базовые суммы
   amountWithoutVAT: number;                    // Сумма без НДС
   preExpensePercent: number;                   // Процент предрасхода (по умолчанию 30%)
@@ -214,6 +219,17 @@ export interface ProjectFinances {
       percent: number;
       amount: number;
       manuallyAdjusted?: boolean;              // Изменено вручную CEO
+      hiddenFromEmployee?: boolean;
+      paidAt?: string | null;
+      paidByName?: string | null;
+      history?: Array<{
+        type: string;
+        by?: string;
+        byName?: string;
+        at: string;
+        from?: unknown;
+        to?: unknown;
+      }>;
     };
   };
   
@@ -395,8 +411,13 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
   const preExpensePercent = financesSource.preExpensePercent ?? 30;
   const preExpenseAmount = amountWithoutVAT * (preExpensePercent / 100);
 
-  const contractors = financesSource.contractors || [];
-  const totalContractorsAmount = contractors.reduce((sum, c) => sum + c.amount, 0);
+  const contractors: Contractor[] = Array.isArray(financesSource.contractors)
+    ? financesSource.contractors
+    : [];
+  const totalContractorsAmount = contractors.reduce(
+    (sum: number, contractor: Contractor) => sum + contractor.amount,
+    0,
+  );
 
   const bonusBase = amountWithoutVAT - totalContractorsAmount - preExpenseAmount;
   const bonusPercent = financesSource.bonusPercent || 10;
@@ -404,9 +425,11 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
   const existingTeamBonuses = financesSource.teamBonuses || {};
 
   const teamBonuses: ProjectFinances['teamBonuses'] = {};
-  const team = project.team || notes?.team || [];
+  const team: TeamMember[] = Array.isArray(project.team)
+    ? project.team
+    : Array.isArray(notes?.team) ? notes.team : [];
 
-  team.forEach(member => {
+  team.forEach((member: TeamMember) => {
     const userId = member.userId || (member as any).id || (member as any).employeeId;
     if (!userId) return;
     const existingBonus = existingTeamBonuses[userId];

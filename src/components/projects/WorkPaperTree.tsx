@@ -68,7 +68,7 @@ export function WorkPaperTree({
     workPapers.forEach(wp => {
       // Извлекаем код раздела из кода документа (например, 'J-1' -> 'J')
       const sectionCode = wp.code.split('-')[0] || wp.code.split('_')[0] || 'OTHER';
-      const sectionName = wp.template?.section?.name || `Раздел ${sectionCode}`;
+      const sectionName = `Раздел ${sectionCode}`;
 
       if (!groups[sectionCode]) {
         groups[sectionCode] = {

@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useTasks, Task } from '@/hooks/useTasks';
+import { useTasks, Task, type TaskCreateInput } from '@/hooks/useTasks';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -445,7 +445,7 @@ export default function Tasks({ projectId, embedded }: { projectId?: string; emb
       if (form.wantReviewer && form.reviewer) labels.push(`reviewer:${form.reviewer}`);
       if (form.wantAttachment) labels.push('requires_attachment');
 
-      const payload: Partial<Task> = {
+      const payload: TaskCreateInput & Partial<Task> = {
         title:       form.title.trim(),
         description: form.description.trim() || null,
         project_id:  form.project_id || null,

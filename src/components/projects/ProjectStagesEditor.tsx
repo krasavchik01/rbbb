@@ -24,6 +24,9 @@ export function ProjectStagesEditor({ stages, onChange }: ProjectStagesEditorPro
       startDate: "",
       endDate: "",
       description: "",
+      amountWithoutVAT: 0,
+      vatAmount: 0,
+      amountWithVAT: 0,
     };
     onChange([...stages, newStage]);
   };

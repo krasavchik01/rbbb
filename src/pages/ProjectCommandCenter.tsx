@@ -41,6 +41,7 @@ import {
 } from '@/lib/timesheets';
 import { calculateProjectFinances } from '@/types/project-v3';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
+import type { CanonicalTeamMember } from '@/types/project-domain';
 import type * as XLSXNs from 'xlsx';
 
 const loadXlsx = (): Promise<typeof XLSXNs> => import('xlsx');
@@ -88,10 +89,9 @@ function projectStatus(project: any): string {
   return notes?.status || project?.status || 'new';
 }
 
-function projectTeam(project: any): any[] {
+function projectTeam(project: any): CanonicalTeamMember[] {
   const notes = readProjectNotes(project);
-  if (Array.isArray(project?.team)) return project.team;
-  if (Array.isArray(notes?.team)) return notes.team;
+  if (Array.isArray(notes?.team)) return notes.team as CanonicalTeamMember[];
   return [];
 }
 
@@ -292,9 +292,9 @@ function teamMemberKey(member: any): string {
   return `${teamRole(member)}__${teamMemberId(member) || normalizeProjectGroupText(teamName(member))}`;
 }
 
-function uniqueMembersFromTeams(teams: any[][]): any[] {
+function uniqueMembersFromTeams(teams: CanonicalTeamMember[][]): CanonicalTeamMember[] {
   const seen = new Set<string>();
-  const members: any[] = [];
+  const members: CanonicalTeamMember[] = [];
 
   for (const team of teams) {
     for (const member of team || []) {
@@ -308,7 +308,7 @@ function uniqueMembersFromTeams(teams: any[][]): any[] {
   return members;
 }
 
-function coverageTeam(projectTeam: any[], periods: AuditPeriod[]): any[] {
+function coverageTeam(projectTeam: CanonicalTeamMember[], periods: AuditPeriod[]): CanonicalTeamMember[] {
   return uniqueMembersFromTeams([projectTeam || [], ...(periods || []).map(periodTeam)]);
 }
 
@@ -762,7 +762,7 @@ function keepExplicitPeriodTeams(periods: AuditPeriod[], sourceProjectId?: strin
   });
 }
 
-function periodTeam(period: AuditPeriod): any[] {
+function periodTeam(period: AuditPeriod): CanonicalTeamMember[] {
   return Array.isArray(period.team) ? period.team : [];
 }
 
@@ -1413,7 +1413,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const bonusPercent = Math.max(0, Math.min(100, nextPercent));
     setSavingProjectId(`${row.id}:${memberId}`);
     try {
-      const nextTeam = row.team.map((item) => {
+      const nextTeam = row.team.map((item: CanonicalTeamMember) => {
         if (teamMemberId(item) !== memberId || teamRole(item) !== teamRole(member)) return item;
         return { ...item, bonusPercent };
       });
@@ -1500,7 +1500,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const role = teamRole(member);
     setSavingProjectId(`${row.id}:remove:${id || memberIndex}`);
     try {
-      const nextTeam = row.team.filter((item, index) => {
+      const nextTeam = row.team.filter((item: CanonicalTeamMember, index: number) => {
         if (id && teamMemberId(item)) return !(teamMemberId(item) === id && teamRole(item) === role);
         return index !== memberIndex;
       });
@@ -2075,7 +2075,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             </Badge>
                             {row.periods.length > 0 && (
                               <div className="text-xs text-muted-foreground">
-                                {row.periods.length} период(а): {row.periods.slice(0, 2).map((period) => period.name).join(', ')}
+                                {row.periods.length} период(а): {row.periods.slice(0, 2).map((period: AuditPeriod) => period.name).join(', ')}
                               </div>
                             )}
                           </div>
@@ -2263,7 +2263,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                         Периоды не указаны.
                                       </div>
                                     )}
-                                    {row.periods.map((period) => {
+                                    {row.periods.map((period: AuditPeriod) => {
                                       const team = periodTeam(period);
                                       const teamSource = period.teamSource;
                                       const periodHasOwnTeam = teamSource === 'period';
@@ -2511,7 +2511,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                           />
                                         )}
                                         <div className="space-y-2">
-                                          {members.map((member, memberIndex) => {
+                                          {members.map((member: CanonicalTeamMember, memberIndex: number) => {
                                             const memberId = teamMemberId(member);
                                             const percent = memberBonusPercent(member, row.finances);
                                             const amount = memberBonusAmount(member, row.finances);

@@ -21,6 +21,7 @@ import {
   type AuditPeriod,
   type AuditPeriodType,
 } from '@/lib/auditPeriods';
+import { PROJECT_ROLES } from '@/types/roles';
 
 interface AuditPeriodsEditorProps {
   project: any;
@@ -156,6 +157,7 @@ export function AuditPeriodsEditor({
   const addMemberToPeriod = async (periodId: string, employeeId: string, role: string) => {
     const employee = sortedEmployees.find((candidate: any) => candidate.id === employeeId);
     if (!employee) return;
+    const roleSpec = PROJECT_ROLES.find((candidate) => candidate.role === role);
 
     const next = periods.map((period) => {
       if (period.id !== periodId) return period;
@@ -170,6 +172,9 @@ export function AuditPeriodsEditor({
             userName: employeeLabel(employee),
             userEmail: employee.email,
             role,
+            bonusPercent: roleSpec?.bonusPercent ?? 0,
+            assignedAt: new Date().toISOString(),
+            assignedBy: currentUserId || 'period-editor',
           },
         ],
         updatedAt: new Date().toISOString(),

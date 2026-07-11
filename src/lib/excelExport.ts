@@ -31,6 +31,10 @@ export interface ProjectExcelRow {
   'Сумма'?: number | string;                   // Альтернатива "Сумма (без НДС)" или "Сумма с учетом НДС"
   'Сумма (без НДС)'?: number | string;
   'Сумма с учетом НДС'?: number | string;      // Поддержка варианта с НДС
+  'Сумма с НДС'?: number | string;
+  'Сумма с учетом ндс'?: number | string;
+  'Сумма с ндс'?: number | string;
+  'Сумма без учета НДС'?: number | string;
   'Валюта': string;
   'Наша компания': string;
   'Консорциум?': string;

@@ -846,7 +846,7 @@ function employeeToAuthUser(employee: Employee): AuthUser {
     email: employee.email || '',
     name: employee.name || 'Без имени',
     role,
-    companyId: employee.company_id || employee.companyId || undefined,
+    companyId: employee.companyId || undefined,
     department: employee.department || '',
     position: employee.position || '',
     avatar: employee.name

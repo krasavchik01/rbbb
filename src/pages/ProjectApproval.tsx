@@ -27,7 +27,7 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { ProjectV3 } from "@/types/project-v3";
+import { ProjectV3, type ProjectFinances, type TeamMember } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { supabase } from "@/integrations/supabase/client";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
@@ -72,7 +72,7 @@ export default function ProjectApproval() {
   const canManageProjects = isAdmin || user?.role === 'deputy_director';
 
   // Команда проекта
-  const [teamMembers, setTeamMembers] = useState<{[key: string]: string}>({});
+  const [teamMembers, setTeamMembers] = useState<Partial<Record<UserRole, string>>>({});
   const [contractors, setContractors] = useState<Contractor[]>([]);
   
   // Отображение для зам директора
@@ -233,9 +233,9 @@ export default function ProjectApproval() {
     openedDeepLinkRef.current = openId;
     setSelectedProject(target as any);
     const team = (target as any)?.notes?.team || (target as any)?.team || [];
-    const memberMap: Record<string, string> = {};
+    const memberMap: Partial<Record<UserRole, string>> = {};
     (team as any[]).forEach((m: any) => {
-      if (m?.userId && m?.role) memberMap[m.role] = m.userId;
+      if (m?.userId && m?.role) memberMap[m.role as UserRole] = m.userId;
     });
     setTeamMembers(memberMap);
     // Чистим URL — иначе кнопка «назад» возвращает на этот же deep-link.
@@ -258,18 +258,23 @@ export default function ProjectApproval() {
     const totalBonusAmount = bonusBase * (bonusPercent / 100);
 
     // Рассчитываем бонусы по ролям
-    const teamBonuses: {[key: string]: number} = {};
+    const teamBonuses: ProjectFinances['teamBonuses'] = {};
     let totalAssignedPercent = 0;
 
     PROJECT_ROLES.forEach(projectRole => {
       const memberId = teamMembers[projectRole.role];
       if (memberId) {
-        teamBonuses[projectRole.role] = totalBonusAmount * (projectRole.bonusPercent / 100);
+        teamBonuses[memberId] = {
+          role: projectRole.role,
+          percent: projectRole.bonusPercent,
+          amount: totalBonusAmount * (projectRole.bonusPercent / 100),
+          manuallyAdjusted: false,
+        };
         totalAssignedPercent += projectRole.bonusPercent;
       }
     });
 
-    const totalPaidBonuses = Object.values(teamBonuses).reduce((sum, b) => sum + b, 0);
+    const totalPaidBonuses = Object.values(teamBonuses).reduce((sum, bonus) => sum + bonus.amount, 0);
     const unassignedPercent = 100 - totalAssignedPercent;
     const unassignedAmount = totalBonusAmount * (unassignedPercent / 100);
     
@@ -351,16 +356,19 @@ export default function ProjectApproval() {
       };
 
       // Формируем команду проекта
-      const projectTeam = PROJECT_ROLES
-        .filter(role => teamMembers[role.role])
-        .map(role => ({
-          userId: teamMembers[role.role],
-          userName: getEmployeeName(teamMembers[role.role]),
+      const projectTeam: TeamMember[] = PROJECT_ROLES.flatMap(role => {
+        const userId = teamMembers[role.role];
+        if (!userId) return [];
+
+        return [{
+          userId,
+          userName: getEmployeeName(userId),
           role: role.role,
           bonusPercent: role.bonusPercent,
           assignedAt: new Date().toISOString(),
           assignedBy: user?.id || "",
-        }));
+        }];
+      });
 
       // Обновляем проект
       const updatedProject: ProjectV3 = {
@@ -1160,10 +1168,11 @@ export default function ProjectApproval() {
                     selectedSlots={selectedRoles}
                     onToggleSlot={(role, checked) => {
                       if (role === 'partner') return;
-                      setSelectedRoles({...selectedRoles, [role]: checked});
+                      const typedRole = role as UserRole;
+                      setSelectedRoles({...selectedRoles, [typedRole]: checked});
                       if (!checked) {
                         const newTeam = {...teamMembers};
-                        delete newTeam[role];
+                        delete newTeam[typedRole];
                         setTeamMembers(newTeam);
                       }
                     }}
@@ -1206,6 +1215,7 @@ export default function ProjectApproval() {
                           .filter(role => teamMembers[role.role])
                           .map(role => {
                             const memberId = teamMembers[role.role];
+                            if (!memberId) return null;
                             const employee = availableEmployees.find(e => e.id === memberId);
                             const memberName = employee?.name || `Сотрудник ${memberId}`;
                             
@@ -1245,8 +1255,8 @@ export default function ProjectApproval() {
                             size="sm"
                             onClick={() => {
                               const allMemberIds = PROJECT_ROLES
-                                .filter(role => teamMembers[role.role])
-                                .map(role => teamMembers[role.role]);
+                                .map(role => teamMembers[role.role])
+                                .filter((memberId): memberId is string => Boolean(memberId));
                               setFinancialVisibleTo(allMemberIds);
                             }}
                           >

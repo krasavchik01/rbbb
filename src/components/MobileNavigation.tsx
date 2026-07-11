@@ -33,24 +33,19 @@ const allNavItems: NavItem[] = [
   { to: '/settings', icon: Settings, label: 'Настройки', allowedRoles: ROLE_GROUPS.admin },
 ];
 
+function canShowNavItem(item: NavItem, userRole?: UserRole): boolean {
+  if (item.allowedRoles) return !!userRole && item.allowedRoles.includes(userRole);
+  if (item.excludeRoles) return !userRole || !item.excludeRoles.includes(userRole);
+  return true;
+}
+
 export const MobileNavigation = () => {
   const location = useLocation();
   const { user } = useAuth();
 
   // Фильтруем пункты меню по роли пользователя
   const navItems = useMemo(() => {
-    return allNavItems.filter(item => {
-      // Если указаны allowedRoles - проверяем вхождение
-      if (item.allowedRoles) {
-        return item.allowedRoles.includes(user?.role || '');
-      }
-      // Если указаны excludeRoles - проверяем исключение
-      if (item.excludeRoles) {
-        return !item.excludeRoles.includes(user?.role || '');
-      }
-      // Если ничего не указано - показываем всем
-      return true;
-    });
+    return allNavItems.filter((item) => canShowNavItem(item, user?.role));
   }, [user?.role]);
 
   // Берём первые 5 для нижнего меню
@@ -141,18 +136,7 @@ export const MobileHeader = () => {
 
                 <div className="space-y-2">
                   {allNavItems
-                    .filter(item => {
-                      // Если указаны allowedRoles - проверяем вхождение
-                      if (item.allowedRoles) {
-                        return item.allowedRoles.includes(user?.role || '');
-                      }
-                      // Если указаны excludeRoles - проверяем исключение
-                      if (item.excludeRoles) {
-                        return !item.excludeRoles.includes(user?.role || '');
-                      }
-                      // Если ничего не указано - показываем всем
-                      return true;
-                    })
+                    .filter((item) => canShowNavItem(item, user?.role))
                     .map((item) => {
                       const Icon = item.icon;
                       return (

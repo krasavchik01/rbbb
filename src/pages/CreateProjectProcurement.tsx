@@ -72,21 +72,10 @@ export default function CreateProjectProcurement() {
   
   // Новые поля: этапы, услуги, файлы
   const [hasStages, setHasStages] = useState(false);
-  const [projectStages, setProjectStages] = useState<Array<{
-    id: string;
-    name: string;
-    startDate: string;
-    endDate: string;
-    description?: string;
-  }>>([]);
+  const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
   
   const [hasAdditionalServices, setHasAdditionalServices] = useState(false);
-  const [additionalServices, setAdditionalServices] = useState<Array<{
-    id: string;
-    name: string;
-    description?: string;
-    cost?: number;
-  }>>([]);
+  const [additionalServices, setAdditionalServices] = useState<AdditionalService[]>([]);
   
   const [projectFiles, setProjectFiles] = useState<File[]>([]);
 
