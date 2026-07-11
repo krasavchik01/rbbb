@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +22,6 @@ import {
   Users,
   Briefcase,
   DollarSign,
-  Calendar,
   Clock,
   Target,
   BarChart3,
@@ -32,7 +30,6 @@ import {
   CheckCircle,
   AlertTriangle,
   AlertCircle,
-  Zap,
   XCircle,
   FileText,
   Award,
@@ -144,8 +141,6 @@ const MetricCard = React.memo(({
   subtitle?: string;
   gradient?: string;
 }) => {
-  const navigate = useNavigate();
-
   return (
     <Card className="p-4 sm:p-6 relative overflow-hidden group cursor-pointer hover:scale-[1.02] transition-all duration-300 border-2 border-transparent hover:border-primary/30 bg-gradient-to-br from-background via-background to-secondary/10 backdrop-blur-sm">
       {/* Градиентный фон при наведении */}

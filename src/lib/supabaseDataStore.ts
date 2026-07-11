@@ -110,18 +110,6 @@ const STORAGE_KEYS = {
   SYNC_STATUS: 'rb_sync_status',
 };
 
-function extensionForUpload(file: File): string {
-  const fromName = file.name.match(/\.([a-zA-Z0-9]{1,12})$/)?.[1];
-  if (fromName) return `.${fromName.toLowerCase()}`;
-  const mime = String(file.type || '').toLowerCase();
-  if (mime.includes('pdf')) return '.pdf';
-  if (mime.includes('word')) return '.docx';
-  if (mime.includes('excel') || mime.includes('spreadsheet')) return '.xlsx';
-  if (mime.includes('png')) return '.png';
-  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';
-  return '';
-}
-
 function recordValue(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, any>
@@ -185,21 +173,6 @@ export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
     contract: Object.keys(contract).length > 0 ? contract : undefined,
     client: Object.keys(client).length > 0 ? client : undefined,
   };
-}
-
-function safeStorageFileName(file: File): string {
-  const ext = extensionForUpload(file);
-  const name = file.name || 'file';
-  const withoutExt = ext && name.toLowerCase().endsWith(ext) ? name.slice(0, -ext.length) : name;
-  const asciiBase = withoutExt
-    .normalize('NFKD')
-    .replace(/[^\x00-\x7F]/g, '')
-    .replace(/[\\/:*?"<>|#%{}^~[\]`;@=&+,]+/g, '_')
-    .replace(/[^a-zA-Z0-9._-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^[_\-.]+|[_\-.]+$/g, '')
-    .slice(0, 120);
-  return `${asciiBase || 'file'}${ext}`;
 }
 
 class SupabaseDataStore {

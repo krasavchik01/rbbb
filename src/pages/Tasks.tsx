@@ -23,7 +23,7 @@ import {
   CheckSquare, Search, Clock, User, CheckCircle2, Circle,
   Briefcase, ListChecks, Plus, Trash2, Edit, Kanban,
   List, GripVertical, AlertTriangle, CalendarDays, X, Eye,
-  Paperclip, Users, Upload, Download, FileText,
+  Paperclip, Users,
 } from 'lucide-react';
 import { format, isPast, isToday, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -211,12 +211,6 @@ export interface TaskAttachment {
   storagePath: string;
   uploadedAt: string;
   uploadedBy: string;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} Б`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
 // ─── Form state ───────────────────────────────────────────────────────────────

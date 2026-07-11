@@ -3,30 +3,17 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
-  Check,
-  Upload,
-  FileText,
-  CheckCircle,
   CheckCircle2,
-  Circle,
-  ChevronRight,
-  Save,
-  AlertCircle,
   Users,
   Calendar,
   DollarSign,
   Target,
-  X,
   Edit,
-  UserPlus,
-  Search,
   Plus
 } from "lucide-react";
 import { useEmployees, useProjects } from "@/hooks/useSupabaseData";
@@ -36,7 +23,6 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
-import { ProjectV3 } from "@/types/project-v3";
 import { TEAM_ROLE_SLOTS } from "@/types/roles";
 
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
@@ -53,9 +39,8 @@ import { ContractEditor } from "@/components/projects/ContractEditor";
 import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
 import { AuditPeriodsEditor } from "@/components/projects/AuditPeriodsEditor";
 import Tasks from "@/pages/Tasks";
-import { Task, ChecklistItem } from "@/types/project";
 // WorkPaper types removed
-import { ContractInfo, ProjectAmendment } from "@/types/project-v3";
+import { ProjectAmendment } from "@/types/project-v3";
 import type { AuditPeriod } from "@/lib/auditPeriods";
 import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { useMemo } from "react";
@@ -104,8 +89,8 @@ export default function ProjectWorkspace() {
   const [showTeamDialog, setShowTeamDialog] = useState(false);
   // Слоты команды: роль → ID сотрудника (или null)
   const [teamSlots, setTeamSlots] = useState<Record<string, string | null>>({});
-  const [openSlotDropdown, setOpenSlotDropdown] = useState<string | null>(null);
-  const [slotSearch, setSlotSearch] = useState('');
+  const [, setOpenSlotDropdown] = useState<string | null>(null);
+  const [, setSlotSearch] = useState('');
   const [addingNewInSlot, setAddingNewInSlot] = useState<string | null>(null);
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeType, setNewEmployeeType] = useState<'staff' | 'gph' | 'subcontract'>('staff');
@@ -124,7 +109,6 @@ export default function ProjectWorkspace() {
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
   const canEditAuditPeriods = isPartner || isAdmin || isCEO || isDeputy;
-  const canSeeContracts = isProcurement || isAdmin || isPartner || isPM || isDirector;
   const projectStatus = project?.notes?.status || project?.status;
   // Управление командой: admin/ceo — всегда, deputy_director — пока проект не
   // ушёл в активную работу (этап распределения/сборки команды). Партнёр, PM,
@@ -151,7 +135,6 @@ export default function ProjectWorkspace() {
   const canMarkReady = (isPM || isAdmin) && (isInProgress || projectStatus === 'approved' || projectStatus === 'planning');
   const canApproveCompletion = (isPartner || isAdmin) && isReadyToComplete;
   // Директор/зам видят только общую информацию, без деталей методологии
-  const showFullDetails = !isDirector;
   const normalizedContract = useMemo(() => readProjectContract(project), [project]);
   const normalizedFiles = useMemo(() => readProjectFiles(project), [project]);
   const normalizedFinances = useMemo(() => readProjectFinances(project), [project]);
@@ -159,8 +142,7 @@ export default function ProjectWorkspace() {
   const normalizedDeadline = useMemo(() => readProjectDeadline(project), [project]);
 
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
-  const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } =
-    useProjectDataSync(id || '');
+  const { loadProjectData, syncStatus } = useProjectDataSync(id || '');
 
   // Часы этого проекта (approved + pending) — для шапки.
   const [projectHours, setProjectHours] = useState<ProjectHoursTotals | undefined>();
@@ -184,31 +166,6 @@ export default function ProjectWorkspace() {
       task.project_id === project?.notes?.id
     );
   }, [id, allTasks, project]);
-
-  // Группируем задачи по сотрудникам (всегда вызывается, до условных вычислений)
-  const tasksByEmployee = useMemo(() => {
-    const grouped: Record<string, Task[]> = {};
-
-    projectTasks.forEach((task: any) => {
-      const assignees = task.assignees || [];
-      if (assignees.length === 0) {
-        // Задачи без назначенных
-        if (!grouped['unassigned']) {
-          grouped['unassigned'] = [];
-        }
-        grouped['unassigned'].push(task);
-      } else {
-        assignees.forEach((assigneeId: string) => {
-          if (!grouped[assigneeId]) {
-            grouped[assigneeId] = [];
-          }
-          grouped[assigneeId].push(task);
-        });
-      }
-    });
-
-    return grouped;
-  }, [projectTasks]);
 
   // Загрузить существующую команду в слоты
   const loadTeamIntoSlots = useCallback((proj: any) => {

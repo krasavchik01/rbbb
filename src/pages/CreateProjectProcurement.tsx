@@ -14,10 +14,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getAppSettings } from "@/lib/appSettings";
 import { Company, findCompanyByAnyValue, getActiveCompanies, normalizeCompanies } from "@/types/companies";
 import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo, ProjectStage, AdditionalService } from "@/types/project-v3";
-import { notifyProjectCreated } from "@/lib/projectNotifications";
 import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
-import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 import { ProjectStagesEditor } from "@/components/projects/ProjectStagesEditor";
 import { AdditionalServicesSelector } from "@/components/projects/AdditionalServicesSelector";
 

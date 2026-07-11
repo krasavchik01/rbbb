@@ -7,29 +7,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   CheckCircle2,
   XCircle,
   Users,
   Calendar,
-  DollarSign,
   FileText,
   Plus,
   Trash2,
-  UserPlus,
-  TrendingUp,
   Building2,
   AlertTriangle,
-  Eye,
-  ChevronRight
+  Eye
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectV3, type ProjectFinances, type TeamMember } from "@/types/project-v3";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
-import { supabase } from "@/integrations/supabase/client";
 import { PROJECT_ROLES, ROLE_LABELS, UserRole } from "@/types/roles";
 import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { Contractor } from "@/types/project-v3";
@@ -58,7 +53,7 @@ export default function ProjectApproval() {
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<ProjectV3 | null>(null);
+  const [, setProjectToDelete] = useState<ProjectV3 | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Массовое удаление
@@ -90,38 +85,8 @@ export default function ProjectApproval() {
   const [newContractorType, setNewContractorType] = useState<'gph' | 'subcontract'>('gph');
 
   // Добавление нового сотрудника inline
-  const [addingNewForRole, setAddingNewForRole] = useState<string | null>(null);
-  const [newEmpName, setNewEmpName] = useState("");
-
-  // Поиск в dropdown и открытый dropdown
-  const [openRoleDropdown, setOpenRoleDropdown] = useState<string | null>(null);
-  const [roleSearchQuery, setRoleSearchQuery] = useState("");
-
-  // Маппинг ролей сотрудников из Supabase на роли проектов
-  const mapEmployeeRoleToProjectRole = (employeeRole: string): string | null => {
-    const roleMap: Record<string, string> = {
-      'partner': 'partner',
-      'manager_1': 'manager_1',
-      'manager_2': 'manager_2',
-      'manager_3': 'manager_3',
-      'supervisor_3': 'supervisor_3',
-      'supervisor_2': 'supervisor_2',
-      'supervisor_1': 'supervisor_1',
-      'tax_specialist': 'tax_specialist_1', // Маппим tax_specialist на tax_specialist_1
-      'tax_specialist_1': 'tax_specialist_1',
-      'tax_specialist_2': 'tax_specialist_2',
-      'assistant_3': 'assistant_3',
-      'assistant_2': 'assistant_2',
-      'assistant_1': 'assistant_1',
-      'academy': 'academy',
-    };
-    // Если роль уже в списке PROJECT_ROLES, возвращаем её как есть
-    const projectRoleNames = PROJECT_ROLES.map(r => r.role);
-    if (projectRoleNames.includes(employeeRole as any)) {
-      return employeeRole;
-    }
-    return roleMap[employeeRole] || null;
-  };
+  const [, setAddingNewForRole] = useState<string | null>(null);
+  const [, setNewEmpName] = useState("");
 
   // Преобразуем реальных сотрудников в универсальный формат для выбора (БЕЗ ФИЛЬТРАЦИИ)
   const availableEmployees = realEmployees.map(emp => {

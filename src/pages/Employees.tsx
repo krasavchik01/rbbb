@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProjects } from "@/hooks/useProjects";
 import { 
   Plus, 
   Search, 
@@ -20,7 +19,6 @@ import {
   Eye,
   Kanban,
   TableIcon,
-  Clock,
   Phone,
   Award,
   User

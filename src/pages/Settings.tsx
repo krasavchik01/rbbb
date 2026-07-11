@@ -27,7 +27,6 @@ import {
   CheckCircle,
   Settings2,
   MapPin,
-  Building2,
   Mail
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';

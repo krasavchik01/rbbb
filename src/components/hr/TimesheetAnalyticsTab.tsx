@@ -25,9 +25,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -869,7 +867,6 @@ export default function TimesheetAnalyticsTab() {
               </DialogHeader>
               <EmployeeDrilldown
                 entries={drillEntries}
-                projectById={projectById}
                 norm={norm}
               />
             </>
@@ -907,11 +904,9 @@ function Legend2({ color, label }: { color: string; label: string }) {
 
 function EmployeeDrilldown({
   entries,
-  projectById,
   norm,
 }: {
   entries: TimesheetEntry[];
-  projectById: Map<string, any>;
   norm: number;
 }) {
   // По дням

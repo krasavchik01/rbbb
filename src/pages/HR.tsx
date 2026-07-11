@@ -32,9 +32,7 @@ import {
   CheckCircle,
   BarChart3,
   TrendingUp,
-  Clock,
   Target,
-  Building,
   Edit,
   CalendarRange
 } from "lucide-react";
@@ -130,11 +128,6 @@ export default function HR() {
   ];
 
   // РОЛИ ДЛЯ РУКОВОДСТВА (ДОПОЛНИТЕЛЬНЫЕ)
-  const leadershipRoles = [
-    { value: 'partner', label: 'Генеральный директор' },
-    { value: 'deputy_director', label: 'Заместитель директора' }
-  ];
-
   // МАППИНГ РУССКИХ НАЗВАНИЙ НА СУЩЕСТВУЮЩИЕ ENUM ЗНАЧЕНИЯ
   const roleMapping: Record<string, string> = {
     // Руководство

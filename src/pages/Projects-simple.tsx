@@ -17,14 +17,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { TaskManager } from "@/components/tasks/TaskManager";
-import { Task, Project as ProjectType, ChecklistItem, PriorityLevel, TaskStatus } from "@/types/project";
+import { Task } from "@/types/project";
 import { Plus, Search, Calendar, Users, ArrowRight, CheckSquare, Clock, Circle, AlertCircle, XCircle, BarChart3, Trash2, Download, Upload, FileDown, SlidersHorizontal, ChevronDown, X, Printer } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useProjects, useEmployees, useCompanies } from "@/hooks/useSupabaseData";
+import { useProjects, useEmployees } from "@/hooks/useSupabaseData";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
@@ -137,9 +136,8 @@ function VirtualizedProjectGrid({
 }
 
 export default function Projects() {
-  const { projects: realProjects, loading, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
+  const { projects: realProjects, deleteProject: deleteProjectFromStore, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
-  const { companies: allAppCompanies = [] } = useCompanies();
   const { tasks = [] } = useTasks();
 
   // Часы по проектам (approved + pending) — один запрос на всю страницу,
@@ -997,8 +995,6 @@ export default function Projects() {
 
       const notesStatus = project.notes?.status;
       const team = project.team || project.notes?.team || [];
-      const createdBy = project.createdBy || project.notes?.createdBy;
-
       // Проверка: пользователь в команде проекта
       const isInTeam = team.some((member: any) => {
         const memberId = member.userId || member.id || member.employeeId;
@@ -1470,13 +1466,6 @@ export default function Projects() {
     };
   };
 
-  // Аудит-шаблоны удалены по решению юзера. Расчёт «заполненности документов»
-  // отключён — везде возвращаем заглушку, чтобы не ломать места, которые
-  // дёргают getDocumentCompletion.
-  const getDocumentCompletion = useCallback((_project: any) => {
-    return { completed: 0, total: 0, percentage: 0 };
-  }, []);
-
   // Обогащённая статистика проекта: читаем реальные данные из localStorage + полей проекта
   const getEnrichedProjectStats = useCallback((project: any) => {
     const projectId = project.id || project.notes?.id || '';
@@ -1788,7 +1777,7 @@ export default function Projects() {
               {project.stages && project.stages.length > 0 && (
                 <div className="mt-2 p-2 bg-secondary/10 rounded text-xs space-y-1">
                   <div className="font-semibold text-muted-foreground mb-1">Этапы договора:</div>
-                  {project.stages.map((stage: ProjectStage, idx: number) => (
+                  {project.stages.map((stage: ProjectStage) => (
                     <div key={stage.id} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
                       <span className="text-muted-foreground">{stage.name}</span>
                       <span className="font-mono font-semibold">
@@ -2946,7 +2935,7 @@ export default function Projects() {
                         {/* ФИНАНСЫ (без НДС + с НДС в одной ячейке) */}
                         <td className="px-2 py-2">
                           {showAmounts ? (() => {
-                            const { amount: amtNoVat, currency } = getProjectAmount(project);
+                            const { amount: amtNoVat } = getProjectAmount(project);
                             const { amount: amtVat } = getProjectAmountWithVAT(project);
                             const fmt = (v: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(v);
                             if (!amtNoVat && !amtVat) return <span className="text-xs text-muted-foreground">—</span>;

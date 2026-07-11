@@ -14,7 +14,6 @@
  */
 
 import { useMemo } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   CheckCircle2,
@@ -34,15 +33,6 @@ interface Props {
   hours?: ProjectHoursTotals;
   variant?: 'compact' | 'expanded';
 }
-
-const ROLE_LABEL: Record<string, string> = {
-  partner: 'Партнёр',
-  manager_1: 'PM', manager_2: 'PM', manager_3: 'PM',
-  supervisor_1: 'Супер', supervisor_2: 'Супер', supervisor_3: 'Супер',
-  senior_assistant: 'Ст. ассистент',
-  assistant_1: 'Ассистент', assistant_2: 'Ассистент', assistant_3: 'Ассистент',
-  tax_specialist_1: 'Налог', tax_specialist_2: 'Налог',
-};
 
 function initials(name?: string): string {
   if (!name) return '?';

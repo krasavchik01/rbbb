@@ -29,7 +29,6 @@ import {
   projectContractFiles as readProjectContractFiles,
   projectDeadline as readProjectDeadline,
   projectFinances as readProjectFinances,
-  projectFiles as readProjectFiles,
   projectNotes as readProjectNotes,
   projectStartDate as readProjectStartDate,
 } from '@/lib/contractData';
@@ -130,10 +129,6 @@ function projectType(project: any): string {
 
 function projectContract(project: any): any {
   return readProjectContract(project);
-}
-
-function projectFiles(project: any): any[] {
-  return readProjectFiles(project);
 }
 
 function projectContractFiles(project: any): any[] {
@@ -483,13 +478,6 @@ function partnerFilterKey(value: string): string {
     return tokens.slice(0, 2).sort().join(' ');
   }
   return tokens.join(' ');
-}
-
-function companyFilterKey(value: string): string {
-  const normalized = normalizeProjectGroupText(value)
-    .replace(/^(тоо|чк|ип|ао|ооо|ллп|llp|lp|ltd|inc)\s+/i, '')
-    .trim();
-  return normalized || 'missing';
 }
 
 function companyAllowedNames(company: CompanyOption): string[] {

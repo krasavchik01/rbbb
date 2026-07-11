@@ -15,14 +15,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {
   Plus,
   Search,
   TrendingUp,
-  TrendingDown,
-  DollarSign,
   FileText,
   Calendar,
   CheckCircle2,
@@ -30,7 +27,6 @@ import {
   Clock,
   AlertCircle,
   Eye,
-  Edit,
   TableIcon,
   BarChart3,
   ClipboardCheck,
@@ -72,8 +68,8 @@ interface Tender {
 export default function Tenders() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [, setSelectedTender] = useState<Tender | null>(null);
+  const [, setIsAddDialogOpen] = useState(false);
   const [isEvaluationDialogOpen, setIsEvaluationDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table' | 'chart'>('cards');

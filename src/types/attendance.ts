@@ -120,8 +120,8 @@ export const getStatusColor = (status: AttendanceStatus): string => {
 export const calculateWorkDuration = (checkIn: string, checkOut: string): number => {
   if (!checkIn || !checkOut) return 0;
   
-  const [inH, inM, inS] = checkIn.split(':').map(Number);
-  const [outH, outM, outS] = checkOut.split(':').map(Number);
+  const [inH, inM] = checkIn.split(':').map(Number);
+  const [outH, outM] = checkOut.split(':').map(Number);
   
   const inMinutes = inH * 60 + inM;
   const outMinutes = outH * 60 + outM;

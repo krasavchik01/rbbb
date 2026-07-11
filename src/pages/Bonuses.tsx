@@ -5,11 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useProjects } from '@/hooks/useSupabaseData';
-import { useTasks, type Task } from '@/hooks/useTasks';
+import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { calculateProjectFinances } from '@/types/project-v3';
@@ -32,7 +31,6 @@ import {
   CheckCircle,
   Clock,
   Users,
-  CheckCircle2,
   XCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -56,8 +54,8 @@ export default function Bonuses() {
   //    и не закрывает проект, пока партнёр не разберётся).
   // Старый источник (project_survey_responses + answers.totalHours) выпилен —
   // он не различал утверждённые/неутверждённые часы.
-  const [approvedIdx, setApprovedIdx] = useState<Map<string, number>>(new Map());
-  const [pendingIdx, setPendingIdx] = useState<Map<string, number>>(new Map());
+  const [, setApprovedIdx] = useState<Map<string, number>>(new Map());
+  const [, setPendingIdx] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     let active = true;
     Promise.all([approvedHoursIndex(), pendingHoursIndex()])
@@ -78,34 +76,11 @@ export default function Bonuses() {
       });
     return () => { active = false; };
   }, [toast]);
-  const getHoursFor = (userId: string, projectId: string): number =>
-    approvedIdx.get(`${userId}__${projectId}`) || 0;
-  const getPendingHoursFor = (userId: string, projectId: string): number =>
-    pendingIdx.get(`${userId}__${projectId}`) || 0;
-
-  // Статистика задач по проекту — CEO видит «нормально ли всё прошло»:
-  // сколько задач, сколько выполнено, сколько просрочено.
-  const getTaskStats = (projectId: string) => {
-    const projectTasks = tasks.filter((t: Task) => t.project_id === projectId);
-    const now = Date.now();
-    let done = 0, overdue = 0, inProgress = 0, blocked = 0;
-    for (const t of projectTasks) {
-      if (t.status === 'done') done++;
-      else if (t.status === 'blocked') blocked++;
-      else if (t.status === 'in_progress' || t.status === 'in_review') inProgress++;
-      // Просрочка: дедлайн прошёл и задача не done
-      if (t.due_at && t.status !== 'done' && new Date(t.due_at).getTime() < now) overdue++;
-    }
-    return { total: projectTasks.length, done, overdue, inProgress, blocked };
-  };
-  const getTasksForProject = (projectId: string): Task[] => tasks.filter((t: Task) => t.project_id === projectId);
-
   // CEO может менять «общий процент бонуса от базы» на лету (по умолчанию 10).
-  const [draftBonusPercent, setDraftBonusPercent] = useState<Record<string, string>>({});
+  const [draftBonusPercent] = useState<Record<string, string>>({});
   // CEO может «скрыть» бонус сотрудника от него самого (personal view не покажет).
-  const [draftHidden, setDraftHidden] = useState<Record<string, Record<string, boolean>>>({});
+  const [draftHidden] = useState<Record<string, Record<string, boolean>>>({});
   // Раскрытие списка задач проекта (по умолчанию свёрнут).
-  const [tasksOpen, setTasksOpen] = useState<Record<string, boolean>>({});
   // Раскрытие истории изменений конкретного бонуса (ключ = bonus.id).
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
 
@@ -121,20 +96,6 @@ export default function Bonuses() {
   const canApproveBonusPayout = isCeoOrAdmin;
   const canEditBonuses = isCeoOrAdmin;
   const personalView = !isCeoOrAdmin;
-
-  const projectsAwaitingApproval = useMemo(() => {
-    return projects.filter((project: any) => (project?.notes?.status || project?.status) === 'pending_payment_approval');
-  }, [projects]);
-
-  const updateDraftAmount = (projectId: string, employeeId: string, amount: string) => {
-    setDraftAdjustments((prev) => ({
-      ...prev,
-      [projectId]: {
-        ...(prev[projectId] || {}),
-        [employeeId]: amount,
-      },
-    }));
-  };
 
   const approveProjectBonuses = async (
     project: any,
