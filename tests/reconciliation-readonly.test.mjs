@@ -25,3 +25,13 @@ test('collector does not invoke legacy import scripts', () => {
     assert.equal(source.includes(forbidden), false, forbidden);
   }
 });
+
+test('bonus payment registry reader contains no mutation path', () => {
+  const source = fs.readFileSync(
+    new URL('../src/lib/bonusPayments.ts', import.meta.url),
+    'utf8',
+  );
+  for (const forbidden of ['.insert(', '.update(', '.upsert(', '.delete(', '.rpc(']) {
+    assert.equal(source.includes(forbidden), false, forbidden);
+  }
+});
