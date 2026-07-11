@@ -15,6 +15,12 @@ import { calculateProjectFinances } from '@/types/project-v3';
 import { PROJECT_ROLES } from '@/types/roles';
 import { notifyBonusesApproved, notifyProjectClosed } from '@/lib/projectNotifications';
 import { CEOSummaryTable, type CEOSummaryActions } from '@/components/projects/CEOSummaryTable';
+import {
+  buildBonusPaymentIndex,
+  getBonusPaymentState,
+  loadBonusPayments,
+  type BonusPaymentRow,
+} from '@/lib/bonusPayments';
 
 type BonusHistoryEntry = {
   type: string;
@@ -46,6 +52,30 @@ export default function Bonuses() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'paid'>('all');
   const [filterType, setFilterType] = useState<'all' | 'project' | 'kpi' | 'annual'>('all');
   const [draftAdjustments, setDraftAdjustments] = useState<Record<string, Record<string, string>>>({});
+  const [paymentRows, setPaymentRows] = useState<BonusPaymentRow[]>([]);
+  const [paymentRegistryLoading, setPaymentRegistryLoading] = useState(true);
+  const [paymentRegistryError, setPaymentRegistryError] = useState<string | null>(null);
+  const paymentIndex = useMemo(() => buildBonusPaymentIndex(paymentRows), [paymentRows]);
+
+  useEffect(() => {
+    let active = true;
+    setPaymentRegistryLoading(true);
+    loadBonusPayments()
+      .then((rows) => {
+        if (!active) return;
+        setPaymentRows(rows);
+        setPaymentRegistryError(null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('[Bonuses] failed to load final payment registry', error);
+        setPaymentRegistryError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setPaymentRegistryLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   // Часы по таймщитам — нужны CEO чтобы видеть факт перед утверждением бонуса.
   // Источник истины с PR 3: timesheet_entries.
@@ -243,34 +273,6 @@ export default function Bonuses() {
     const nextFinances = { ...finances, teamBonuses };
     return updateProjectRecord(projectId, { finances: nextFinances });
   };
-  const markBonusPaid = async (projectId: string, userId: string) => {
-    if (!canEditBonuses) return;
-    try {
-      await patchTeamBonus(
-        projectId, userId,
-        { paidAt: new Date().toISOString(), paidBy: user?.id, paidByName: user?.name },
-        { type: 'paid' },
-      );
-      toast({ title: 'Бонус выплачен', description: 'Запись сохранена.' });
-      await refreshProjects();
-    } catch (e: any) {
-      toast({ title: 'Ошибка', description: e?.message || 'Не удалось зафиксировать выплату', variant: 'destructive' });
-    }
-  };
-  const unmarkBonusPaid = async (projectId: string, userId: string) => {
-    if (!canEditBonuses) return;
-    try {
-      await patchTeamBonus(
-        projectId, userId,
-        { paidAt: null, paidBy: null, paidByName: null },
-        { type: 'unmark_paid' },
-      );
-      toast({ title: 'Отметка выплаты снята' });
-      await refreshProjects();
-    } catch (e: any) {
-      toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
-    }
-  };
   const toggleBonusVisibility = async (projectId: string, userId: string, current: boolean) => {
     if (!canEditBonuses) return;
     try {
@@ -385,16 +387,16 @@ export default function Bonuses() {
     projects.forEach((project: any) => {
       if (project.finances && project.finances.teamBonuses) {
         const finances = calculateProjectFinances(project);
-        const projectStatus = project?.notes?.status || project?.status;
         Object.entries(finances.teamBonuses).forEach(([userId, bonus]: [string, any]) => {
           // CEO мог пометить бонус как «скрыть от сотрудника» — в personal view не показываем.
           if (personalView && bonus?.hiddenFromEmployee) return;
           const employee = employees.find((e: any) => e.id === userId);
           if (employee) {
-            // Статус: paid (выплачено) > approved (закрытый проект) > pending (ждёт CEO)
+            const payment = getBonusPaymentState(paymentIndex, project.id, userId);
+            // Финальный статус подтверждает только таблица bonuses.
             let status: 'pending' | 'approved' | 'paid' = 'pending';
-            if (bonus.paidAt) status = 'paid';
-            else if (projectStatus === 'completed') status = 'approved';
+            if (payment.paid) status = 'paid';
+            else if (payment.registered) status = 'approved';
             bonuses.push({
               id: `${project.id}-${userId}`,
               projectId: project.id,
@@ -409,8 +411,8 @@ export default function Bonuses() {
               description: `Бонус за проект "${project.name || project.title}"`,
               // Дополнительные поля для CEO-действий
               hiddenFromEmployee: !!bonus.hiddenFromEmployee,
-              paidAt: bonus.paidAt || null,
-              paidByName: bonus.paidByName || null,
+              paidAt: payment.paymentDate,
+              paidByName: null,
               role: bonus.role || null,
               history: Array.isArray(bonus.history) ? bonus.history : [],
             } as any);
@@ -423,7 +425,7 @@ export default function Bonuses() {
     // только его собственные начисления.
     const ownerFiltered = personalView && user ? bonuses.filter((b) => b.employeeId === user.id) : bonuses;
     return ownerFiltered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [projects, employees, personalView, user]);
+  }, [projects, employees, paymentIndex, personalView, user]);
 
   // Фильтрация бонусов
   const filteredBonuses = useMemo(() => {
@@ -511,12 +513,6 @@ export default function Bonuses() {
         removeTeamRole: async (projectId, employeeId, role) => {
           await removeProjectTeamRole(projectId, employeeId, role);
         },
-        markPaid: async (projectId, userId) => {
-          await markBonusPaid(projectId, userId);
-        },
-        unmarkPaid: async (projectId, userId) => {
-          await unmarkBonusPaid(projectId, userId);
-        },
         toggleHidden: async (projectId, userId, current) => {
           await toggleBonusVisibility(projectId, userId, current);
         },
@@ -568,6 +564,35 @@ export default function Bonuses() {
         </Badge>
         <p className="text-muted-foreground mt-1 text-sm">Система бонусов и поощрений</p>
       </div>
+
+      <Card className={`p-4 border ${paymentRegistryError ? 'border-red-300 bg-red-50/60' : 'border-blue-200 bg-blue-50/50'}`}>
+        <div className="flex items-start gap-3">
+          {paymentRegistryLoading ? (
+            <Clock className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+          ) : paymentRegistryError ? (
+            <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+          ) : (
+            <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+          )}
+          <div>
+            <p className="font-semibold text-sm">Финальный платёжный реестр</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {paymentRegistryLoading
+                ? 'Загружаются утверждённые выплаты из таблицы bonuses…'
+                : paymentRegistryError
+                  ? `Реестр не загрузился: ${paymentRegistryError}. Предварительные расчёты видны, но ни один из них не считается выплатой.`
+                  : paymentIndex.totalRows === 0
+                    ? 'В таблице bonuses нет строк: финальные выплаты не зарегистрированы. Ниже показан только предварительный расчёт.'
+                    : `Загружено строк: ${paymentIndex.totalRows}. Выплату подтверждает только payment_date в таблице bonuses.`}
+            </p>
+            {!paymentRegistryLoading && !paymentRegistryError && paymentIndex.unmatchedRows > 0 && (
+              <p className="text-xs text-amber-700 mt-1">
+                Без полной пары проект + сотрудник: {paymentIndex.unmatchedRows}. Эти строки не сопоставлены автоматически.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* Статистика */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -794,15 +819,6 @@ export default function Bonuses() {
                       </div>
                       {canEditBonuses && (
                         <div className="flex items-center gap-2 mt-2 flex-wrap text-xs">
-                          {!isPaid ? (
-                            <Button size="sm" variant="default" className="h-6 px-2 text-xs" onClick={() => markBonusPaid(bonus.projectId, bonus.employeeId)}>
-                              <CheckCircle className="w-3 h-3 mr-1" /> Выплатить
-                            </Button>
-                          ) : (
-                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => unmarkBonusPaid(bonus.projectId, bonus.employeeId)}>
-                              Снять отметку
-                            </Button>
-                          )}
                           <Button
                             size="sm"
                             variant="outline"

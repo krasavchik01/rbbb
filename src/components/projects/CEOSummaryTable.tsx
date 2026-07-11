@@ -173,7 +173,7 @@ function EmployeeSearchSelect({
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type StatusFilter = 'all' | 'pending' | 'closed' | 'missing_team' | 'missing_amount' | 'needs_attention' | 'paid';
+type StatusFilter = 'all' | 'pending' | 'closed' | 'missing_team' | 'missing_amount' | 'needs_attention';
 type SortKey = 'name' | 'base' | 'bonus' | 'profit';
 type SortDir = 'asc' | 'desc';
 
@@ -184,8 +184,6 @@ export interface CEOSummaryActions {
   ) => Promise<void>;
   addTeamRole?: (projectId: string, employeeId: string, role: string) => Promise<void>;
   removeTeamRole?: (projectId: string, employeeId: string, role: string) => Promise<void>;
-  markPaid?: (projectId: string, userId: string) => Promise<void>;
-  unmarkPaid?: (projectId: string, userId: string) => Promise<void>;
   toggleHidden?: (projectId: string, userId: string, current: boolean) => Promise<void>;
   adjustAmount?: (projectId: string, userId: string, amount: number) => Promise<void>;
 }
@@ -225,11 +223,10 @@ function projectMatchesStatusFilter(project: any, filter: StatusFilter): boolean
     : (Array.isArray(project?.notes?.team) ? project.notes.team : []);
   const needsAttention = hasNoAmount || team.length === 0;
   if (filter === 'pending') return s === 'pending_payment_approval';
-  if (filter === 'closed') return s === 'completed' && !hasAllPaid(project);
+  if (filter === 'closed') return s === 'completed';
   if (filter === 'missing_team') return team.length === 0;
   if (filter === 'missing_amount') return hasNoAmount;
   if (filter === 'needs_attention') return needsAttention;
-  if (filter === 'paid') return s === 'completed' && hasAllPaid(project);
   return true;
 }
 
@@ -262,13 +259,6 @@ function taskStatsFor(projectId: string, tasks: any[]) {
   return { total: list.length, done, active, overdue };
 }
 
-function hasAllPaid(project: any): boolean {
-  const tb = project?.finances?.teamBonuses || {};
-  const vals = Object.values(tb) as any[];
-  if (vals.length === 0) return false;
-  return vals.every((v) => v?.paidAt);
-}
-
 const STATUS_PILLS: Record<string, { label: string; tone: string }> = {
   pending_payment_approval: { label: 'Ждёт CEO',  tone: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
   completed:                { label: 'Закрыт',    tone: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
@@ -282,7 +272,6 @@ const QUICK_FILTERS: Array<{ key: StatusFilter; label: string }> = [
   { key: 'closed', label: 'Закрытые' },
   { key: 'missing_team', label: 'Без команды' },
   { key: 'missing_amount', label: 'Без суммы' },
-  { key: 'paid', label: 'Выплачено' },
 ];
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -482,7 +471,7 @@ export function CEOSummaryTable({
       profit: totals.grossProfit,
       pendingCount,
       avgBonus,
-      paidOut: totals.totalBonuses,
+      plannedBonusPool: totals.totalBonuses,
       projectsCount: filteredRows.length,
     };
   }, [rows, filteredRows, totals]);
@@ -614,7 +603,7 @@ export function CEOSummaryTable({
             <KPI label="Проектов" value={String(kpi.projectsCount)} tone="text-primary" icon={<BarChart3 className="w-4 h-4" />} />
             <KPI label="Ждёт CEO" value={String(kpi.pendingCount)} tone="text-amber-500" icon={<AlertTriangle className="w-4 h-4" />} />
             <KPI label="Общий бонус-пул" value={fmt(kpi.pool)} tone="text-green-500" icon={<DollarSign className="w-4 h-4" />} />
-            <KPI label="Выплачено / запланировано" value={fmt(kpi.paidOut)} tone="text-emerald-500" icon={<CheckCircle2 className="w-4 h-4" />} />
+            <KPI label="Плановый бонусный фонд" value={fmt(kpi.plannedBonusPool)} tone="text-emerald-500" icon={<CheckCircle2 className="w-4 h-4" />} />
             <KPI label="Средний бонус на чел." value={fmt(kpi.avgBonus)} tone="text-blue-500" icon={<Users className="w-4 h-4" />} />
             <KPI label="Чистая прибыль" value={fmt(kpi.profit)} tone={kpi.profit >= 0 ? 'text-emerald-600' : 'text-red-500'} icon={<TrendingUp className="w-4 h-4" />} />
           </div>
@@ -1317,7 +1306,6 @@ function ProjectDetail({
                     {m.manuallyAdjusted && (
                       <div className="text-[9px] text-amber-600">правка CEO (план: {fmt(m.plannedAmount)})</div>
                     )}
-                    {m.paidAt && <div className="text-[9px] text-emerald-600">выплачено {new Date(m.paidAt).toLocaleDateString('ru')}</div>}
                   </div>
                 </div>
                 {actions && (
@@ -1334,16 +1322,6 @@ function ProjectDetail({
                           Сохранить
                         </Button>
                       </>
-                    )}
-                    {actions.markPaid && !m.paidAt && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => actions.markPaid!(row.id, m.userId)} disabled={busy}>
-                        <CheckCircle2 className="w-3 h-3" /> Выплачено
-                      </Button>
-                    )}
-                    {actions.unmarkPaid && m.paidAt && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => actions.unmarkPaid!(row.id, m.userId)} disabled={busy}>
-                        Снять выплату
-                      </Button>
                     )}
                     {actions.toggleHidden && (
                       <Button
