@@ -1,18 +1,22 @@
-import { useAuth } from '@/contexts/AuthContext';
-import { Bell, Menu, GitCommit } from 'lucide-react';
+import { useAuth, type User } from '@/contexts/AuthContext';
+import { Bell, Menu, GitCommit, ShieldCheck, UserRoundCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getUnreadCount } from '@/lib/notifications';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useEmployees } from '@/hooks/useSupabaseData';
+import { ROLE_LABELS, normalizeUserRole } from '@/types/roles';
+import type { Employee } from '@/lib/supabaseDataStore';
 
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Дашборд',
-  '/dashboard': 'Дашборд',
-  '/projects': 'Проекты',
+  '/dashboard': 'Свод',
+  '/projects': 'Свод',
   '/hr': 'HR',
   '/timesheets': 'Тайм-шиты',
   '/attendance': 'Посещаемость',
@@ -34,7 +38,7 @@ declare const __APP_VERSION__: string;
 declare const __BUILD_TIME__: string;
 
 export function AppHeader() {
-  const { user } = useAuth();
+  const { user, originalUser, isImpersonating, stopImpersonation } = useAuth();
   const { toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const location = useLocation();
@@ -90,6 +94,28 @@ export function AppHeader() {
         </div>
         
         <div className="flex items-center space-x-2 md:space-x-4">
+          {(user.role === 'admin' || isImpersonating) && (
+            <RoleCheckMenu />
+          )}
+
+          {isImpersonating && originalUser && (
+            <div className="hidden lg:flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs text-amber-900">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span className="max-w-[220px] truncate">
+                Проверка: {user.name}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-amber-900 hover:bg-amber-100"
+                onClick={() => void stopImpersonation()}
+                aria-label="Вернуться в admin"
+                title={`Вернуться: ${originalUser.name}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
           {/* Бейдж версии для админа */}
           {user.role === 'admin' && (
             <Badge
@@ -136,5 +162,83 @@ export function AppHeader() {
         </div>
       </div>
     </header>
+  );
+}
+
+function employeeToAuthUser(employee: Employee): User {
+  const role = normalizeUserRole(employee.role, employee.level);
+  return {
+    id: employee.id,
+    email: employee.email || '',
+    name: employee.name || 'Без имени',
+    role,
+    companyId: employee.company_id || employee.companyId || undefined,
+    department: employee.department || '',
+    position: employee.position || '',
+    avatar: employee.name
+      ? employee.name.split(' ').map((part) => part[0]).join('').toUpperCase().slice(0, 2)
+      : 'UN',
+  };
+}
+
+function RoleCheckMenu() {
+  const { user, originalUser, isImpersonating, startImpersonation, stopImpersonation } = useAuth();
+  const { employees, loading } = useEmployees();
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  const canSwitch = (originalUser || user)?.role === 'admin';
+  const sortedEmployees = useMemo(() => {
+    return [...employees]
+      .filter((employee) => employee.id && employee.name)
+      .sort((a, b) => {
+        const roleA = ROLE_LABELS[normalizeUserRole(a.role, a.level)] || a.role;
+        const roleB = ROLE_LABELS[normalizeUserRole(b.role, b.level)] || b.role;
+        return `${roleA} ${a.name}`.localeCompare(`${roleB} ${b.name}`, 'ru');
+      });
+  }, [employees]);
+
+  const handleSwitch = async (employeeId: string) => {
+    setSelectedEmployeeId(employeeId);
+    const employee = sortedEmployees.find((item) => item.id === employeeId);
+    if (!employee) return;
+    await startImpersonation(employeeToAuthUser(employee));
+  };
+
+  if (!canSwitch) return null;
+
+  return (
+    <div className="hidden md:flex items-center gap-2">
+      <UserRoundCheck className="h-4 w-4 text-muted-foreground" />
+      <Select
+        value={isImpersonating ? user?.id || selectedEmployeeId : selectedEmployeeId}
+        onValueChange={(value) => void handleSwitch(value)}
+        disabled={loading}
+      >
+        <SelectTrigger className="h-8 w-[230px] text-xs">
+          <SelectValue placeholder={loading ? 'Загрузка ролей...' : 'Проверить роль'} />
+        </SelectTrigger>
+        <SelectContent className="max-h-[420px]">
+          {sortedEmployees.map((employee) => {
+            const role = normalizeUserRole(employee.role, employee.level);
+            const roleLabel = ROLE_LABELS[role] || role;
+            return (
+              <SelectItem key={employee.id} value={employee.id} className="text-xs">
+                {roleLabel}: {employee.name}
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+      {isImpersonating && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => void stopImpersonation()}
+        >
+          Вернуться
+        </Button>
+      )}
+    </div>
   );
 }

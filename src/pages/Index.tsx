@@ -19,7 +19,7 @@ const Index = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate('/projects');
     }
   }, [user, navigate]);
 
@@ -31,7 +31,7 @@ const Index = () => {
     try {
       const success = await login(email, password);
       if (success) {
-        navigate('/dashboard');
+        navigate('/projects');
       } else {
         setError('Неверный email или пароль');
       }
@@ -169,6 +169,15 @@ const Index = () => {
                       'Войти'
                     )}
                   </Button>
+
+                  <div className="text-center">
+                    <Link
+                      to="/forgot-password"
+                      className="text-sm text-blue-300 transition-colors hover:text-blue-200"
+                    >
+                      Забыли пароль?
+                    </Link>
+                  </div>
 
                   <div className="text-center pt-4 border-t border-slate-700">
                     <Link

@@ -1,0 +1,17 @@
+{
+  "startedAt": "2026-07-01T09:47:08.460Z",
+  "mode": "dry-run",
+  "deleteSource": false,
+  "onlyProjectId": "",
+  "limit": 0,
+  "totals": {
+    "projectsScanned": 1020,
+    "projectsWithCandidates": 0,
+    "candidates": 0,
+    "migrated": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "projects": [],
+  "finishedAt": "2026-07-01T09:47:08.471Z"
+}

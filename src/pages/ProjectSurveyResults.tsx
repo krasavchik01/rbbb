@@ -60,8 +60,8 @@ import {
 
 const PROPOSED_STATUS_LABEL: Record<NonNullable<SurveyProposal['proposedStatus']>, { label: string; tone: string }> = {
   in_progress: { label: 'Оставить активным',         tone: 'bg-blue-100 text-blue-700' },
-  completed:   { label: 'Закрыть как «Завершён»',    tone: 'bg-green-100 text-green-700' },
-  cancelled:   { label: 'Закрыть как «Отменён»',     tone: 'bg-red-100 text-red-700' },
+  completed:   { label: 'Завершить как «Завершён»',  tone: 'bg-green-100 text-green-700' },
+  cancelled:   { label: 'Завершить как «Отменён»',   tone: 'bg-red-100 text-red-700' },
 };
 
 const CONFIDENCE_LABEL: Record<SurveyProposal['confidence'], { label: string; tone: string }> = {

@@ -1,53 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
+import { ROUTE_ACCESS } from '../../src/lib/roleAccess';
+import { USER_ROLES, type UserRole } from '../../src/types/roles';
 
-type Role =
-  | 'admin'
-  | 'ceo'
-  | 'deputy_director'
-  | 'hr'
-  | 'partner'
-  | 'procurement'
-  | 'assistant_1'
-  | 'manager_1';
+type Role = UserRole;
 
-const roles: Role[] = [
-  'admin',
-  'ceo',
-  'deputy_director',
-  'hr',
-  'partner',
-  'procurement',
-  'assistant_1',
-  'manager_1',
-];
+const roles: Role[] = USER_ROLES;
 
-const allRoles = roles;
-
-const routeMatrix: Array<{ path: string; allowed: readonly Role[] }> = [
-  { path: '/dashboard', allowed: allRoles },
-  { path: '/projects', allowed: allRoles },
-  { path: '/hr', allowed: ['admin', 'ceo', 'deputy_director', 'hr'] },
-  { path: '/employees', allowed: ['admin', 'ceo', 'deputy_director', 'hr'] },
-  { path: '/analytics', allowed: ['admin', 'ceo', 'deputy_director'] },
-  { path: '/timesheets', allowed: allRoles },
-  { path: '/timesheet-approval', allowed: ['admin', 'ceo', 'deputy_director', 'hr', 'partner'] },
-  { path: '/assign-partners', allowed: ['admin', 'ceo', 'deputy_director'] },
-  { path: '/bonuses', allowed: ['admin', 'ceo', 'deputy_director'] },
-  { path: '/settings', allowed: allRoles },
-  { path: '/calendar', allowed: allRoles },
-  { path: '/tasks', allowed: allRoles },
-  { path: '/attendance', allowed: allRoles },
-  { path: '/user-management', allowed: ['admin'] },
-  { path: '/create-project-procurement', allowed: ['admin', 'procurement'] },
-  { path: '/project-approval', allowed: ['admin', 'ceo', 'deputy_director'] },
-  { path: '/tenders', allowed: ['procurement'] },
-  { path: '/diagnostics', allowed: ['admin'] },
-  { path: '/database-test', allowed: ['admin'] },
-  { path: '/notifications', allowed: allRoles },
-  { path: '/smtp-settings', allowed: ['admin'] },
-  { path: '/role-management', allowed: ['admin'] },
-  { path: '/settings-diagnostics', allowed: ['admin'] },
-  { path: '/ai', allowed: ['admin', 'ceo', 'deputy_director', 'partner', 'hr'] },
+const routeMatrix: Array<{ path: string; allowed: readonly Role[]; expectedPath?: string }> = [
+  { path: '/dashboard', allowed: roles, expectedPath: '/projects' },
+  { path: '/timesheet-approval', allowed: roles, expectedPath: '/projects' },
+  { path: '/calendar', allowed: roles, expectedPath: '/projects' },
+  { path: '/tasks', allowed: roles, expectedPath: '/projects' },
+  ...Object.entries(ROUTE_ACCESS).map(([path, allowed]) => ({ path, allowed })),
 ];
 
 async function blockProductionNetwork(page: Page) {
@@ -102,10 +66,11 @@ test.describe('production-safe role route access matrix', () => {
 
           const allowed = routeInfo.allowed.includes(role);
           if (allowed) {
-            await expect(page).toHaveURL(new RegExp(`${routeInfo.path.replace('/', '\\/')}(?:[?#].*)?$`));
+            const expectedPath = routeInfo.expectedPath || routeInfo.path;
+            await expect(page).toHaveURL(new RegExp(`${expectedPath.replace('/', '\\/')}(?:[?#].*)?$`));
             await expect(page.locator('body')).not.toContainText('Вход в систему');
           } else {
-            await expect(page).toHaveURL(/\/dashboard(?:[?#].*)?$/);
+            await expect(page).toHaveURL(/\/projects(?:[?#].*)?$/);
           }
         });
       }

@@ -1,0 +1,10 @@
+{
+  "mode": "dry-run",
+  "createdAt": "2026-06-16T09:13:38.047Z",
+  "totalRows": 14854,
+  "duplicateGroupCount": 0,
+  "deleteCandidateCount": 0,
+  "keptCount": 0,
+  "duplicateGroups": [],
+  "deletedRowsBackup": []
+}

@@ -7,6 +7,7 @@ import { supabaseDataStore, Employee, Project, Company } from '@/lib/supabaseDat
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
 import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
+import { findCompanyByAnyValue } from '@/types/companies';
 
 // Хук для сотрудников
 export function useEmployees() {
@@ -96,11 +97,64 @@ function getProjectTeamMembers(project: any): any[] {
   return [];
 }
 
-function projectHasTeamMember(project: any, userId?: string | null): boolean {
-  if (!userId) return false;
+function normalizeIdentity(value: any): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizePersonName(value: any): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[ә]/g, 'а')
+    .replace(/[ғ]/g, 'г')
+    .replace(/[қ]/g, 'к')
+    .replace(/[ң]/g, 'н')
+    .replace(/[ө]/g, 'о')
+    .replace(/[ұү]/g, 'у')
+    .replace(/[і]/g, 'и')
+    .replace(/[^a-zа-я0-9]+/giu, ' ')
+    .trim();
+}
+
+function personMatchKey(value: any): string {
+  const tokens = normalizePersonName(value)
+    .split(' ')
+    .filter((token) => token.length >= 2)
+    .filter((token) => !/(ович|евич|улы|ұлы|кызы|қызы)$/u.test(token));
+  if (tokens.length >= 2) {
+    return tokens.slice(0, 2).sort().join(' ');
+  }
+  return tokens.join(' ');
+}
+
+function teamMemberIdentity(member: any) {
+  const employee = member?.employee || member?.profile || member?.user || {};
+  return {
+    id: member?.userId || member?.user_id || member?.employeeId || member?.employee_id || employee?.id || member?.id || '',
+    email: member?.userEmail || member?.user_email || member?.employeeEmail || member?.employee_email || employee?.email || member?.email || '',
+    name: member?.userName || member?.user_name || member?.employeeName || member?.employee_name || employee?.name || employee?.full_name || member?.name || '',
+  };
+}
+
+function projectHasTeamMember(project: any, user?: { id?: string | null; email?: string | null; name?: string | null } | null): boolean {
+  if (!user?.id && !user?.email && !user?.name) return false;
+  const userId = normalizeIdentity(user.id);
+  const userEmail = normalizeIdentity(user.email);
+  const userName = normalizeIdentity(user.name);
+  const userNameKey = personMatchKey(user.name);
+
   return getProjectTeamMembers(project).some((member: any) => {
-    const memberId = member?.userId || member?.id || member?.employeeId;
-    return memberId === userId;
+    const identity = teamMemberIdentity(member);
+    const memberId = normalizeIdentity(identity.id);
+    const memberEmail = normalizeIdentity(identity.email);
+    const memberName = normalizeIdentity(identity.name);
+    const memberNameKey = personMatchKey(identity.name);
+    return (
+      (userId && memberId === userId) ||
+      (userEmail && memberEmail === userEmail) ||
+      (userName && memberName === userName) ||
+      (userNameKey && memberNameKey && userNameKey === memberNameKey)
+    );
   });
 }
 
@@ -129,18 +183,24 @@ export function useProjects() {
 
   // Фильтрация по allowedCompanyIds пользователя
   const projects = useMemo(() => {
-    if (!user?.allowedCompanyIds || user.allowedCompanyIds.length === 0) {
-      return allProjects;
+    if (user?.allowedCompanyIds && user.allowedCompanyIds.length > 0) {
+      const companies = appSettings.companies || [];
+      const allowedNames = user.allowedCompanyIds
+        .flatMap((id: string) => {
+          const company = findCompanyByAnyValue(id, companies as any);
+          return [id, company?.id, company?.name, company?.fullName].filter(Boolean);
+        })
+        .filter(Boolean) as string[];
+
+      if (allowedNames.length === 0) return allProjects;
+      return allProjects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));
     }
-    const companies = appSettings.companies || [];
-    const allowedNames = user.allowedCompanyIds
-      .map((id: string) => (companies as any[]).find((c: any) => c.id === id)?.name)
-      .filter(Boolean) as string[];
-    if (allowedNames.length === 0) return allProjects;
-    return allProjects.filter((p) =>
-      projectMatchesAllowedCompanies(p, allowedNames) || projectHasTeamMember(p, user.id),
-    );
-  }, [allProjects, user?.allowedCompanyIds, user?.id, appSettings.companies]);
+
+    const canViewAllProjects = user && ['ceo', 'admin', 'deputy_director', 'procurement'].includes(user.role);
+    if (canViewAllProjects) return allProjects;
+
+    return allProjects.filter((p) => projectHasTeamMember(p, user));
+  }, [allProjects, user?.allowedCompanyIds, user?.id, user?.role, appSettings.companies]);
 
   useEffect(() => {
     loadProjects();

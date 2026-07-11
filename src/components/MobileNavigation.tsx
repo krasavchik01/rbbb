@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FolderKanban, Users, BarChart3, Settings, Menu, LogOut, Activity } from 'lucide-react';
+import { CalendarCheck, Clock, FolderKanban, Users, Settings, Menu, LogOut, Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,22 +13,24 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useState, useMemo } from 'react';
+import { ROLE_GROUPS } from '@/lib/roleAccess';
+import type { UserRole } from '@/types/roles';
 
 interface NavItem {
   to: string;
   icon: any;
   label: string;
-  excludeRoles?: string[];
-  allowedRoles?: string[];
+  excludeRoles?: readonly UserRole[];
+  allowedRoles?: readonly UserRole[];
 }
 
 const allNavItems: NavItem[] = [
-  { to: '/dashboard', icon: Home, label: 'Главная' },
-  { to: '/projects', icon: FolderKanban, label: 'Проекты' },
-  { to: '/hr', icon: Users, label: 'HR', allowedRoles: ['hr'] },
-  { to: '/attendance', icon: Activity, label: 'Посещаемость', allowedRoles: ['ceo', 'deputy_director'] },
-  { to: '/analytics', icon: BarChart3, label: 'Аналитика', allowedRoles: ['ceo', 'admin'] },
-  { to: '/settings', icon: Settings, label: 'Настройки', excludeRoles: ['ceo', 'deputy_director'] },
+  { to: '/projects', icon: FolderKanban, label: 'Свод' },
+  { to: '/timesheets', icon: Clock, label: 'Таймшиты' },
+  { to: '/attendance', icon: CalendarCheck, label: 'Посещаемость' },
+  { to: '/notifications', icon: Bell, label: 'Уведомления' },
+  { to: '/hr', icon: Users, label: 'HR', allowedRoles: ROLE_GROUPS.hrManagement },
+  { to: '/settings', icon: Settings, label: 'Настройки', allowedRoles: ROLE_GROUPS.admin },
 ];
 
 export const MobileNavigation = () => {

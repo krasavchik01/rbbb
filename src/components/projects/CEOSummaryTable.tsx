@@ -18,12 +18,12 @@
 import { useState, useMemo, useCallback, useEffect, Fragment } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PROJECT_ROLES } from '@/types/roles';
 import {
   ChevronDown,
@@ -42,6 +42,8 @@ import {
   Clock,
   AlertTriangle,
   ExternalLink,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import {
   computeProjectBonus,
@@ -58,6 +60,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from '@/lib/timesheet
 
 const ROLE_GROUPS = [
   { key: 'partner',     label: 'Партнёр',      roles: ['partner'],                                    color: 'text-violet-600 dark:text-violet-400',   bg: 'bg-violet-500/10',   border: 'border-violet-500/20' },
+  { key: 'leaders',     label: 'Руководители', roles: ['project_leader'],                             color: 'text-fuchsia-600 dark:text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/20' },
   { key: 'managers',    label: 'Менеджеры',    roles: ['manager_1', 'manager_2', 'manager_3'],         color: 'text-blue-600 dark:text-blue-400',       bg: 'bg-blue-500/10',     border: 'border-blue-500/20' },
   { key: 'supervisors', label: 'Супервайзеры', roles: ['supervisor_3', 'supervisor_2', 'supervisor_1'], color: 'text-cyan-600 dark:text-cyan-400',       bg: 'bg-cyan-500/10',     border: 'border-cyan-500/20' },
   { key: 'tax',         label: 'Налоговики',   roles: ['tax_specialist_1', 'tax_specialist_2'],        color: 'text-amber-600 dark:text-amber-400',     bg: 'bg-amber-500/10',    border: 'border-amber-500/20' },
@@ -66,6 +69,7 @@ const ROLE_GROUPS = [
 
 const ROLE_SHORT: Record<string, string> = {
   partner: 'П',
+  project_leader: 'РП',
   manager_1: 'М1', manager_2: 'М2', manager_3: 'М3',
   supervisor_3: 'С3', supervisor_2: 'С2', supervisor_1: 'С1',
   tax_specialist_1: 'Н1', tax_specialist_2: 'Н2',
@@ -74,9 +78,102 @@ const ROLE_SHORT: Record<string, string> = {
 
 const fmt = (v: number) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(v);
 
+function employeeLabel(employee: any): string {
+  return employee?.name || employee?.full_name || employee?.email || employee?.id || '';
+}
+
+function EmployeeSearchSelect({
+  employees,
+  value,
+  onChange,
+  placeholder = 'Выберите сотрудника',
+  className = '',
+}: {
+  employees: any[];
+  value?: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = employees.find((employee: any) => employee.id === value);
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    return employees
+      .filter((employee: any) => {
+        if (!q) return true;
+        const label = employeeLabel(employee).toLowerCase();
+        const role = String(employee?.role || '').toLowerCase();
+        const level = String(employee?.level || '').toLowerCase();
+        const email = String(employee?.email || '').toLowerCase();
+        return label.includes(q) || role.includes(q) || level.includes(q) || email.includes(q);
+      })
+      .slice(0, 120);
+  }, [employees, q]);
+
+  const pick = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(next) => {
+      setOpen(next);
+      if (!next) setQuery('');
+    }}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className={`h-9 justify-between bg-background font-normal ${className}`}>
+          <span className="truncate">{selected ? employeeLabel(selected) : placeholder}</span>
+          <Search className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[360px] p-0" align="start">
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Введите ФИО, email или роль..."
+              className="h-9 pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-80 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <div className="px-2 py-6 text-center text-sm text-muted-foreground">Совпадений нет</div>
+          ) : (
+            filtered.map((employee: any) => (
+              <button
+                type="button"
+                key={employee.id}
+                className="flex w-full items-center justify-between gap-2 rounded px-2 py-2 text-left text-sm hover:bg-accent"
+                onClick={() => pick(employee.id)}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{employeeLabel(employee)}</span>
+                  {(employee.role || employee.email) && (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[employee.role, employee.email].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </span>
+                {employee.id === value && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'paid';
+type StatusFilter = 'all' | 'pending' | 'closed' | 'missing_team' | 'missing_amount' | 'needs_attention' | 'paid';
 type SortKey = 'name' | 'base' | 'bonus' | 'profit';
 type SortDir = 'asc' | 'desc';
 
@@ -85,6 +182,8 @@ export interface CEOSummaryActions {
     project: any,
     finalSettings: { bonusPercent: number; overheadPercent: number; distribution: Record<string, number> },
   ) => Promise<void>;
+  addTeamRole?: (projectId: string, employeeId: string, role: string) => Promise<void>;
+  removeTeamRole?: (projectId: string, employeeId: string, role: string) => Promise<void>;
   markPaid?: (projectId: string, userId: string) => Promise<void>;
   unmarkPaid?: (projectId: string, userId: string) => Promise<void>;
   toggleHidden?: (projectId: string, userId: string, current: boolean) => Promise<void>;
@@ -94,6 +193,7 @@ export interface CEOSummaryActions {
 interface CEOSummaryTableProps {
   projects: any[];
   employees: any[];
+  tasks?: any[];
   getProjectAmount: (project: any) => { amount: number | null; currency: string };
   getCompanyDisplayName: (company: string) => string;
   onProjectClick?: (project: any) => void;
@@ -109,17 +209,57 @@ interface CEOSummaryTableProps {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getProjectStatus(project: any): string {
-  return project?.notes?.status || project?.status || '';
+  const status = project?.status || project?.notes?.status || '';
+  if (status === 'Завершён' || status === 'Закрыт') return 'completed';
+  if (status === 'В работе') return 'in_progress';
+  return status;
 }
 
 /** Маппинг статусов проекта → фильтр CEO. */
 function projectMatchesStatusFilter(project: any, filter: StatusFilter): boolean {
   if (filter === 'all') return true;
   const s = getProjectStatus(project);
+  const hasNoAmount = readProjectAmount(project) <= 0;
+  const team = Array.isArray(project?.team)
+    ? project.team
+    : (Array.isArray(project?.notes?.team) ? project.notes.team : []);
+  const needsAttention = hasNoAmount || team.length === 0;
   if (filter === 'pending') return s === 'pending_payment_approval';
-  if (filter === 'approved') return s === 'completed' && !hasAllPaid(project);
+  if (filter === 'closed') return s === 'completed' && !hasAllPaid(project);
+  if (filter === 'missing_team') return team.length === 0;
+  if (filter === 'missing_amount') return hasNoAmount;
+  if (filter === 'needs_attention') return needsAttention;
   if (filter === 'paid') return s === 'completed' && hasAllPaid(project);
   return true;
+}
+
+function readProjectAmount(project: any): number {
+  return (
+    Number(project?.contract?.amountWithoutVAT) ||
+    Number(project?.amountWithoutVAT) ||
+    Number(project?.notes?.contract?.amountWithoutVAT) ||
+    Number(project?.notes?.finances?.amountWithoutVAT) ||
+    Number(project?.notes?.amountWithoutVAT) ||
+    Number(project?.notes?.amount) ||
+    0
+  );
+}
+
+function taskStatsFor(projectId: string, tasks: any[]) {
+  const now = Date.now();
+  const list = (tasks || []).filter((task) => task?.project_id === projectId || task?.projectId === projectId);
+  let done = 0;
+  let active = 0;
+  let overdue = 0;
+  for (const task of list) {
+    const status = task.status || '';
+    const isDone = status === 'done' || status === 'completed';
+    if (isDone) done += 1;
+    else active += 1;
+    const due = task.due_at || task.dueAt || task.deadline;
+    if (due && !isDone && new Date(due).getTime() < now) overdue += 1;
+  }
+  return { total: list.length, done, active, overdue };
 }
 
 function hasAllPaid(project: any): boolean {
@@ -136,11 +276,21 @@ const STATUS_PILLS: Record<string, { label: string; tone: string }> = {
   cancelled:                { label: 'Отменён',   tone: 'bg-red-500/10 text-red-600 border-red-500/20' },
 };
 
+const QUICK_FILTERS: Array<{ key: StatusFilter; label: string }> = [
+  { key: 'all', label: 'Все' },
+  { key: 'pending', label: 'Ждут CEO' },
+  { key: 'closed', label: 'Закрытые' },
+  { key: 'missing_team', label: 'Без команды' },
+  { key: 'missing_amount', label: 'Без суммы' },
+  { key: 'paid', label: 'Выплачено' },
+];
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CEOSummaryTable({
   projects,
   employees,
+  tasks = [],
   getProjectAmount,
   getCompanyDisplayName,
   onProjectClick,
@@ -223,6 +373,9 @@ export function CEOSummaryTable({
     currency: string;
     status: string;
     hours: ProjectHoursTotals;
+    taskStats: { total: number; done: number; active: number; overdue: number };
+    hasNoAmount: boolean;
+    hasNoTeam: boolean;
     effectiveSettings: { overheadPercent: number; bonusPercent: number; distribution: Record<string, number> };
   };
 
@@ -253,6 +406,9 @@ export function CEOSummaryTable({
         currency: amt.currency,
         status: getProjectStatus(project),
         hours: hoursMap.get(id) || { approved: 0, pending: 0 },
+        taskStats: taskStatsFor(id, tasks),
+        hasNoAmount: readProjectAmount(project) <= 0,
+        hasNoTeam: !(Array.isArray(project?.team) && project.team.length > 0) && !(Array.isArray(project?.notes?.team) && project.notes.team.length > 0),
         effectiveSettings: {
           overheadPercent: settings.overheadPercent!,
           bonusPercent: settings.bonusPercent!,
@@ -260,7 +416,7 @@ export function CEOSummaryTable({
         },
       };
     });
-  }, [projects, overrides, globalOverhead, globalBonus, globalDistribution, hoursMap, getProjectAmount, getCompanyDisplayName]);
+  }, [projects, overrides, globalOverhead, globalBonus, globalDistribution, hoursMap, tasks, getProjectAmount, getCompanyDisplayName]);
 
   // ─── Apply filters ────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -286,6 +442,17 @@ export function CEOSummaryTable({
     });
     return sorted;
   }, [rows, search, statusFilter, sortKey, sortDir]);
+
+  const filterCounts = useMemo(() => {
+    const counts = {} as Record<StatusFilter, number>;
+    QUICK_FILTERS.forEach((filter) => {
+      counts[filter.key] = filter.key === 'all'
+        ? rows.length
+        : rows.filter((row) => projectMatchesStatusFilter(row.project, filter.key)).length;
+    });
+    counts.needs_attention = rows.filter((row) => projectMatchesStatusFilter(row.project, 'needs_attention')).length;
+    return counts;
+  }, [rows]);
 
   // ─── Totals across visible rows ──────────────────────────────────────────
   const totals = useMemo(() => {
@@ -451,48 +618,73 @@ export function CEOSummaryTable({
         </div>
 
         {/* ── Filters bar ──────────────────────────────────────────────────── */}
-        <div className="p-3 border-b border-border bg-muted/20 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по проекту или клиенту…"
-              className="pl-8 h-9 text-sm"
-            />
+        <div className="p-3 border-b border-border bg-muted/20 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {QUICK_FILTERS.map((filter) => {
+              const active = statusFilter === filter.key;
+              return (
+                <Button
+                  key={filter.key}
+                  type="button"
+                  variant={active ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStatusFilter(filter.key)}
+                  className="h-8 gap-1.5 px-2.5 text-xs"
+                >
+                  {filter.label}
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] tabular-nums ${active ? 'bg-primary-foreground/20' : 'bg-muted'}`}>
+                    {filterCounts[filter.key] || 0}
+                  </span>
+                </Button>
+              );
+            })}
+            {(statusFilter !== 'all' || search) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setSearch('');
+                }}
+                className="h-8 px-2 text-xs"
+              >
+                Сбросить
+              </Button>
+            )}
           </div>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="h-9 text-sm w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все статусы</SelectItem>
-              <SelectItem value="pending">Ждут CEO</SelectItem>
-              <SelectItem value="approved">Закрыт, не выплачен</SelectItem>
-              <SelectItem value="paid">Полностью выплачен</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={`${sortKey}:${sortDir}`} onValueChange={(v) => {
-            const [k, d] = v.split(':') as [SortKey, SortDir];
-            setSortKey(k); setSortDir(d);
-          }}>
-            <SelectTrigger className="h-9 text-sm w-[200px]">
-              <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="base:desc">По сумме без НДС ↓</SelectItem>
-              <SelectItem value="base:asc">По сумме без НДС ↑</SelectItem>
-              <SelectItem value="bonus:desc">По бонус-пулу ↓</SelectItem>
-              <SelectItem value="profit:desc">По прибыли ↓</SelectItem>
-              <SelectItem value="name:asc">По имени А-Я</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="ml-auto text-xs text-muted-foreground tabular-nums">
-            показано {filteredRows.length} из {rows.length}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-xl">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Найти проект или клиента..."
+                className="pl-8 h-9 text-sm"
+              />
+            </div>
+            <Select value={`${sortKey}:${sortDir}`} onValueChange={(v) => {
+              const [k, d] = v.split(':') as [SortKey, SortDir];
+              setSortKey(k); setSortDir(d);
+            }}>
+              <SelectTrigger className="h-9 text-sm w-[170px]">
+                <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="base:desc">Сумма: больше</SelectItem>
+                <SelectItem value="base:asc">Сумма: меньше</SelectItem>
+                <SelectItem value="bonus:desc">Бонус: больше</SelectItem>
+                <SelectItem value="profit:desc">Прибыль: больше</SelectItem>
+                <SelectItem value="name:asc">Название А-Я</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="ml-auto text-xs text-muted-foreground tabular-nums">
+              {filteredRows.length} из {rows.length}
+            </div>
           </div>
         </div>
-
         {/* ── Tabs: Table / Analytics ──────────────────────────────────────── */}
         <Tabs defaultValue="table" className="w-full">
           <div className="px-4 pt-3">
@@ -528,6 +720,8 @@ export function CEOSummaryTable({
                       onClick={() => toggleSort('bonus')}
                     >Бонус</th>
                     <th className="px-2 py-2 text-right text-[10px] font-semibold text-cyan-500 uppercase">Часы</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-semibold text-primary uppercase min-w-[260px]">Команда / бонусы</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted-foreground uppercase min-w-[120px]">Задачи</th>
                     {ROLE_GROUPS.map((g) => (
                       <th key={g.key} className={`px-2 py-2 text-left text-[10px] font-semibold uppercase min-w-[140px] ${g.color}`}>
                         {g.label}
@@ -571,6 +765,18 @@ export function CEOSummaryTable({
                                     {statusPill.label}
                                   </Badge>
                                 )}
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {row.hasNoAmount && (
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-red-500/30 bg-red-500/10 text-red-600">
+                                      Нет суммы
+                                    </Badge>
+                                  )}
+                                  {row.hasNoTeam && (
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700">
+                                      Нет команды
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -594,6 +800,41 @@ export function CEOSummaryTable({
                             <div className="text-xs font-medium text-cyan-600 dark:text-cyan-400 tabular-nums">{fmt(row.hours.approved)}</div>
                             {row.hours.pending > 0 && (
                               <div className="text-[9px] text-amber-500 tabular-nums">+{fmt(row.hours.pending)} ждёт</div>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 align-top min-w-[260px]">
+                            {row.members.length > 0 ? (
+                              <div className="space-y-1">
+                                {row.members.slice(0, 4).map((m) => (
+                                  <div key={`${m.userId}-${m.role}`} className="grid grid-cols-[minmax(82px,1fr)_44px_76px] items-baseline gap-2 text-[11px]">
+                                    <span className="truncate" title={getEmployeeName(m.userId, m.userName)}>
+                                      {getEmployeeName(m.userId, m.userName)}
+                                    </span>
+                                    <span className="text-muted-foreground tabular-nums text-right">{m.bonusPct.toFixed(0)}%</span>
+                                    <span className="font-semibold tabular-nums text-right whitespace-nowrap">{fmt(m.finalAmount)}</span>
+                                  </div>
+                                ))}
+                                {row.members.length > 4 && (
+                                  <div className="text-[10px] text-muted-foreground">+{row.members.length - 4} ещё</div>
+                                )}
+                                <div className="border-t border-border/60 pt-1 flex justify-between text-[11px] font-bold">
+                                  <span>Итого</span>
+                                  <span className="tabular-nums">{fmt(row.totalPaidBonuses)}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-amber-700">Команда не назначена</div>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 align-top min-w-[120px]">
+                            <div className="text-[11px] font-medium tabular-nums">
+                              {row.taskStats.total === 0 ? 'Нет задач' : `${row.taskStats.done}/${row.taskStats.total} закрыто`}
+                            </div>
+                            {row.taskStats.active > 0 && (
+                              <div className="text-[10px] text-muted-foreground tabular-nums">{row.taskStats.active} активных</div>
+                            )}
+                            {row.taskStats.overdue > 0 && (
+                              <div className="text-[10px] text-red-600 tabular-nums">{row.taskStats.overdue} просрочено</div>
                             )}
                           </td>
                           {ROLE_GROUPS.map((g) => {
@@ -641,7 +882,7 @@ export function CEOSummaryTable({
                         {/* Expanded detail */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={8 + ROLE_GROUPS.length} className="p-0">
+                            <td colSpan={10 + ROLE_GROUPS.length} className="p-0">
                               <ProjectDetail
                                 row={row}
                                 employees={employees}
@@ -666,6 +907,8 @@ export function CEOSummaryTable({
                     <td className="px-2 py-3 text-right text-xs text-red-500 tabular-nums">-{fmt(totals.overhead + totals.contractors)}</td>
                     <td className="px-2 py-3 text-right text-xs text-blue-600 dark:text-blue-400 tabular-nums">{fmt(totals.remainder)}</td>
                     <td className="px-2 py-3 text-right text-xs text-green-600 dark:text-green-400 tabular-nums">{fmt(totals.bonusPool)}</td>
+                    <td className="px-2 py-3" />
+                    <td className="px-2 py-3 text-right text-xs font-bold tabular-nums">{fmt(totals.totalBonuses)}</td>
                     <td className="px-2 py-3" />
                     {ROLE_GROUPS.map((g) => (
                       <td key={g.key} className={`px-2 py-3 text-right text-xs font-bold tabular-nums ${g.color}`}>{fmt(groupTotals[g.key])}</td>
@@ -784,9 +1027,44 @@ function SliderField({ label, value, onChange, max }: { label: string; value: nu
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">{label}</Label>
-        <span className="text-sm font-bold text-primary tabular-nums">{value}%</span>
       </div>
-      <Slider value={[value]} onValueChange={([v]) => onChange(v)} min={0} max={max} step={1} />
+      <PercentStepper value={value} onChange={onChange} min={0} max={max} />
+    </div>
+  );
+}
+
+function PercentStepper({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const clamp = (next: number) => Math.max(min, Math.min(max, Math.round(next)));
+  const set = (next: number) => onChange(clamp(next));
+  return (
+    <div className="inline-grid grid-cols-[28px_64px_28px] items-center rounded-md border border-border bg-background overflow-hidden">
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-7 rounded-none" onClick={() => set(value - 1)}>
+        <Minus className="w-3.5 h-3.5" />
+      </Button>
+      <div className="relative border-x border-border">
+        <Input
+          type="number"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => set(Number(e.target.value) || 0)}
+          className="h-8 border-0 rounded-none text-center text-sm font-bold tabular-nums pr-5 focus-visible:ring-0"
+        />
+        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
+      </div>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-7 rounded-none" onClick={() => set(value + 1)}>
+        <Plus className="w-3.5 h-3.5" />
+      </Button>
     </div>
   );
 }
@@ -814,7 +1092,7 @@ function DistributionGroup({
                 <span className="text-[11px] text-muted-foreground">{pr?.label || role}</span>
                 <span className="text-[11px] font-bold tabular-nums w-7 text-right">{distribution[role] || 0}%</span>
               </div>
-              <Slider value={[distribution[role] || 0]} onValueChange={([v]) => onChange(role, v)} min={0} max={50} step={1} className="h-3" />
+              <PercentStepper value={distribution[role] || 0} onChange={(v) => onChange(role, v)} min={0} max={50} />
             </div>
           );
         })}
@@ -855,9 +1133,17 @@ function ProjectDetail({
     (employees || []).forEach((e: any) => { if (e?.id) m[e.id] = e; });
     return m;
   }, [employees]);
+  const sortedEmployees = useMemo(
+    () => [...(employees || [])]
+      .filter((employee: any) => employee?.id)
+      .sort((a: any, b: any) => employeeLabel(a).localeCompare(employeeLabel(b), 'ru')),
+    [employees],
+  );
   const empName = (uid: string, fb?: string) => empMap[uid]?.name || fb || '—';
 
   const [adjustDraft, setAdjustDraft] = useState<Record<string, string>>({});
+  const [newMemberId, setNewMemberId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('assistant_1');
   const [busy, setBusy] = useState(false);
 
   const approveAll = async () => {
@@ -869,6 +1155,17 @@ function ProjectDetail({
         overheadPercent: eff.overheadPercent,
         distribution: eff.distribution,
       });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addTeamRole = async () => {
+    if (!actions?.addTeamRole || !newMemberId || !newMemberRole) return;
+    setBusy(true);
+    try {
+      await actions.addTeamRole(row.id, newMemberId, newMemberRole);
+      setNewMemberId('');
     } finally {
       setBusy(false);
     }
@@ -949,6 +1246,43 @@ function ProjectDetail({
       </div>
 
       {/* Members with actions */}
+      {actions?.addTeamRole && (
+        <div className="p-3 rounded-lg bg-background/60 border border-border space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <Label className="text-xs font-semibold">Добавить человека в проектную роль</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Должность сотрудника не ограничивает роль в этом проекте.
+              </p>
+            </div>
+            <Button size="sm" className="h-8 text-xs" onClick={addTeamRole} disabled={busy || !newMemberId || !newMemberRole}>
+              Добавить
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,1fr)_minmax(180px,260px)] gap-2">
+            <EmployeeSearchSelect
+              employees={sortedEmployees}
+              value={newMemberId}
+              onChange={setNewMemberId}
+              placeholder={`Найти сотрудника (${sortedEmployees.length})`}
+              className="w-full text-sm"
+            />
+            <Select value={newMemberRole} onValueChange={setNewMemberRole}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROJECT_ROLES.map((role) => (
+                  <SelectItem key={role.role} value={role.role}>
+                    {role.label} ({role.bonusPercent}%)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {row.members.length === 0 ? (
           <div className="col-span-2 p-4 text-center text-xs text-muted-foreground rounded-lg border border-dashed">
@@ -969,7 +1303,7 @@ function ProjectDetail({
               } finally { setBusy(false); }
             };
             return (
-              <div key={m.userId} className="p-3 rounded-lg border border-border bg-background/60">
+              <div key={`${m.userId}-${m.role}`} className="p-3 rounded-lg border border-border bg-background/60">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{empName(m.userId, m.userName)}</div>
@@ -1017,6 +1351,17 @@ function ProjectDetail({
                         disabled={busy}
                       >
                         {m.hiddenFromEmployee ? <><EyeOff className="w-3 h-3" /> скрыт</> : <><Eye className="w-3 h-3" /> виден</>}
+                      </Button>
+                    )}
+                    {actions.removeTeamRole && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-red-600 hover:text-red-700"
+                        onClick={() => actions.removeTeamRole!(row.id, m.userId, m.role)}
+                        disabled={busy}
+                      >
+                        Убрать роль
                       </Button>
                     )}
                   </div>

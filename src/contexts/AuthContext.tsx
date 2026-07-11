@@ -3,7 +3,7 @@ import { UserRole, hasPermission, normalizeUserRole } from '@/types/roles';
 import { supabase } from '@/integrations/supabase/client';
 import { getUserAllowedCompanyIds } from '@/lib/userCompanyAccess';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
@@ -17,16 +17,22 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  originalUser: User | null;
+  isImpersonating: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  startImpersonation: (targetUser: User) => Promise<boolean>;
+  stopImpersonation: () => Promise<void>;
   isLoading: boolean;
   checkPermission: (permission: string) => boolean;
   hasRole: (role: UserRole) => boolean;
-  hasAnyRole: (roles: UserRole[]) => boolean;
+  hasAnyRole: (roles: readonly UserRole[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const USER_STORAGE_KEY = 'user';
+const ORIGINAL_USER_STORAGE_KEY = 'rb_original_user';
 
 // Обогащает пользователя данными о доступе к компаниям из Supabase
 async function enrichUserWithAccess(user: User): Promise<User> {
@@ -43,11 +49,22 @@ function normalizeAuthUser(user: User): User {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [originalUser, setOriginalUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Проверка сохраненной сессии
-    const savedUser = localStorage.getItem('user');
+    const savedOriginalUser = localStorage.getItem(ORIGINAL_USER_STORAGE_KEY);
+    if (savedOriginalUser) {
+      try {
+        setOriginalUser(normalizeAuthUser(JSON.parse(savedOriginalUser)));
+      } catch (error) {
+        console.error('Error parsing original user:', error);
+        localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
+      }
+    }
+
+    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
     if (savedUser) {
       try {
         const parsed = normalizeAuthUser(JSON.parse(savedUser));
@@ -58,7 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
       } catch (error) {
         console.error('Error parsing saved user:', error);
-        localStorage.removeItem('user');
+        localStorage.removeItem(USER_STORAGE_KEY);
         setIsLoading(false);
       }
     } else {
@@ -88,8 +105,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
 
-      // Проверяем пароль если он установлен в БД
-      if ((employeeData as any).password && (employeeData as any).password !== password) {
+      const legacyPassword = (employeeData as any).password as string | null | undefined;
+
+      // Проверяем пароль, если он установлен в БД.
+      if (legacyPassword && legacyPassword !== password) {
         console.error('❌ Wrong password for:', employeeData.email);
         return false;
       }
@@ -104,6 +123,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       if (signInError) {
         console.warn('⚠️ Supabase Auth session was not created for employee login:', signInError.message);
+        if (!legacyPassword) {
+          return false;
+        }
       }
 
       console.log('✅ Employee found:', employeeData.name);
@@ -128,7 +150,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const enriched = await enrichUserWithAccess(user);
       setUser(enriched);
-      localStorage.setItem('user', JSON.stringify(user));
+      setOriginalUser(null);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
       return true;
     } catch (error) {
       console.error('❌ Database error:', error);
@@ -139,7 +163,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    setOriginalUser(null);
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
     void supabase.auth.signOut();
   };
 
@@ -153,7 +179,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(updated);
     // Сохраняем базовые поля (без allowedCompanyIds — они берутся из Supabase)
     const { allowedCompanyIds: _, ...baseUser } = updated;
-    localStorage.setItem('user', JSON.stringify(baseUser));
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(baseUser));
+  };
+
+  const startImpersonation = async (targetUser: User): Promise<boolean> => {
+    const adminUser = originalUser || user;
+    if (!adminUser || adminUser.role !== 'admin') {
+      return false;
+    }
+
+    const normalizedTarget = normalizeAuthUser(targetUser);
+    const enrichedTarget = await enrichUserWithAccess(normalizedTarget);
+    const baseAdmin = normalizeAuthUser(adminUser);
+    const { allowedCompanyIds: _targetAllowed, ...targetBase } = enrichedTarget;
+    const { allowedCompanyIds: _adminAllowed, ...adminBase } = baseAdmin;
+
+    setOriginalUser(baseAdmin);
+    setUser(enrichedTarget);
+    localStorage.setItem(ORIGINAL_USER_STORAGE_KEY, JSON.stringify(adminBase));
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(targetBase));
+    return true;
+  };
+
+  const stopImpersonation = async (): Promise<void> => {
+    if (!originalUser) return;
+    const restored = await enrichUserWithAccess(originalUser);
+    const { allowedCompanyIds: _, ...baseUser } = restored;
+    setUser(restored);
+    setOriginalUser(null);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(baseUser));
+    localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
   };
 
   const checkPermission = (permission: string): boolean => {
@@ -170,12 +225,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return user?.role === role;
   };
 
-  const hasAnyRole = (roles: UserRole[]): boolean => {
+  const hasAnyRole = (roles: readonly UserRole[]): boolean => {
     return user ? roles.includes(user.role) : false;
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, checkPermission, hasRole, hasAnyRole }}>
+    <AuthContext.Provider value={{
+      user,
+      originalUser,
+      isImpersonating: !!originalUser,
+      login,
+      logout,
+      updateUser,
+      startImpersonation,
+      stopImpersonation,
+      isLoading,
+      checkPermission,
+      hasRole,
+      hasAnyRole
+    }}>
       {children}
     </AuthContext.Provider>
   );

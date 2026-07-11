@@ -60,6 +60,29 @@ import type { AuditPeriod } from "@/lib/auditPeriods";
 import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { useMemo } from "react";
 import { getProjectStatusLabel, isTaskDoneStatus } from "@/lib/projectWorkflow";
+import {
+  buildContractUpdate,
+  projectContract as readProjectContract,
+  projectDeadline as readProjectDeadline,
+  projectFiles as readProjectFiles,
+  projectFinances as readProjectFinances,
+  projectStartDate as readProjectStartDate,
+} from "@/lib/contractData";
+
+const mapProjectAmendmentRecord = (record: any): ProjectAmendment => ({
+  id: String(record.id || `amend_${Date.now()}`),
+  projectId: String(record.project_id || record.projectId || ''),
+  number: String(record.number || ''),
+  date: String(record.date || ''),
+  description: String(record.description || ''),
+  fileUrl: record.file_url || record.fileUrl || undefined,
+  createdBy: String(record.created_by || record.createdBy || 'system'),
+  createdAt: String(record.created_at || record.createdAt || new Date().toISOString()),
+});
+
+const projectFileKey = (file: any): string => (
+  file?.id || file?.storagePath || file?.publicUrl || file?.url || file?.fileName || file?.name || ''
+);
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -128,6 +151,11 @@ export default function ProjectWorkspace() {
   const canApproveCompletion = (isPartner || isAdmin) && isReadyToComplete;
   // Директор/зам видят только общую информацию, без деталей методологии
   const showFullDetails = !isDirector;
+  const normalizedContract = useMemo(() => readProjectContract(project), [project]);
+  const normalizedFiles = useMemo(() => readProjectFiles(project), [project]);
+  const normalizedFinances = useMemo(() => readProjectFinances(project), [project]);
+  const normalizedStartDate = useMemo(() => readProjectStartDate(project), [project]);
+  const normalizedDeadline = useMemo(() => readProjectDeadline(project), [project]);
 
   // Хук для синхронизации с Supabase (работает ТОЛЬКО если id существует)
   const { loadProjectData, saveProjectData: syncSaveProjectData, syncStatus, forceSync } =
@@ -205,11 +233,28 @@ export default function ProjectWorkspace() {
 
   // Загрузка дополнительных соглашений из JSON проекта
   useEffect(() => {
-    if (project) {
-      const contractAmendments = project?.contract?.amendments || project?.notes?.contract?.amendments || [];
-      setAmendments(contractAmendments);
-    }
-  }, [project?.contract?.amendments, project?.notes?.contract?.amendments]);
+    if (!project) return;
+
+    let cancelled = false;
+    const fallbackAmendments = project?.contract?.amendments || project?.notes?.contract?.amendments || [];
+    const projectId = project.id || id;
+
+    setAmendments(fallbackAmendments);
+
+    if (!projectId) return;
+    supabaseDataStore.getProjectAmendments(projectId)
+      .then((rows) => {
+        if (cancelled) return;
+        if (rows.length > 0) {
+          setAmendments(rows.map(mapProjectAmendmentRecord));
+        }
+      })
+      .catch((error) => {
+        console.warn('Could not load project amendments table:', error);
+      });
+
+    return () => { cancelled = true; };
+  }, [project?.id, id, project?.contract?.amendments, project?.notes?.contract?.amendments]);
 
   // Прямая подгрузка проекта по id из Supabase — параллельно с useProjects.
   // Раньше: useProjects (из старого useDataStore) мог возвращать пустой
@@ -362,7 +407,7 @@ export default function ProjectWorkspace() {
           <div className="min-w-0 flex-1">
             <h1 className="text-base sm:text-xl font-bold truncate max-w-full" title={project.name || project.client?.name || 'Проект'}>{project.name || project.client?.name || 'Проект'}</h1>
             <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              {project.contract?.subject || project.notes?.contract?.subject || 'Проект'}
+              {normalizedContract?.subject || project.contract?.subject || project.notes?.contract?.subject || 'Проект'}
               {projectTasks.length > 0 && ` • ${projectTasks.length} задач`}
             </p>
           </div>
@@ -520,8 +565,8 @@ export default function ProjectWorkspace() {
                 </div>
                 {(() => {
                   let daysTotal = 0, daysPassed = 0, daysRemaining = 0, timeProgress = 0;
-                  const endStr = project.contract?.serviceEndDate || project.deadline;
-                  const startStr = project.createdAt;
+                  const endStr = normalizedDeadline || project.contract?.serviceEndDate || project.deadline;
+                  const startStr = normalizedStartDate || project.createdAt;
 
                   if (startStr && endStr) {
                     const start = new Date(startStr).getTime();
@@ -621,7 +666,7 @@ export default function ProjectWorkspace() {
 
               {/* Финансовая сводка */}
               {((project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || '')) ||
-                !project.financialVisibility || (project.finances && (isPartner || isDirector || isAdmin || isPM))) ? (
+                !project.financialVisibility || ((normalizedFinances?.amountWithoutVAT > 0 || project.finances) && (isPartner || isDirector || isAdmin || isPM))) ? (
                 <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-muted/30 border-border">
                   <div className="col-span-full flex items-center gap-2 mb-2">
                     <DollarSign className="w-6 h-6 text-green-600" />
@@ -631,14 +676,14 @@ export default function ProjectWorkspace() {
                   <div className="bg-card p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
                     <p className="text-2xl font-bold">
-                      {project.finances?.amountWithoutVAT ? Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
+                      {normalizedFinances?.amountWithoutVAT ? Number(normalizedFinances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
                     </p>
                   </div>
 
                   <div className="bg-card p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">База бонусов</p>
                     <p className="text-2xl font-bold">
-                      {project.finances?.bonusBase ? Number(project.finances.bonusBase).toLocaleString('ru-RU') : '0'} ₸
+                      {normalizedFinances?.bonusBase ? Number(normalizedFinances.bonusBase).toLocaleString('ru-RU') : '0'} ₸
                     </p>
                   </div>
 
@@ -646,7 +691,7 @@ export default function ProjectWorkspace() {
                     <div className="bg-card p-4 rounded-lg border border-green-500/20">
                       <p className="text-xs text-green-700 font-medium uppercase tracking-wider mb-1">Общие бонусы</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {project.finances?.totalBonusAmount ? Number(project.finances.totalBonusAmount).toLocaleString('ru-RU') : '0'} ₸
+                        {normalizedFinances?.totalBonusAmount ? Number(normalizedFinances.totalBonusAmount).toLocaleString('ru-RU') : '0'} ₸
                       </p>
                     </div>
                   )}
@@ -655,12 +700,12 @@ export default function ProjectWorkspace() {
                     <div className="bg-card p-4 rounded-lg border border-blue-500/20">
                       <p className="text-xs text-blue-700 font-medium uppercase tracking-wider mb-1">Валовая прибыль</p>
                       <p className="text-2xl font-bold text-blue-600">
-                        {project.finances?.grossProfit ? Number(project.finances.grossProfit).toLocaleString('ru-RU') : '0'} ₸
+                        {normalizedFinances?.grossProfit ? Number(normalizedFinances.grossProfit).toLocaleString('ru-RU') : '0'} ₸
                       </p>
                     </div>
                   )}
                 </Card>
-              ) : project.finances ? (
+              ) : (normalizedFinances?.amountWithoutVAT > 0 || project.finances) ? (
                 <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 border-border">
                   <div className="col-span-full flex items-center gap-2 mb-2">
                     <DollarSign className="w-6 h-6 text-muted-foreground" />
@@ -670,7 +715,7 @@ export default function ProjectWorkspace() {
                   <div className="bg-card p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
                     <p className="text-2xl font-bold">
-                      {project.finances?.amountWithoutVAT ? Number(project.finances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
+                      {normalizedFinances?.amountWithoutVAT ? Number(normalizedFinances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
                     </p>
                   </div>
                   <div className="bg-card p-4 rounded-lg border border-border flex items-center justify-center">
@@ -704,10 +749,23 @@ export default function ProjectWorkspace() {
           <ProjectFileManager
             projectId={project?.id || id || ''}
             uploadedBy={user?.id || ''}
-            initialFiles={project?.notes?.files || []}
+            initialFiles={normalizedFiles}
+            canUpload={isProcurementOrAdmin}
             canDelete={() => isProcurementOrAdmin}
             onFilesChange={(files) => {
-              // Можно обновить состояние если нужно
+              setProject((current: any) => {
+                if (!current) return current;
+                const currentKeys = (current.notes?.files || []).map(projectFileKey).join('|');
+                const nextKeys = (files || []).map(projectFileKey).join('|');
+                if (currentKeys === nextKeys) return current;
+                return {
+                  ...current,
+                  notes: {
+                    ...(current.notes || {}),
+                    files,
+                  },
+                };
+              });
             }}
           />
         </TabsContent>
@@ -716,47 +774,31 @@ export default function ProjectWorkspace() {
         <TabsContent value="contract" className="space-y-4 mt-4">
           <ContractEditor
             projectId={project?.id || id || ''}
-            contract={project?.contract || project?.notes?.contract || null}
+            contract={normalizedContract}
             amendments={amendments}
             projectType={project?.type || project?.notes?.type || ''}
             companyId={project?.companyId || project?.notes?.companyId || ''}
             companyName={project?.companyName || project?.notes?.companyName || ''}
-            projectFiles={project?.notes?.files || []}
-            onContractUpdate={async (updatedContract) => {
+            projectFiles={normalizedFiles}
+            onContractUpdate={async (updatedContract, uploadedFiles = []) => {
               if (project) {
-                const newAmount = updatedContract.amountWithoutVAT || 0;
-                const newVat = updatedContract.vatRate || 0;
-                const newVatAmount = newAmount * (newVat / 100);
-                const newFinances = {
-                  ...(project.notes?.finances || {}),
-                  amountWithoutVAT: newAmount,
-                  vatRate: newVat,
-                  vatAmount: newVatAmount,
-                  amountWithVAT: newAmount + newVatAmount,
-                  currency: updatedContract.currency || 'KZT',
-                };
+                const contractUpdate = buildContractUpdate(project, updatedContract, uploadedFiles);
 
                 // Обновляем ВСЕ поля локального состояния сразу
                 setProject({
                   ...project,
-                  contract: updatedContract,
-                  amountWithoutVAT: newAmount,
-                  finances: newFinances,
-                  notes: {
-                    ...(project.notes || {}),
-                    contract: updatedContract,
-                    finances: newFinances,
-                    amountWithoutVAT: newAmount,
-                  },
+                  ...contractUpdate,
                 });
 
                 // Сохраняем в Supabase
                 try {
-                  await supabaseDataStore.updateProject(project.id || id, {
-                    contract: updatedContract,
-                    finances: newFinances,
-                    amountWithoutVAT: newAmount,
+                  const savedProject = await supabaseDataStore.updateProject(project.id || id, {
+                    contract: contractUpdate.contract,
+                    finances: contractUpdate.finances,
+                    amountWithoutVAT: contractUpdate.amountWithoutVAT,
+                    files: contractUpdate.files,
                   });
+                  if (savedProject) setProject(savedProject as any);
                   toast({
                     title: '✅ Договор обновлён',
                     description: 'Изменения сохранены',
@@ -773,13 +815,21 @@ export default function ProjectWorkspace() {
             }}
             onProjectSettingsUpdate={async (settings) => {
               if (project) {
-                const updatedProject = {
-                  ...project,
-                  ...(settings.type && { type: settings.type }),
-                  ...(settings.companyId && { companyId: settings.companyId }),
-                  ...(settings.companyName && { companyName: settings.companyName }),
-                };
-                setProject(updatedProject);
+                setProject((current: any) => {
+                  const source = current || project;
+                  return {
+                    ...source,
+                    ...(settings.type && { type: settings.type }),
+                    ...(settings.companyId && { companyId: settings.companyId }),
+                    ...(settings.companyName && { companyName: settings.companyName }),
+                    notes: {
+                      ...(source?.notes || {}),
+                      ...(settings.type && { type: settings.type }),
+                      ...(settings.companyId && { companyId: settings.companyId }),
+                      ...(settings.companyName && { companyName: settings.companyName }),
+                    },
+                  };
+                });
 
                 try {
                   await supabaseDataStore.updateProject(project.id || id, {
@@ -793,65 +843,63 @@ export default function ProjectWorkspace() {
               }
             }}
             onAmendmentAdd={async (amendment) => {
-              const newAmendments = [amendment, ...amendments];
-              setAmendments(newAmendments);
-
-              // Сохраняем в JSON проекта
-              if (project) {
-                const currentContract = project.contract || project.notes?.contract || {};
-                const updatedContract = {
-                  ...currentContract,
-                  amendments: newAmendments,
-                };
-                const updatedProject = {
-                  ...project,
-                  contract: updatedContract,
-                  notes: { ...(project.notes || {}), contract: updatedContract },
-                };
-                setProject(updatedProject);
-
-                try {
-                  await supabaseDataStore.updateProject(project.id || id, {
-                    contract: updatedContract,
-                  });
-                  toast({
-                    title: '✅ Доп. соглашение сохранено',
-                  });
-                } catch (error) {
-                  console.error('Error saving amendment:', error);
-                  toast({
-                    title: '❌ Ошибка',
-                    description: 'Не удалось сохранить доп. соглашение',
-                    variant: 'destructive',
-                  });
-                }
-              }
+              if (!project) return;
+              const saved = await supabaseDataStore.createProjectAmendment(
+                project.id || id,
+                {
+                  number: amendment.number,
+                  date: amendment.date,
+                  description: amendment.description,
+                  fileUrl: amendment.fileUrl,
+                },
+                String((user as any)?.id || user?.email || 'system')
+              );
+              const savedAmendment = mapProjectAmendmentRecord(saved);
+              const nextAmendments = [
+                savedAmendment,
+                ...amendments.filter((item) => item.id !== savedAmendment.id),
+              ];
+              const nextContract = {
+                ...(project.contract || project.notes?.contract || {}),
+                amendments: nextAmendments,
+              };
+              setAmendments(nextAmendments);
+              setProject((current: any) => current ? ({
+                ...current,
+                contract: nextContract,
+                notes: {
+                  ...(current.notes || {}),
+                  amendments: nextAmendments,
+                  contract: nextContract,
+                },
+              }) : current);
+              toast({
+                title: 'Доп. соглашение сохранено',
+              });
             }}
             onAmendmentDelete={async (amendmentId) => {
-              const newAmendments = amendments.filter(a => a.id !== amendmentId);
-              setAmendments(newAmendments);
-
-              // Сохраняем в JSON проекта
+              await supabaseDataStore.deleteProjectAmendment(amendmentId);
+              const nextAmendments = amendments.filter(a => a.id !== amendmentId);
+              setAmendments(nextAmendments);
               if (project) {
-                const currentContract = project.contract || project.notes?.contract || {};
-                const updatedContract = {
-                  ...currentContract,
-                  amendments: newAmendments,
+                const nextContract = {
+                  ...(project.contract || project.notes?.contract || {}),
+                  amendments: nextAmendments,
                 };
-                const updatedProject = {
-                  ...project,
-                  contract: updatedContract,
-                  notes: { ...(project.notes || {}), contract: updatedContract },
-                };
-                setProject(updatedProject);
-
-                try {
-                  await supabaseDataStore.updateProject(project.id || id, {
-                    contract: updatedContract,
-                  });
-                } catch (error) {
-                  console.error('Error deleting amendment:', error);
-                }
+                await supabaseDataStore.updateProject(project.id || id, {
+                  ...(project.notes || {}),
+                  amendments: nextAmendments,
+                  contract: nextContract,
+                });
+                setProject((current: any) => current ? ({
+                  ...current,
+                  contract: nextContract,
+                  notes: {
+                    ...(current.notes || {}),
+                    amendments: nextAmendments,
+                    contract: nextContract,
+                  },
+                }) : current);
               }
             }}
             canEdit={isProcurementOrAdmin}
@@ -1315,5 +1363,3 @@ export default function ProjectWorkspace() {
     </div>
   );
 }
-
-

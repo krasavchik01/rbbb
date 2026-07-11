@@ -84,10 +84,11 @@ const Register = () => {
     setIsLoading(true);
 
     try {
+      const normalizedEmail = formData.email.trim().toLowerCase();
       const { data: existingUser } = await supabase
         .from('employees')
         .select('id')
-        .eq('email', formData.email.trim().toLowerCase())
+        .eq('email', normalizedEmail)
         .maybeSingle();
 
       if (existingUser) {
@@ -99,11 +100,30 @@ const Register = () => {
       const level = getLevelForUserRole(formData.role as UserRole);
       const dbRole = getDbRoleForUserRole(formData.role as UserRole) as DbAppRole;
 
+      const { error: authError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name.trim(),
+            role: formData.role,
+          },
+        },
+      });
+
+      if (authError && !authError.message.toLowerCase().includes('already')) {
+        console.error('Auth registration error:', authError);
+        setError('Не удалось создать учетную запись для входа. Попробуйте позже.');
+        setIsLoading(false);
+        return;
+      }
+
       const { error: insertError } = await supabase
         .from('employees')
         .insert({
           name: formData.name.trim(),
-          email: formData.email.trim().toLowerCase(),
+          email: normalizedEmail,
+          password: formData.password,
           role: dbRole,
           level: level as DbEmployeeLevel,
           whatsapp: formData.phone || null,

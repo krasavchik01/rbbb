@@ -1,0 +1,96 @@
+{
+  "startedAt": "2026-07-01T09:41:40.736Z",
+  "mode": "dry-run",
+  "deleteSource": false,
+  "onlyProjectId": "",
+  "limit": 0,
+  "totals": {
+    "projectsScanned": 1020,
+    "projectsWithCandidates": 2,
+    "candidates": 10,
+    "migrated": 0,
+    "skipped": 10,
+    "errors": 0
+  },
+  "projects": [
+    {
+      "projectId": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3",
+      "projectName": "ТОО Жизнь высокого уровня  - услуги по проведению маркетингового исследование ",
+      "candidates": 4,
+      "migrated": [],
+      "skipped": [
+        {
+          "reason": "dry-run",
+          "fileName": "Договор (старая версия)",
+          "bucket": "contracts",
+          "storagePath": "https://mknvqsnitzaurpwnhzwn.supabase.co/storage/v1/object/public/contracts/32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782733577834-v66s0q-file.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Договор орг .PDF",
+          "bucket": "contracts",
+          "storagePath": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782733577834-v66s0q-file.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Допик 1.pdf",
+          "bucket": "contracts",
+          "storagePath": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782733630868-sx4oav-1.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Contract scan",
+          "bucket": "contracts",
+          "storagePath": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782733630868-sx4oav-1.pdf"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "projectId": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8",
+      "projectName": "ТОО «BI Property»",
+      "candidates": 6,
+      "migrated": [],
+      "skipped": [
+        {
+          "reason": "dry-run",
+          "fileName": "Договор (старая версия)",
+          "bucket": "contracts",
+          "storagePath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733259831-sjmhpv-002.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Проект договора аудит (002). бс.pdf",
+          "bucket": "contracts",
+          "storagePath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733259831-sjmhpv-002.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Проект договора аудит (002)..pdf",
+          "bucket": "contracts",
+          "storagePath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733265112-1901ej-002.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Допик №1.pdf",
+          "bucket": "contracts",
+          "storagePath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733416804-yciptw-No1.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Contract scan",
+          "bucket": "contracts",
+          "storagePath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733259831-sjmhpv-002.pdf"
+        },
+        {
+          "reason": "dry-run",
+          "fileName": "Original contract",
+          "bucket": "contracts",
+          "storagePath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733265112-1901ej-002.pdf"
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "finishedAt": "2026-07-01T09:41:40.752Z"
+}

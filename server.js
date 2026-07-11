@@ -19,8 +19,8 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // In-memory storage removed (Migrated to Supabase)
 
-const FILE_UPLOAD_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
-const FILE_DELETE_ROLES = ['admin', 'ceo', 'deputy_director', 'procurement', 'manager'];
+const FILE_UPLOAD_ROLES = ['admin', 'ceo', 'deputy_director', 'company_director', 'procurement'];
+const FILE_DELETE_ROLES = ['admin', 'ceo', 'deputy_director', 'company_director', 'procurement'];
 
 const isStrictJwtMode = () => process.env.REQUIRE_SUPABASE_JWT === 'true';
 
@@ -32,9 +32,18 @@ const getBearerToken = (req) => {
 
 const normalizeJwtRole = (role) => typeof role === 'string' ? role.trim() : '';
 
+const decodeLegacyHeader = (value) => {
+  if (typeof value !== 'string') return '';
+  try {
+    return decodeURIComponent(value).trim();
+  } catch {
+    return value.trim();
+  }
+};
+
 const getLegacyUserFromHeaders = (req) => {
   const id = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'].trim() : '';
-  const name = typeof req.headers['x-user-name'] === 'string' ? req.headers['x-user-name'].trim() : '';
+  const name = decodeLegacyHeader(req.headers['x-user-name']);
   const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].trim() : '';
 
   return {

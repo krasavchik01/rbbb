@@ -11,8 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Upload, Plus, Trash2, FileText, Building2, User, Calendar, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Company, DEFAULT_COMPANIES } from "@/types/companies";
+import { getAppSettings } from "@/lib/appSettings";
+import { Company, findCompanyByAnyValue, getActiveCompanies, normalizeCompanies } from "@/types/companies";
 import { PROJECT_TYPE_LABELS, ProjectType, ClientInfo, ContractInfo, ProjectStage, AdditionalService } from "@/types/project-v3";
 import { notifyProjectCreated } from "@/lib/projectNotifications";
 import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
@@ -90,34 +90,28 @@ export default function CreateProjectProcurement() {
   
   const [projectFiles, setProjectFiles] = useState<File[]>([]);
 
-  // Загружаем компании напрямую из Supabase
-  const [companies, setCompanies] = useState<Company[]>(DEFAULT_COMPANIES.filter(c => c.isActive));
+  // Единый каталог наших компаний: настройки админа + обязательная нормализация legacy-значений.
+  const [companies, setCompanies] = useState<Company[]>(() => getActiveCompanies());
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadCompanies = async () => {
       try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('companies')
-          .limit(1)
-          .single();
-
-        if (error) {
-          console.error('Ошибка загрузки компаний:', error);
-          return;
-        }
-
-        if (data?.companies && Array.isArray(data.companies)) {
-          console.log('Загружены компании из Supabase:', data.companies);
-          const activeCompanies = data.companies.filter((c: Company) => c.isActive);
-          setCompanies(activeCompanies);
-        }
+        const settings = await getAppSettings();
+        const activeCompanies = normalizeCompanies(settings.companies).filter((company) => company.isActive);
+        if (!cancelled) setCompanies(activeCompanies.length > 0 ? activeCompanies : getActiveCompanies());
       } catch (err) {
         console.error('Ошибка при загрузке компаний:', err);
+        if (!cancelled) setCompanies(getActiveCompanies());
       }
     };
 
     loadCompanies();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const addContact = () => {
@@ -199,6 +193,28 @@ export default function CreateProjectProcurement() {
     return (totalSize / (1024 * 1024)).toFixed(1);
   };
 
+  const dedupeFiles = (files: File[]): File[] => {
+    const seen = new Set<string>();
+    return files.filter((file) => {
+      const key = `${file.name}|${file.size}|${file.lastModified}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const projectFileCategory = (file: File): 'contract' | 'document' => {
+    const name = file.name.toLowerCase();
+    return name.includes('договор') ||
+      name.includes('contract') ||
+      name.includes('agreement') ||
+      name.includes('допник') ||
+      name.includes('доп') ||
+      name.includes('дс')
+      ? 'contract'
+      : 'document';
+  };
+
   const validateForm = (): boolean => {
     if (!clientName.trim()) {
       toast({ title: "Ошибка", description: "Укажите наименование клиента", variant: "destructive" });
@@ -268,6 +284,7 @@ export default function CreateProjectProcurement() {
 
     const amountValue = parseFloat(amountWithoutVAT) || 0;
     const vatRateValue = parseFloat(vatRate) || 0;
+    const selectedCompany = findCompanyByAnyValue(companyId, companies);
 
     // Создаём объект проекта
     const project = {
@@ -277,11 +294,11 @@ export default function CreateProjectProcurement() {
       
       // Консорциум или обычная компания
       isConsortium: isConsortium,
-      companyId: isConsortium ? undefined : companyId,
-      companyName: isConsortium ? "Консорциум" : (companies.find(c => c.id === companyId)?.name || ""),
+      companyId: isConsortium ? undefined : selectedCompany?.id || companyId,
+      companyName: isConsortium ? "Консорциум" : (selectedCompany?.name || ""),
       consortiumMembers: isConsortium ? consortiumMembers.map(m => ({
-        companyId: m.companyId,
-        companyName: companies.find(c => c.id === m.companyId)?.name || "",
+        companyId: findCompanyByAnyValue(m.companyId, companies)?.id || m.companyId,
+        companyName: findCompanyByAnyValue(m.companyId, companies)?.name || "",
         sharePercentage: m.sharePercentage,
         shareAmount: (amountValue * m.sharePercentage) / 100,
       })) : undefined,
@@ -345,8 +362,8 @@ export default function CreateProjectProcurement() {
         
         // Для консорциума - разбивка по компаниям
         consortiumFinances: isConsortium ? consortiumMembers.map(m => ({
-          companyId: m.companyId,
-          companyName: companies.find(c => c.id === m.companyId)?.name || "",
+          companyId: findCompanyByAnyValue(m.companyId, companies)?.id || m.companyId,
+          companyName: findCompanyByAnyValue(m.companyId, companies)?.name || "",
           sharePercentage: m.sharePercentage,
           shareAmount: (amountValue * m.sharePercentage) / 100,
           bonusBase: ((amountValue * m.sharePercentage) / 100) * 0.7,
@@ -366,26 +383,29 @@ export default function CreateProjectProcurement() {
       // Сохраняем проект через новый dataStore (с Supabase интеграцией)
       console.log('💾 Сохраняем проект через supabaseDataStore...');
       const savedProject = await supabaseDataStore.createProject(project);
+      const savedProjectId = savedProject?.id || project.id;
       console.log('✅ Проект успешно сохранён:', {
-        id: project.id,
+        id: savedProjectId,
         name: project.name,
         status: project.status
       });
 
       // Загружаем файлы проекта (если есть)
-      const allFilesToUpload = [...contractFiles, ...projectFiles];
+      const allFilesToUpload = dedupeFiles([...contractFiles, ...projectFiles]);
+      const failedUploads: string[] = [];
       if (allFilesToUpload.length > 0) {
         console.log('📎 Загружаем файлы проекта...');
         for (const file of allFilesToUpload) {
           try {
             await supabaseDataStore.uploadProjectFile(
-              project.id,
+              savedProjectId,
               file,
-              file.name.toLowerCase().includes('договор') || file.name.toLowerCase().includes('contract') ? 'contract' : 'document',
+              projectFileCategory(file),
               user?.id || ""
             );
           } catch (fileError) {
             console.warn('⚠️ Не удалось загрузить файл:', file.name, fileError);
+            failedUploads.push(file.name);
             // Не блокируем создание проекта из-за ошибки загрузки файла
           }
         }
@@ -405,10 +425,18 @@ export default function CreateProjectProcurement() {
         console.warn('⚠️ Не удалось отправить уведомление зам. директору:', e);
       }
 
-      toast({
-        title: "✅ Проект создан!",
-        description: `Проект "${project.name}" отправлен на утверждение. Зам. директор получил уведомление.`,
-      });
+      if (failedUploads.length > 0) {
+        toast({
+          title: "Проект создан, но часть файлов не загрузилась",
+          description: `Не привязались файлы: ${failedUploads.join(', ')}`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "✅ Проект создан!",
+          description: `Проект "${project.name}" отправлен на утверждение. Зам. директор получил уведомление.`,
+        });
+      }
 
       navigate('/projects');
     } catch (error) {

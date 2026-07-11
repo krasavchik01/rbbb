@@ -1,16 +1,16 @@
-/**
- * Vercel Serverless Function для тестирования SMTP подключения
- * Путь: /api/test-smtp
- */
+import {
+  createEmailTransport,
+  getSupabaseAdmin,
+  loadEmailConfig,
+  normalizeEmailConfig,
+  parseBody,
+  requireAdmin,
+  sendMail,
+  setCors,
+} from './_email-utils.mjs';
 
-import nodemailer from 'nodemailer';
-
-export default async (req, res) => {
-  // Разрешаем CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+export default async function handler(req, res) {
+  setCors(res, 'POST,OPTIONS');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -18,47 +18,58 @@ export default async (req, res) => {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    const { config } = req.body;
+    const supabase = getSupabaseAdmin();
+    await requireAdmin(req, supabase);
 
-    if (!config || !config.host || !config.port || !config.user || !config.password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Заполните все обязательные поля' 
+    const body = parseBody(req);
+    const existing = await loadEmailConfig(supabase).catch(() => null);
+    const config = normalizeEmailConfig(body.config || body, existing);
+    const testRecipient = String(body.testRecipient || '').trim();
+
+    const transporter = createEmailTransport(config);
+    await transporter.verify();
+
+    let delivery = null;
+    if (testRecipient) {
+      delivery = await sendMail(config, {
+        to: testRecipient,
+        subject: 'SUITE-A: SMTP test',
+        text: 'SMTP подключение работает. Это тестовое письмо из настроек SUITE-A.',
+        html: '<p>SMTP подключение работает.</p><p>Это тестовое письмо из настроек SUITE-A.</p>',
       });
     }
 
-    // Создаем транспорт для тестирования
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      auth: {
-        user: config.user,
-        pass: config.password
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    const accepted = Array.isArray(delivery?.accepted) ? delivery.accepted.map(String) : [];
+    const rejected = Array.isArray(delivery?.rejected) ? delivery.rejected.map(String) : [];
 
-    // Проверяем подключение
-    await transporter.verify();
+    if (testRecipient && rejected.length) {
+      return res.status(502).json({
+        success: false,
+        message: `SMTP отклонил письмо для: ${rejected.join(', ')}`,
+        messageId: delivery?.messageId || '',
+        accepted,
+        rejected,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Подключение успешно! SMTP сервер доступен.'
+      message: testRecipient
+        ? `SMTP работает, письмо передано серверу на ${testRecipient}. Message ID: ${delivery?.messageId || 'нет'}`
+        : 'SMTP подключение успешно. Для проверки доставки укажите email получателя теста.',
+      messageId: delivery?.messageId || '',
+      accepted,
+      rejected,
     });
-
   } catch (error) {
     console.error('SMTP test error:', error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
-      message: `Ошибка подключения: ${error.message}`
+      message: `Ошибка SMTP: ${error.message}`,
     });
   }
-};
-
+}

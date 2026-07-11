@@ -1,10 +1,16 @@
-/**
- * Email Service - SMTP конфиг из Supabase, отправка через Vercel API
- */
+import { supabase } from '@/integrations/supabase/client';
 
-import { getAppSettings, saveAppSettings, type SMTPConfig } from './appSettings';
-
-export type { SMTPConfig };
+export interface SMTPConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  from: string;
+  fromName: string;
+  hasPassword?: boolean;
+  source?: 'database' | 'env';
+}
 
 export interface EmailTemplate {
   subject: string;
@@ -12,144 +18,176 @@ export interface EmailTemplate {
   text: string;
 }
 
-// API endpoint
 const getAPIBase = (): string => {
   try {
     if (typeof window !== 'undefined' && window.location?.origin) {
       return window.location.origin;
     }
-  } catch {}
+  } catch {
+    // Browser-only helper; keep server-side rendering safe.
+  }
   return '';
 };
 
-// Загрузка SMTP конфига из Supabase (через appSettings)
+const getPublicAppBase = (): string => {
+  const envUrl = String(import.meta.env.VITE_PUBLIC_APP_URL || import.meta.env.VITE_APP_URL || '').trim();
+  if (envUrl) return envUrl.replace(/\/+$/, '');
+
+  try {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      const origin = window.location.origin.replace(/\/+$/, '');
+      if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+        return origin;
+      }
+    }
+  } catch {
+    // Browser-only helper; keep server-side rendering safe.
+  }
+
+  return 'https://rbbb.vercel.app';
+};
+
+const getStoredUserId = (): string => {
+  try {
+    const saved = localStorage.getItem('user');
+    if (!saved) return '';
+    const user = JSON.parse(saved);
+    return String(user?.id || '');
+  } catch {
+    return '';
+  }
+};
+
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    // Legacy logins may not have a Supabase Auth session yet.
+  }
+
+  const userId = getStoredUserId();
+  if (userId) headers['X-Suite-User-Id'] = userId;
+
+  return headers;
+};
+
+async function readJSON(response: Response) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.message || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
 export const loadSMTPConfig = async (): Promise<SMTPConfig | null> => {
   try {
-    const settings = await getAppSettings();
-    return settings.smtp || null;
-  } catch (err) {
-    console.error('Error loading SMTP config:', err);
+    const response = await fetch(`${getAPIBase()}/api/email-settings`, {
+      method: 'GET',
+      headers: await getAuthHeaders(),
+    });
+    const payload = await readJSON(response);
+    return payload.config || null;
+  } catch (error) {
+    console.error('Error loading SMTP config:', error);
     return null;
   }
 };
 
-// Синхронная версия — из кеша (для быстрого доступа)
-let _cachedSmtp: SMTPConfig | null = null;
-export const loadSMTPConfigSync = (): SMTPConfig | null => {
-  // При первом вызове пробуем из localStorage как фоллбэк
-  if (!_cachedSmtp) {
-    try {
-      const saved = localStorage.getItem('rb_smtp_config');
-      if (saved) _cachedSmtp = JSON.parse(saved);
-    } catch {}
-  }
-  return _cachedSmtp;
+export const saveSMTPConfig = async (config: SMTPConfig): Promise<SMTPConfig | null> => {
+  const response = await fetch(`${getAPIBase()}/api/email-settings`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ config }),
+  });
+  const payload = await readJSON(response);
+  return payload.config || null;
 };
 
-// Сохранение SMTP конфига в Supabase
-export const saveSMTPConfig = async (config: SMTPConfig): Promise<void> => {
-  _cachedSmtp = config;
-  // Сохраняем и в localStorage как кеш, и в Supabase как основное хранилище
-  localStorage.setItem('rb_smtp_config', JSON.stringify(config));
-  await saveAppSettings({ smtp: config } as any);
+export const testSMTPConnection = async (
+  config: SMTPConfig,
+  testRecipient?: string
+): Promise<{ success: boolean; message: string }> => {
+  const response = await fetch(`${getAPIBase()}/api/test-smtp`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ config, testRecipient }),
+  });
+  return readJSON(response);
 };
 
-// Проверка подключения SMTP через API
-export const testSMTPConnection = async (config: SMTPConfig): Promise<{ success: boolean; message: string }> => {
-  try {
-    const response = await fetch(`${getAPIBase()}/api/test-smtp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config })
-    });
-    return await response.json();
-  } catch (error) {
-    return { success: false, message: `Ошибка подключения: ${error}` };
-  }
+export const requestPasswordResetEmail = async (
+  email: string
+): Promise<{ success: boolean; message: string }> => {
+  const appUrl = getPublicAppBase();
+  const response = await fetch(`${getAPIBase()}/api/request-password-reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      appUrl,
+      redirectTo: `${appUrl}/reset-password`,
+    }),
+  });
+  return readJSON(response);
 };
 
-// Шаблон приветственного письма
 export const getWelcomeEmailTemplate = (employeeName: string, email: string, password: string): EmailTemplate => ({
-  subject: 'Добро пожаловать в RB Partners!',
+  subject: 'Добро пожаловать в SUITE-A',
   html: `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-        .credentials { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
-        .credential-label { font-weight: bold; color: #667eea; }
-        .credential-value { font-family: monospace; background: #f3f4f6; padding: 8px 12px; border-radius: 4px; display: inline-block; margin-left: 10px; }
-        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
-        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Добро пожаловать!</h1>
-          <p>RB Partners Group</p>
-        </div>
-        <div class="content">
-          <h2>Здравствуйте, ${employeeName}!</h2>
-          <p>Ваш аккаунт в системе RB Partners создан.</p>
-          <div class="credentials">
-            <h3>Данные для входа:</h3>
-            <div style="margin:10px 0"><span class="credential-label">Email:</span> <span class="credential-value">${email}</span></div>
-            <div style="margin:10px 0"><span class="credential-label">Пароль:</span> <span class="credential-value">${password}</span></div>
-          </div>
-          <div class="warning">Пожалуйста, смените пароль при первом входе.</div>
-          <p>Ссылка для входа: <a href="${getAPIBase()}">${getAPIBase()}</a></p>
-          <div class="footer"><p>&copy; ${new Date().getFullYear()} RB Partners Group</p></div>
-        </div>
+    <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#111827;line-height:1.5">
+      <h2 style="margin:0 0 16px">Добро пожаловать в SUITE-A</h2>
+      <p>Здравствуйте, ${employeeName}.</p>
+      <p>Ваш аккаунт создан. Используйте эти данные для первого входа:</p>
+      <div style="background:#f3f4f6;border-radius:10px;padding:16px;margin:20px 0">
+        <p style="margin:0 0 8px"><strong>Email:</strong> ${email}</p>
+        <p style="margin:0"><strong>Пароль:</strong> ${password}</p>
       </div>
-    </body>
-    </html>
+      <p>После входа пароль можно сменить в настройках безопасности.</p>
+      <p><a href="${getPublicAppBase()}" style="color:#0284c7">Открыть SUITE-A</a></p>
+    </div>
   `,
-  text: `Здравствуйте, ${employeeName}!\n\nВаши данные для входа:\nEmail: ${email}\nПароль: ${password}\n\nСсылка: ${getAPIBase()}\n\nСмените пароль при первом входе.`
+  text: [
+    `Здравствуйте, ${employeeName}.`,
+    '',
+    'Ваш аккаунт создан.',
+    `Email: ${email}`,
+    `Пароль: ${password}`,
+    '',
+    `Вход: ${getPublicAppBase()}`,
+  ].join('\n'),
 });
 
-// Отправка email через Vercel API
 export const sendEmail = async (
   to: string,
-  template: EmailTemplate,
-  config?: SMTPConfig
+  template: EmailTemplate
 ): Promise<{ success: boolean; message: string }> => {
   try {
-    const smtpConfig = config || await loadSMTPConfig() || loadSMTPConfigSync();
-
-    if (!smtpConfig) {
-      return { success: false, message: 'SMTP не настроен. Настройте в Админке → SMTP Настройки.' };
-    }
-
     const response = await fetch(`${getAPIBase()}/api/send-email`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         to,
         subject: template.subject,
         html: template.html,
         text: template.text,
-        config: smtpConfig
-      })
+      }),
     });
 
-    return await response.json();
+    return readJSON(response);
   } catch (error) {
     console.error('Email send error:', error);
-    return { success: false, message: `Ошибка отправки: ${error}` };
+    return { success: false, message: `Ошибка отправки: ${error instanceof Error ? error.message : error}` };
   }
 };
 
-// Отправка приветственного письма
 export const sendWelcomeEmail = async (
   employeeName: string,
   email: string,
   password: string
 ): Promise<{ success: boolean; message: string }> => {
-  const template = getWelcomeEmailTemplate(employeeName, email, password);
-  return await sendEmail(email, template);
+  return sendEmail(email, getWelcomeEmailTemplate(employeeName, email, password));
 };

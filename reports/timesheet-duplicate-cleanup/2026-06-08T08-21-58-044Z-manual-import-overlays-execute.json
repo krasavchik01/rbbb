@@ -1,0 +1,53 @@
+{
+  "mode": "execute",
+  "createdAt": "2026-06-08T08:21:58.045Z",
+  "totalRows": 14702,
+  "candidateCount": 1,
+  "byDate": {
+    "2026-06-01": 1
+  },
+  "groups": [
+    {
+      "manualId": "79799b9c-1251-4625-a898-25532260ae65",
+      "manualKeyHash": "eeee4876564e3896",
+      "matchedImportIds": [
+        "141f2b75-6998-4589-b8e8-33faa04dde2c"
+      ],
+      "matchCount": 1,
+      "matchReason": "high_hour_import_overlay",
+      "employeeDayTotal": 17,
+      "workDate": "2026-06-01",
+      "hours": 8,
+      "manualStatus": "draft",
+      "manualSource": "manual"
+    }
+  ],
+  "deletedRowsBackup": [
+    {
+      "id": "79799b9c-1251-4625-a898-25532260ae65",
+      "employee_id": "a0e89029-c442-4f68-8067-da96cbc3b308",
+      "employee_name": "Қасымбек Тинай Асқарқызы",
+      "project_id": "68b792cf-5e4e-4438-ba4a-e6bc9a82345d",
+      "project_name": "TOO Crown Star  - услуг по проведению аудита комбинированной финансовой отчетности 8 компании (ТОО «Crown Star», ИП  «Мадина Оручева», ИП «Гульмамедов», ИП «МАНГО», ИП «Сулиева», ИП «Севастьянова», «H.N.S.» Turizm Insaat Elektronik Sanayi Ve Ticaret A.S. (Х.Н.С.» Туризм Иншаат Элетроник Санайи Ве Тиджарет Аноним Ширкети) и АО «H.N.S.» Turizm Insaat Elektronik Sanayi Ve Ticaret A.S.») за 2025 год, подготовленной в соответствии с международными стандартами финансовой отчетности (МСФО), согласно Техническому заданию к Договору, являющемуся неотъемлемой частью Договора",
+      "work_date": "2026-06-01",
+      "hours": 8,
+      "section": "Планирование — Оценка рисков",
+      "position": null,
+      "location": null,
+      "city": null,
+      "manager_raw": null,
+      "partner_raw": null,
+      "notes": "Работа над проектом",
+      "source": "manual",
+      "import_batch_id": null,
+      "status": "draft",
+      "reviewed_by": null,
+      "reviewed_by_name": null,
+      "reviewed_at": null,
+      "reviewer_notes": null,
+      "created_by": "a0e89029-c442-4f68-8067-da96cbc3b308",
+      "created_at": "2026-06-08T05:19:02.477771+00:00",
+      "updated_at": "2026-06-08T05:19:02.477771+00:00"
+    }
+  ]
+}

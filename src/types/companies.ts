@@ -1,24 +1,27 @@
 /**
- * Типы данных для структуры компаний группы
+ * Company catalog for "Наша компания".
+ * These records are the canonical values used in project creation, filtering,
+ * project access settings and legacy project normalization.
  */
 
 export interface Company {
   id: string;
   name: string;
   fullName: string;
-  inn: string; // ИИН/БИН
+  inn: string;
   address?: string;
   phone?: string;
   email?: string;
-  directorId?: string; // ID генерального директора (для HR)
-  directorName?: string; // ФИО генерального директора
-  parentCompanyId?: string; // ID родительской компании (для дочерних)
+  directorId?: string;
+  directorName?: string;
+  parentCompanyId?: string;
   isActive: boolean;
   created_at: string;
   updated_at: string;
 }
 
-// Дефолтный список компаний (используется как fallback и для инициализации)
+const now = () => new Date().toISOString();
+
 export const DEFAULT_COMPANIES: Company[] = [
   {
     id: 'mak',
@@ -26,83 +29,263 @@ export const DEFAULT_COMPANIES: Company[] = [
     fullName: 'Товарищество с ограниченной ответственностью "МАК"',
     inn: '000000000000',
     isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: now(),
+    updated_at: now(),
   },
   {
-    id: 'aplus',
-    name: 'A+Partners',
-    fullName: 'A+Partners Group',
-    inn: '000000000001',
-    isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'rb-academy',
-    name: 'RB Academy',
-    fullName: 'RB Academy',
-    inn: '000000000002',
-    parentCompanyId: 'aplus',
-    isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'rb-partners',
-    name: 'RB Partners',
-    fullName: 'RB Partners',
-    inn: '000000000003',
-    parentCompanyId: 'aplus',
-    isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'it-audit',
-    name: 'IT Audit',
+    id: 'rb-partners-it-audit',
+    name: 'ТОО RB Partners IT Audit',
     fullName: 'IT Audit',
     inn: '000000000004',
-    parentCompanyId: 'aplus',
     isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: now(),
+    updated_at: now(),
   },
   {
-    id: 'parkerrussell',
-    name: 'PARKERRUSSELL',
-    fullName: 'PARKERRUSSELL',
-    inn: '000000000005',
+    id: 'mkf',
+    name: 'ТОО МКФ',
+    fullName: 'ТОО МКФ',
+    inn: '1',
     isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: now(),
+    updated_at: now(),
   },
   {
-    id: 'andersonkz',
-    name: 'Andersonkz',
-    fullName: 'Andersonkz',
-    inn: '000000000006',
+    id: 'academy',
+    name: 'ТОО Academy',
+    fullName: 'ТОО Academy',
+    inn: '2',
     isActive: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'rusell',
+    name: 'ЧК Rusell',
+    fullName: 'ЧК Rusell',
+    inn: '3',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'anderson-qazaqstan',
+    name: 'ТОО Anderson Qazaqstan',
+    fullName: 'ТОО Anderson Qazaqstan',
+    inn: '5',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'anderson-consulting',
+    name: 'ТОО Anderson Consulting',
+    fullName: 'ТОО Anderson Consulting',
+    inn: '6',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'anderson-aifc-branch',
+    name: 'Филиал Branch of Anderson Qazaqstan LLP in the AIFC',
+    fullName: 'Филиал Branch of Anderson Qazaqstan LLP in the AIFC',
+    inn: '7',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'parker-kazakhstan',
+    name: 'ТОО Parker Казахстан',
+    fullName: 'ТОО Parker Казахстан',
+    inn: '9',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'parker-consulting-appraisal',
+    name: 'ТОО Parker Consulting & Appraisal',
+    fullName: 'ТОО Parker Consulting & Appraisal',
+    inn: '8',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: 'parker-kaz-ltd',
+    name: 'ЧК Parker KAZ Ltd',
+    fullName: 'ЧК Parker KAZ Ltd',
+    inn: '10',
+    isActive: true,
+    created_at: now(),
+    updated_at: now(),
   },
 ];
 
-// Совместимость: COMPANIES теперь ссылается на DEFAULT_COMPANIES
-// В будущем используйте getAppSettings().companies для получения актуального списка
+const COMPANY_ID_ALIASES: Record<string, string> = {
+  mak: 'mak',
+  too_mak: 'mak',
+  'тоо_мак': 'mak',
+  'тоомак': 'mak',
+
+  aplus: 'academy',
+  'a+partners': 'academy',
+  'a_partners': 'academy',
+  'rb-academy': 'academy',
+  rb_academy: 'academy',
+  'rb academy': 'academy',
+  academy: 'academy',
+  'тоо_academy': 'academy',
+
+  'rb-partners': 'rb-partners-it-audit',
+  rb_partners: 'rb-partners-it-audit',
+  'rb partners': 'rb-partners-it-audit',
+  'it-audit': 'rb-partners-it-audit',
+  it_audit: 'rb-partners-it-audit',
+  'it audit': 'rb-partners-it-audit',
+  'rb partners it audit': 'rb-partners-it-audit',
+  'тоо_rb_partners_it_audit': 'rb-partners-it-audit',
+
+  mkf: 'mkf',
+  'мкф': 'mkf',
+  'тоо_мкф': 'mkf',
+
+  russell: 'rusell',
+  rusell: 'rusell',
+  'чк_rusell': 'rusell',
+  'чк_russell': 'rusell',
+
+  andersonkz: 'anderson-qazaqstan',
+  anderson: 'anderson-qazaqstan',
+  'anderson kz': 'anderson-qazaqstan',
+  'anderson qazaqstan': 'anderson-qazaqstan',
+  'тоо_anderson_qazaqstan': 'anderson-qazaqstan',
+
+  'anderson-consulting': 'anderson-consulting',
+  'anderson consulting': 'anderson-consulting',
+  'anderson consulutung': 'anderson-consulting',
+  'anderson consulung': 'anderson-consulting',
+  'тоо_anderson_consulting': 'anderson-consulting',
+
+  'anderson-aifc-branch': 'anderson-aifc-branch',
+  'branch of anderson qazaqstan llp in the aifc': 'anderson-aifc-branch',
+  'филиал branch of anderson qazaqstan llp in the aifc': 'anderson-aifc-branch',
+
+  parkerrussell: 'parker-kaz-ltd',
+  'parker russell': 'parker-kaz-ltd',
+  'parker-kaz-ltd': 'parker-kaz-ltd',
+  'parker kaz ltd': 'parker-kaz-ltd',
+  'чк_parker_kaz_ltd': 'parker-kaz-ltd',
+
+  'parker-kazakhstan': 'parker-kazakhstan',
+  'parker kazakhstan': 'parker-kazakhstan',
+  'parker казахстан': 'parker-kazakhstan',
+  'тоо_parker_казахстан': 'parker-kazakhstan',
+
+  'parker-consulting-appraisal': 'parker-consulting-appraisal',
+  'parker consulting appraisal': 'parker-consulting-appraisal',
+  'parker consulting & appraisal': 'parker-consulting-appraisal',
+  'тоо_parker_consulting_appraisal': 'parker-consulting-appraisal',
+};
+
+export function normalizeCompanyKey(value: unknown): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[«»"'`]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[()]/g, ' ')
+    .replace(/[^\p{L}\p{N}+]+/gu, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_{2,}/g, '_');
+}
+
+function aliasCandidates(value: unknown): string[] {
+  const raw = String(value || '').trim();
+  const key = normalizeCompanyKey(raw);
+  const noLegalPrefix = key.replace(/^(тоо|too|чк|ип|ao|ао|ооо|llp|ltd|lp)_+/, '');
+  return Array.from(new Set([raw.toLowerCase(), key, noLegalPrefix].filter(Boolean)));
+}
+
+export function normalizeCompanyId(value: unknown): string {
+  for (const candidate of aliasCandidates(value)) {
+    if (COMPANY_ID_ALIASES[candidate]) return COMPANY_ID_ALIASES[candidate];
+  }
+  return String(value || '');
+}
+
+export function findCompanyByAnyValue(value: unknown, companies: Company[] = DEFAULT_COMPANIES): Company | undefined {
+  const normalizedId = normalizeCompanyId(value);
+  if (normalizedId) {
+    const byId = companies.find((company) => company.id === normalizedId);
+    if (byId) return byId;
+  }
+
+  const keys = aliasCandidates(value);
+  return companies.find((company) => {
+    const companyKeys = [
+      company.id,
+      company.name,
+      company.fullName,
+      company.inn,
+    ].flatMap(aliasCandidates);
+    return keys.some((key) => companyKeys.includes(key));
+  });
+}
+
+export function normalizeCompany(company: Company): Company {
+  const canonicalId = [company.id, company.name, company.fullName, company.inn]
+    .map(normalizeCompanyId)
+    .find((id) => DEFAULT_COMPANIES.some((item) => item.id === id));
+  const canonical = DEFAULT_COMPANIES.find((item) => item.id === canonicalId);
+  if (!canonical) return company;
+
+  return {
+    ...canonical,
+    isActive: company.isActive !== false,
+    address: company.address || canonical.address,
+    phone: company.phone || canonical.phone,
+    email: company.email || canonical.email,
+    directorId: company.directorId || canonical.directorId,
+    directorName: company.directorName || canonical.directorName,
+    updated_at: company.updated_at || canonical.updated_at,
+  };
+}
+
+export function normalizeCompanies(companies: Company[] = DEFAULT_COMPANIES): Company[] {
+  const byId = new Map(DEFAULT_COMPANIES.map((company) => [company.id, company]));
+  const custom: Company[] = [];
+
+  for (const company of companies || []) {
+    if (!company) continue;
+    const normalized = normalizeCompany(company);
+    if (DEFAULT_COMPANIES.some((item) => item.id === normalized.id)) {
+      byId.set(normalized.id, {
+        ...byId.get(normalized.id),
+        ...normalized,
+        name: DEFAULT_COMPANIES.find((item) => item.id === normalized.id)?.name || normalized.name,
+        fullName: DEFAULT_COMPANIES.find((item) => item.id === normalized.id)?.fullName || normalized.fullName,
+      } as Company);
+    } else {
+      custom.push(company);
+    }
+  }
+
+  const canonical = DEFAULT_COMPANIES.map((company) => byId.get(company.id) || company);
+  return [...canonical, ...custom.filter((company) => company.isActive !== false)];
+}
+
 export const COMPANIES = DEFAULT_COMPANIES;
 
-// Получить компанию по ID
 export const getCompanyById = (id: string): Company | undefined => {
-  return COMPANIES.find(c => c.id === id);
+  return findCompanyByAnyValue(id, DEFAULT_COMPANIES);
 };
 
-// Получить все активные компании
 export const getActiveCompanies = (): Company[] => {
-  return COMPANIES.filter(c => c.isActive);
+  return normalizeCompanies(DEFAULT_COMPANIES).filter((company) => company.isActive);
 };
 
-// Получить родительскую компанию
 export const getParentCompany = (companyId: string): Company | undefined => {
   const company = getCompanyById(companyId);
   if (company?.parentCompanyId) {
@@ -111,9 +294,7 @@ export const getParentCompany = (companyId: string): Company | undefined => {
   return undefined;
 };
 
-// Получить дочерние компании
 export const getChildCompanies = (parentId: string): Company[] => {
-  return COMPANIES.filter(c => c.parentCompanyId === parentId);
+  const normalizedParentId = normalizeCompanyId(parentId);
+  return normalizeCompanies(DEFAULT_COMPANIES).filter((company) => company.parentCompanyId === normalizedParentId);
 };
-
-

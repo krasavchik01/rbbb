@@ -1,0 +1,1813 @@
+{
+  "generatedAt": "2026-06-16T10:51:04.120Z",
+  "marker": "auto:partner-ledger-close-2026-06-09",
+  "commit": false,
+  "aggressive": false,
+  "forceBest": false,
+  "files": [
+    "САУЛЕ 2024 окт-2025 окт.xlsx"
+  ],
+  "rows": [
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "TOO «Bapy Mining»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Гульжан",
+        "Тинай",
+        "Жанар (налоги)"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.886Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.886Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:03.886Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.886Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Жанар (налоги)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «EREYMENTAU WIND POWER»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Марат"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Ерлан (налоги)"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 90,
+      "matchStatus": "medium",
+      "commitAllowed": true,
+      "matchedProjectId": "dca11a37-6c3a-43fb-bab8-6569a61ca464",
+      "matchedProjectName": "ТОО «Ereymentau Wind Power» (за период 2022-2024)",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "dca11a37-6c3a-43fb-bab8-6569a61ca464",
+          "name": "ТОО «Ereymentau Wind Power» (за период 2022-2024)",
+          "status": "completed",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.897Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "ee799c58-3600-43c7-b9ea-9130763233ff",
+          "userName": "Байтараков Олжас Маратович",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.897Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "userName": "Жамбыл Ернур",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.897Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Ерлан (налоги)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "FinQ",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "matchScore": 90,
+      "matchStatus": "medium",
+      "commitAllowed": true,
+      "matchedProjectId": "ef206b96-b160-4367-aada-e19e361040e1",
+      "matchedProjectName": "ТОО «FinQ»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "ef206b96-b160-4367-aada-e19e361040e1",
+          "name": "ТОО «FinQ»",
+          "status": "completed",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.904Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": []
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «HomeITTech»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Саия"
+      ],
+      "team": [
+        "Тинай",
+        "Спандияр (налоги)"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "2ceab59c-5de2-4dbe-9c60-146bcb648aab",
+      "matchedProjectName": "ТОО «HomeITTech»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "2ceab59c-5de2-4dbe-9c60-146bcb648aab",
+          "name": "ТОО «HomeITTech»",
+          "status": "completed",
+          "score": 170
+        },
+        {
+          "id": "1ca406d7-d22a-4d4b-950b-4c855d97a162",
+          "name": "ТОО HomeITTech - услуги по проведению согласованных процедур по МССУ 4400 за 2025 год ",
+          "status": "active",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.912Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "userName": "Шардарбекова Саия Гамзатовна",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.912Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.912Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Спандияр (налоги)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения»",
+      "auditType": "АУДИТ, СПЕЦ.НАЗ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Мая"
+      ],
+      "team": [
+        "Светлана",
+        "Газиз",
+        "Роман (налоги)"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 90,
+      "matchStatus": "medium",
+      "commitAllowed": true,
+      "matchedProjectId": "46dcc841-8a44-4bde-832a-c6b7043e93b6",
+      "matchedProjectName": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения» («IMB Центр»)",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "46dcc841-8a44-4bde-832a-c6b7043e93b6",
+          "name": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения» («IMB Центр»)",
+          "status": "completed",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.927Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.927Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "ced00de0-1c69-4eb7-8cc5-d979af4618cc",
+          "userName": "Каби Светлана",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:03.927Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "314ab04b-882c-43a4-94ac-a46280d8ddb2",
+          "userName": "Алдонгаров Газиз Сериккалиевич",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:03.927Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Роман (налоги)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "АО «Lancaster Group Kazakhstan»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Мая"
+      ],
+      "team": [
+        "Гульжан",
+        "Руслан",
+        "Василий (ГПХ)"
+      ],
+      "tax": [],
+      "note": "Василий ГПХ",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "3b22dd3f-37d0-40ec-8485-ce3b9b72c21f",
+      "matchedProjectName": "АО Lancaster Group Kazakhstan",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "3b22dd3f-37d0-40ec-8485-ce3b9b72c21f",
+          "name": "АО Lancaster Group Kazakhstan",
+          "status": "active",
+          "score": 170
+        },
+        {
+          "id": "962f3649-f91b-4af2-87d2-7da045e6dda7",
+          "name": "«Berkut Mining» (Беркут Майнинг) (группа компаний АО Lancaster Group Kazakhstan)",
+          "status": "active",
+          "score": 90
+        },
+        {
+          "id": "27d15f79-0343-4289-ad13-0427587698a0",
+          "name": "Частная компания ANKA CAPITAL LTD (Группа компаний АО \"Lancaster Group Kazakhstan\") ",
+          "status": "completed",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.936Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.936Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:03.936Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.936Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Василий (ГПХ)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "АО \"Samruk-Kazyna Construction\"",
+      "auditType": "СПЕЦ.НАЗ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Газиз"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "a5e29b51-d7f0-4f46-b487-7abeacbdf38c",
+      "matchedProjectName": "АО Samruk-Kazyna Construction",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "a5e29b51-d7f0-4f46-b487-7abeacbdf38c",
+          "name": "АО Samruk-Kazyna Construction",
+          "status": "completed",
+          "score": 170
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.945Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "314ab04b-882c-43a4-94ac-a46280d8ddb2",
+          "userName": "Алдонгаров Газиз Сериккалиевич",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.945Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": []
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «Start Industries»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Тинай",
+        "Zabira Yerlankyzy",
+        "Аскар (налоги)"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 170,
+      "matchStatus": "duplicate_candidates",
+      "commitAllowed": false,
+      "matchedProjectId": "03953bb9-7e3b-4c62-b22f-4d277dea4de9",
+      "matchedProjectName": "ТОО «Start Industries»",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "03953bb9-7e3b-4c62-b22f-4d277dea4de9",
+          "name": "ТОО «Start Industries»",
+          "status": "active",
+          "score": 170
+        },
+        {
+          "id": "9788ecc7-1918-4964-98df-d712920648cb",
+          "name": "ТОО «Start Industries»",
+          "status": "completed",
+          "score": 170
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.953Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.953Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.953Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "userName": "Zabira Yerlankyzy",
+          "role": "supervisor_1",
+          "bonusPercent": 6,
+          "assignedAt": "2026-06-16T10:51:03.953Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Аскар (налоги)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «Арал Петролеум Кэпитал»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Мая"
+      ],
+      "team": [
+        "Тинай",
+        "Светлана",
+        "Руслан",
+        "Аманов Онгар"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "98bb1092-bfd2-4d5c-8071-00962615b979",
+      "matchedProjectName": "ТОО «Арал Петролеум Кэпитал»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "98bb1092-bfd2-4d5c-8071-00962615b979",
+          "name": "ТОО «Арал Петролеум Кэпитал»",
+          "status": "completed",
+          "score": 170
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.962Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.962Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.962Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "ced00de0-1c69-4eb7-8cc5-d979af4618cc",
+          "userName": "Каби Светлана",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:03.962Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.962Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "d1dbb59d-113c-4d9a-8a65-06f441bcf0a9",
+          "userName": "Аманов Онгар",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.962Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": []
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "БЕСШОКЫ (ГРУППА КОМПАНИЙ7). ОТДЕЛЬНЫЕ И КОНС.",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Альфира (ГПХ)"
+      ],
+      "team": [
+        "Бакытжан",
+        "Ерлан (налоги)"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.972Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "e9b94a61-36b2-4120-9b97-3d006e2db738",
+          "userName": "Бекжанов Бақытжан Абылқасымұлы",
+          "role": "supervisor_1",
+          "bonusPercent": 6,
+          "assignedAt": "2026-06-16T10:51:03.972Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Альфира (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Ерлан (налоги)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "БЕСШОКЫ",
+      "auditType": "ЛКУ, ИПДО",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Светлана"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.978Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "ced00de0-1c69-4eb7-8cc5-d979af4618cc",
+          "userName": "Каби Светлана",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.978Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": []
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «Гранит – Талес Электроникс»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Гаухар"
+      ],
+      "team": [
+        "Улжан",
+        "Ерлан (ГПХ) налоги"
+      ],
+      "tax": [],
+      "note": "Ерлан сейчас в штате",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "6a43ea08-a920-4744-9fa5-ca0bbdfdf4c3",
+      "matchedProjectName": "ТОО Гранит – Талес Электроникс",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "6a43ea08-a920-4744-9fa5-ca0bbdfdf4c3",
+          "name": "ТОО Гранит – Талес Электроникс",
+          "status": "completed",
+          "score": 170
+        },
+        {
+          "id": "8abe2976-8adb-4804-973a-95add50a3503",
+          "name": "ТОО Гранит – Талес Электроникс - Услуги по проведению аудита финансовой отчетности ТОО «Гранит – Талес Электроникс» за 2025 год, подготовленной в соответствии с международными стандартами ",
+          "status": "active",
+          "score": 90
+        },
+        {
+          "id": "ce6cadf6-a098-49b4-92b0-d47c5250fd3b",
+          "name": "ТОО «Гранит – Талес Электроникс»  - услуг по проведению аудита финансовой отчетности ТОО «Гранит – Талес Электроникс» за 2025 год, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности (МСФО)",
+          "status": "active",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:03.988Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "userName": "Сартаева Гаухар Шыныбековна",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:03.988Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "26beb79f-a453-49d1-8933-546eacb9b83e",
+          "userName": "Төрегелді Улжан",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:03.988Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Ерлан (ГПХ) налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "Акционерное общество \"Национальная платежная корпорация Национального Банка Республики Казахстан\"",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Гульжан",
+        "Тинай",
+        "Мая",
+        "Спандияр налоги"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.001Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.001Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:04.001Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.001Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:04.001Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Спандияр налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр)",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Гаухар"
+      ],
+      "team": [
+        "Акулпа",
+        "Ерлан (ГПХ)"
+      ],
+      "tax": [],
+      "note": "Ерлан сейчас в штате",
+      "matchScore": 170,
+      "matchStatus": "duplicate_candidates",
+      "commitAllowed": false,
+      "matchedProjectId": "aecb29f8-6333-4684-8681-fc5c81267e97",
+      "matchedProjectName": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "aecb29f8-6333-4684-8681-fc5c81267e97",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "active",
+          "score": 170
+        },
+        {
+          "id": "b34fff03-7f8f-4172-a5d5-980cd044ea2e",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "active",
+          "score": 170
+        },
+        {
+          "id": "7f8c3928-af21-41e9-9f28-4c7c236e6506",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "active",
+          "score": 170
+        },
+        {
+          "id": "6134be94-bc92-47ab-9206-13f85f0dac1b",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "completed",
+          "score": 170
+        },
+        {
+          "id": "97b3e728-8f4f-475b-9c29-35c73d555bba",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "completed",
+          "score": 170
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.010Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "userName": "Сартаева Гаухар Шыныбековна",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.010Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Акулпа",
+          "role": "external"
+        },
+        {
+          "name": "Ерлан (ГПХ)",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «СК-Фармация»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Меруерт"
+      ],
+      "team": [
+        "Рошангуль",
+        "Спандияр налоги"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "1c4126ee-4bfb-4004-b190-2fc1b1e05910",
+      "matchedProjectName": "ТОО СК-Фармация",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "1c4126ee-4bfb-4004-b190-2fc1b1e05910",
+          "name": "ТОО СК-Фармация",
+          "status": "completed",
+          "score": 170
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.018Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "77308b99-457a-4d12-939f-0e4264295c5a",
+          "userName": "Ушурбакиева Рошангуль",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.018Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Меруерт",
+          "role": "project_leader"
+        },
+        {
+          "name": "Спандияр налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "СКТБ ГРАНИТ",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Мая"
+      ],
+      "team": [
+        "Тинай",
+        "Руслан",
+        "Аскар (ГПХ)налоги"
+      ],
+      "tax": [],
+      "note": "Аскар ГПХ налоги",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.025Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.025Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.025Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.025Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Аскар (ГПХ)налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "СПК АКТОБЕ",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Камиля (ГПХ)"
+      ],
+      "team": [
+        "Мадина ГПХ",
+        "Ермек ГПХ налоги"
+      ],
+      "tax": [],
+      "note": "Камиля, Мадина, Ермек - ГПХ",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.032Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Мадина ГПХ",
+          "role": "external"
+        },
+        {
+          "name": "Ермек ГПХ налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "СПК АЛМАТЫ+ 6 ДОЧЕК. ОТДЕЛЬНЫЕ И КОНС.",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Камиля (ГПХ)"
+      ],
+      "team": [
+        "Нускабаева Райхан",
+        "Тинай",
+        "Ержан (ГПХ)",
+        "Спандияр налоги",
+        "Турлыгазина Дана"
+      ],
+      "tax": [],
+      "note": "Ержан ГПХ",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.041Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:04.041Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.041Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "14d98372-b1e2-451b-9aac-eadb1f581510",
+          "userName": "Турлыгазина Дана Ерікқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.041Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Ержан (ГПХ)",
+          "role": "external"
+        },
+        {
+          "name": "Спандияр налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «Управление по добыче и транспортироке воды»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Гульжан",
+        "Тинай",
+        "Мая",
+        "Акмолдир налоги"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.052Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.052Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:04.052Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.052Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:04.052Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Акмолдир налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "AO «Центр развития города Алматы»",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Мая"
+      ],
+      "team": [
+        "Тинай"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.061Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.061Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.061Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": []
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО ЭКСПОИНЖИНИРИНГ",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Тинай",
+        "Мая",
+        "Акмолдир налоги"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 170,
+      "matchStatus": "high",
+      "commitAllowed": true,
+      "matchedProjectId": "8943794a-0081-4a34-ba79-3eac899aeee4",
+      "matchedProjectName": "ТОО «ЭКСПОИНЖИНИРИНГ»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "8943794a-0081-4a34-ba79-3eac899aeee4",
+          "name": "ТОО «ЭКСПОИНЖИНИРИНГ»",
+          "status": "completed",
+          "score": 170
+        },
+        {
+          "id": "7606f7bb-30c2-432a-ad6c-58f31d51c2d0",
+          "name": "ТОО ЭКСПОИНЖИНИРИНГ - услуг по проведению:\n1.1.1. аудита финансовой отчетности ТОО «ЭКСПОИНЖИНИРИНГ» за период с 1 января 2025 года по 31 декабря 2025 года, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности;\n1.1.2. подтверждению отчета об исполнении лицензионных обязательств и ИПДО за 2025 год \n",
+          "status": "active",
+          "score": 90
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.068Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.068Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.068Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T10:51:04.068Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Акмолдир налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ЭсКейЭкоплант",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Улжан"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.075Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.075Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "26beb79f-a453-49d1-8933-546eacb9b83e",
+          "userName": "Төрегелді Улжан",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.075Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": []
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТОО «Самрук-Казына Инвест», ОТДЕЛЬНАЯ и КОНСОЛИД ПО ФОРМАМ",
+      "auditType": "ОБЗОР",
+      "auditYear": null,
+      "periodRaw": "6 МЕС 2025",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Ембердиев Ермек"
+      ],
+      "team": [
+        "Саия",
+        "Василий ГПХ"
+      ],
+      "tax": [],
+      "note": "Василий ГПХ",
+      "matchScore": 95,
+      "matchStatus": "duplicate_candidates",
+      "commitAllowed": false,
+      "matchedProjectId": "461627fc-8164-42be-8a88-d44e0109227b",
+      "matchedProjectName": "ТОО «Самрук-Қазына Инвест» ",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "461627fc-8164-42be-8a88-d44e0109227b",
+          "name": "ТОО «Самрук-Қазына Инвест» ",
+          "status": "active",
+          "score": 95
+        },
+        {
+          "id": "722869d2-56cd-4c2e-80fc-2d09e7c6c277",
+          "name": "ТОО «Самрук-Қазына Инвест» ",
+          "status": "active",
+          "score": 95
+        },
+        {
+          "id": "a5d450ac-cb5e-497d-8984-4e7a850b0ae2",
+          "name": "ТОО «Самрук-Қазына Инвест» ",
+          "status": "active",
+          "score": 95
+        },
+        {
+          "id": "1994a852-6aa8-4a65-8981-2a1cb2fde45c",
+          "name": "ТОО «Самрук-Қазына Инвест» ",
+          "status": "active",
+          "score": 95
+        },
+        {
+          "id": "ac55709d-79b1-4bdb-9f28-0f6c4749f549",
+          "name": "ТОО «Самрук-Қазына Инвест» ",
+          "status": "active",
+          "score": 95
+        },
+        {
+          "id": "47c6013d-e333-4f1c-8dbb-d704149ae620",
+          "name": "ТОО Самрук-Қазына Инвест",
+          "status": "completed",
+          "score": 95
+        },
+        {
+          "id": "60617275-7f07-4cc2-9428-70357a929a2f",
+          "name": "ТОО Самрук Казына Инвест",
+          "status": "completed",
+          "score": 95
+        },
+        {
+          "id": "a186c8d2-8908-4eca-8cba-356b0f6b0012",
+          "name": "ТОО Самрук-Қазына Инвест",
+          "status": "completed",
+          "score": 95
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.087Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "147980fa-ea7a-4d49-a5b4-6189cea63ce4",
+          "userName": "Ембердиев Ермек",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.087Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "userName": "Шардарбекова Саия Гамзатовна",
+          "role": "manager_2",
+          "bonusPercent": 8,
+          "assignedAt": "2026-06-16T10:51:04.087Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Василий ГПХ",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "СПК АЛМАТЫ+ 7 ДОЧЕК. ОТДЕЛЬНЫЕ И КОНС.",
+      "auditType": "ОБЗОР",
+      "auditYear": null,
+      "periodRaw": "6 МЕС 2025",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Камиля (ГПХ)"
+      ],
+      "team": [
+        "Тинай",
+        "Саия",
+        "Юра",
+        "Спандияр налоги",
+        "Акмолдир налоги"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.097Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.097Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "userName": "Шардарбекова Саия Гамзатовна",
+          "role": "manager_2",
+          "bonusPercent": 8,
+          "assignedAt": "2026-06-16T10:51:04.097Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Юра",
+          "role": "external"
+        },
+        {
+          "name": "Спандияр налоги",
+          "role": "external"
+        },
+        {
+          "name": "Акмолдир налоги",
+          "role": "external"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "СПК АКТОБЕ",
+      "auditType": "ОБЗОР",
+      "auditYear": null,
+      "periodRaw": "9 МЕС 2025",
+      "partner": "Бадамбаева Сауле",
+      "managers": [
+        "Камиля (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.104Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "ТАЗА СУ (ПАРКЕР)",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Рахматулла Арман",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Руслан",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.112Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.112Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "userName": "Zabira Yerlankyzy",
+          "role": "supervisor_1",
+          "bonusPercent": 6,
+          "assignedAt": "2026-06-16T10:51:04.112Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Рахматулла Арман",
+          "role": "partner"
+        }
+      ]
+    },
+    {
+      "sourceFile": "САУЛЕ 2024 окт-2025 окт.xlsx",
+      "sourceSheet": "Лист1",
+      "no": "",
+      "clientName": "FINBOX (ЧК)",
+      "auditType": "АУДИТ",
+      "auditYear": null,
+      "periodRaw": "2024",
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Мая"
+      ],
+      "team": [
+        "Тинай",
+        "Ержан (ГПХ)"
+      ],
+      "tax": [],
+      "note": "Ержан ГПХ",
+      "matchScore": 0,
+      "matchStatus": "unmatched",
+      "commitAllowed": false,
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "userName": "Шынгыс Сартаев",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T10:51:04.119Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T10:51:04.119Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T10:51:04.119Z",
+          "assignedBy": "auto:partner-ledger-close-2026-06-09"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Ержан (ГПХ)",
+          "role": "external"
+        }
+      ]
+    }
+  ]
+}

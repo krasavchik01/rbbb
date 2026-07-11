@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
 import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
+import { findCompanyByAnyValue } from '@/types/companies';
 
 /**
  * Фильтрует массив проектов по allowedCompanyIds текущего пользователя.
@@ -20,7 +21,10 @@ export function useFilteredProjects<T>(projects: T[]): T[] {
     // Получаем имена разрешённых компаний по их ID
     const companies = appSettings.companies || [];
     const allowedNames = user.allowedCompanyIds
-      .map((id) => companies.find((c: any) => c.id === id)?.name)
+      .flatMap((id) => {
+        const company = findCompanyByAnyValue(id, companies as any);
+        return [id, company?.id, company?.name, company?.fullName].filter(Boolean);
+      })
       .filter(Boolean) as string[];
 
     if (allowedNames.length === 0) return projects;

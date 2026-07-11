@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
+import { contractFileUrl, dedupeProjectFiles, projectContractFiles } from '@/lib/contractData';
 import { ContractInfo, ProjectAmendment, ProjectCurrency, CURRENCY_LABELS, ProjectType, PROJECT_TYPE_LABELS } from '@/types/project-v3';
 import { DEFAULT_COMPANIES } from '@/types/companies';
 
@@ -58,11 +59,52 @@ interface ContractEditorProps {
   companyId?: string;
   companyName?: string;
   projectFiles?: any[]; // Файлы из notes.files
-  onContractUpdate: (contract: ContractInfo) => void;
-  onProjectSettingsUpdate?: (settings: { type?: string; companyId?: string; companyName?: string }) => void;
-  onAmendmentAdd?: (amendment: ProjectAmendment) => void;
-  onAmendmentDelete?: (amendmentId: string) => void;
+  onContractUpdate: (contract: ContractInfo, uploadedFiles?: any[]) => void | Promise<void>;
+  onProjectSettingsUpdate?: (settings: { type?: string; companyId?: string; companyName?: string }) => void | Promise<void>;
+  onAmendmentAdd?: (amendment: ProjectAmendment) => void | Promise<void>;
+  onAmendmentDelete?: (amendmentId: string) => void | Promise<void>;
   canEdit?: boolean;
+}
+
+function createEmptyContract(): ContractInfo {
+  return {
+    number: '',
+    date: new Date().toISOString().slice(0, 10),
+    subject: '',
+    serviceStartDate: '',
+    serviceEndDate: '',
+    amountWithoutVAT: 0,
+    vatRate: 16,
+    vatAmount: 0,
+    amountWithVAT: 0,
+    currency: 'KZT' as ProjectCurrency,
+  };
+}
+
+function normalizeSeafileDownloadPath(value: string): string {
+  let path = String(value || '').trim().replace(/^seafile:\/\//i, '');
+  while (path.startsWith('//')) path = path.slice(1);
+  return path.startsWith('/') ? path : `/${path}`;
+}
+
+function isSeafileReference(file: any, url: string): boolean {
+  const publicUrl = String(file?.publicUrl || file?.url || url || '');
+  return Boolean(
+    file?.isSeafile ||
+      file?.storage === 'seafile' ||
+      publicUrl.startsWith('seafile://')
+  );
+}
+
+function openDownloadUrl(url: string, fileName?: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  if (fileName) anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
 }
 
 export function ContractEditor({
@@ -83,14 +125,9 @@ export function ContractEditor({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContract, setEditedContract] = useState<ContractInfo | null>(contract);
 
-  // Получаем файлы договора из notes.files или из contract
-  const contractFilesFromNotes = projectFiles.filter((f: any) => f.category === 'contract');
-  const contractScanUrl = contract?.contractScanUrl && contract.contractScanUrl !== 'pending_upload'
-    ? contract.contractScanUrl
-    : contractFilesFromNotes[0]?.publicUrl || contractFilesFromNotes[0]?.url;
-  const contractOriginalUrl = contract?.contractOriginalUrl && contract.contractOriginalUrl !== 'pending_upload'
-    ? contract.contractOriginalUrl
-    : contractFilesFromNotes[1]?.publicUrl || contractFilesFromNotes[1]?.url;
+  // Единый список файлов договора: notes.files + старые contractScanUrl/contractOriginalUrl, без дублей.
+  const contractFilesFromNotes = projectContractFiles({ contract, notes: { files: projectFiles } });
+  const visibleContractFiles = dedupeProjectFiles(contractFilesFromNotes);
   const [showAddAmendment, setShowAddAmendment] = useState(false);
   const [amendmentToDelete, setAmendmentToDelete] = useState<string | null>(null);
 
@@ -108,9 +145,51 @@ export function ContractEditor({
   });
 
   // Загрузка файлов
-  const [contractFile, setContractFile] = useState<File | null>(null);
-  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [contractFiles, setContractFiles] = useState<File[]>([]);
+  const [originalFiles, setOriginalFiles] = useState<File[]>([]);
   const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
+
+  const openProjectFile = async (file: any, fallbackName = 'Файл') => {
+    const rawUrl = contractFileUrl(file);
+    const fileName = file?.fileName || file?.name || fallbackName;
+
+    if (!rawUrl || rawUrl === 'pending_upload') {
+      toast({
+        title: 'Ошибка',
+        description: 'URL файла не найден',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      if (isSeafileReference(file, rawUrl)) {
+        const storagePath = normalizeSeafileDownloadPath(file?.storagePath || rawUrl);
+        const downloadUrl = await supabaseDataStore.getSeafileDownloadUrl(storagePath);
+        if (!downloadUrl) throw new Error('Не удалось получить ссылку на файл из Seafile');
+        openDownloadUrl(downloadUrl, fileName);
+        return;
+      }
+
+      openDownloadUrl(rawUrl, fileName);
+    } catch (error: any) {
+      console.error('Ошибка скачивания файла договора:', error);
+      toast({
+        title: 'Ошибка',
+        description: error?.message || 'Не удалось скачать файл',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openAmendmentFile = async (fileUrl: string, fileName: string) => {
+    await openProjectFile({
+      fileName,
+      publicUrl: fileUrl,
+      storagePath: fileUrl,
+      isSeafile: String(fileUrl || '').startsWith('seafile://'),
+    }, fileName);
+  };
 
   useEffect(() => {
     setEditedContract(contract);
@@ -124,43 +203,58 @@ export function ContractEditor({
     setEditedCompanyId(initialCompanyId || '');
   }, [initialCompanyId]);
 
+  const startContractEditing = () => {
+    setEditedContract(contract ? { ...contract } : createEmptyContract());
+    setIsEditing(true);
+  };
+
   const handleSaveContract = async () => {
-    if (!editedContract) return;
+    const nextContract: ContractInfo = { ...(editedContract || createEmptyContract()) };
+    const uploadedFiles: any[] = [];
+    const failedUploads: string[] = [];
+
+    const uploadOptionalContractFile = async (
+      file: File,
+      targetField?: 'contractScanUrl' | 'contractOriginalUrl'
+    ) => {
+      try {
+        const result = await supabaseDataStore.uploadProjectFile(
+          projectId,
+          file,
+          'contract',
+          'system'
+        );
+        if (targetField && !nextContract[targetField]) nextContract[targetField] = result.publicUrl;
+        if (result.file) uploadedFiles.push(result.file);
+      } catch (uploadError) {
+        console.warn('Contract file upload failed, saving contract without file:', uploadError);
+        failedUploads.push(file.name);
+      }
+    };
 
     try {
       // Загружаем файлы если есть
-      if (contractFile) {
-        const result = await supabaseDataStore.uploadProjectFile(
-          projectId,
-          contractFile,
-          'contract',
-          'system'
-        );
-        editedContract.contractScanUrl = result.publicUrl;
+      for (const [index, file] of contractFiles.entries()) {
+        await uploadOptionalContractFile(file, index === 0 ? 'contractScanUrl' : undefined);
       }
 
-      if (originalFile) {
-        const result = await supabaseDataStore.uploadProjectFile(
-          projectId,
-          originalFile,
-          'contract',
-          'system'
-        );
-        editedContract.contractOriginalUrl = result.publicUrl;
+      for (const [index, file] of originalFiles.entries()) {
+        await uploadOptionalContractFile(file, index === 0 ? 'contractOriginalUrl' : undefined);
       }
 
       // Рассчитываем НДС
-      const vatRate = editedContract.vatRate || 0;
-      const amountWithoutVAT = editedContract.amountWithoutVAT || 0;
-      editedContract.vatAmount = amountWithoutVAT * (vatRate / 100);
-      editedContract.amountWithVAT = amountWithoutVAT + editedContract.vatAmount;
+      const vatRate = nextContract.vatRate || 0;
+      const amountWithoutVAT = nextContract.amountWithoutVAT || 0;
+      nextContract.vatAmount = amountWithoutVAT * (vatRate / 100);
+      nextContract.amountWithVAT = amountWithoutVAT + nextContract.vatAmount;
 
-      onContractUpdate(editedContract);
+      await onContractUpdate(nextContract, uploadedFiles);
+      setEditedContract(nextContract);
 
       // Сохраняем настройки проекта (вид проекта, компания)
       if (onProjectSettingsUpdate) {
         const selectedCompany = companies.find(c => c.id === editedCompanyId);
-        onProjectSettingsUpdate({
+        await onProjectSettingsUpdate({
           type: editedProjectType || undefined,
           companyId: editedCompanyId || undefined,
           companyName: selectedCompany?.name || undefined,
@@ -168,18 +262,26 @@ export function ContractEditor({
       }
 
       setIsEditing(false);
-      setContractFile(null);
-      setOriginalFile(null);
+      setContractFiles([]);
+      setOriginalFiles([]);
 
-      toast({
-        title: '✅ Договор обновлён',
-        description: 'Данные договора успешно сохранены',
-      });
-    } catch (error) {
+      if (failedUploads.length > 0) {
+        toast({
+          title: 'Договор сохранён, файл не загрузился',
+          description: `Данные договора сохранены. Не загрузился файл: ${failedUploads.slice(0, 2).join(', ')}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: '✅ Договор обновлён',
+          description: 'Данные договора успешно сохранены',
+        });
+      }
+    } catch (error: any) {
       console.error('Error saving contract:', error);
       toast({
         title: '❌ Ошибка',
-        description: 'Не удалось сохранить договор',
+        description: error?.message ? `Не удалось сохранить договор: ${error.message}` : 'Не удалось сохранить договор',
         variant: 'destructive',
       });
     }
@@ -197,15 +299,21 @@ export function ContractEditor({
 
     try {
       let fileUrl: string | undefined;
+      let failedUpload: string | null = null;
 
       if (amendmentFile) {
-        const result = await supabaseDataStore.uploadProjectFile(
-          projectId,
-          amendmentFile,
-          'document',
-          'system'
-        );
-        fileUrl = result.publicUrl;
+        try {
+          const result = await supabaseDataStore.uploadProjectFile(
+            projectId,
+            amendmentFile,
+            'document',
+            'system'
+          );
+          fileUrl = result.publicUrl;
+        } catch (uploadError) {
+          console.warn('Amendment file upload failed, saving amendment without file:', uploadError);
+          failedUpload = amendmentFile.name;
+        }
       }
 
       const amendment: ProjectAmendment = {
@@ -220,21 +328,29 @@ export function ContractEditor({
       };
 
       // Сохраняем через колбэк (в JSON проекта, минуя RLS на project_amendments)
-      onAmendmentAdd?.(amendment);
+      await onAmendmentAdd?.(amendment);
 
       setNewAmendment({ number: '', date: '', description: '', amountChange: 0 });
       setAmendmentFile(null);
       setShowAddAmendment(false);
 
-      toast({
-        title: '✅ Доп. соглашение добавлено',
-        description: `Доп. соглашение №${amendment.number} успешно добавлено`,
-      });
-    } catch (error) {
+      if (failedUpload) {
+        toast({
+          title: 'Доп. соглашение сохранено, файл не загрузился',
+          description: `Доп. соглашение №${amendment.number} сохранено. Не загрузился файл: ${failedUpload}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: '✅ Доп. соглашение добавлено',
+          description: `Доп. соглашение №${amendment.number} успешно добавлено`,
+        });
+      }
+    } catch (error: any) {
       console.error('Error adding amendment:', error);
       toast({
         title: '❌ Ошибка',
-        description: 'Не удалось добавить доп. соглашение',
+        description: error?.message ? `Не удалось добавить доп. соглашение: ${error.message}` : 'Не удалось добавить доп. соглашение',
         variant: 'destructive',
       });
     }
@@ -245,7 +361,7 @@ export function ContractEditor({
 
     try {
       // Удаляем через колбэк (в JSON проекта)
-      onAmendmentDelete?.(amendmentToDelete);
+      await onAmendmentDelete?.(amendmentToDelete);
       setAmendmentToDelete(null);
 
       toast({
@@ -276,7 +392,7 @@ export function ContractEditor({
           <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p>Данные договора не указаны</p>
           {canEdit && (
-            <Button onClick={() => setIsEditing(true)} variant="outline" className="mt-4">
+            <Button onClick={startContractEditing} variant="outline" className="mt-4">
               <Plus className="w-4 h-4 mr-2" />
               Добавить данные договора
             </Button>
@@ -305,7 +421,7 @@ export function ContractEditor({
             </div>
           </div>
           {canEdit && !isEditing && (
-            <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+            <Button onClick={startContractEditing} variant="outline" size="sm">
               <Edit className="w-4 h-4 mr-2" />
               Редактировать
             </Button>
@@ -468,14 +584,15 @@ export function ContractEditor({
                   <Input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setContractFile(e.target.files?.[0] || null)}
+                    multiple
+                    onChange={(e) => setContractFiles(Array.from(e.target.files || []))}
                   />
-                  {contractFile && (
+                  {contractFiles.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Новый файл: {contractFile.name}
+                      Новых файлов: {contractFiles.length}
                     </p>
                   )}
-                  {editedContract?.contractScanUrl && !contractFile && (
+                  {editedContract?.contractScanUrl && contractFiles.length === 0 && (
                     <p className="text-xs text-green-500 mt-1">
                       ✓ Скан загружен
                     </p>
@@ -486,14 +603,15 @@ export function ContractEditor({
                   <Input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setOriginalFile(e.target.files?.[0] || null)}
+                    multiple
+                    onChange={(e) => setOriginalFiles(Array.from(e.target.files || []))}
                   />
-                  {originalFile && (
+                  {originalFiles.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Новый файл: {originalFile.name}
+                      Новых файлов: {originalFiles.length}
                     </p>
                   )}
-                  {editedContract?.contractOriginalUrl && !originalFile && (
+                  {editedContract?.contractOriginalUrl && originalFiles.length === 0 && (
                     <p className="text-xs text-green-500 mt-1">
                       ✓ Оригинал загружен
                     </p>
@@ -505,8 +623,8 @@ export function ContractEditor({
                 <Button variant="outline" onClick={() => {
                   setIsEditing(false);
                   setEditedContract(contract);
-                  setContractFile(null);
-                  setOriginalFile(null);
+                  setContractFiles([]);
+                  setOriginalFiles([]);
                 }}>
                   <X className="w-4 h-4 mr-2" />
                   Отмена
@@ -527,7 +645,7 @@ export function ContractEditor({
                 <div>
                   <p className="text-sm text-muted-foreground">Сумма без НДС</p>
                   <p className="font-bold text-lg text-primary">
-                    {formatCurrency(editedContract?.amountWithoutVAT ?? contract?.amountWithoutVAT, editedContract?.currency || contract?.currency)}
+                    {formatCurrency(editedContract?.amountWithoutVAT ?? contract?.amountWithoutVAT ?? 0, editedContract?.currency || contract?.currency)}
                   </p>
                 </div>
               </div>
@@ -560,50 +678,31 @@ export function ContractEditor({
                 <div>
                   <p className="text-sm text-muted-foreground">Файлы</p>
                   <div className="flex gap-2 mt-1 flex-wrap">
-                    {contractScanUrl && (
-                      <a
-                        href={contractScanUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Badge variant="outline" className="cursor-pointer hover:bg-primary/10">
-                          <FileText className="w-3 h-3 mr-1" />
-                          Скан
-                        </Badge>
-                      </a>
-                    )}
-                    {contractOriginalUrl && (
-                      <a
-                        href={contractOriginalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Badge variant="outline" className="cursor-pointer hover:bg-primary/10 bg-green-500/10 border-green-500/30">
-                          <FileText className="w-3 h-3 mr-1" />
-                          Оригинал
-                        </Badge>
-                      </a>
-                    )}
-                    {/* Показываем все файлы договора из notes.files */}
-                    {contractFilesFromNotes.length > 0 && !contractScanUrl && !contractOriginalUrl && (
-                      contractFilesFromNotes.map((file: any, idx: number) => (
-                        <a
+                    {visibleContractFiles.length > 0 && (
+                      visibleContractFiles.map((file: any, idx: number) => {
+                        const url = contractFileUrl(file);
+                        const label = file.fileName || file.name || `Файл ${idx + 1}`;
+                        return url ? (
+                        <button
                           key={file.id || idx}
-                          href={file.publicUrl || file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                          type="button"
+                          className="border-0 bg-transparent p-0"
+                          onClick={() => void openProjectFile(file, label)}
                         >
                           <Badge variant="outline" className="cursor-pointer hover:bg-primary/10">
                             <FileText className="w-3 h-3 mr-1" />
-                            {file.fileName || `Файл ${idx + 1}`}
+                            {label}
                           </Badge>
-                        </a>
-                      ))
+                        </button>
+                        ) : (
+                          <Badge key={file.id || label || idx} variant="outline">
+                            <FileText className="w-3 h-3 mr-1" />
+                            {label}
+                          </Badge>
+                        );
+                      })
                     )}
-                    {!contractScanUrl && !contractOriginalUrl && contractFilesFromNotes.length === 0 && (
+                    {visibleContractFiles.length === 0 && (
                       <span className="text-sm text-muted-foreground">Файлы не загружены</span>
                     )}
                   </div>
@@ -680,11 +779,17 @@ export function ContractEditor({
                   </div>
                   <div className="flex items-center gap-2">
                     {amendment.fileUrl && (
-                      <a href={amendment.fileUrl} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </a>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void openAmendmentFile(
+                          amendment.fileUrl || '',
+                          `Доп. соглашение ${amendment.number || ''}`.trim(),
+                        )}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
                     )}
                     {canEdit && (
                       <Button

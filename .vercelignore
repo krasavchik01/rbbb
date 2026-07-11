@@ -2,5 +2,15 @@
 node_modules
 .git
 *.log
+reports
+test-results
+playwright-report
+.agents
+.claude
+supabase/.temp
+*.xlsx
+*.xls
+*.csv
+tmp
 
 

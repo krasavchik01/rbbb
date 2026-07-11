@@ -2,7 +2,7 @@
 // Эти настройки управляются администратором и применяются глобально для всех пользователей
 
 import { supabase } from '@/integrations/supabase/client';
-import { Company, DEFAULT_COMPANIES } from '@/types/companies';
+import { Company, DEFAULT_COMPANIES, normalizeCompanies } from '@/types/companies';
 import type { UserRole } from '@/types/roles';
 
 export interface SMTPConfig {
@@ -60,6 +60,45 @@ let cachedSettings: AppSettings | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 5000; // 5 секунд кеш
 
+type SettingsEnvelope = {
+  __suiteASettings: 1;
+  companies?: Company[];
+  [key: string]: unknown;
+};
+
+function isSettingsEnvelope(value: unknown): value is SettingsEnvelope {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as { __suiteASettings?: unknown }).__suiteASettings === 1
+  );
+}
+
+function extractCompanies(rawCompanies: unknown): Company[] {
+  if (Array.isArray(rawCompanies)) {
+    return normalizeCompanies(rawCompanies as Company[]);
+  }
+
+  if (isSettingsEnvelope(rawCompanies) && Array.isArray(rawCompanies.companies)) {
+    return normalizeCompanies(rawCompanies.companies);
+  }
+
+  return normalizeCompanies(DEFAULT_SETTINGS.companies);
+}
+
+function preserveSettingsEnvelope(rawCompanies: unknown, companies: Company[]): Company[] | SettingsEnvelope {
+  const normalizedCompanies = normalizeCompanies(companies);
+  if (isSettingsEnvelope(rawCompanies)) {
+    return {
+      ...rawCompanies,
+      companies: normalizedCompanies,
+    };
+  }
+
+  return normalizedCompanies;
+}
+
 export async function getAppSettings(): Promise<AppSettings> {
   // Возвращаем кеш если он свежий
   if (cachedSettings && Date.now() - cacheTimestamp < CACHE_TTL) {
@@ -81,15 +120,14 @@ export async function getAppSettings(): Promise<AppSettings> {
     }
 
     if (data) {
-      const companies = Array.isArray(data.companies)
-        ? (data.companies as unknown as Company[])
-        : DEFAULT_SETTINGS.companies;
+      const companies = extractCompanies(data.companies);
 
       console.log('getAppSettings: данные из Supabase:', {
         hasCompanies: !!data.companies,
         isArray: Array.isArray(data.companies),
+        isEnvelope: isSettingsEnvelope(data.companies),
         companiesCount: companies.length,
-        companies: data.companies
+        companies: normalizeCompanies(companies)
       });
 
       const settings: AppSettings = {
@@ -136,23 +174,36 @@ function getLocalSettings(): AppSettings {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...DEFAULT_SETTINGS, ...parsed, showDemoUsers: false };
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        companies: normalizeCompanies(parsed.companies || DEFAULT_SETTINGS.companies),
+        showDemoUsers: false,
+      };
     }
   } catch (error) {
     console.error('Ошибка чтения из localStorage:', error);
   }
-  return DEFAULT_SETTINGS;
+  return {
+    ...DEFAULT_SETTINGS,
+    companies: normalizeCompanies(DEFAULT_SETTINGS.companies),
+  };
 }
 
 export async function saveAppSettings(settings: Partial<AppSettings>): Promise<void> {
   try {
     const current = await getAppSettings();
-    const updated = { ...current, ...settings, showDemoUsers: false };
+    const updated = {
+      ...current,
+      ...settings,
+      companies: normalizeCompanies(settings.companies || current.companies),
+      showDemoUsers: false,
+    };
 
     // Получаем id записи
     const { data: settingsRow, error: fetchError } = await supabase
       .from('app_settings')
-      .select('id')
+      .select('id, companies')
       .limit(1)
       .single();
 
@@ -160,6 +211,8 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
       console.error('Ошибка получения id настроек:', fetchError);
       throw new Error('Не удалось получить настройки для обновления');
     }
+
+    const companiesPayload = preserveSettingsEnvelope((settingsRow as any).companies, updated.companies);
 
     console.log('Сохраняем настройки в Supabase, id:', settingsRow.id, 'данные:', updated);
 
@@ -176,7 +229,7 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
         maintenance_mode: updated.maintenanceMode,
         maintenance_message: updated.maintenanceMessage,
         recent_activity_visible_roles: updated.recentActivityVisibleRoles,
-        companies: updated.companies // Сохраняем компании
+        companies: companiesPayload // Сохраняем компании
       } as any)
       .eq('id', settingsRow.id)
       .select();

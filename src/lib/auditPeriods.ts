@@ -15,6 +15,7 @@ export interface AuditPeriod {
   taskIds?: string[];
   documentIds?: string[];
   team?: any[];
+  teamSource?: 'period' | 'project' | 'empty';
   amountWithoutVAT?: number;
   sourceProjectId?: string;
   createdBy: string;
@@ -271,6 +272,8 @@ export function projectToAuditPeriod(project: any, index = 0): AuditPeriod {
     deadline: getProjectDeadline(project),
     taskIds: [],
     documentIds: [],
+    team: getProjectTeam(project),
+    teamSource: 'project',
     sourceProjectId,
     createdBy: project?.createdBy || project?.notes?.createdBy || 'system',
     createdAt: project?.created_at || now,

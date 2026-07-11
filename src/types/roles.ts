@@ -29,7 +29,7 @@ export type UserRole =
   | 'admin';                 // Администратор системы
 
 // Названия ролей на русском
-const USER_ROLES: UserRole[] = [
+export const USER_ROLES: UserRole[] = [
   'ceo',
   'deputy_director',
   'company_director',

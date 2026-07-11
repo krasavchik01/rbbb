@@ -5,14 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, type User as AuthUser } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAppSettings } from '@/lib/appSettings';
 import { CompaniesManagement } from '@/components/settings/CompaniesManagement';
+import { EmailSettingsPanel } from '@/components/settings/EmailSettingsPanel';
 import { UserCompanyAssignment } from '@/components/settings/UserCompanyAssignment';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ROLE_LABELS, type UserRole } from '@/types/roles';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useEmployees } from '@/hooks/useSupabaseData';
+import { ROLE_LABELS, normalizeUserRole, type UserRole } from '@/types/roles';
+import type { Employee } from '@/lib/supabaseDataStore';
+import { useNavigate } from 'react-router-dom';
 import {
   User,
   Bell,
@@ -22,7 +27,8 @@ import {
   CheckCircle,
   Settings2,
   MapPin,
-  Building2
+  Building2,
+  Mail
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -57,6 +63,9 @@ export default function Settings() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const isAdmin = user?.role === 'admin';
+  const defaultSettingsTab = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('tab') || 'profile'
+    : 'profile';
 
   // Синхронизация с appSettings при изменении
   useEffect(() => {
@@ -175,12 +184,20 @@ export default function Settings() {
   };
 
   const handleChangePassword = async () => {
+    if (!user?.id || !user.email) {
+      toast({ title: 'Ошибка', description: 'Пользователь не найден', variant: 'destructive' });
+      return;
+    }
+    if (!currentPassword.trim()) {
+      toast({ title: 'Ошибка', description: 'Введите текущий пароль', variant: 'destructive' });
+      return;
+    }
     if (!newPassword.trim()) {
       toast({ title: 'Ошибка', description: 'Введите новый пароль', variant: 'destructive' });
       return;
     }
-    if (newPassword.length < 4) {
-      toast({ title: 'Ошибка', description: 'Пароль должен быть минимум 4 символа', variant: 'destructive' });
+    if (newPassword.length < 8) {
+      toast({ title: 'Ошибка', description: 'Пароль должен быть минимум 8 символов', variant: 'destructive' });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -190,19 +207,75 @@ export default function Settings() {
 
     setIsSaving(true);
     try {
-      // Обновляем пароль в таблице employees
-      const { error } = await supabase
+      const { data: employee, error: employeeReadError } = await supabase
         .from('employees')
-        .update({ password: newPassword } as any)
-        .eq('id', user!.id);
+        .select('id,email,password')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
+      if (employeeReadError) throw employeeReadError;
+
+      let authVerified = false;
+      if ((employee as any)?.password) {
+        if ((employee as any).password !== currentPassword) {
+          toast({ title: 'Ошибка', description: 'Текущий пароль указан неверно', variant: 'destructive' });
+          return;
+        }
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: user.email.trim().toLowerCase(),
+          password: currentPassword,
+        });
+        if (signInError) {
+          toast({ title: 'Ошибка', description: 'Текущий пароль указан неверно', variant: 'destructive' });
+          return;
+        }
+        authVerified = true;
+      }
+
+      const { error: employeeUpdateError } = await supabase
+        .from('employees')
+        .update({ password: newPassword })
+        .eq('id', user.id);
+
+      if (employeeUpdateError) throw employeeUpdateError;
+
+      let authPasswordSynced = false;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session && !authVerified) {
+        await supabase.auth.signInWithPassword({
+          email: user.email.trim().toLowerCase(),
+          password: currentPassword,
+        });
+      }
+
+      const { error: authUpdateError } = await supabase.auth.updateUser({ password: newPassword });
+      authPasswordSynced = !authUpdateError;
+
+      if (!authPasswordSynced) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: user.email.trim().toLowerCase(),
+          password: newPassword,
+          options: {
+            data: {
+              name: user.name,
+              role: user.role,
+            },
+          },
+        });
+        authPasswordSynced = !signUpError;
+      }
 
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
 
-      toast({ title: 'Пароль изменён', description: 'Новый пароль сохранён. Используйте его при следующем входе.' });
+      toast({
+        title: 'Пароль изменён',
+        description: authPasswordSynced
+          ? 'Новый пароль сохранён и синхронизирован с восстановлением через email.'
+          : 'Новый пароль сохранён для входа. Если восстановление через email не сработает, обратитесь к администратору.',
+      });
     } catch (err: any) {
       toast({ title: 'Ошибка', description: err.message || 'Не удалось сменить пароль', variant: 'destructive' });
     } finally {
@@ -212,7 +285,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4 md:p-6">
-        <div>
+      <div>
         <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
           <Shield className="w-6 h-6 sm:w-8 sm:h-8" />
           Настройки
@@ -220,13 +293,16 @@ export default function Settings() {
         <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Настройки системы и профиля</p>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-4">
+      {isAdmin && <RoleTestingPanel />}
+
+      <Tabs defaultValue={defaultSettingsTab} className="space-y-4">
         <TabsList className="flex flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="profile" className="text-xs sm:text-sm">Профиль</TabsTrigger>
           <TabsTrigger value="notifications" className="text-xs sm:text-sm">Уведомления</TabsTrigger>
           <TabsTrigger value="appearance" className="text-xs sm:text-sm">Внешний вид</TabsTrigger>
           <TabsTrigger value="security" className="text-xs sm:text-sm">Безопасность</TabsTrigger>
           {isAdmin && <TabsTrigger value="system" className="text-xs sm:text-sm">Система</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="email" className="text-xs sm:text-sm">Почта</TabsTrigger>}
           {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo' || user?.role === 'deputy_director') && (
             <TabsTrigger value="companies" className="text-xs sm:text-sm">Компании</TabsTrigger>
           )}
@@ -435,14 +511,14 @@ export default function Settings() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
-              <Button onClick={handleChangePassword} disabled={isSaving || !newPassword}>
+              <Button onClick={handleChangePassword} disabled={isSaving || !currentPassword || !newPassword}>
                 <Save className="w-4 h-4 mr-2" />
                 {isSaving ? 'Сохранение...' : 'Изменить пароль'}
               </Button>
               <div className="mt-4 p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
                   <CheckCircle className="w-4 h-4 inline mr-2" />
-                  Рекомендуется использовать пароль длиной не менее 8 символов
+                  Пароль должен быть не короче 8 символов. После смены используйте его при следующем входе.
                 </p>
               </div>
             </div>
@@ -688,6 +764,21 @@ export default function Settings() {
           </TabsContent>
         )}
 
+        {isAdmin && (
+          <TabsContent value="email" className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
+                <Mail className="w-5 h-5 text-primary" />
+                Почтовые настройки
+              </h3>
+              <p className="text-sm text-muted-foreground mb-5">
+                Настройка SMTP для восстановления пароля и системных уведомлений.
+              </p>
+            </div>
+            <EmailSettingsPanel />
+          </TabsContent>
+        )}
+
         {/* Вкладка Компании */}
         {(user?.role === 'admin' || user?.role === 'hr' || user?.role === 'procurement' || user?.role === 'ceo' || user?.role === 'deputy_director') && (
           <TabsContent value="companies" className="space-y-4">
@@ -735,5 +826,139 @@ export default function Settings() {
         )}
       </Tabs>
     </div>
+  );
+}
+
+const ROLE_TEST_SHORTCUTS: Array<{ role: UserRole; label: string }> = [
+  { role: 'ceo', label: 'Войти как CEO' },
+  { role: 'deputy_director', label: 'Войти как замдир' },
+  { role: 'partner', label: 'Войти как партнер' },
+  { role: 'hr', label: 'Войти как HR' },
+  { role: 'procurement', label: 'Войти как закуп' },
+  { role: 'manager_1', label: 'Войти как менеджер' },
+  { role: 'assistant_1', label: 'Войти как сотрудник' },
+];
+
+function employeeToAuthUser(employee: Employee): AuthUser {
+  const role = normalizeUserRole(employee.role, employee.level);
+  return {
+    id: employee.id,
+    email: employee.email || '',
+    name: employee.name || 'Без имени',
+    role,
+    companyId: employee.company_id || employee.companyId || undefined,
+    department: employee.department || '',
+    position: employee.position || '',
+    avatar: employee.name
+      ? employee.name.split(' ').map((part) => part[0]).join('').toUpperCase().slice(0, 2)
+      : 'UN',
+  };
+}
+
+function RoleTestingPanel() {
+  const navigate = useNavigate();
+  const { user, originalUser, isImpersonating, startImpersonation, stopImpersonation } = useAuth();
+  const { employees, loading } = useEmployees();
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  const sortedEmployees = [...employees]
+    .filter((employee) => employee.id && employee.name)
+    .sort((a, b) => {
+      const roleA = ROLE_LABELS[normalizeUserRole(a.role, a.level)] || a.role;
+      const roleB = ROLE_LABELS[normalizeUserRole(b.role, b.level)] || b.role;
+      return `${roleA} ${a.name}`.localeCompare(`${roleB} ${b.name}`, 'ru');
+    });
+
+  const switchToEmployee = async (employee?: Employee) => {
+    if (!employee) return;
+    await startImpersonation(employeeToAuthUser(employee));
+    navigate('/projects');
+  };
+
+  const switchToRole = async (role: UserRole) => {
+    const employee = sortedEmployees.find((item) => normalizeUserRole(item.role, item.level) === role);
+    if (employee) {
+      await switchToEmployee(employee);
+      return;
+    }
+
+    if (!user) return;
+    await startImpersonation({
+      ...user,
+      role,
+      name: `${ROLE_LABELS[role] || role} (проверка)`,
+      email: user.email || `role-${role}@local.test`,
+      position: 'Режим проверки роли',
+    });
+    navigate('/projects');
+  };
+
+  return (
+    <Card className="p-4 sm:p-5 border-sky-200 bg-sky-50/60">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Проверка ролей</h2>
+          <p className="text-sm text-muted-foreground">
+            Быстрый вход под реальным сотрудником, чтобы проверить таблицу, таймшиты и доступы.
+          </p>
+          {isImpersonating && originalUser && user && (
+            <p className="mt-2 text-sm font-medium text-amber-700">
+              Сейчас проверяете как: {user.name}. Оригинал: {originalUser.name}.
+            </p>
+          )}
+        </div>
+
+        {isImpersonating && (
+          <Button
+            variant="outline"
+            onClick={() => void stopImpersonation()}
+          >
+            Вернуться в admin
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {ROLE_TEST_SHORTCUTS.map((item) => (
+          <Button
+            key={item.role}
+            variant={item.role === 'partner' ? 'default' : 'outline'}
+            size="sm"
+            disabled={loading}
+            onClick={() => void switchToRole(item.role)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-[minmax(260px,520px)_auto] md:items-center">
+        <Select
+          value={selectedEmployeeId}
+          onValueChange={(value) => {
+            setSelectedEmployeeId(value);
+            void switchToEmployee(sortedEmployees.find((employee) => employee.id === value));
+          }}
+          disabled={loading}
+        >
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder={loading ? 'Загрузка сотрудников...' : 'Или выбрать любого сотрудника'} />
+          </SelectTrigger>
+          <SelectContent className="max-h-[420px]">
+            {sortedEmployees.map((employee) => {
+              const role = normalizeUserRole(employee.role, employee.level);
+              return (
+                <SelectItem key={employee.id} value={employee.id}>
+                  {ROLE_LABELS[role] || role}: {employee.name}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">
+          После выбора откроется главная таблица.
+        </span>
+      </div>
+    </Card>
   );
 }

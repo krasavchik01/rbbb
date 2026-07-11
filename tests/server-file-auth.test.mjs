@@ -285,8 +285,8 @@ test('seafile delete proxy requires privileged role and calls Seafile with serve
     const allowed = await fetch(`${ctx.baseUrl}/api/seafile/file?path=${encodeURIComponent('/project-a/secret.txt')}`, {
       method: 'DELETE',
       headers: {
-        'x-user-id': 'manager-1',
-        'x-user-role': 'manager',
+        'x-user-id': 'procurement-1',
+        'x-user-role': 'procurement',
       },
     });
     assert.equal(allowed.status, 200);
@@ -348,8 +348,8 @@ test('seafile upload proxy uploads through server-side token', async () => {
     const response = await fetch(`${ctx.baseUrl}/api/seafile/upload`, {
       method: 'POST',
       headers: {
-        'x-user-id': 'manager-1',
-        'x-user-role': 'manager',
+        'x-user-id': 'procurement-1',
+        'x-user-role': 'procurement',
       },
       body: form,
     });

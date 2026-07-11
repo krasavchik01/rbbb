@@ -1,0 +1,71 @@
+{
+  "startedAt": "2026-07-01T09:46:11.032Z",
+  "mode": "execute",
+  "deleteSource": false,
+  "onlyProjectId": "",
+  "limit": 0,
+  "totals": {
+    "projectsScanned": 1020,
+    "projectsWithCandidates": 2,
+    "candidates": 5,
+    "migrated": 5,
+    "skipped": 0,
+    "errors": 0
+  },
+  "projects": [
+    {
+      "projectId": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3",
+      "projectName": "ТОО Жизнь высокого уровня  - услуги по проведению маркетингового исследование ",
+      "candidates": 2,
+      "migrated": [
+        {
+          "fileName": "Договор (старая версия)",
+          "bucket": "contracts",
+          "oldPath": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782733577834-v66s0q-file.pdf",
+          "newPath": "/32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782899173971-1ryvha-_ (_ _)",
+          "downloadOk": true
+        },
+        {
+          "fileName": "Допик 1.pdf",
+          "bucket": "contracts",
+          "oldPath": "32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782733630868-sx4oav-1.pdf",
+          "newPath": "/32c1c739-05ba-4d57-b28f-61f1f1d7b1a3/1782899180330-yzzj33-_ 1.pdf",
+          "downloadOk": true
+        }
+      ],
+      "skipped": [],
+      "errors": []
+    },
+    {
+      "projectId": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8",
+      "projectName": "ТОО «BI Property»",
+      "candidates": 3,
+      "migrated": [
+        {
+          "fileName": "Договор (старая версия)",
+          "bucket": "contracts",
+          "oldPath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733259831-sjmhpv-002.pdf",
+          "newPath": "/727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782899181864-yjq5si-_ (_ _)",
+          "downloadOk": true
+        },
+        {
+          "fileName": "Проект договора аудит (002)..pdf",
+          "bucket": "contracts",
+          "oldPath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733265112-1901ej-002.pdf",
+          "newPath": "/727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782899182546-ftgkak-_ _ _ (002)..pdf",
+          "downloadOk": true
+        },
+        {
+          "fileName": "Допик №1.pdf",
+          "bucket": "contracts",
+          "oldPath": "727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782733416804-yciptw-No1.pdf",
+          "newPath": "/727e3a84-18c1-4088-aaee-4e1d5f80b0c8/1782899183173-k5a1da-_ _1.pdf",
+          "downloadOk": true
+        }
+      ],
+      "skipped": [],
+      "errors": []
+    }
+  ],
+  "finishedAt": "2026-07-01T09:46:23.413Z"
+}

@@ -1,24 +1,15 @@
 import {
-  LayoutDashboard,
   FolderOpen,
-  Clock,
-  Gift,
   Settings,
   UserCheck,
-  TrendingUp,
   Bell,
-  Calendar,
   UserCog,
-  CheckSquare,
   Activity,
   FileText,
   LogOut,
   Award,
-  Mail,
-  Bot,
-  CheckCircle2,
-  CalendarRange,
-  Users as UsersIcon,
+  Clock,
+  CalendarCheck,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -37,81 +28,48 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types/roles';
 import { getUnreadCount } from '@/lib/notifications';
-import { countPendingForUser } from '@/lib/aiTasks';
+import { ROLE_GROUPS } from '@/lib/roleAccess';
 
 interface MenuItem {
   title: string;
   url: string;
   icon: any;
   permission?: string;
-  allowedRoles?: UserRole[];
-  excludeRoles?: UserRole[];
+  allowedRoles?: readonly UserRole[];
+  excludeRoles?: readonly UserRole[];
 }
 
-// Структура sidebar: по доменам (после user-feedback session 2026-05-21).
-// AI-ассистент в самом верху как «универсальный пульт».
-//
-// Секция «Быстрый доступ» добавлена 2026-05-29 после жалобы пользователя
-// «дай меню быстрого доступа что бы я мог нажимать!» — компактный список
-// частых действий с фильтрацией по роли. Дублирует пункты из других
-// секций намеренно: тут они под рукой, там — в логическом домене.
+// Sidebar intentionally stays short: the app should have one obvious place to start
+// and a small set of action groups. Avoid duplicating the same route in multiple sections.
 const SECTIONS: { label: string; items: MenuItem[] }[] = [
   {
-    label: 'Быстрый доступ',
+    label: 'Работа',
     items: [
-      { title: 'Табель и аналитика', url: '/hr?tab=timesheet',     icon: CalendarRange,  allowedRoles: ['hr','ceo','deputy_director','admin'] },
-      { title: 'Утверждение часов',  url: '/timesheet-approval',   icon: CheckCircle2,   allowedRoles: ['partner','deputy_director','ceo','admin','hr'] },
-      { title: 'Назначение партнёров', url: '/assign-partners',    icon: UsersIcon,      allowedRoles: ['deputy_director','ceo','admin'] },
-      { title: 'Тайм-щиты (мои)',    url: '/timesheets',           icon: Clock,          excludeRoles: ['procurement','ceo','deputy_director'] },
+      { title: 'Свод', url: '/projects', icon: FolderOpen },
+      { title: 'Таймшиты', url: '/timesheets', icon: Clock },
+      { title: 'Посещаемость', url: '/attendance', icon: CalendarCheck },
+      { title: 'Уведомления', url: '/notifications', icon: Bell },
+      { title: 'Настройки', url: '/settings', icon: Settings },
     ],
   },
   {
-    label: 'Основное',
+    label: 'Управление',
     items: [
-      { title: 'AI-ассистент «RB»', url: '/ai',           icon: Bot,             allowedRoles: ['deputy_director','ceo','admin','partner','hr'] },
-      { title: 'Дашборд',           url: '/',             icon: LayoutDashboard },
-      { title: 'Уведомления',       url: '/notifications', icon: Bell },
+      { title: 'HR', url: '/hr', icon: UserCheck, allowedRoles: ROLE_GROUPS.hrManagement },
     ],
   },
   {
-    label: 'Проекты',
+    label: 'Закупки',
     items: [
-      { title: 'Проекты',              url: '/projects',                   icon: FolderOpen },
-      { title: 'Создать проект',       url: '/create-project-procurement', icon: FileText,    allowedRoles: ['procurement'] },
-      { title: 'Тендеры',              url: '/tenders',                    icon: Award,       allowedRoles: ['procurement'] },
+      { title: 'Создать проект', url: '/create-project-procurement', icon: FileText, allowedRoles: ROLE_GROUPS.procurement },
+      { title: 'Тендеры', url: '/tenders', icon: Award, allowedRoles: ROLE_GROUPS.procurement },
     ],
   },
   {
-    label: 'Задачи и календарь',
+    label: 'Админ',
     items: [
-      { title: 'Задачи',     url: '/tasks',    icon: CheckSquare, excludeRoles: ['procurement'] },
-      { title: 'Календарь',  url: '/calendar', icon: Calendar,    excludeRoles: ['procurement'] },
-    ],
-  },
-  {
-    label: 'Команда',
-    items: [
-      { title: 'HR',           url: '/hr',         icon: UserCheck, allowedRoles: ['hr','ceo','deputy_director','admin'] },
-      { title: 'Посещаемость', url: '/attendance', icon: Activity },
-    ],
-  },
-  {
-    label: 'Финансы',
-    items: [
-      { title: 'Тайм-щиты',  url: '/timesheets', icon: Clock,      excludeRoles: ['procurement','ceo','deputy_director'] },
-      { title: 'Утверждение часов', url: '/timesheet-approval', icon: CheckCircle2, allowedRoles: ['partner','deputy_director','ceo','admin','hr'] },
-      { title: 'Бонусы',     url: '/bonuses',    icon: Gift,       allowedRoles: ['ceo', 'deputy_director', 'admin'] },
-      { title: 'Аналитика',  url: '/analytics',  icon: TrendingUp, allowedRoles: ['ceo', 'deputy_director', 'admin'] },
-    ],
-  },
-  {
-    label: 'Администрирование',
-    items: [
-      { title: 'Управление',         url: '/user-management',       icon: UserCog,  allowedRoles: ['admin'] },
-      { title: 'Диагностика',        url: '/diagnostics',           icon: Activity, allowedRoles: ['admin'] },
-      { title: 'Тест БД',            url: '/database-test',         icon: Activity, allowedRoles: ['admin'] },
-      { title: 'SMTP Настройки',     url: '/smtp-settings',         icon: Mail,     allowedRoles: ['admin'] },
-      { title: 'Настройки',          url: '/settings',              icon: Settings, excludeRoles: ['ceo','deputy_director'] },
+      { title: 'Пользователи', url: '/user-management', icon: UserCog, allowedRoles: ROLE_GROUPS.admin },
+      { title: 'Диагностика', url: '/diagnostics', icon: Activity, allowedRoles: ROLE_GROUPS.admin },
     ],
   },
 ];
@@ -121,7 +79,6 @@ export function AppSidebar() {
   const { user, checkPermission, hasAnyRole, logout } = useAuth();
   const collapsed = state === 'collapsed';
   const [unreadCount, setUnreadCount] = useState(0);
-  const [aiTasksCount, setAiTasksCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -132,15 +89,6 @@ export function AppSidebar() {
     };
     tick();
     const interval = setInterval(tick, 15000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Счётчик pending AI-задач — обновляется каждую минуту (in-app push)
-  useEffect(() => {
-    if (!user) return;
-    const tick = () => countPendingForUser(user.id).then(setAiTasksCount).catch(() => {});
-    tick();
-    const interval = setInterval(tick, 60_000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -182,24 +130,11 @@ export function AppSidebar() {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </Badge>
             )}
-            {item.url === '/tasks' && aiTasksCount > 0 && (
-              <Badge
-                variant="destructive"
-                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold animate-pulse"
-              >
-                {aiTasksCount > 9 ? '9+' : aiTasksCount}
-              </Badge>
-            )}
           </div>
           {!collapsed && <span className="flex-1 text-sm">{item.title}</span>}
           {!collapsed && item.url === '/notifications' && unreadCount > 0 && (
             <Badge variant="destructive" className="ml-auto text-xs">
               {unreadCount}
-            </Badge>
-          )}
-          {!collapsed && item.url === '/tasks' && aiTasksCount > 0 && (
-            <Badge variant="destructive" className="ml-auto text-xs">
-              {aiTasksCount}
             </Badge>
           )}
         </NavLink>

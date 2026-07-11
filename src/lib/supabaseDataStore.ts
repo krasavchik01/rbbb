@@ -6,7 +6,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
-import { apiDelete, apiGet, apiPostFormData } from '@/lib/api';
+import { apiDelete, apiGet, apiPost, apiPostFormData } from '@/lib/api';
+import { dedupeProjectFiles } from '@/lib/contractData';
 
 // Типы из Supabase
 type SupabaseEmployee = Database['public']['Tables']['employees']['Row'];
@@ -75,6 +76,33 @@ const STORAGE_KEYS = {
   SYNC_STATUS: 'rb_sync_status',
 };
 
+function extensionForUpload(file: File): string {
+  const fromName = file.name.match(/\.([a-zA-Z0-9]{1,12})$/)?.[1];
+  if (fromName) return `.${fromName.toLowerCase()}`;
+  const mime = String(file.type || '').toLowerCase();
+  if (mime.includes('pdf')) return '.pdf';
+  if (mime.includes('word')) return '.docx';
+  if (mime.includes('excel') || mime.includes('spreadsheet')) return '.xlsx';
+  if (mime.includes('png')) return '.png';
+  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';
+  return '';
+}
+
+function safeStorageFileName(file: File): string {
+  const ext = extensionForUpload(file);
+  const name = file.name || 'file';
+  const withoutExt = ext && name.toLowerCase().endsWith(ext) ? name.slice(0, -ext.length) : name;
+  const asciiBase = withoutExt
+    .normalize('NFKD')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/[\\/:*?"<>|#%{}^~[\]`;@=&+,]+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_\-.]+|[_\-.]+$/g, '')
+    .slice(0, 120);
+  return `${asciiBase || 'file'}${ext}`;
+}
+
 class SupabaseDataStore {
   private isOnline: boolean = false;
 
@@ -131,7 +159,8 @@ class SupabaseDataStore {
   // === EMPLOYEES ===
 
   async getEmployees(): Promise<Employee[]> {
-    if (this.isOnline) {
+    const online = this.isOnline || await this.checkConnection();
+    if (online) {
       try {
         const { data, error } = await supabase
           .from('employees')
@@ -214,6 +243,7 @@ class SupabaseDataStore {
           .insert([{
             name: newEmployee.name,
             email: newEmployee.email,
+            password: employee.password || null,
             role: newEmployee.role as any,
             level: '1' as any, // По умолчанию уровень 1
             whatsapp: newEmployee.phone || null,
@@ -435,7 +465,7 @@ class SupabaseDataStore {
           .from('projects')
           .update({
             notes: JSON.stringify(mergedNotes),
-            name: updates.name || updates.client?.name || existingNotes.name || 'Без названия',
+            name: updates.name || updates.client?.name || existingNotes.name || currentProject.name || 'Без названия',
             status: supabaseStatus,
             kpi_percentage: nextCompletion,
             updated_at: new Date().toISOString()
@@ -463,11 +493,32 @@ class SupabaseDataStore {
 
   async deleteProject(id: string): Promise<boolean> {
     try {
-      await supabase.from('projects').delete().eq('id', id);
+      const relatedTables = ['project_files', 'project_amendments', 'project_data'] as const;
+      for (const table of relatedTables) {
+        const { error } = await supabase.from(table as any).delete().eq('project_id', id);
+        if (error) {
+          console.warn(`Could not clean ${table} for project ${id}:`, error);
+        }
+      }
+
+      const { error } = await supabase.from('projects').delete().eq('id', id);
+      if (error) throw error;
+
+      const { data: stillExists, error: verifyError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (verifyError) throw verifyError;
+      if (stillExists) {
+        throw new Error('Project was not deleted. Check database delete permissions.');
+      }
+
       return true;
     } catch (err) {
       console.error('❌ Error deleting project:', err);
-      return false;
+      throw err;
     }
   }
 
@@ -534,6 +585,9 @@ class SupabaseDataStore {
 
     // Маппинг статуса из Supabase в UI
     const mappedStatus = (() => {
+      if (proj.status === 'completed') return 'completed';
+      if (proj.status === 'in_progress' && notes?.status === 'completed') return 'completed';
+
       // Пытаемся взять статус из notes, так как он там более точный (русский)
       const notesStatus = notes?.status;
       if (notesStatus) {
@@ -572,6 +626,7 @@ class SupabaseDataStore {
       // Извлекаем команду и задачи из notes
       team: notes?.team || [],
       tasks: notes?.tasks || [],
+      finances: notes?.finances || undefined,
       // Сохраняем notes отдельно для доступа к полным данным
       notes: notes,
       // Маппим contract если он есть в notes
@@ -601,6 +656,60 @@ class SupabaseDataStore {
 
   // === PROJECT FILES ===
 
+  private async uploadFileDirectToSeafile(params: {
+    projectId?: string;
+    taskId?: string;
+    file: File;
+    category?: string;
+    uploadedBy: string;
+  }): Promise<any> {
+    const { projectId, taskId, file, category = 'other', uploadedBy } = params;
+    const linkResponse = await apiPost<{
+      uploadUrl: string;
+      form: {
+        fileField?: string;
+        fileName?: string;
+        storedName?: string;
+        parentDir?: string;
+        relativePath?: string;
+        replace?: string;
+      };
+      file: any;
+    }>('/api/seafile/upload-link', {
+      projectId,
+      taskId,
+      category,
+      uploadedBy,
+      fileName: file.name,
+      fileType: file.type || 'application/octet-stream',
+      fileSize: file.size || 0,
+    });
+
+    if (linkResponse.error || !linkResponse.data?.uploadUrl || !linkResponse.data?.file) {
+      throw new Error(linkResponse.error || 'Could not create Seafile upload link');
+    }
+
+    const form = linkResponse.data.form || {};
+    const fallbackRelativePath = taskId ? `tasks/${taskId}` : projectId || '';
+    const formData = new FormData();
+    formData.append(form.fileField || 'file', file, form.fileName || form.storedName || file.name);
+    formData.append('parent_dir', form.parentDir || '/');
+    formData.append('relative_path', form.relativePath || fallbackRelativePath);
+    formData.append('replace', form.replace || '0');
+
+    const uploadResponse = await fetch(linkResponse.data.uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      const details = await uploadResponse.text().catch(() => '');
+      throw new Error(`Seafile direct upload failed: HTTP ${uploadResponse.status}${details ? ` ${details}` : ''}`);
+    }
+
+    return linkResponse.data.file;
+  }
+
   /**
  * Загружает файл на локальный сервер (NAS) и сохраняет метаданные в Supabase
  */
@@ -609,7 +718,7 @@ class SupabaseDataStore {
     file: File,
     category: 'contract' | 'scan' | 'document' | 'screenshot' | 'other' = 'other',
     uploadedBy: string
-  ): Promise<{ id: string; storagePath: string; publicUrl: string }> {
+  ): Promise<{ id: string; storagePath: string; publicUrl: string; file?: any }> {
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -618,17 +727,96 @@ class SupabaseDataStore {
       formData.append('uploadedBy', uploadedBy);
 
       console.log(`📤 Загрузка файла ${file.name} в Seafile через backend proxy, папка: /${projectId}...`);
-      const uploadResponse = await apiPostFormData<{ file: any }>('/api/seafile/upload', formData);
-      if (uploadResponse.error || !uploadResponse.data?.file) {
-        throw new Error(uploadResponse.error || 'Пустой ответ сервера Seafile upload proxy');
+      let fileRecord: any;
+      try {
+        fileRecord = await this.uploadFileDirectToSeafile({
+          projectId,
+          file,
+          category,
+          uploadedBy,
+        });
+      } catch (directError) {
+        console.warn('Direct Seafile upload unavailable, falling back to upload proxy:', directError);
       }
 
-      const fileRecord = uploadResponse.data.file;
+      if (!fileRecord) {
+      try {
+        const uploadResponse = await apiPostFormData<{ file: any }>('/api/seafile/upload', formData);
+        if (uploadResponse.error || !uploadResponse.data?.file) {
+          throw new Error(uploadResponse.error || 'Пустой ответ сервера Seafile upload proxy');
+        }
+        fileRecord = uploadResponse.data.file;
+      } catch (proxyError) {
+        console.error('Seafile upload proxy failed:', proxyError);
+        throw proxyError;
+        /*
+        const bucketName = category === 'contract'
+          ? 'contracts'
+          : category === 'document'
+            ? 'documents'
+            : 'project-files';
+        const safeFileName = safeStorageFileName(file);
+        const storagePath = `${projectId}/${Date.now()}-${safeFileName}`;
+
+        const { error: storageError } = await supabase.storage
+          .from(bucketName)
+          .upload(storagePath, file, {
+            contentType: file.type || 'application/octet-stream',
+            upsert: false,
+          });
+
+        if (storageError) {
+          throw storageError;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(storagePath);
+
+        fileRecord = {
+          id: `file_${Date.now()}`,
+          name: file.name,
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size || 0,
+          storagePath,
+          publicUrl: publicUrlData.publicUrl,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy,
+          category,
+        };
+        */
+      }
+      }
+      const storagePath = fileRecord.storagePath || fileRecord.path || fileRecord.filePath || '';
+      const publicUrl = fileRecord.publicUrl || fileRecord.url || (storagePath ? `seafile://${storagePath}` : '');
+      const normalizedFileRecord = {
+        ...fileRecord,
+        id: fileRecord.id || `file_${Date.now()}`,
+        projectId,
+        fileName: fileRecord.fileName || fileRecord.name || file.name,
+        name: fileRecord.name || fileRecord.fileName || file.name,
+        fileType: fileRecord.fileType || fileRecord.type || file.type || 'application/octet-stream',
+        fileSize: fileRecord.fileSize || fileRecord.size || file.size || 0,
+        storagePath,
+        uploadedBy,
+        uploadedAt: fileRecord.uploadedAt || fileRecord.createdAt || new Date().toISOString(),
+        category,
+        publicUrl,
+        url: publicUrl,
+      };
 
       const project = await this.getProject(projectId);
       const existingNotes = (project as any)?.notes || {};
       const existingFiles = existingNotes.files || [];
-      const updatedFiles = [...existingFiles, fileRecord];
+      const fileKey = normalizedFileRecord.id || normalizedFileRecord.storagePath || normalizedFileRecord.publicUrl;
+      const updatedFiles = dedupeProjectFiles([
+        ...existingFiles.filter((item: any) => {
+          const itemKey = item?.id || item?.storagePath || item?.publicUrl || item?.url;
+          return !fileKey || itemKey !== fileKey;
+        }),
+        normalizedFileRecord,
+      ]);
 
       // Если это договор (contract), пропишем псевдо-ссылку еще и в contractScanUrl 
       // для обратной совместимости со старыми компонентами
@@ -636,20 +824,25 @@ class SupabaseDataStore {
       if (category === 'contract') {
         updatedContract = {
           ...existingNotes.contract,
-          contractScanUrl: fileRecord.publicUrl
+          contractScanUrl: publicUrl
         };
       }
 
-      await this.updateProject(projectId, {
-        ...existingNotes,
-        files: updatedFiles,
-        ...(category === 'contract' ? { contract: updatedContract } : {})
-      } as any);
+      try {
+        await this.updateProject(projectId, {
+          ...existingNotes,
+          files: updatedFiles,
+          ...(category === 'contract' ? { contract: updatedContract } : {})
+        } as any);
+      } catch (metadataError) {
+        console.warn('Could not sync uploaded file metadata to project notes:', metadataError);
+      }
 
       return {
-        id: fileRecord.id,
-        storagePath: fileRecord.storagePath,
-        publicUrl: fileRecord.publicUrl
+        id: normalizedFileRecord.id,
+        storagePath,
+        publicUrl,
+        file: normalizedFileRecord
       };
     } catch (error) {
       console.error('❌ Ошибка в uploadProjectFile (Seafile):', error);
@@ -796,6 +989,17 @@ class SupabaseDataStore {
     file: File,
     uploadedBy: string
   ): Promise<{ id: string; name: string; size: number; storagePath: string; uploadedAt: string; uploadedBy: string }> {
+    try {
+      const directFile = await this.uploadFileDirectToSeafile({
+        taskId,
+        file,
+        uploadedBy,
+      });
+      if (directFile) return directFile;
+    } catch (directError) {
+      console.warn('Direct task Seafile upload unavailable, falling back to upload proxy:', directError);
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('taskId', taskId);
@@ -913,7 +1117,37 @@ class SupabaseDataStore {
       return data;
     } catch (error) {
       console.error('❌ Error creating project amendment:', error);
-      throw error;
+      const fallback = {
+        id: `amend_${Date.now()}`,
+        project_id: projectId,
+        projectId,
+        number: amendment.number,
+        date: amendment.date,
+        description: amendment.description,
+        file_url: amendment.fileUrl || null,
+        fileUrl: amendment.fileUrl || undefined,
+        created_by: createdBy,
+        createdBy,
+        created_at: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+
+      const project = await this.getProject(projectId);
+      const existingNotes = (project as any)?.notes || {};
+      const existingAmendments = existingNotes.amendments || existingNotes.contract?.amendments || [];
+      const updatedAmendments = [
+        fallback,
+        ...existingAmendments.filter((item: any) => String(item?.id) !== fallback.id),
+      ];
+      await this.updateProject(projectId, {
+        ...existingNotes,
+        amendments: updatedAmendments,
+        contract: {
+          ...(existingNotes.contract || {}),
+          amendments: updatedAmendments,
+        },
+      } as any);
+      return fallback;
     }
   }
 
@@ -929,9 +1163,17 @@ class SupabaseDataStore {
         .order('date', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      if (data && data.length > 0) return data;
     } catch (error) {
       console.error('❌ Error getting project amendments:', error);
+    }
+
+    try {
+      const project = await this.getProject(projectId);
+      const notes = (project as any)?.notes || {};
+      return notes.amendments || notes.contract?.amendments || [];
+    } catch (fallbackError) {
+      console.error('❌ Error getting project amendments fallback:', fallbackError);
       return [];
     }
   }
@@ -950,7 +1192,7 @@ class SupabaseDataStore {
       return true;
     } catch (error) {
       console.error('❌ Error deleting project amendment:', error);
-      throw error;
+      return false;
     }
   }
 

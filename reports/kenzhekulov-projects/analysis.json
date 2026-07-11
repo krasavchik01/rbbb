@@ -1,0 +1,3398 @@
+{
+  "summary": {
+    "source": "Проекты Кенжекулов.xlsx",
+    "rows": 52,
+    "high": 3,
+    "medium": 4,
+    "low": 21,
+    "unmatched": 24,
+    "alreadyCompleted": 7,
+    "unmatchedEmployees": [
+      "Акмолдир",
+      "Анара (ГПХ)",
+      "Василий",
+      "Дмитрий",
+      "Лебеков Ермек",
+      "Сауле (ГПХ)"
+    ]
+  },
+  "rows": [
+    {
+      "no": "1",
+      "clientName": "ТОО «Oil Construction Company»",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "октября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        10
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Нускабаева Райхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Идрисов Спандияр"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Нускабаева Райхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "employeeName": "Нускабаева Райхан",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Идрисов Спандияр",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "employeeName": "Идрисов Спандияр",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "medium",
+      "matchedProjectId": "ca8526ed-4e82-4566-bf08-ced1855f8166",
+      "matchedProjectName": "ТОО «Oil Construction Company» (за период 2022-2024)",
+      "matchedProjectStatus": "in_progress",
+      "matchScore": 70,
+      "candidates": [
+        {
+          "id": "ca8526ed-4e82-4566-bf08-ced1855f8166",
+          "name": "ТОО «Oil Construction Company» (за период 2022-2024)",
+          "status": "in_progress",
+          "score": 70
+        },
+        {
+          "id": "942e5751-7666-4d58-a696-17f2c63f4b1d",
+          "name": "ТОО «Oil Construction Company» (за период 2022-2024)",
+          "status": "active",
+          "score": 70
+        },
+        {
+          "id": "0629f630-5092-4e09-8b63-84ea343c288f",
+          "name": "ТОО «Oil Construction Company» (за период 2025-2027)",
+          "status": "completed",
+          "score": 45
+        },
+        {
+          "id": "9c7b15cc-50c0-469a-8d68-63d21ba942bd",
+          "name": "ТОО «Oil Construction Company» (за период 2025-2027)",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "6a0c7388-724d-445c-a66b-35d6dd3927e1",
+          "name": "ТОО «Oil Construction Company» (за период 2025-2027)",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "2",
+      "clientName": "Oil Service Company",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "октября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        10
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Идрисов Спандияр"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Идрисов Спандияр",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "employeeName": "Идрисов Спандияр",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "3",
+      "clientName": "Oil Service Company",
+      "auditType": "Аудит ПФО 6м2025",
+      "auditYear": 2025,
+      "periodRaw": "июль 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Идрисов Спандияр"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Идрисов Спандияр",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "employeeName": "Идрисов Спандияр",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "4",
+      "clientName": "КМГ-Аэро",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "ноября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        11
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Zhorabekov Zhanibek"
+      ],
+      "team": [
+        "Аманов Онгар",
+        "Бекжанов Бақытжан"
+      ],
+      "tax": [
+        "Акмолдир"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Zhorabekov Zhanibek",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "5e0f57c3-534a-426b-9af0-2a054ed5a225",
+          "employeeName": "Zhorabekov Zhanibek",
+          "matched": true
+        },
+        {
+          "name": "Аманов Онгар",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "d1dbb59d-113c-4d9a-8a65-06f441bcf0a9",
+          "employeeName": "Аманов Онгар",
+          "matched": true
+        },
+        {
+          "name": "Бекжанов Бақытжан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "e9b94a61-36b2-4120-9b97-3d006e2db738",
+          "employeeName": "Бекжанов Бақытжан Абылқасымұлы",
+          "matched": true
+        },
+        {
+          "name": "Акмолдир",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": null,
+          "employeeName": "Акмолдир",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "5",
+      "clientName": "ТОО Озенмунайсервис",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "октября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        10
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Лебеков Ермек"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Лебеков Ермек",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": null,
+          "employeeName": "Лебеков Ермек",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "c011cdcf-144b-4839-be2a-a86a63cc2ab2",
+      "matchedProjectName": "ТОО Озенмунайсервис (за период 2023-2025)",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "c011cdcf-144b-4839-be2a-a86a63cc2ab2",
+          "name": "ТОО Озенмунайсервис (за период 2023-2025)",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "624b27eb-d589-4ef2-860c-9c22bd4e9610",
+          "name": "ТОО Озенмунайсервис (за период 2023-2025)",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "27758e4e-e71d-456b-a2f4-b245c062b5c9",
+          "name": "ТОО Озенмунайсервис (за период 2023-2025)",
+          "status": "completed",
+          "score": 45
+        },
+        {
+          "id": "f9219841-5532-44a6-96e6-bbfb24de900d",
+          "name": "ТОО Озенмунайсервис (за период 2023-2025)",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "6",
+      "clientName": "ТОО Кен-Курылыс-Сервис",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "октября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        10
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Идрисов Спандияр"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Идрисов Спандияр",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "employeeName": "Идрисов Спандияр",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "medium",
+      "matchedProjectId": "c32b354d-34c1-47bf-b6ea-f6049e5c9c69",
+      "matchedProjectName": "ТОО Кен-Курылыс-Сервис (за период 2022-2024)",
+      "matchedProjectStatus": "completed",
+      "matchScore": 70,
+      "candidates": [
+        {
+          "id": "c32b354d-34c1-47bf-b6ea-f6049e5c9c69",
+          "name": "ТОО Кен-Курылыс-Сервис (за период 2022-2024)",
+          "status": "completed",
+          "score": 70
+        }
+      ]
+    },
+    {
+      "no": "7",
+      "clientName": "SkyBridge Invest",
+      "auditType": "Аудит ПФО 6м2024",
+      "auditYear": 2024,
+      "periodRaw": "июля 2024г. - август 2024г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2024,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "5d2f64af-299c-4ead-b644-c1bde16219e9",
+      "matchedProjectName": "АО SkyBridge Invest",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "5d2f64af-299c-4ead-b644-c1bde16219e9",
+          "name": "АО SkyBridge Invest",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "db26bee4-0da7-45c1-981a-64a020b55f67",
+          "name": "АО SkyBridge Invest",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "8",
+      "clientName": "SkyBridge Digital Finance Ltd",
+      "auditType": "Аудит ПФО 6м2024",
+      "auditYear": 2024,
+      "periodRaw": "июля 2024г. - август 2024г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2024,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "aaa05862-77e3-45b9-9b82-f5daa73eb22a",
+      "matchedProjectName": "Частная компания «SkyBridge Digital Finance Ltd.»",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "aaa05862-77e3-45b9-9b82-f5daa73eb22a",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "4ea5913a-bad3-44f7-81f1-0a5ba324cd99",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "f407e814-994f-42a7-a8a7-ac8362310ee3",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "cc98690b-3c17-4fb7-8392-ee54f117ce12",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "9",
+      "clientName": "IQ Solutions",
+      "auditType": "Аудит ПФО 6м2024",
+      "auditYear": 2024,
+      "periodRaw": "июля 2024г. - август 2024г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2024,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "be364640-1303-4487-a3a9-a00078e30d6a",
+      "matchedProjectName": "ТОО «iQ-Solutions»",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "be364640-1303-4487-a3a9-a00078e30d6a",
+          "name": "ТОО «iQ-Solutions»",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "10",
+      "clientName": "SB Solutions",
+      "auditType": "Аудит ПФО 6м2024",
+      "auditYear": 2024,
+      "periodRaw": "июля 2024г. - август 2024г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2024,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "19794b0f-01e3-43fd-8fec-001f89f1120d",
+      "matchedProjectName": "ТОО «SB-Solutions»",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "19794b0f-01e3-43fd-8fec-001f89f1120d",
+          "name": "ТОО «SB-Solutions»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "a69c1838-1698-4d98-8644-032d764c75ee",
+          "name": "ТОО «SB-Solutions»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "55fbe3a6-eea5-433d-9e1f-09acb94d40ff",
+          "name": "ТОО «SB-Solutions»",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "11",
+      "clientName": "SkyBridge Invest",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "5d2f64af-299c-4ead-b644-c1bde16219e9",
+      "matchedProjectName": "АО SkyBridge Invest",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "5d2f64af-299c-4ead-b644-c1bde16219e9",
+          "name": "АО SkyBridge Invest",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "db26bee4-0da7-45c1-981a-64a020b55f67",
+          "name": "АО SkyBridge Invest",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "12",
+      "clientName": "SkyBridge Digital Finance Ltd",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "aaa05862-77e3-45b9-9b82-f5daa73eb22a",
+      "matchedProjectName": "Частная компания «SkyBridge Digital Finance Ltd.»",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "aaa05862-77e3-45b9-9b82-f5daa73eb22a",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "4ea5913a-bad3-44f7-81f1-0a5ba324cd99",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "f407e814-994f-42a7-a8a7-ac8362310ee3",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "cc98690b-3c17-4fb7-8392-ee54f117ce12",
+          "name": "Частная компания «SkyBridge Digital Finance Ltd.»",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "13",
+      "clientName": "IQ Solutions",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "be364640-1303-4487-a3a9-a00078e30d6a",
+      "matchedProjectName": "ТОО «iQ-Solutions»",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "be364640-1303-4487-a3a9-a00078e30d6a",
+          "name": "ТОО «iQ-Solutions»",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "14",
+      "clientName": "SB Solutions",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Бекболова Саийда"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Бекболова Саийда",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "ed484c3f-3acc-40fa-9d56-533d31f99221",
+          "employeeName": "Бекболова Саийда Медетқызы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "19794b0f-01e3-43fd-8fec-001f89f1120d",
+      "matchedProjectName": "ТОО «SB-Solutions»",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "19794b0f-01e3-43fd-8fec-001f89f1120d",
+          "name": "ТОО «SB-Solutions»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "a69c1838-1698-4d98-8644-032d764c75ee",
+          "name": "ТОО «SB-Solutions»",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "55fbe3a6-eea5-433d-9e1f-09acb94d40ff",
+          "name": "ТОО «SB-Solutions»",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "15",
+      "clientName": "ТОО KMG-Security",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "ноября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        11
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Шардарбекова Саия"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Шардарбекова Саия",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "employeeName": "Шардарбекова Саия Гамзатовна",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "medium",
+      "matchedProjectId": "afafe527-1044-4b01-9940-749e194a82ed",
+      "matchedProjectName": "ТОО KMG-Security (за период 2022-2024)",
+      "matchedProjectStatus": "active",
+      "matchScore": 70,
+      "candidates": [
+        {
+          "id": "afafe527-1044-4b01-9940-749e194a82ed",
+          "name": "ТОО KMG-Security (за период 2022-2024)",
+          "status": "active",
+          "score": 70
+        }
+      ]
+    },
+    {
+      "no": "16",
+      "clientName": "ТОО Богатырь Комир",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "ноября 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        11
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Василий",
+        "Дмитрий"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Василий",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Василий",
+          "matched": false
+        },
+        {
+          "name": "Дмитрий",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Дмитрий",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "high",
+      "matchedProjectId": "2f5dfee7-0abd-4604-b144-e1e487f01283",
+      "matchedProjectName": "ТОО Богатырь Комир",
+      "matchedProjectStatus": "completed",
+      "matchScore": 115,
+      "candidates": [
+        {
+          "id": "2f5dfee7-0abd-4604-b144-e1e487f01283",
+          "name": "ТОО Богатырь Комир",
+          "status": "completed",
+          "score": 115
+        },
+        {
+          "id": "d255a0da-ce08-463f-9992-fadb30b2f025",
+          "name": "ТОО Богатырь Комир (за период 2022-2024)",
+          "status": "active",
+          "score": 70
+        }
+      ]
+    },
+    {
+      "no": "17",
+      "clientName": "KIDF Fund",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "декабря 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        12
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Сартаева Гаухар"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сартаева Гаухар",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "employeeName": "Сартаева Гаухар Шыныбековна",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "18",
+      "clientName": "KIDF MC",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "декабря 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        12
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Сартаева Гаухар"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сартаева Гаухар",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "employeeName": "Сартаева Гаухар Шыныбековна",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "19",
+      "clientName": "ЧК Aktau Tourism City Ltd.",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "декабря 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        12
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Кенжекулов Адилжан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "20",
+      "clientName": "ЧК «Ellington Group KAZ» Ltd.",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "декабря 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        12
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Мухашев Куаныш"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Мухашев Куаныш",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "f148a71f-f5f2-4a21-bdec-8e2b2e9d5aee",
+          "employeeName": "Мухашев Куаныш Кудашулы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "21",
+      "clientName": "ЧК Tethys International Touristic Hub Ltd.",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "декабря 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        12
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Галымжанов Нурхан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "22",
+      "clientName": "ЧК Turkistan Tourism City Ltd.",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "декабря 2024г. - февраль 2025г.",
+      "periodStartYear": 2024,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        12
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Zhorabekov Zhanibek"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Zhorabekov Zhanibek",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "5e0f57c3-534a-426b-9af0-2a054ed5a225",
+          "employeeName": "Zhorabekov Zhanibek",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "23",
+      "clientName": "ЧК Horizon",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Галымжанов Нурхан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "24",
+      "clientName": "ЧК Orient Fund",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Галымжанов Нурхан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "25",
+      "clientName": "ЧК Orient УК",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Галымжанов Нурхан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "26",
+      "clientName": "АО Нефтяная компания КОР",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "апреля 2025г. - май 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "high",
+      "matchedProjectId": "30a31bc2-3824-44a4-ae2e-8e37364352b2",
+      "matchedProjectName": "АО «Нефтяная компания «КОР»",
+      "matchedProjectStatus": "active",
+      "matchScore": 115,
+      "candidates": [
+        {
+          "id": "30a31bc2-3824-44a4-ae2e-8e37364352b2",
+          "name": "АО «Нефтяная компания «КОР»",
+          "status": "active",
+          "score": 115
+        },
+        {
+          "id": "cdc0b3a1-fc05-4e47-8727-33322afec97f",
+          "name": "АО «Нефтяная компания «КОР»",
+          "status": "active",
+          "score": 115
+        },
+        {
+          "id": "20facfa7-69b4-4e9b-8cb5-f8c32bbd1d5f",
+          "name": "АО «Нефтяная компания «КОР»",
+          "status": "completed",
+          "score": 115
+        },
+        {
+          "id": "f898001e-44a6-4e09-b3ad-8e13e03cd0ec",
+          "name": "АО «Нефтяная компания «КОР»",
+          "status": "active",
+          "score": 115
+        },
+        {
+          "id": "f21ecf0f-cc83-42c5-87d1-c3933521c9e2",
+          "name": "АО «Нефтяная компания «КОР»",
+          "status": "active",
+          "score": 115
+        }
+      ]
+    },
+    {
+      "no": "27",
+      "clientName": "АО Национальные информационные технологии",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраля 2025г. - май 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Акмолдир"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Акмолдир",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": null,
+          "employeeName": "Акмолдир",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "63cf68e4-6e55-42df-bfd9-d3ae5669549a",
+      "matchedProjectName": "АО Национальные информационные технологии (НИТ)",
+      "matchedProjectStatus": "completed",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "63cf68e4-6e55-42df-bfd9-d3ae5669549a",
+          "name": "АО Национальные информационные технологии (НИТ)",
+          "status": "completed",
+          "score": 45
+        },
+        {
+          "id": "905166ec-326e-4e60-9273-fce0d09191f7",
+          "name": "АО «Национальные информационные технологии» - на безвозмездное оказание аудиторских услуг - услуг по проведению аудита отдельной и консолидированной финансовой отчетности Акционерного общества «Национальные информационные технологии», заканчивающийся 31.12.2025 года, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности, для предоставления и размещения на фондовой бирже KASE.KZ и не используется для иных целей, в том числе для бухгалтерского и налогового учета Заказчика ",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "c69f51d2-7a77-4202-a8a2-c8fe7d97f849",
+          "name": "АО Национальные информационные технологии (НИТ)",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "28",
+      "clientName": "Частная компания «ANKA CAPITAL Ltd.»",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "июнь 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        6
+      ],
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        "Кенжекулов Адилжан"
+      ],
+      "team": [
+        "Кенжекулов Адилжан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Сартаев Шынгыс",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "employeeName": "Шынгыс Сартаев",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "27d15f79-0343-4289-ad13-0427587698a0",
+      "matchedProjectName": "Частная компания ANKA CAPITAL LTD (Группа компаний АО \"Lancaster Group Kazakhstan\") ",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "27d15f79-0343-4289-ad13-0427587698a0",
+          "name": "Частная компания ANKA CAPITAL LTD (Группа компаний АО \"Lancaster Group Kazakhstan\") ",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "29",
+      "clientName": "Алайгыр",
+      "auditType": "Аудит ПФО 6м2025",
+      "auditYear": 2025,
+      "periodRaw": "июля 2025г. - август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Zhorabekov Zhanibek"
+      ],
+      "team": [
+        "Аманов Онгар",
+        "Бекжанов Бақытжан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Zhorabekov Zhanibek",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "5e0f57c3-534a-426b-9af0-2a054ed5a225",
+          "employeeName": "Zhorabekov Zhanibek",
+          "matched": true
+        },
+        {
+          "name": "Аманов Онгар",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "d1dbb59d-113c-4d9a-8a65-06f441bcf0a9",
+          "employeeName": "Аманов Онгар",
+          "matched": true
+        },
+        {
+          "name": "Бекжанов Бақытжан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "e9b94a61-36b2-4120-9b97-3d006e2db738",
+          "employeeName": "Бекжанов Бақытжан Абылқасымұлы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "medium",
+      "matchedProjectId": "af047bb7-bfa4-45a1-8cc5-994eac7d4a7b",
+      "matchedProjectName": "ТОО «Совместное предприятие «Алайгыр» (аудит за 2025-2029гг)",
+      "matchedProjectStatus": "active",
+      "matchScore": 70,
+      "candidates": [
+        {
+          "id": "af047bb7-bfa4-45a1-8cc5-994eac7d4a7b",
+          "name": "ТОО «Совместное предприятие «Алайгыр» (аудит за 2025-2029гг)",
+          "status": "active",
+          "score": 70
+        },
+        {
+          "id": "8caef69e-85e7-442f-a2bc-05c2100729f7",
+          "name": "ТОО «Совместное предприятие «Алайгыр» (аудит за 2025-2029гг)",
+          "status": "active",
+          "score": 70
+        },
+        {
+          "id": "138a91e7-f8bb-4439-b203-657757770ff9",
+          "name": "ТОО «Совместное предприятие «Алайгыр» (аудит за 2025-2029гг)",
+          "status": "active",
+          "score": 70
+        },
+        {
+          "id": "7d47cc86-ab70-462e-a6f5-2487165ba303",
+          "name": "ТОО «Совместное предприятие «Алайгыр» (аудит за 2025-2029гг)",
+          "status": "active",
+          "score": 70
+        },
+        {
+          "id": "1f84d934-c279-4b6d-8934-aa363eb4ec6d",
+          "name": "ТОО «Совместное предприятие «Алайгыр» (аудит за 2025-2029гг)",
+          "status": "active",
+          "score": 70
+        }
+      ]
+    },
+    {
+      "no": "30",
+      "clientName": "Шалкия Цинк",
+      "auditType": "Аудит ПФО 6м2025",
+      "auditYear": 2025,
+      "periodRaw": "июля 2025г. - август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сартаева Гаухар"
+      ],
+      "team": [
+        "Аманов Онгар",
+        "Бекжанов Бақытжан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сартаева Гаухар",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "employeeName": "Сартаева Гаухар Шыныбековна",
+          "matched": true
+        },
+        {
+          "name": "Аманов Онгар",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "d1dbb59d-113c-4d9a-8a65-06f441bcf0a9",
+          "employeeName": "Аманов Онгар",
+          "matched": true
+        },
+        {
+          "name": "Бекжанов Бақытжан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "e9b94a61-36b2-4120-9b97-3d006e2db738",
+          "employeeName": "Бекжанов Бақытжан Абылқасымұлы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "31",
+      "clientName": "ТауКен Алтын",
+      "auditType": "Аудит ПФО 6м2025",
+      "auditYear": 2025,
+      "periodRaw": "июля 2025г. - август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "32",
+      "clientName": "ТауКен Самрук",
+      "auditType": "Аудит ПФО 6м2025",
+      "auditYear": 2025,
+      "periodRaw": "июля 2025г. - август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Анара (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Анара (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Анара (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "33",
+      "clientName": "ТОО BNK Group Ltd.",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "34",
+      "clientName": "АО Шымкент Мунай Онимдери",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "апрель-май 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Аманов Онгар"
+      ],
+      "team": [
+        "Бекжанов Бақытжан"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Аманов Онгар",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "d1dbb59d-113c-4d9a-8a65-06f441bcf0a9",
+          "employeeName": "Аманов Онгар",
+          "matched": true
+        },
+        {
+          "name": "Бекжанов Бақытжан",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "e9b94a61-36b2-4120-9b97-3d006e2db738",
+          "employeeName": "Бекжанов Бақытжан Абылқасымұлы",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "35",
+      "clientName": "ТОО QazaqGaz",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраль-март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Шардарбекова Саия"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Шардарбекова Саия",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "employeeName": "Шардарбекова Саия Гамзатовна",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "24207691-9a78-4659-9305-c8689a6d1430",
+      "matchedProjectName": "ТОО «QazaqGaz Научно-технический центр» ",
+      "matchedProjectStatus": "completed",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "24207691-9a78-4659-9305-c8689a6d1430",
+          "name": "ТОО «QazaqGaz Научно-технический центр» ",
+          "status": "completed",
+          "score": 45
+        },
+        {
+          "id": "0f9a105d-2443-41d9-ba17-d6e444c1f3f8",
+          "name": "ТОО QazaqGaz Onimderi - Услуги по оценке имущества",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "b8f901db-e8a9-4c0c-84bd-06df0d8c2a9b",
+          "name": "ТОО QazaqGaz Onimderi - Услуги по оценке имущества",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "36",
+      "clientName": "МФО Фридом финанс",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "февраль-март 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        2,
+        3,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Ембердиев Ермек"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Ембердиев Ермек",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "147980fa-ea7a-4d49-a5b4-6189cea63ce4",
+          "employeeName": "Ембердиев Ермек",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "37",
+      "clientName": "Аэропорт Шымкент",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "апрель-май 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Акмолдир"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Акмолдир",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": null,
+          "employeeName": "Акмолдир",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "c4918675-722f-4082-92f2-f0bbc58d23e0",
+      "matchedProjectName": "Акционерное общество \"Аэропорт Шымкент\" - Услуги по проведению аудита финансовой отчетности",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "c4918675-722f-4082-92f2-f0bbc58d23e0",
+          "name": "Акционерное общество \"Аэропорт Шымкент\" - Услуги по проведению аудита финансовой отчетности",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "be9f9cca-5284-4abd-b5ef-157bfbb5af59",
+          "name": "АО Аэропорт Шымкент",
+          "status": "completed",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "38",
+      "clientName": "БОЗОЙ",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "апрель-май 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "39",
+      "clientName": "Агромашхолдинг",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "апрель-май 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [
+        "Акмолдир"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        },
+        {
+          "name": "Акмолдир",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": null,
+          "employeeName": "Акмолдир",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "0c45862b-5669-411d-94db-9f051adddba0",
+      "matchedProjectName": "АО Агромашхолдинг KZ",
+      "matchedProjectStatus": "completed",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "0c45862b-5669-411d-94db-9f051adddba0",
+          "name": "АО Агромашхолдинг KZ",
+          "status": "completed",
+          "score": 45
+        },
+        {
+          "id": "4f9d5109-ac01-4dc2-9396-287ce70a4237",
+          "name": "АО Агромашхолдинг KZ - услуг по проведению аудита финансовой отчетности АО «Агромашхолдинг KZ» за период с 1 января 2025 года по 31 декабря 2025 года, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности ",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "33f8eb89-bf94-40da-b417-61ea6f0b27e3",
+          "name": "АО Агромашхолдинг KZ - услуг по проведению аудита специального назначения за 2025 год",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "40",
+      "clientName": "АО КТК",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Мухашев Куаныш"
+      ],
+      "team": [
+        "Шардарбекова Саия"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Мухашев Куаныш",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "f148a71f-f5f2-4a21-bdec-8e2b2e9d5aee",
+          "employeeName": "Мухашев Куаныш Кудашулы",
+          "matched": true
+        },
+        {
+          "name": "Шардарбекова Саия",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "employeeName": "Шардарбекова Саия Гамзатовна",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "41",
+      "clientName": "Вива Фарм",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "май-июнь 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        5,
+        6
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сартаева Гаухар"
+      ],
+      "team": [
+        "Турлыгазина Дана"
+      ],
+      "tax": [
+        "Искаков Аскар"
+      ],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сартаева Гаухар",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "employeeName": "Сартаева Гаухар Шыныбековна",
+          "matched": true
+        },
+        {
+          "name": "Турлыгазина Дана",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "14d98372-b1e2-451b-9aac-eadb1f581510",
+          "employeeName": "Турлыгазина Дана Ерікқызы",
+          "matched": true
+        },
+        {
+          "name": "Искаков Аскар",
+          "role": "tax",
+          "bonusPercent": 10,
+          "employeeId": "ebe40d1e-21ea-44be-a530-e539465d6b3e",
+          "employeeName": "Искаков Аскар",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "bebbfd37-96b4-4e6a-91d9-ae1aea5646b2",
+      "matchedProjectName": "ТОО ВИВА ФАРМ - 1.1. Заказчик поручает и оплачивает, а Исполнитель принимает на себя обязательство по оказанию Заказчику услуг:\n1.1.1. по проведению аудита отдельной и консолидированной финансовой отчетности ТОО «ВиваФарм» за 2025 год, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности (МСФО);\n1.1.2. по проведению аудита налоговой отчетности ТОО «ВиваФарм» за 2025 год (далее – услуги) (далее – услуги).\n",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "bebbfd37-96b4-4e6a-91d9-ae1aea5646b2",
+          "name": "ТОО ВИВА ФАРМ - 1.1. Заказчик поручает и оплачивает, а Исполнитель принимает на себя обязательство по оказанию Заказчику услуг:\n1.1.1. по проведению аудита отдельной и консолидированной финансовой отчетности ТОО «ВиваФарм» за 2025 год, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности (МСФО);\n1.1.2. по проведению аудита налоговой отчетности ТОО «ВиваФарм» за 2025 год (далее – услуги) (далее – услуги).\n",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "68d45fd8-287d-4e55-bbc3-6dbcc8408ffb",
+          "name": "ТОО Вива Фарм",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "c07c7e8f-df8f-4432-8e3f-02426fbf4edf",
+          "name": "ТОО Вива Фарм",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "42",
+      "clientName": "Кен Сары",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "июль-август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "94966a83-7644-4342-b289-e5721b7eb720",
+      "matchedProjectName": "ТОО Кен-Сары",
+      "matchedProjectStatus": "completed",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "94966a83-7644-4342-b289-e5721b7eb720",
+          "name": "ТОО Кен-Сары",
+          "status": "completed",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "43",
+      "clientName": "Мирбуш",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "июль-август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        7,
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "44",
+      "clientName": "PS Vostok Trade",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "август 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        8
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "52c8f7f1-6d6c-4d0b-bfe2-c69070729680",
+      "matchedProjectName": "ТОО «PS Vostok Trade» (ПС Восток Трейд)» ",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "52c8f7f1-6d6c-4d0b-bfe2-c69070729680",
+          "name": "ТОО «PS Vostok Trade» (ПС Восток Трейд)» ",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "45",
+      "clientName": "Терезе строительная компания",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "сентябрь 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        9
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "46",
+      "clientName": "KAZ INTEL",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "сентябрь 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        9
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Галымжанов Нурхан"
+      ],
+      "team": [
+        "Жамбыл Ернур",
+        "Zabira Yerlankyzy"
+      ],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Галымжанов Нурхан",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": "967d77e8-774f-4a9a-a5db-37c33e6dc729",
+          "employeeName": "Галымжанов Нурхан Нурланович",
+          "matched": true
+        },
+        {
+          "name": "Жамбыл Ернур",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "employeeName": "Жамбыл Ернур",
+          "matched": true
+        },
+        {
+          "name": "Zabira Yerlankyzy",
+          "role": "assistant",
+          "bonusPercent": 10,
+          "employeeId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "employeeName": "Zabira Yerlankyzy",
+          "matched": true
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "ffdd44e0-a99d-4c1f-bd34-0ecc95b6ef5b",
+      "matchedProjectName": "ТОО KAZ Intel Group",
+      "matchedProjectStatus": "completed",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "ffdd44e0-a99d-4c1f-bd34-0ecc95b6ef5b",
+          "name": "ТОО KAZ Intel Group",
+          "status": "completed",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "47",
+      "clientName": "АО Tansar Capital",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сауле (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сауле (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Сауле (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "e0d5885d-7a20-4493-975e-f5461a83de42",
+      "matchedProjectName": "АО Tansar Capital  от Тримовой Сауле",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "e0d5885d-7a20-4493-975e-f5461a83de42",
+          "name": "АО Tansar Capital  от Тримовой Сауле",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "48",
+      "clientName": "Мой страховой брокер",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сауле (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сауле (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Сауле (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "70306fd4-3a56-423a-ab86-5ba7b88737c0",
+      "matchedProjectName": "ТОО MOI (МОЙ) страховой брокер от Тримовой Сауле",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "70306fd4-3a56-423a-ab86-5ba7b88737c0",
+          "name": "ТОО MOI (МОЙ) страховой брокер от Тримовой Сауле",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "578bfc96-b4ca-4261-aac3-2e56ac66b884",
+          "name": "ТОО \"MOI (МОЙ) страховой брокер\" - услуг по проведению аудита отдельной и консолидированной финансовой отчетности ТОО \"MOI  (МОЙ )страховой брокер\" за период с 1 января 2025 года по 31 декабря 2025 года, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности. ",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "49",
+      "clientName": "ТОО Автосан",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сауле (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сауле (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Сауле (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "high",
+      "matchedProjectId": "c6056e49-f439-4237-b711-94d7f3a1ccf1",
+      "matchedProjectName": "ТОО Автосан",
+      "matchedProjectStatus": "active",
+      "matchScore": 115,
+      "candidates": [
+        {
+          "id": "c6056e49-f439-4237-b711-94d7f3a1ccf1",
+          "name": "ТОО Автосан",
+          "status": "active",
+          "score": 115
+        },
+        {
+          "id": "2073b8ca-c216-4aa3-9686-dc377aa05953",
+          "name": "ТОО «Автосан Казахстан» - услуг по проведению аудита финансовой отчетности ТОО «Автосан Казахстан» за 2025 год, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности (МСФО)",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "50",
+      "clientName": "ТОО ТИМ",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сауле (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сауле (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Сауле (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    },
+    {
+      "no": "51",
+      "clientName": "АО Tansar Group",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сауле (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сауле (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Сауле (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "low",
+      "matchedProjectId": "e76c2b3c-2d74-40be-b7d9-653d2ed57570",
+      "matchedProjectName": "АО Tansar Group от Тримовой Сауле",
+      "matchedProjectStatus": "active",
+      "matchScore": 45,
+      "candidates": [
+        {
+          "id": "e76c2b3c-2d74-40be-b7d9-653d2ed57570",
+          "name": "АО Tansar Group от Тримовой Сауле",
+          "status": "active",
+          "score": 45
+        },
+        {
+          "id": "f0fc6162-8cc0-448c-a1a8-f1856fa7f06e",
+          "name": "АО Tansar Group   - услуг по проведению аудита отдельной и консолидированной финансовой отчетности АО \"Tansar Group\" за период с 1 января 2025 года по 31 декабря 2025 года подготовленной в соответствии с Международными Стандартами Финансовой Отчетности ",
+          "status": "active",
+          "score": 45
+        }
+      ]
+    },
+    {
+      "no": "52",
+      "clientName": "ТОО TGAlfarabi",
+      "auditType": "Аудит ФО 2024",
+      "auditYear": 2024,
+      "periodRaw": "март-апрель 2025г.",
+      "periodStartYear": 2025,
+      "periodEndYear": 2025,
+      "periodMonths": [
+        3,
+        4,
+        5
+      ],
+      "partner": "Кенжекулов Адилжан",
+      "managers": [
+        "Сауле (ГПХ)"
+      ],
+      "team": [],
+      "tax": [],
+      "note": "",
+      "proposedStatus": "completed",
+      "teamProposed": [
+        {
+          "name": "Кенжекулов Адилжан",
+          "role": "partner",
+          "bonusPercent": 25,
+          "employeeId": "4cb72e5f-7375-4278-bd38-b29a7e4a197c",
+          "employeeName": "Кенжекулов Адилжан Абдикалыкович",
+          "matched": true
+        },
+        {
+          "name": "Сауле (ГПХ)",
+          "role": "manager",
+          "bonusPercent": 20,
+          "employeeId": null,
+          "employeeName": "Сауле (ГПХ)",
+          "matched": false
+        }
+      ],
+      "matchConfidence": "unmatched",
+      "matchedProjectId": null,
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "matchScore": 0,
+      "candidates": []
+    }
+  ]
+}

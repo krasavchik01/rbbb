@@ -35,6 +35,7 @@ import {
 } from '@/lib/userCompanyAccess';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizeCompanies, normalizeCompanyId } from '@/types/companies';
 
 // ─── Draggable Company Card ───────────────────────────────────────────────────
 
@@ -168,7 +169,10 @@ export function UserCompanyAssignment() {
     });
   }, []);
 
-  const companies = appSettings.companies || [];
+  const companies = useMemo(
+    () => normalizeCompanies(appSettings.companies || []).filter((company: any) => company.isActive !== false),
+    [appSettings.companies]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -193,9 +197,10 @@ export function UserCompanyAssignment() {
   }, [userList, userSearch]);
 
   // Компании для выбранного пользователя
-  const assignedIds: string[] = selectedUserId
-    ? (accessMap[selectedUserId] ?? [])
-    : [];
+  const assignedIds: string[] = useMemo(() => {
+    if (!selectedUserId) return [];
+    return Array.from(new Set((accessMap[selectedUserId] ?? []).map(normalizeCompanyId).filter(Boolean)));
+  }, [accessMap, selectedUserId]);
 
   const assignedCompanies = companies.filter((c: any) => assignedIds.includes(c.id));
   const availableCompanies = companies.filter((c: any) => !assignedIds.includes(c.id));
@@ -246,7 +251,7 @@ export function UserCompanyAssignment() {
   // Save
   const handleSave = async () => {
     if (!selectedUserId) return;
-    const ids = accessMap[selectedUserId] ?? [];
+    const ids = Array.from(new Set((accessMap[selectedUserId] ?? []).map(normalizeCompanyId).filter(Boolean)));
     if (ids.length === 0) {
       // Если список пуст — снимаем ограничение
       await removeUserCompanyAccess(selectedUserId);

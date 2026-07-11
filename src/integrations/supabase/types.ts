@@ -170,6 +170,7 @@ export type Database = {
           id: string
           level: Database["public"]["Enums"]["employee_level"]
           name: string
+          password: string | null
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string | null
           whatsapp: string | null
@@ -180,6 +181,7 @@ export type Database = {
           id?: string
           level: Database["public"]["Enums"]["employee_level"]
           name: string
+          password?: string | null
           role: Database["public"]["Enums"]["app_role"]
           updated_at?: string | null
           whatsapp?: string | null
@@ -190,6 +192,7 @@ export type Database = {
           id?: string
           level?: Database["public"]["Enums"]["employee_level"]
           name?: string
+          password?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string | null
           whatsapp?: string | null

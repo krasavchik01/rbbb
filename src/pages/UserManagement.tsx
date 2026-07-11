@@ -257,12 +257,13 @@ export default function UserManagement() {
     try {
       setLoading(true);
       setError("");
+      const normalizedEmail = formData.email.trim().toLowerCase();
 
       // Проверяем уникальность email
       const { data: existing } = await supabase
         .from('employees')
         .select('id')
-        .eq('email', formData.email.toLowerCase())
+        .eq('email', normalizedEmail)
         .maybeSingle();
 
       if (existing) {
@@ -270,15 +271,31 @@ export default function UserManagement() {
         setLoading(false);
         return;
       }
-
       // Определяем уровень из роли
       const level = getLevelForUserRole(formData.role) as DbEmployeeLevel;
 
       const dbRole = getEmployeeDbRoleForUserRole(formData.role) as DbAppRole;
 
+      if (formData.password.trim()) {
+        const { error: authError } = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password: formData.password.trim(),
+          options: {
+            data: {
+              name: formData.name.trim(),
+              role: formData.role,
+            },
+          },
+        });
+
+        if (authError && !authError.message.toLowerCase().includes('already')) {
+          throw authError;
+        }
+      }
+
       const insertPayload: any = {
         name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: normalizedEmail,
         role: dbRole,
         level: level,
         whatsapp: formData.phone || null,

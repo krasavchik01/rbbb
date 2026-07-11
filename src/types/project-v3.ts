@@ -339,44 +339,97 @@ export interface ProjectV3 {
 }
 
 // Вспомогательные функции для расчёта финансов
+const readProjectNotes = (project: any): any => {
+  const notes = project?.notes;
+  if (!notes) return {};
+  if (typeof notes === 'string') {
+    try {
+      return JSON.parse(notes) || {};
+    } catch {
+      return {};
+    }
+  }
+  return notes;
+};
+
+const parseProjectMoney = (value: any): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value === undefined || value === null) return 0;
+  const normalized = String(value)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, '')
+    .replace(/[₸₽$€]/g, '')
+    .replace(/,/g, '.')
+    .replace(/[^0-9.-]/g, '');
+  if (!normalized) return 0;
+  const parts = normalized.split('.');
+  const decimalSafe = parts.length > 2
+    ? `${parts.slice(0, -1).join('')}.${parts[parts.length - 1]}`
+    : normalized;
+  const parsed = Number(decimalSafe);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const firstPositiveProjectMoney = (...values: any[]): number => {
+  for (const value of values) {
+    const parsed = parseProjectMoney(value);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
+};
+
 export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFinances => {
-  const amountWithoutVAT = project.contract?.amountWithoutVAT || 0;
-  const preExpensePercent = 30; // По умолчанию 30%
+  const rawProject = project as any;
+  const notes = readProjectNotes(rawProject);
+  const financesSource = rawProject?.finances || notes?.finances || {};
+  const amountWithoutVAT = firstPositiveProjectMoney(
+    project.contract?.amountWithoutVAT,
+    notes?.contract?.amountWithoutVAT,
+    financesSource?.amountWithoutVAT,
+    rawProject?.amountWithoutVAT,
+    rawProject?.amount_without_vat,
+    rawProject?.amount,
+    notes?.amountWithoutVAT,
+    notes?.amount,
+  );
+  const preExpensePercent = financesSource.preExpensePercent ?? 30;
   const preExpenseAmount = amountWithoutVAT * (preExpensePercent / 100);
-  
-  const contractors = project.finances?.contractors || [];
+
+  const contractors = financesSource.contractors || [];
   const totalContractorsAmount = contractors.reduce((sum, c) => sum + c.amount, 0);
-  
+
   const bonusBase = amountWithoutVAT - totalContractorsAmount - preExpenseAmount;
-  const bonusPercent = project.finances?.bonusPercent || 10; // По умолчанию 10%
+  const bonusPercent = financesSource.bonusPercent || 10;
   const totalBonusAmount = bonusBase * (bonusPercent / 100);
-  const existingTeamBonuses = project.finances?.teamBonuses || {};
-  
-  // Рассчитываем бонусы команды
+  const existingTeamBonuses = financesSource.teamBonuses || {};
+
   const teamBonuses: ProjectFinances['teamBonuses'] = {};
-  const team = project.team || [];
-  
+  const team = project.team || notes?.team || [];
+
   team.forEach(member => {
-    const existingBonus = existingTeamBonuses[member.userId];
+    const userId = member.userId || (member as any).id || (member as any).employeeId;
+    if (!userId) return;
+    const existingBonus = existingTeamBonuses[userId];
     const calculatedAmount = totalBonusAmount * (member.bonusPercent / 100);
     const amount = existingBonus?.manuallyAdjusted ? existingBonus.amount : calculatedAmount;
     const percent = existingBonus?.manuallyAdjusted
       ? (totalBonusAmount > 0 ? Number(((amount / totalBonusAmount) * 100).toFixed(2)) : existingBonus.percent || member.bonusPercent)
       : member.bonusPercent;
 
-    teamBonuses[member.userId] = {
+    teamBonuses[userId] = {
+      ...existingBonus,
       role: member.role,
       percent,
-      amount: amount,
+      amount,
       manuallyAdjusted: existingBonus?.manuallyAdjusted || false,
     };
   });
-  
+
   const totalPaidBonuses = Object.values(teamBonuses).reduce((sum, b) => sum + b.amount, 0);
   const totalCosts = totalPaidBonuses + totalContractorsAmount + preExpenseAmount;
   const grossProfit = amountWithoutVAT - totalCosts;
   const profitMargin = amountWithoutVAT > 0 ? (grossProfit / amountWithoutVAT) * 100 : 0;
-  
+
   return {
     amountWithoutVAT,
     preExpensePercent,
@@ -393,5 +446,4 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
     profitMargin,
   };
 };
-
 

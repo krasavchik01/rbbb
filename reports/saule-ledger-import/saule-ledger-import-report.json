@@ -1,0 +1,2422 @@
+{
+  "generatedAt": "2026-06-16T11:02:10.761Z",
+  "marker": "auto:saule-ledger-2024-2025",
+  "commit": true,
+  "source": "САУЛЕ 2024 окт-2025 окт.xlsx",
+  "rows": [
+    {
+      "sourceSheet": "Лист1",
+      "no": "1",
+      "clientName": "TOO «Bapy Mining»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-06-30",
+      "reportDateRaw": "45838",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Гульжан",
+          "name": "Гульжан Чалова",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Жанар (налоги)",
+          "name": "Жанар",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update_duplicates",
+      "matchedProjectId": "368488b7-fd03-455a-9f66-37f8190ba04c",
+      "matchedProjectIds": [
+        "368488b7-fd03-455a-9f66-37f8190ba04c",
+        "307b2232-b101-4e05-8ed7-0c92ae709bd9",
+        "330f42ec-f742-4ef6-a278-ad8f40358899"
+      ],
+      "matchedProjectName": "ТОО «Bapy Mining»",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "368488b7-fd03-455a-9f66-37f8190ba04c",
+          "name": "ТОО «Bapy Mining»",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "307b2232-b101-4e05-8ed7-0c92ae709bd9",
+          "name": "ТОО «Bapy Mining»",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "330f42ec-f742-4ef6-a278-ad8f40358899",
+          "name": "ТОО «Bapy Mining»",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.563Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.563Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:09.563Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:09.563Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "97e3c68c-100a-4b72-8b8d-48372e1a6e20",
+          "userName": "Куандыкова Жанар Ерлановна",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:09.563Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ТОО «Bapy Mining»"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "2",
+      "clientName": "ТОО «EREYMENTAU WIND POWER»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-01-31",
+      "reportDateRaw": "45688",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Марат",
+          "name": "Медекенов Марат",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Ернур",
+          "name": "Жамбыл Ернур",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Ерлан (налоги)",
+          "name": "Ерлан",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "dca11a37-6c3a-43fb-bab8-6569a61ca464",
+      "matchedProjectIds": [
+        "dca11a37-6c3a-43fb-bab8-6569a61ca464"
+      ],
+      "matchedProjectName": "ТОО «Ereymentau Wind Power» (за период 2022-2024)",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "dca11a37-6c3a-43fb-bab8-6569a61ca464",
+          "name": "ТОО «Ereymentau Wind Power» (за период 2022-2024)",
+          "status": "completed",
+          "score": 170,
+          "directScore": 2
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.611Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "b0678845-b2e1-4f58-80ee-d0673a197579",
+          "userName": "Медекенов Марат Макунович",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.611Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "17bc3c3e-6478-4bfd-be1d-0a269a062109",
+          "userName": "Жамбыл Ернур",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:09.611Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "8f927a9f-b2d1-492d-8381-c4d9a3fc0b27",
+          "userName": "Ерлан Худайберген",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:09.611Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ТОО «Ereymentau Wind Power» (за период 2022-2024)"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "3",
+      "clientName": "FinQ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-03-29",
+      "reportDateRaw": "45745",
+      "partner": "Сауле Бадамбаева",
+      "managers": [],
+      "team": [],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "ef206b96-b160-4367-aada-e19e361040e1",
+      "matchedProjectIds": [
+        "ef206b96-b160-4367-aada-e19e361040e1"
+      ],
+      "matchedProjectName": "ТОО «FinQ»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "ef206b96-b160-4367-aada-e19e361040e1",
+          "name": "ТОО «FinQ»",
+          "status": "completed",
+          "score": 170,
+          "directScore": 2
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.653Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ТОО «FinQ»"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "4",
+      "clientName": "ТОО «HomeITTech»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-03-26",
+      "reportDateRaw": "45742",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Саия",
+          "name": "Шардарбекова Саия",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Спандияр (налоги)",
+          "name": "Идрисов Спандияр",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "2ceab59c-5de2-4dbe-9c60-146bcb648aab",
+      "matchedProjectIds": [
+        "2ceab59c-5de2-4dbe-9c60-146bcb648aab"
+      ],
+      "matchedProjectName": "ТОО «HomeITTech»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "2ceab59c-5de2-4dbe-9c60-146bcb648aab",
+          "name": "ТОО «HomeITTech»",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "1ca406d7-d22a-4d4b-950b-4c855d97a162",
+          "name": "ТОО HomeITTech - услуги по проведению согласованных процедур по МССУ 4400 за 2025 год ",
+          "status": "active",
+          "score": 90,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.692Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "userName": "Шардарбекова Саия Гамзатовна",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.692Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:09.692Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "userName": "Идрисов Спандияр",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:09.692Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ТОО «HomeITTech»"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "5",
+      "clientName": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ, СПЕЦ.НАЗ",
+      "reportDate": "2025-02-20",
+      "reportDateRaw": "45708",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Светлана",
+          "name": "Светлана",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Газиз",
+          "name": "Алдонгаров Газиз",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Роман (налоги)",
+          "name": "Роман",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "46dcc841-8a44-4bde-832a-c6b7043e93b6",
+      "matchedProjectIds": [
+        "46dcc841-8a44-4bde-832a-c6b7043e93b6"
+      ],
+      "matchedProjectName": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения» («IMB Центр»)",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "46dcc841-8a44-4bde-832a-c6b7043e93b6",
+          "name": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения» («IMB Центр»)",
+          "status": "completed",
+          "score": 170,
+          "directScore": 2
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.734Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.734Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "ced00de0-1c69-4eb7-8cc5-d979af4618cc",
+          "userName": "Каби Светлана",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:09.734Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "314ab04b-882c-43a4-94ac-a46280d8ddb2",
+          "userName": "Алдонгаров Газиз Сериккалиевич",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:09.734Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Роман (налоги)",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "Объединения юридических лиц в форме Ассоциации «Международный центр развития нефтегазового машиностроения» («IMB Центр»)"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "6",
+      "clientName": "АО «Lancaster Group Kazakhstan»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-07-25",
+      "reportDateRaw": "45863",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Гульжан",
+          "name": "Гульжан Чалова",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Руслан",
+          "name": "Руслан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Василий (ГПХ)",
+          "name": "Василий",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "note": "Василий ГПХ",
+      "action": "update",
+      "matchedProjectId": "3b22dd3f-37d0-40ec-8485-ce3b9b72c21f",
+      "matchedProjectIds": [
+        "3b22dd3f-37d0-40ec-8485-ce3b9b72c21f"
+      ],
+      "matchedProjectName": "АО Lancaster Group Kazakhstan",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "3b22dd3f-37d0-40ec-8485-ce3b9b72c21f",
+          "name": "АО Lancaster Group Kazakhstan",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "962f3649-f91b-4af2-87d2-7da045e6dda7",
+          "name": "«Berkut Mining» (Беркут Майнинг) (группа компаний АО Lancaster Group Kazakhstan)",
+          "status": "active",
+          "score": 170,
+          "directScore": 2
+        },
+        {
+          "id": "27d15f79-0343-4289-ad13-0427587698a0",
+          "name": "Частная компания ANKA CAPITAL LTD (Группа компаний АО \"Lancaster Group Kazakhstan\") ",
+          "status": "completed",
+          "score": 170,
+          "directScore": 2
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.785Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.785Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:09.785Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.785Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Василий (ГПХ)",
+          "role": "contractor"
+        }
+      ],
+      "targetProjectName": "АО Lancaster Group Kazakhstan"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "7",
+      "clientName": "АО \"Samruk-Kazyna Construction\"",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "СПЕЦ.НАЗ",
+      "reportDate": "2025-03-31",
+      "reportDateRaw": "45747",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Газиз",
+          "name": "Алдонгаров Газиз",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "a5e29b51-d7f0-4f46-b487-7abeacbdf38c",
+      "matchedProjectIds": [
+        "a5e29b51-d7f0-4f46-b487-7abeacbdf38c"
+      ],
+      "matchedProjectName": "АО Samruk-Kazyna Construction",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "a5e29b51-d7f0-4f46-b487-7abeacbdf38c",
+          "name": "АО Samruk-Kazyna Construction",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "37633ed5-72be-4a2a-bea6-bd6e72c6637b",
+          "name": "Акционерное Общество \"Samruk-Kazyna Construction\" - Услуги по проведению аудита специального назначения субъектов квазигосударственного сектора",
+          "status": "active",
+          "score": 105,
+          "directScore": 0
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.828Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "314ab04b-882c-43a4-94ac-a46280d8ddb2",
+          "userName": "Алдонгаров Газиз Сериккалиевич",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.828Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "АО Samruk-Kazyna Construction"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "8",
+      "clientName": "ТОО «Start Industries»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-05-15",
+      "reportDateRaw": "45792",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Забира",
+          "name": "Zabira Yerlankyzy",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Аскар (налоги)",
+          "name": "Аскар",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update_duplicates",
+      "matchedProjectId": "03953bb9-7e3b-4c62-b22f-4d277dea4de9",
+      "matchedProjectIds": [
+        "03953bb9-7e3b-4c62-b22f-4d277dea4de9",
+        "9788ecc7-1918-4964-98df-d712920648cb"
+      ],
+      "matchedProjectName": "ТОО «Start Industries»",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "03953bb9-7e3b-4c62-b22f-4d277dea4de9",
+          "name": "ТОО «Start Industries»",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "9788ecc7-1918-4964-98df-d712920648cb",
+          "name": "ТОО «Start Industries»",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.869Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.869Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:09.869Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "userName": "Zabira Yerlankyzy",
+          "role": "supervisor_1",
+          "bonusPercent": 6,
+          "assignedAt": "2026-06-16T11:02:09.869Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:09.869Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ТОО «Start Industries»"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "9",
+      "clientName": "ТОО «Арал Петролеум Кэпитал»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-08-20",
+      "reportDateRaw": "45889",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Светлана",
+          "name": "Светлана",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Руслан",
+          "name": "Руслан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Онгар",
+          "name": "Онгар",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "98bb1092-bfd2-4d5c-8071-00962615b979",
+      "matchedProjectIds": [
+        "98bb1092-bfd2-4d5c-8071-00962615b979"
+      ],
+      "matchedProjectName": "ТОО «Арал Петролеум Кэпитал»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "98bb1092-bfd2-4d5c-8071-00962615b979",
+          "name": "ТОО «Арал Петролеум Кэпитал»",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.912Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.912Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:09.912Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "ced00de0-1c69-4eb7-8cc5-d979af4618cc",
+          "userName": "Каби Светлана",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:09.912Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:09.912Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "314ab04b-882c-43a4-94ac-a46280d8ddb2",
+          "userName": "Алдонгаров Газиз Сериккалиевич",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:09.912Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ТОО «Арал Петролеум Кэпитал»"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "10",
+      "clientName": "БЕСШОКЫ (ГРУППА КОМПАНИЙ7). ОТДЕЛЬНЫЕ И КОНС.",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-05-31",
+      "reportDateRaw": "АПР-МАЙ 2025",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Альфира (ГПХ)",
+          "name": "Альфира",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Бакытжан",
+          "name": "Бекжанов Бақытжан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Ерлан (налоги)",
+          "name": "Ерлан",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:09.956Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "e9b94a61-36b2-4120-9b97-3d006e2db738",
+          "userName": "Бекжанов Бақытжан Абылқасымұлы",
+          "role": "supervisor_1",
+          "bonusPercent": 6,
+          "assignedAt": "2026-06-16T11:02:09.956Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "8f927a9f-b2d1-492d-8381-c4d9a3fc0b27",
+          "userName": "Ерлан Худайберген",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:09.956Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Альфира (ГПХ)",
+          "role": "project_leader"
+        }
+      ],
+      "targetProjectName": "БЕСШОКЫ (ГРУППА КОМПАНИЙ7). ОТДЕЛЬНЫЕ И КОНС. - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "11",
+      "clientName": "БЕСШОКЫ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "ЛКУ, ИПДО",
+      "reportDate": "2025-03-31",
+      "reportDateRaw": "45747",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Светлана",
+          "name": "Светлана",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.002Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "ced00de0-1c69-4eb7-8cc5-d979af4618cc",
+          "userName": "Каби Светлана",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.002Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "БЕСШОКЫ - ЛКУ, ИПДО за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "12",
+      "clientName": "ТОО «Гранит – Талес Электроникс»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-04-30",
+      "reportDateRaw": "45777",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Гаухар",
+          "name": "Сартаева Гаухар",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Улжан",
+          "name": "Улжан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Ерлан (ГПХ) налоги",
+          "name": "Ерлан",
+          "isTax": true,
+          "isContractor": true
+        }
+      ],
+      "note": "Ерлан сейчас в штате",
+      "action": "update",
+      "matchedProjectId": "6a43ea08-a920-4744-9fa5-ca0bbdfdf4c3",
+      "matchedProjectIds": [
+        "6a43ea08-a920-4744-9fa5-ca0bbdfdf4c3"
+      ],
+      "matchedProjectName": "ТОО Гранит – Талес Электроникс",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "6a43ea08-a920-4744-9fa5-ca0bbdfdf4c3",
+          "name": "ТОО Гранит – Талес Электроникс",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "ce6cadf6-a098-49b4-92b0-d47c5250fd3b",
+          "name": "ТОО «Гранит – Талес Электроникс»  - услуг по проведению аудита финансовой отчетности ТОО «Гранит – Талес Электроникс» за 2025 год, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности (МСФО)",
+          "status": "active",
+          "score": 100,
+          "directScore": 3
+        },
+        {
+          "id": "8abe2976-8adb-4804-973a-95add50a3503",
+          "name": "ТОО Гранит – Талес Электроникс - Услуги по проведению аудита финансовой отчетности ТОО «Гранит – Талес Электроникс» за 2025 год, подготовленной в соответствии с международными стандартами ",
+          "status": "active",
+          "score": 100,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.049Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "userName": "Сартаева Гаухар Шыныбековна",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.049Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "26beb79f-a453-49d1-8933-546eacb9b83e",
+          "userName": "Төрегелді Улжан",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.049Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Ерлан (ГПХ) налоги",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "ТОО Гранит – Талес Электроникс"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "13",
+      "clientName": "Акционерное общество \"Национальная платежная корпорация Национального Банка Республики Казахстан\"",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-02-20",
+      "reportDateRaw": "45708",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Гульжан",
+          "name": "Гульжан Чалова",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Спандияр налоги",
+          "name": "Идрисов Спандияр",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.097Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.097Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:10.097Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.097Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:10.097Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "userName": "Идрисов Спандияр",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:10.097Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "Акционерное общество \"Национальная платежная корпорация Национального Банка Республики Казахстан\" - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "14",
+      "clientName": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр)",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-03-14",
+      "reportDateRaw": "45730",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Гаухар",
+          "name": "Сартаева Гаухар",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Акулпа",
+          "name": "Акулпа",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Ерлан (ГПХ)",
+          "name": "Ерлан",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "note": "Ерлан сейчас в штате",
+      "action": "update_duplicates",
+      "matchedProjectId": "aecb29f8-6333-4684-8681-fc5c81267e97",
+      "matchedProjectIds": [
+        "aecb29f8-6333-4684-8681-fc5c81267e97",
+        "b34fff03-7f8f-4172-a5d5-980cd044ea2e",
+        "7f8c3928-af21-41e9-9f28-4c7c236e6506",
+        "6134be94-bc92-47ab-9206-13f85f0dac1b",
+        "97b3e728-8f4f-475b-9c29-35c73d555bba"
+      ],
+      "matchedProjectName": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "aecb29f8-6333-4684-8681-fc5c81267e97",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "b34fff03-7f8f-4172-a5d5-980cd044ea2e",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "7f8c3928-af21-41e9-9f28-4c7c236e6506",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "6134be94-bc92-47ab-9206-13f85f0dac1b",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "97b3e728-8f4f-475b-9c29-35c73d555bba",
+          "name": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) ",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.149Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "481df253-c011-46c1-bcda-04ea31690a1f",
+          "userName": "Сартаева Гаухар Шыныбековна",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.149Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Акулпа",
+          "role": "external"
+        },
+        {
+          "name": "Ерлан (ГПХ)",
+          "role": "contractor"
+        }
+      ],
+      "targetProjectName": "ТОО «CAIH Power» (СиЭйАйЭйч Пауэр) "
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "15",
+      "clientName": "ТОО «СК-Фармация»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-06-04",
+      "reportDateRaw": "45812",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Меруерт",
+          "name": "Меруерт",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Рошангуль",
+          "name": "Рошангуль",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Спандияр налоги",
+          "name": "Идрисов Спандияр",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "1c4126ee-4bfb-4004-b190-2fc1b1e05910",
+      "matchedProjectIds": [
+        "1c4126ee-4bfb-4004-b190-2fc1b1e05910"
+      ],
+      "matchedProjectName": "ТОО СК-Фармация",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "1c4126ee-4bfb-4004-b190-2fc1b1e05910",
+          "name": "ТОО СК-Фармация",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.196Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "77308b99-457a-4d12-939f-0e4264295c5a",
+          "userName": "Ушурбакиева Рошангуль",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.196Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "userName": "Идрисов Спандияр",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:10.196Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Меруерт",
+          "role": "project_leader"
+        }
+      ],
+      "targetProjectName": "ТОО СК-Фармация"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "16",
+      "clientName": "СКТБ ГРАНИТ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-04-30",
+      "reportDateRaw": "45777",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Руслан",
+          "name": "Руслан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Аскар (ГПХ)налоги",
+          "name": "Аскар",
+          "isTax": true,
+          "isContractor": true
+        }
+      ],
+      "note": "Аскар ГПХ налоги",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.241Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.241Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.241Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.241Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Аскар (ГПХ)налоги",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "СКТБ ГРАНИТ - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "17",
+      "clientName": "СПК АКТОБЕ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-04-30",
+      "reportDateRaw": "45777",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Камиля (ГПХ)",
+          "name": "Камиля",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Мадина ГПХ",
+          "name": "Мадина ГПХ",
+          "isTax": false,
+          "isContractor": true
+        },
+        {
+          "sourceName": "Ермек ГПХ налоги",
+          "name": "Ермек ГПХ",
+          "isTax": true,
+          "isContractor": true
+        }
+      ],
+      "note": "Камиля, Мадина, Ермек - ГПХ",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.285Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Мадина ГПХ",
+          "role": "contractor"
+        },
+        {
+          "name": "Ермек ГПХ налоги",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "СПК АКТОБЕ - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "18",
+      "clientName": "СПК АЛМАТЫ+ 6 ДОЧЕК. ОТДЕЛЬНЫЕ И КОНС.",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-03-31",
+      "reportDateRaw": "45747",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Камиля (ГПХ)",
+          "name": "Камиля",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Ержан (ГПХ)",
+          "name": "Ержан",
+          "isTax": false,
+          "isContractor": true
+        },
+        {
+          "sourceName": "Спандияр налоги",
+          "name": "Идрисов Спандияр",
+          "isTax": true,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Дана",
+          "name": "Турлыгазина Дана",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "note": "Ержан ГПХ",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.330Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:10.330Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.330Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "userName": "Идрисов Спандияр",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:10.330Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "14d98372-b1e2-451b-9aac-eadb1f581510",
+          "userName": "Турлыгазина Дана Ерікқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.330Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Ержан (ГПХ)",
+          "role": "contractor"
+        }
+      ],
+      "targetProjectName": "СПК АЛМАТЫ+ 6 ДОЧЕК. ОТДЕЛЬНЫЕ И КОНС. - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "19",
+      "clientName": "ТОО «Управление по добыче и транспортироке воды»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-02-14",
+      "reportDateRaw": "45702",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Гульжан",
+          "name": "Гульжан Чалова",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Акмолдир налоги",
+          "name": "Акмолдир",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.376Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.376Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "c8cdce56-3284-4c52-9137-351ea2218cfb",
+          "userName": "Гульжан Чалова",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:10.376Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.376Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:10.376Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Акмолдир налоги",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "ТОО «Управление по добыче и транспортироке воды» - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "20",
+      "clientName": "AO «Центр развития города Алматы»",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-05-12",
+      "reportDateRaw": "45789",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update_duplicates",
+      "matchedProjectId": "6f92447c-8a3a-41aa-8ee2-62ae3f60aa15",
+      "matchedProjectIds": [
+        "6f92447c-8a3a-41aa-8ee2-62ae3f60aa15",
+        "9e2a9547-b14b-4c0e-920b-feaeca9694be",
+        "2cf1c9ae-dacb-4309-97da-4ea23e939f61"
+      ],
+      "matchedProjectName": "АО Центр развития города Алматы",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "6f92447c-8a3a-41aa-8ee2-62ae3f60aa15",
+          "name": "АО Центр развития города Алматы",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "9e2a9547-b14b-4c0e-920b-feaeca9694be",
+          "name": "АО Центр развития города Алматы",
+          "status": "active",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "2cf1c9ae-dacb-4309-97da-4ea23e939f61",
+          "name": "АО Центр развития города Алматы",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.424Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.424Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.424Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "АО Центр развития города Алматы"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "21",
+      "clientName": "ТОО ЭКСПОИНЖИНИРИНГ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-04-30",
+      "reportDateRaw": "45777",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Акмолдир налоги",
+          "name": "Акмолдир",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "update",
+      "matchedProjectId": "8943794a-0081-4a34-ba79-3eac899aeee4",
+      "matchedProjectIds": [
+        "8943794a-0081-4a34-ba79-3eac899aeee4"
+      ],
+      "matchedProjectName": "ТОО «ЭКСПОИНЖИНИРИНГ»",
+      "matchedProjectStatus": "completed",
+      "candidates": [
+        {
+          "id": "8943794a-0081-4a34-ba79-3eac899aeee4",
+          "name": "ТОО «ЭКСПОИНЖИНИРИНГ»",
+          "status": "completed",
+          "score": 170,
+          "directScore": 3
+        },
+        {
+          "id": "7606f7bb-30c2-432a-ad6c-58f31d51c2d0",
+          "name": "ТОО ЭКСПОИНЖИНИРИНГ - услуг по проведению:\n1.1.1. аудита финансовой отчетности ТОО «ЭКСПОИНЖИНИРИНГ» за период с 1 января 2025 года по 31 декабря 2025 года, подготовленной в соответствии с Международными Стандартами Финансовой Отчетности;\n1.1.2. подтверждению отчета об исполнении лицензионных обязательств и ИПДО за 2025 год \n",
+          "status": "active",
+          "score": 100,
+          "directScore": 3
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.468Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.468Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.468Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "manager_1",
+          "bonusPercent": 10,
+          "assignedAt": "2026-06-16T11:02:10.468Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Акмолдир налоги",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "ТОО «ЭКСПОИНЖИНИРИНГ»"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "22",
+      "clientName": "ЭсКейЭкоплант",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-10-21",
+      "reportDateRaw": "45951",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Улжан",
+          "name": "Улжан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.508Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.508Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "26beb79f-a453-49d1-8933-546eacb9b83e",
+          "userName": "Төрегелді Улжан",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.508Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [],
+      "targetProjectName": "ЭсКейЭкоплант - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "23",
+      "clientName": "ТОО «Самрук-Казына Инвест», ОТДЕЛЬНАЯ и КОНСОЛИД ПО ФОРМАМ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "6 МЕС 2025",
+      "auditYear": 2025,
+      "auditType": "ОБЗОР",
+      "reportDate": "2025-07-25",
+      "reportDateRaw": "45863",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Ермек",
+          "name": "Ермек",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Саия",
+          "name": "Шардарбекова Саия",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Василий ГПХ",
+          "name": "Василий ГПХ",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "note": "Василий ГПХ",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.550Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "147980fa-ea7a-4d49-a5b4-6189cea63ce4",
+          "userName": "Ембердиев Ермек",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.550Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "userName": "Шардарбекова Саия Гамзатовна",
+          "role": "manager_2",
+          "bonusPercent": 8,
+          "assignedAt": "2026-06-16T11:02:10.550Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Василий ГПХ",
+          "role": "contractor"
+        }
+      ],
+      "targetProjectName": "ТОО «Самрук-Казына Инвест», ОТДЕЛЬНАЯ и КОНСОЛИД ПО ФОРМАМ - ОБЗОР за 6 МЕС 2025"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "24",
+      "clientName": "СПК АЛМАТЫ+ 7 ДОЧЕК. ОТДЕЛЬНЫЕ И КОНС.",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "6 МЕС 2025",
+      "auditYear": 2025,
+      "auditType": "ОБЗОР",
+      "reportDate": "2025-08-22",
+      "reportDateRaw": "45891",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Камиля (ГПХ)",
+          "name": "Камиля",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Саия",
+          "name": "Шардарбекова Саия",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Юра",
+          "name": "Юра",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Спандияр налоги",
+          "name": "Идрисов Спандияр",
+          "isTax": true,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Акмолдир налоги",
+          "name": "Акмолдир",
+          "isTax": true,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.599Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.599Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "01f7efe3-6c66-4aaf-add9-608eef5bef17",
+          "userName": "Шардарбекова Саия Гамзатовна",
+          "role": "manager_2",
+          "bonusPercent": 8,
+          "assignedAt": "2026-06-16T11:02:10.599Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "94b84bd5-eb54-43df-907e-1bd6c840b881",
+          "userName": "Идрисов Спандияр",
+          "role": "tax_specialist_1",
+          "bonusPercent": 3,
+          "assignedAt": "2026-06-16T11:02:10.599Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        },
+        {
+          "name": "Юра",
+          "role": "external"
+        },
+        {
+          "name": "Акмолдир налоги",
+          "role": "tax_specialist_1"
+        }
+      ],
+      "targetProjectName": "СПК АЛМАТЫ+ 7 ДОЧЕК. ОТДЕЛЬНЫЕ И КОНС. - ОБЗОР за 6 МЕС 2025"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "25",
+      "clientName": "СПК АКТОБЕ",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "9 МЕС 2025",
+      "auditYear": 2025,
+      "auditType": "ОБЗОР",
+      "reportDate": "2025-12-01",
+      "reportDateRaw": "45992",
+      "partner": "Сауле Бадамбаева",
+      "managers": [
+        {
+          "sourceName": "Камиля (ГПХ)",
+          "name": "Камиля",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "team": [],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "ba3d0a39-e789-4eed-8890-64dca41dbdd9",
+          "userName": "Сауле Бадамбаева",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.642Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Камиля (ГПХ)",
+          "role": "project_leader"
+        }
+      ],
+      "targetProjectName": "СПК АКТОБЕ - ОБЗОР за 9 МЕС 2025"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "26",
+      "clientName": "ТАЗА СУ (ПАРКЕР)",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-06-30",
+      "reportDateRaw": "45838",
+      "partner": "Рахматулла Арман",
+      "managers": [
+        {
+          "sourceName": "Райхан",
+          "name": "Нускабаева Райхан",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Руслан",
+          "name": "Руслан",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Забира",
+          "name": "Zabira Yerlankyzy",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "note": "",
+      "action": "create",
+      "matchedProjectId": null,
+      "matchedProjectIds": [],
+      "matchedProjectName": null,
+      "matchedProjectStatus": null,
+      "candidates": [],
+      "teamMembers": [
+        {
+          "userId": "1831fe4f-6cd1-4ce1-838a-722ceb1dcfa7",
+          "userName": "Нускабаева Райхан",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.682Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "9bce397b-59bd-4ec9-9ba6-c070ccad2be4",
+          "userName": "Саукымбек Руслан",
+          "role": "assistant_2",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.682Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "6e5a0a31-8254-4c4c-b524-9ba0cdd0c746",
+          "userName": "Zabira Yerlankyzy",
+          "role": "supervisor_1",
+          "bonusPercent": 6,
+          "assignedAt": "2026-06-16T11:02:10.682Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Рахматулла Арман",
+          "role": "partner"
+        }
+      ],
+      "targetProjectName": "ТАЗА СУ (ПАРКЕР) - АУДИТ за 2024"
+    },
+    {
+      "sourceSheet": "Лист1",
+      "no": "27",
+      "clientName": "FINBOX (ЧК)",
+      "amountWithVAT": 0,
+      "amountWithoutVAT": 0,
+      "periodRaw": "2024",
+      "auditYear": 2024,
+      "auditType": "АУДИТ",
+      "reportDate": "2025-03-01",
+      "reportDateRaw": "45717",
+      "partner": "Сартаев Шынгыс",
+      "managers": [
+        {
+          "sourceName": "Мая",
+          "name": "Мая",
+          "isTax": false,
+          "isContractor": false
+        }
+      ],
+      "team": [
+        {
+          "sourceName": "Тинай",
+          "name": "Қасымбек Тинай",
+          "isTax": false,
+          "isContractor": false
+        },
+        {
+          "sourceName": "Ержан (ГПХ)",
+          "name": "Ержан",
+          "isTax": false,
+          "isContractor": true
+        }
+      ],
+      "note": "Ержан ГПХ",
+      "action": "update_duplicates",
+      "matchedProjectId": "99da55db-2516-4284-9766-0924ff68b6a8",
+      "matchedProjectIds": [
+        "99da55db-2516-4284-9766-0924ff68b6a8",
+        "c7ea58fc-03ee-4831-8523-4105f050fd2f",
+        "4af423c5-3c6c-4701-b263-d32b92a893ca"
+      ],
+      "matchedProjectName": "ТОО «Микрофинансовая организация «Finbox» ",
+      "matchedProjectStatus": "active",
+      "candidates": [
+        {
+          "id": "99da55db-2516-4284-9766-0924ff68b6a8",
+          "name": "ТОО «Микрофинансовая организация «Finbox» ",
+          "status": "active",
+          "score": 100,
+          "directScore": 0
+        },
+        {
+          "id": "c7ea58fc-03ee-4831-8523-4105f050fd2f",
+          "name": "ТОО «Микрофинансовая организация «Finbox» ",
+          "status": "completed",
+          "score": 100,
+          "directScore": 0
+        },
+        {
+          "id": "4af423c5-3c6c-4701-b263-d32b92a893ca",
+          "name": "ТОО «Микрофинансовая организация «Finbox» ",
+          "status": "completed",
+          "score": 100,
+          "directScore": 0
+        }
+      ],
+      "teamMembers": [
+        {
+          "userId": "3ceb66d6-1ecf-4ab2-8a98-aa2436b9d0fd",
+          "userName": "Шынгыс Сартаев",
+          "role": "partner",
+          "bonusPercent": 25,
+          "assignedAt": "2026-06-16T11:02:10.722Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "aa7a4770-3b03-4b7e-8fa3-53baae1d1b56",
+          "userName": "Кенжебек Мая Тельманкызы",
+          "role": "project_leader",
+          "bonusPercent": 4,
+          "assignedAt": "2026-06-16T11:02:10.722Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        },
+        {
+          "userId": "a0e89029-c442-4f68-8067-da96cbc3b308",
+          "userName": "Қасымбек Тинай Асқарқызы",
+          "role": "assistant_1",
+          "bonusPercent": 2,
+          "assignedAt": "2026-06-16T11:02:10.722Z",
+          "assignedBy": "auto:saule-ledger-2024-2025"
+        }
+      ],
+      "externalPeople": [
+        {
+          "name": "Ержан (ГПХ)",
+          "role": "contractor"
+        }
+      ],
+      "targetProjectName": "ТОО «Микрофинансовая организация «Finbox» "
+    }
+  ]
+}

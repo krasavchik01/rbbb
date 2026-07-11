@@ -1441,7 +1441,7 @@ export default function HR() {
               </div>
           <DialogFooter>
             <Button onClick={() => setShowImportResults(false)}>
-              Закрыть
+              Готово
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import { getNotifications } from "@/lib/notifications";
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { useAppSettings } from "@/lib/appSettings";
 import { projectMatchesAllowedCompanies } from "@/lib/userCompanyAccess";
+import { findCompanyByAnyValue } from "@/types/companies";
 
 export default function ProjectApproval() {
   const navigate = useNavigate();
@@ -53,6 +54,7 @@ export default function ProjectApproval() {
   // Активные проекты, где зам.ГД уже утвердила команду — для контроля и
   // возможности пересоставить пока проект не закрыт.
   const [activeProjects, setActiveProjects] = useState<ProjectV3[]>([]);
+  const [approvalQueueFilter, setApprovalQueueFilter] = useState<'ready' | 'no_partner' | 'no_team' | 'no_amount' | 'all'>('ready');
   const [selectedProject, setSelectedProject] = useState<ProjectV3 | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -145,11 +147,11 @@ export default function ProjectApproval() {
     
     // Проверяем каждую роль из PROJECT_ROLES
     PROJECT_ROLES.forEach(projectRole => {
-      const employeesForRole = availableEmployees.filter(emp => emp.role === projectRole.role);
+      const employeesForRole = availableEmployees;
       console.log(`  - ${projectRole.label} (${projectRole.role}):`, employeesForRole.length, 'сотрудников');
       if (employeesForRole.length === 0) {
         console.warn(`    ⚠️ Нет сотрудников с ролью ${projectRole.role}`);
-        const withOriginalRole = realEmployees.filter(e => e.role === projectRole.role);
+        const withOriginalRole = realEmployees;
         console.log(`    - С исходной ролью ${projectRole.role}:`, withOriginalRole.length);
       }
     });
@@ -164,10 +166,15 @@ export default function ProjectApproval() {
     if (user?.allowedCompanyIds && user.allowedCompanyIds.length > 0) {
       const companies = appSettings.companies || [];
       const allowedNames = user.allowedCompanyIds
-        .map((id: string) => (companies as any[]).find((c: any) => c.id === id)?.name)
+        .flatMap((id: string) => {
+          const company = findCompanyByAnyValue(id, companies as any);
+          return [id, company?.id, company?.name, company?.fullName].filter(Boolean);
+        })
         .filter(Boolean) as string[];
       if (allowedNames.length > 0) {
         filtered = filtered.filter(p => projectMatchesAllowedCompanies(p, allowedNames));
+      } else {
+        filtered = supaProjects as any[];
       }
     }
 
@@ -642,7 +649,7 @@ export default function ProjectApproval() {
 
   // Выбрать все проекты
   const selectAllProjects = () => {
-    setSelectedProjects(new Set(projects.map(p => p.id)));
+    setSelectedProjects(new Set(approvalQueue.visible.map(p => p.id)));
   };
 
   // Снять выделение со всех
@@ -717,6 +724,51 @@ export default function ProjectApproval() {
     return new Intl.NumberFormat('ru-RU').format(amount) + ' ₸';
   };
 
+  const getProjectTeam = (project: any) => {
+    if (Array.isArray(project?.team)) return project.team;
+    if (Array.isArray(project?.notes?.team)) return project.notes.team;
+    return [];
+  };
+
+  const getProjectAmount = (project: any) =>
+    Number(project?.contract?.amountWithoutVAT) ||
+    Number(project?.amountWithoutVAT) ||
+    Number(project?.notes?.contract?.amountWithoutVAT) ||
+    Number(project?.notes?.finances?.amountWithoutVAT) ||
+    Number(project?.notes?.amountWithoutVAT) ||
+    Number(project?.notes?.amount) ||
+    0;
+
+  const approvalQueue = useMemo(() => {
+    const rows = projects.map((project: any) => {
+      const team = getProjectTeam(project);
+      const hasPartner = team.some((member: any) => member?.role === 'partner');
+      const hasTeam = team.length > 0;
+      const hasAmount = getProjectAmount(project) > 0;
+      return { project, team, hasPartner, hasTeam, hasAmount };
+    });
+
+    const counts = {
+      total: rows.length,
+      ready: rows.filter((row) => row.hasPartner && row.hasTeam && row.hasAmount).length,
+      noPartner: rows.filter((row) => !row.hasPartner).length,
+      noTeam: rows.filter((row) => !row.hasTeam).length,
+      noAmount: rows.filter((row) => !row.hasAmount).length,
+    };
+
+    const visible = rows
+      .filter((row) => {
+        if (approvalQueueFilter === 'ready') return row.hasPartner && row.hasTeam && row.hasAmount;
+        if (approvalQueueFilter === 'no_partner') return !row.hasPartner;
+        if (approvalQueueFilter === 'no_team') return !row.hasTeam;
+        if (approvalQueueFilter === 'no_amount') return !row.hasAmount;
+        return true;
+      })
+      .map((row) => row.project as ProjectV3);
+
+    return { counts, visible };
+  }, [projects, approvalQueueFilter]);
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in p-2 sm:p-4 md:p-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -727,7 +779,7 @@ export default function ProjectApproval() {
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Заместитель генерального директора</p>
         </div>
         <Badge className="text-sm sm:text-lg px-3 sm:px-4 py-1 sm:py-2 self-start sm:self-auto">
-          {projects.length} на утверждении
+          {approvalQueue.counts.ready} готово / {approvalQueue.counts.total} всего
         </Badge>
       </div>
 
@@ -740,7 +792,7 @@ export default function ProjectApproval() {
               <FileText className="w-4 h-4 flex-shrink-0" />
               <span>На утверждение</span>
               {projects.length > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-xs">{projects.length}</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs">{approvalQueue.counts.ready}/{projects.length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="active" className="whitespace-nowrap gap-1.5 px-3">
@@ -760,17 +812,42 @@ export default function ProjectApproval() {
 
         {/* Список проектов */}
         <TabsContent value="list" className="space-y-4">
+          {projects.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {[
+                { key: 'ready', label: 'Готовы', count: approvalQueue.counts.ready, tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700' },
+                { key: 'no_partner', label: 'Без партнера', count: approvalQueue.counts.noPartner, tone: 'border-red-500/30 bg-red-500/10 text-red-700' },
+                { key: 'no_team', label: 'Без команды', count: approvalQueue.counts.noTeam, tone: 'border-amber-500/30 bg-amber-500/10 text-amber-700' },
+                { key: 'no_amount', label: 'Без суммы', count: approvalQueue.counts.noAmount, tone: 'border-orange-500/30 bg-orange-500/10 text-orange-700' },
+                { key: 'all', label: 'Все в очереди', count: approvalQueue.counts.total, tone: 'border-border bg-muted/40 text-foreground' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setApprovalQueueFilter(item.key as typeof approvalQueueFilter);
+                    setSelectedProjects(new Set());
+                  }}
+                  className={`rounded-lg border p-3 text-left transition-colors ${item.tone} ${approvalQueueFilter === item.key ? 'ring-2 ring-primary' : 'hover:bg-muted/60'}`}
+                >
+                  <div className="text-xs font-medium">{item.label}</div>
+                  <div className="text-xl font-bold tabular-nums">{item.count}</div>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Панель массовых действий */}
-          {canManageProjects && projects.length > 0 && (
+          {canManageProjects && approvalQueue.visible.length > 0 && (
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={selectedProjects.size === projects.length ? deselectAllProjects : selectAllProjects}
+                    onClick={selectedProjects.size === approvalQueue.visible.length ? deselectAllProjects : selectAllProjects}
                   >
-                    {selectedProjects.size === projects.length ? 'Снять выделение' : 'Выбрать все'}
+                    {selectedProjects.size === approvalQueue.visible.length ? 'Снять выделение' : 'Выбрать видимые'}
                   </Button>
                   {selectedProjects.size > 0 && (
                     <Badge variant="secondary">
@@ -799,8 +876,14 @@ export default function ProjectApproval() {
               <h3 className="text-xl font-semibold mb-2">Нет проектов на утверждении</h3>
               <p className="text-muted-foreground">Все проекты обработаны</p>
             </Card>
+          ) : approvalQueue.visible.length === 0 ? (
+            <Card className="p-12 text-center">
+              <AlertTriangle className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold mb-2">В этой категории пусто</h3>
+              <p className="text-muted-foreground">Переключите фильтр выше, чтобы увидеть другие проекты очереди.</p>
+            </Card>
           ) : (
-            projects.map(project => (
+            approvalQueue.visible.map(project => (
               <Card key={project.id} className="p-4 sm:p-6 hover:shadow-lg transition-all">
                 <div className="flex items-start gap-3 sm:gap-4">
                   {/* Чекбокс для массового удаления */}
@@ -827,6 +910,23 @@ export default function ProjectApproval() {
                           <div className="min-w-0 flex-1">
                             <h3 className="font-semibold text-base sm:text-lg break-words leading-tight">{project.name}</h3>
                             <p className="text-xs sm:text-sm text-muted-foreground break-words">{project.client.name}</p>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {!getProjectTeam(project).some((member: any) => member?.role === 'partner') && (
+                                <Badge variant="outline" className="text-[10px] border-red-500/30 bg-red-500/10 text-red-700">
+                                  Нет партнера
+                                </Badge>
+                              )}
+                              {getProjectTeam(project).length === 0 && (
+                                <Badge variant="outline" className="text-[10px] border-amber-500/30 bg-amber-500/10 text-amber-700">
+                                  Нет команды
+                                </Badge>
+                              )}
+                              {getProjectAmount(project) <= 0 && (
+                                <Badge variant="outline" className="text-[10px] border-orange-500/30 bg-orange-500/10 text-orange-700">
+                                  Нет суммы
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
 

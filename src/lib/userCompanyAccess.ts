@@ -2,6 +2,7 @@
 // Хранится в Supabase таблице user_company_access
 
 import { supabase } from '@/integrations/supabase/client';
+import { findCompanyByAnyValue, normalizeCompanyId, normalizeCompanyKey } from '@/types/companies';
 
 export interface UserCompanyAccessMap {
   [userId: string]: string[]; // массив ID компаний из appSettings.companies
@@ -57,10 +58,11 @@ export async function getUserAllowedCompanyIds(userId: string): Promise<string[]
 // Установить разрешённые компании для пользователя (upsert)
 export async function setUserAllowedCompanyIds(userId: string, companyIds: string[]): Promise<void> {
   try {
+    const normalizedCompanyIds = Array.from(new Set((companyIds || []).map(normalizeCompanyId).filter(Boolean)));
     const { error } = await supabase
       .from('user_company_access')
       .upsert(
-        { user_id: userId, company_ids: companyIds },
+        { user_id: userId, company_ids: normalizedCompanyIds },
         { onConflict: 'user_id' }
       );
 
@@ -90,10 +92,10 @@ export async function removeUserCompanyAccess(userId: string): Promise<void> {
 
 // Нормализация названия компании (убирает ТОО, ЧК, ИП, LLP и т.д.)
 export function normalizeCompanyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/^(тоо|чк|ип|ао|ооо|ллп|llp|lp|ltd|inc)\s+/i, '')
-    .replace(/["""«»]/g, '')
+  const canonical = findCompanyByAnyValue(name);
+  const source = canonical?.name || name;
+  return normalizeCompanyKey(source)
+    .replace(/^(тоо|too|чк|ип|ао|ao|ооо|llp|lp|ltd|inc)_+/i, '')
     .trim();
 }
 
@@ -110,9 +112,11 @@ export function projectMatchesAllowedCompanies(
 
   // Извлекаем название компании из проекта (разные поля)
   const rawName: string =
+    notes?.companyId ||
     notes?.companyName ||
     notes?.ourCompany ||
     notes?.company ||
+    project.companyId ||
     notes?.client?.name ||
     project.client?.name ||
     project.clientName ||

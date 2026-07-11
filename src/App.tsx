@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
@@ -7,15 +7,14 @@ import Layout from '@/components/Layout';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AIErrorBoundary } from '@/components/AIErrorBoundary';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
+import { ROLE_GROUPS } from '@/lib/roleAccess';
 const Index = lazy(() => import('@/pages/Index'));
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
-const Projects = lazy(() => import('@/pages/Projects-simple'));
+const Projects = lazy(() => import('@/pages/Projects'));
 const HR = lazy(() => import('@/pages/HR'));
 const Analytics = lazy(() => import('@/pages/Analytics'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Employees = lazy(() => import('@/pages/Employees'));
 const Timesheets = lazy(() => import('@/pages/Timesheets'));
-const TimesheetApproval = lazy(() => import('@/pages/TimesheetApproval'));
 const AssignPartners = lazy(() => import('@/pages/AssignPartners'));
 const Bonuses = lazy(() => import('@/pages/Bonuses'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
@@ -25,7 +24,6 @@ const ProjectWorkspace = lazy(() => import('@/pages/ProjectWorkspace'));
 const SupabaseDiagnostics = lazy(() => import('@/pages/SupabaseDiagnostics'));
 const DatabaseTest = lazy(() => import('@/pages/DatabaseTest'));
 const Tenders = lazy(() => import('@/pages/Tenders'));
-const Calendar = lazy(() => import('@/pages/Calendar'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
@@ -35,9 +33,10 @@ const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Register = lazy(() => import('@/pages/Register'));
+const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const SettingsDiagnostics = lazy(() => import('@/pages/SettingsDiagnostics'));
 const AIChat = lazy(() => import('@/pages/AIChat'));
-const TasksHub = lazy(() => import('@/pages/TasksHub'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +53,15 @@ function RedirectToProject() {
   return <Navigate to={`/project/${id}`} replace />;
 }
 
+function IndexRoute() {
+  const location = useLocation();
+  const hash = location.hash || (typeof window !== 'undefined' ? window.location.hash : '');
+  if (hash.includes('access_token=') && (hash.includes('type=recovery') || hash.includes('refresh_token='))) {
+    return <Navigate to={{ pathname: '/reset-password', hash }} replace />;
+  }
+  return <Index />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -61,18 +69,12 @@ function App() {
         <SidebarProvider>
           <Suspense fallback={<div style={{padding:16}}>Загрузка...</div>}>
             <Routes>
-            <Route path="/" element={<Index />} />
+            <Route path="/" element={<IndexRoute />} />
             <Route path="/register" element={<Register />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/dashboard" element={<Navigate to="/projects" replace />} />
+            <Route path="/project-command-center" element={<Navigate to="/projects" replace />} />
             <Route
               path="/projects"
               element={
@@ -86,7 +88,7 @@ function App() {
             <Route
               path="/hr"
               element={
-                <ProtectedRoute allowedRoles={['hr', 'ceo', 'deputy_director', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.hrManagement}>
                   <Layout>
                     <HR />
                   </Layout>
@@ -96,7 +98,7 @@ function App() {
             <Route
               path="/analytics"
               element={
-                <ProtectedRoute allowedRoles={['ceo', 'deputy_director', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.executive}>
                   <Layout>
                     <Analytics />
                   </Layout>
@@ -106,7 +108,7 @@ function App() {
             <Route
               path="/employees"
               element={
-                <ProtectedRoute allowedRoles={['hr', 'ceo', 'deputy_director', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.hrManagement}>
                   <Layout>
                     <Employees />
                   </Layout>
@@ -123,20 +125,11 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/timesheet-approval"
-              element={
-                <ProtectedRoute allowedRoles={['partner', 'deputy_director', 'ceo', 'admin', 'hr']}>
-                  <Layout>
-                    <TimesheetApproval />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/timesheet-approval" element={<Navigate to="/projects" replace />} />
             <Route
               path="/assign-partners"
               element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.management}>
                   <Layout>
                     <AssignPartners />
                   </Layout>
@@ -146,7 +139,7 @@ function App() {
             <Route
               path="/bonuses"
               element={
-                <ProtectedRoute allowedRoles={['ceo', 'deputy_director', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.executive}>
                   <Layout>
                     <Bonuses />
                   </Layout>
@@ -163,27 +156,9 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/calendar"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Calendar />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/tasks"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <TasksHub />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/my-tasks" element={<Navigate to="/tasks?tab=mine" replace />} />
+            <Route path="/calendar" element={<Navigate to="/projects" replace />} />
+            <Route path="/tasks" element={<Navigate to="/projects" replace />} />
+            <Route path="/my-tasks" element={<Navigate to="/projects" replace />} />
             {/* Legacy survey/questionnaire/import workflows removed from the product UI.
                 Keep redirects so old saved links do not 404. */}
             <Route path="/survey" element={<Navigate to="/projects" replace />} />
@@ -217,7 +192,7 @@ function App() {
             <Route
               path="/create-project-procurement"
               element={
-                <ProtectedRoute allowedRoles={['procurement', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.procurementAdmin}>
                   <Layout>
                     <CreateProjectProcurement />
                   </Layout>
@@ -227,7 +202,7 @@ function App() {
             <Route
               path="/project-approval"
               element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.management}>
                   <Layout>
                     <WidgetErrorBoundary fullPage label="Утверждение проектов">
                       <ProjectApproval />
@@ -239,7 +214,7 @@ function App() {
             <Route
               path="/tenders"
               element={
-                <ProtectedRoute allowedRoles={['procurement']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.procurement}>
                   <Layout>
                     <Tenders />
                   </Layout>
@@ -259,7 +234,7 @@ function App() {
             <Route
               path="/diagnostics"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.admin}>
                   <Layout>
                     <SupabaseDiagnostics />
                   </Layout>
@@ -269,7 +244,7 @@ function App() {
             <Route
               path="/database-test"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.admin}>
                   <Layout>
                     <DatabaseTest />
                   </Layout>
@@ -289,7 +264,7 @@ function App() {
             <Route
               path="/smtp-settings"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.admin}>
                   <Layout>
                     <SMTPSettings />
                   </Layout>
@@ -304,7 +279,7 @@ function App() {
             <Route
               path="/role-management"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.admin}>
                   <Layout>
                     <RoleManagement />
                   </Layout>
@@ -314,7 +289,7 @@ function App() {
             <Route
               path="/settings-diagnostics"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.admin}>
                   <Layout>
                     <SettingsDiagnostics />
                   </Layout>
@@ -326,7 +301,7 @@ function App() {
             <Route
               path="/ai"
               element={
-                <ProtectedRoute allowedRoles={['deputy_director', 'ceo', 'admin', 'partner', 'hr']}>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.ai}>
                   <Layout>
                     <AIErrorBoundary>
                       <AIChat />

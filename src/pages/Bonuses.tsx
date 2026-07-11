@@ -13,6 +13,7 @@ import { useTasks, type Task } from '@/hooks/useTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { calculateProjectFinances } from '@/types/project-v3';
+import { PROJECT_ROLES } from '@/types/roles';
 import { notifyBonusesApproved, notifyProjectClosed } from '@/lib/projectNotifications';
 import { CEOSummaryTable, type CEOSummaryActions } from '@/components/projects/CEOSummaryTable';
 import {
@@ -331,6 +332,65 @@ export default function Bonuses() {
     }
   };
 
+  const getProjectTeam = (project: any) => {
+    if (Array.isArray(project?.team)) return project.team;
+    if (Array.isArray(project?.notes?.team)) return project.notes.team;
+    return [];
+  };
+
+  const addProjectTeamRole = async (projectId: string, employeeId: string, role: string) => {
+    if (!canEditBonuses) return;
+    const project = projects.find((p: any) => p.id === projectId);
+    const employee = employees.find((e: any) => e.id === employeeId);
+    if (!project || !employee) return;
+
+    const currentTeam = getProjectTeam(project);
+    const alreadyAssigned = currentTeam.some((member: any) =>
+      (member.userId || member.id || member.employeeId) === employeeId && member.role === role,
+    );
+    if (alreadyAssigned) {
+      toast({
+        title: 'Роль уже назначена',
+        description: `${employee.name || 'Сотрудник'} уже есть в этой роли на проекте.`,
+      });
+      return;
+    }
+
+    const roleSpec = PROJECT_ROLES.find((item) => item.role === role);
+    const nextTeam = [
+      ...currentTeam,
+      {
+        userId: employeeId,
+        userName: employee.name || employee.full_name || employee.email || employeeId,
+        name: employee.name || employee.full_name || employee.email || employeeId,
+        role,
+        bonusPercent: roleSpec?.bonusPercent ?? 0,
+        assignedAt: new Date().toISOString(),
+        assignedBy: user?.id || 'ceo-summary',
+      },
+    ];
+
+    await updateProjectRecord(projectId, { team: nextTeam });
+    await refreshProjects();
+    toast({
+      title: 'Роль добавлена',
+      description: `${employee.name || 'Сотрудник'} добавлен как ${roleSpec?.label || role}.`,
+    });
+  };
+
+  const removeProjectTeamRole = async (projectId: string, employeeId: string, role: string) => {
+    if (!canEditBonuses) return;
+    const project = projects.find((p: any) => p.id === projectId);
+    if (!project) return;
+    const currentTeam = getProjectTeam(project);
+    const nextTeam = currentTeam.filter((member: any) =>
+      !((member.userId || member.id || member.employeeId) === employeeId && member.role === role),
+    );
+    await updateProjectRecord(projectId, { team: nextTeam });
+    await refreshProjects();
+    toast({ title: 'Роль убрана из команды проекта' });
+  };
+
   // Получаем все бонусы из проектов
   const allBonuses = useMemo(() => {
     const bonuses: Array<{
@@ -475,6 +535,12 @@ export default function Bonuses() {
         approveAndClose: async (project, settings) => {
           await approveProjectBonuses(project, settings);
         },
+        addTeamRole: async (projectId, employeeId, role) => {
+          await addProjectTeamRole(projectId, employeeId, role);
+        },
+        removeTeamRole: async (projectId, employeeId, role) => {
+          await removeProjectTeamRole(projectId, employeeId, role);
+        },
         markPaid: async (projectId, userId) => {
           await markBonusPaid(projectId, userId);
         },
@@ -603,9 +669,10 @@ export default function Bonuses() {
         <CEOSummaryTable
           projects={projects}
           employees={employees}
+          tasks={tasks}
           getProjectAmount={getProjectAmountForTable}
           getCompanyDisplayName={getCompanyDisplayNameForTable}
-          initialStatusFilter="pending"
+          initialStatusFilter="all"
           actions={ceoTableActions}
           hideHeader={true}
         />

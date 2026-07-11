@@ -1,0 +1,1171 @@
+{
+  "committed": true,
+  "planned": [
+    {
+      "name": "Кудайбергенова Шолпанай",
+      "role": "partner",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 27,
+      "sourceRoles": [
+        "partner",
+        "team"
+      ],
+      "sourceExamples": [
+        "Техконструктивстрой (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 80)",
+        "AB Exim Mananagement (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 81)",
+        "ТОО Эталон Люкс (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 101)"
+      ]
+    },
+    {
+      "name": "Сауле Тримова",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 23,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Мой страховой брокер (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 14)",
+        "FinQ (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 22)",
+        "ТОО Автосан (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 87)"
+      ]
+    },
+    {
+      "name": "Альфира Хисамитдинова",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 7,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Балхашметаллы (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 11)",
+        "ТОО BG Metal (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 12)",
+        "АО «ULMUS BESSHOKY» (УЛМУС БЕСШОКЫ) (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 38)"
+      ]
+    },
+    {
+      "name": "Жумадилов Бакыт",
+      "role": "partner",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 7,
+      "sourceRoles": [
+        "partner"
+      ],
+      "sourceExamples": [
+        "Eurasian Development Bank (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 34)",
+        "АО ВТБ Банк (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 51)",
+        "Евразийский Банк Развития (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 15)"
+      ]
+    },
+    {
+      "name": "Василий Павленко",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 6,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО Baiterek Venture Fund (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 60)",
+        "ТОО Богатырь Комир (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 59)",
+        "Самрук-Қазына Инвест ТОО (1 кв Проекты 2026_RBI.xlsx, Проекты 1 кв 2026 row 20)"
+      ]
+    },
+    {
+      "name": "Акмолдир Омарова",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 4,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО КазмунайГаз-Аэро (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 36)",
+        "ТОО Богатырь Комир (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 59)",
+        "ЧК Fin Q (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 93)"
+      ]
+    },
+    {
+      "name": "Исалиева Кулбала",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 4,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Finbox (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 3)",
+        "ТОО Binom Education (2 кв Проекты 2024_RBI.xlsx, спец аудит 2024 2 кв row 3)",
+        "Проект по реконструкции автодороги \" Актобе- Макат\" соединяющий Коридоры 1 и 6 ЦАРЕЦ\", финансируемый в рамках соглашения № 3416 - KAZ, заключенного между Правительством РК и АБР (2 кв Проекты 2024_RBI.xlsx, спец аудит 2024 2 кв row 10)"
+      ]
+    },
+    {
+      "name": "Мадиева Раушан",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 4,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Bogatyr Komir (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 7)",
+        "Акбидай Терминал (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 12)",
+        "ТОО Bogatir Komir / Богатырь Комир (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 29)"
+      ]
+    },
+    {
+      "name": "Сейткереев Сакен",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 4,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Finbox (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 3)",
+        "ТОО Oil Construction Company (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 45)",
+        "КМG Security (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 76)"
+      ]
+    },
+    {
+      "name": "Тукеева Назира",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 4,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Bogatyr Komir (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 7)",
+        "Акбидай Терминал (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 12)",
+        "ТОО Bogatir Komir / Богатырь Комир (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 29)"
+      ]
+    },
+    {
+      "name": "Айдана Иргебаева",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 3,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Суд МФЦА (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 18)",
+        "AIFC Professional Services Group Limited (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 70)",
+        "TechHubLimited (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 78)"
+      ]
+    },
+    {
+      "name": "Дмитрий Сыч",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 3,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО Baiterek Venture Fund (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 60)",
+        "ТОО Богатырь Комир (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 59)",
+        "Акционерное общество Компания по страхованию жизни \" Государтсвенная Аннуитетная компания\" (3 кв Проекты 2025_RBI.xlsx, аудит ФО 3 кв 2025 row 4)"
+      ]
+    },
+    {
+      "name": "Ермек Лебеков",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 3,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО \"Инвестиционный фонд Казахстана\" (Сейфулина_Проекты октябрь 2024-октябрь 2025.xlsx, Anderson row 6)",
+        "АО \"СПК Астана\" (Сейфулина_Проекты октябрь 2024-октябрь 2025.xlsx, Anderson row 7)",
+        "ТОО \"Коксуский сахарный завод\" (Сейфулина_Проекты октябрь 2024-октябрь 2025.xlsx, МАК RB Partners row 11)"
+      ]
+    },
+    {
+      "name": "Омаров Онгар",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 3,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО ЕТС-Тендер (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 30)",
+        "СКТБ Гранит (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 93)",
+        "АО Товарная биржа \"Евразийская Торговая Система\" (4 кв Проекты 2025_RBI.xlsx, Проекты 4 кв 2025 row 4)"
+      ]
+    },
+    {
+      "name": "Роза Бакишева",
+      "role": "manager",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 3,
+      "sourceRoles": [
+        "team",
+        "project_leader"
+      ],
+      "sourceExamples": [
+        "ТОО Альфараби Оперейтинг (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 49)",
+        "ТОО Женис Оперейтинг (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 55)",
+        "Zhylyoi Operating ТОО (1 кв Проекты 2026_RBI.xlsx, Проекты 1 кв 2026 row 5)"
+      ]
+    },
+    {
+      "name": "Абдыкадыр Салтанат",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Bogatyr Komir (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 7)",
+        "ТОО Bogatir Komir / Богатырь Комир (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 29)"
+      ]
+    },
+    {
+      "name": "Бисенова Гульсим",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Oil Construction Company (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 45)",
+        "АО Усть-Каменогорские тепловые сети (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 89)"
+      ]
+    },
+    {
+      "name": "Молдагалиева Марал",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Общественный Фонд \" Билим Болашагы\" (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 88)",
+        "АО Усть-Каменогорские тепловые сети (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 89)"
+      ]
+    },
+    {
+      "name": "Мусаева Ботагоз",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Bogatyr Komir (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 7)",
+        "ТОО Bogatir Komir / Богатырь Комир (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 29)"
+      ]
+    },
+    {
+      "name": "Раимбек",
+      "role": "manager",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "project_leader"
+      ],
+      "sourceExamples": [
+        "Микрофинансовая организация MOST ТОО (1 кв Проекты 2026_RBI.xlsx, Проекты 1 кв 2026 row 19)",
+        "ТОО МФО ФРИДОМ ФИНАНС Кредит (1 кв Проекты 2026_RBI.xlsx, Проекты 1 кв 2026 row 34)"
+      ]
+    },
+    {
+      "name": "Рахматулла Арман",
+      "role": "partner",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "partner"
+      ],
+      "sourceExamples": [
+        "ТОО \"Ирбис Логистикс\" (Сейфулина_Проекты октябрь 2024-октябрь 2025.xlsx, Parker Kazakhstan row 5)",
+        "ТОО \"Кыран\" (Сейфулина_Проекты октябрь 2024-октябрь 2025.xlsx, Parker Kazakhstan row 6)"
+      ]
+    },
+    {
+      "name": "Саида Ахметжанова",
+      "role": "partner",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "partner"
+      ],
+      "sourceExamples": [
+        "Техконструктивстрой (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 80)",
+        "AB Exim Mananagement (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 81)"
+      ]
+    },
+    {
+      "name": "Смагулова Ляззат",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Bogatyr Komir (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 7)",
+        "ТОО Bogatir Komir / Богатырь Комир (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 29)"
+      ]
+    },
+    {
+      "name": "Тайтаразов Максат",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 2,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО ВТБ Банк (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 51)",
+        "Евразийский Банк Развития (2 кв Проекты 2025_RBI.xlsx, Проекты 2 кв 2025 row 74)"
+      ]
+    },
+    {
+      "name": "Акулбеков Кайрат",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "IC Petrolium (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 94)"
+      ]
+    },
+    {
+      "name": "Акулпа",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "СКТБ Гранит (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 93)"
+      ]
+    },
+    {
+      "name": "Акулпа Аделет",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО ИП «СЖС Казахстан ЛТД» (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 23)"
+      ]
+    },
+    {
+      "name": "Акулпа Исахан",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ЧК Ellinton Group KAZ ltd (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 19)"
+      ]
+    },
+    {
+      "name": "Александр Харюшко",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Богатырь Комир (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 59)"
+      ]
+    },
+    {
+      "name": "Али Кожагулов",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО “Teta Telecom” (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 53)"
+      ]
+    },
+    {
+      "name": "Бегайдаров Арсен",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Некоммерческое АО Администрация Международного финансового центра \" Астана\" (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 80)"
+      ]
+    },
+    {
+      "name": "Биялиева Тогжан",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ЧК Kazakhstan Investment Development Fund ( KIDF) Management Company Ltd. (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 89)"
+      ]
+    },
+    {
+      "name": "Гридюшко Александра",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО Baiterek Venture Fund (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 60)"
+      ]
+    },
+    {
+      "name": "Гулсун",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "КМG Security (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 76)"
+      ]
+    },
+    {
+      "name": "Дина Окина",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО \"ARK CO ( ARK KO)\" (2 кв Проекты 2025_RBI.xlsx, Проекты 2 кв 2025 row 79)"
+      ]
+    },
+    {
+      "name": "Егор Чернов",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО ИЗА (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 60)"
+      ]
+    },
+    {
+      "name": "Жантеева Аялым",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО ВТБ Банк (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 51)"
+      ]
+    },
+    {
+      "name": "Жораханов Жанибек",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Kalamkas - Khazar Operating (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 39)"
+      ]
+    },
+    {
+      "name": "Касимова Альбина",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ЧК Kazakhstan Investment Development Fund ( KIDF) Management Company Ltd. (1 кв Проекты 2025_RBI.xlsx, Проекты 1 кв 2025 row 89)"
+      ]
+    },
+    {
+      "name": "Косилбекова Динара",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО ВТБ Банк (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 51)"
+      ]
+    },
+    {
+      "name": "Куралай",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Акционерное общество Компания по страхованию жизни \" Государтсвенная Аннуитетная компания\" (3 кв Проекты 2025_RBI.xlsx, аудит ФО 3 кв 2025 row 4)"
+      ]
+    },
+    {
+      "name": "Машкенов Темирлан",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Некоммерческое АО Администрация Международного финансового центра \" Астана\" (2 кв Проекты 2024_RBI.xlsx, Проекты 2 кв 2024  row 80)"
+      ]
+    },
+    {
+      "name": "Меруерт Салимова",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "СК-Фармация ТОО (2 кв Проекты 2025_RBI.xlsx, Проекты 2 кв 2025 row 15)"
+      ]
+    },
+    {
+      "name": "Молдагалиева М.К.",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Binom Education (3 кв Проекты 2025_RBI.xlsx, спец аудит 2025 3 кв row 2)"
+      ]
+    },
+    {
+      "name": "Нурбаев Ерганат",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО Baiterek Venture Fund (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 60)"
+      ]
+    },
+    {
+      "name": "Нургалиулы Темирлан",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Finbox (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 3)"
+      ]
+    },
+    {
+      "name": "Нурсултан",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО Микрофинансовая организация Юникредо (2 кв Проекты 2025_RBI.xlsx, Проекты 2 кв 2025 row 64)"
+      ]
+    },
+    {
+      "name": "Рахимжанова Мира",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Акционерное общество Компания по страхованию жизни \" Государтсвенная Аннуитетная компания\" (3 кв Проекты 2025_RBI.xlsx, аудит ФО 3 кв 2025 row 4)"
+      ]
+    },
+    {
+      "name": "Светлана Загорская",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "Finbox (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 3)"
+      ]
+    },
+    {
+      "name": "Султан Киргиз",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "АО ИСЛАМСКИЙ БАНК ЗАМАН-БАНК (2 кв Проекты 2025_RBI.xlsx, Проекты 2 кв 2025 row 9)"
+      ]
+    },
+    {
+      "name": "Хасенов Ардак",
+      "role": "employee",
+      "level": "1",
+      "email": null,
+      "password": null,
+      "whatsapp": null,
+      "sourceCount": 1,
+      "sourceRoles": [
+        "team"
+      ],
+      "sourceExamples": [
+        "ТОО КазРосГаз (1 кв Проекты 2024_RBI.xlsx, Проекты 1 кв 2024 row 24)"
+      ]
+    }
+  ],
+  "inserted": [
+    {
+      "id": "df3b7f8e-d32d-4074-8cef-ad96da9d0352",
+      "name": "Кудайбергенова Шолпанай",
+      "role": "partner",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "bb849f91-87f0-4216-aa8f-e836730b9f33",
+      "name": "Сауле Тримова",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "f24ecfd0-dfcc-4255-841d-65ff7c288c6f",
+      "name": "Альфира Хисамитдинова",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "3fd99810-3e0a-4b0a-973b-1f7a38dbfac2",
+      "name": "Жумадилов Бакыт",
+      "role": "partner",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "bd81e792-9a08-4152-b8c8-eb2aab9bee36",
+      "name": "Василий Павленко",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "bf4be789-8998-4928-b8e1-96415b619aef",
+      "name": "Акмолдир Омарова",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "d1e2e2b8-1a0d-4aa4-9aec-4374633a4d12",
+      "name": "Исалиева Кулбала",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "ed7910b7-fb63-4e9f-9f61-8b91d54be68b",
+      "name": "Мадиева Раушан",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "c20793e8-6cac-4cb9-ae7e-b8d0168886cf",
+      "name": "Сейткереев Сакен",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "3b95ab67-ad44-4513-be94-7afa5b673c3c",
+      "name": "Тукеева Назира",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "eeb36496-5742-43e9-b2b8-278105cba76f",
+      "name": "Айдана Иргебаева",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "a5424373-445f-49e1-a493-e98a2c16dcb4",
+      "name": "Дмитрий Сыч",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "c48cb93d-1afc-470c-b297-da7fd76053a1",
+      "name": "Ермек Лебеков",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "6c3f61f3-e0fa-4d07-a73a-49979b98c24b",
+      "name": "Омаров Онгар",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "3cffac9e-3f18-42de-b348-59fced11321c",
+      "name": "Роза Бакишева",
+      "role": "manager",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "2a931a14-8b22-4c67-a4ff-6d88a241d7b2",
+      "name": "Абдыкадыр Салтанат",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "43837bd6-8f8c-4677-b91a-9a2a84b07340",
+      "name": "Бисенова Гульсим",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "25ee83c5-1009-4be4-993f-f44c9d762318",
+      "name": "Молдагалиева Марал",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "6b534b48-8d02-424c-acb4-02cb7d19d9ef",
+      "name": "Мусаева Ботагоз",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "bd7a4dd1-c367-40a6-af09-f64538b1d9f5",
+      "name": "Раимбек",
+      "role": "manager",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "a062b9d6-7285-4469-9b2f-8aaaa9b15c5a",
+      "name": "Рахматулла Арман",
+      "role": "partner",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "373051a0-aed4-44ef-b48e-68f12eafa87b",
+      "name": "Саида Ахметжанова",
+      "role": "partner",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "c5d4c853-9d3a-4a0e-9ead-5274429aea1f",
+      "name": "Смагулова Ляззат",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "eccec320-6e21-4f66-91bc-eec9ae32e9af",
+      "name": "Тайтаразов Максат",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "90cf5a6f-28df-4b9c-ad12-1577a04ca94d",
+      "name": "Акулбеков Кайрат",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "f592ba3b-f349-4cf7-a8d5-bdb3d7ee630b",
+      "name": "Акулпа",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "991325e4-3c5a-4bf7-a551-be8e4b597751",
+      "name": "Акулпа Аделет",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "a07dc191-270c-4669-b8ca-26835e1c3b98",
+      "name": "Акулпа Исахан",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "a93d93af-af68-462d-bba2-2523d40ccef2",
+      "name": "Александр Харюшко",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "df39fdf4-c4f0-46b8-8364-fa33b30bb594",
+      "name": "Али Кожагулов",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "58811476-b143-4b02-8302-d8676c3dd85a",
+      "name": "Бегайдаров Арсен",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "6c4106d2-140a-4a74-bb41-b7f07d695c63",
+      "name": "Биялиева Тогжан",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "17dd2b4c-b5a1-41a9-87d3-e95c450881c4",
+      "name": "Гридюшко Александра",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "0596d742-ef6c-43aa-aea3-3d87ee09f163",
+      "name": "Гулсун",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "d749e583-08fa-41a2-bd46-f33feade30e2",
+      "name": "Дина Окина",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "039ff57e-ac2a-47a4-a573-a5d4e4b90a7d",
+      "name": "Егор Чернов",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "236c46c2-1711-4922-89c1-c661d5de6181",
+      "name": "Жантеева Аялым",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "a977e8d7-0ae1-4335-9dd9-202c64e2e199",
+      "name": "Жораханов Жанибек",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "f7a714a1-a95c-4160-b4a9-bf93328283ff",
+      "name": "Касимова Альбина",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "1351a286-aed8-4176-bc66-226a414540e4",
+      "name": "Косилбекова Динара",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "52160ac1-7d7c-456f-84f1-27e5d7a8f007",
+      "name": "Куралай",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "e18aca9e-64e8-4f4f-805c-0c5c52960e82",
+      "name": "Машкенов Темирлан",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "79ec7f64-1b34-42f1-ac13-fb27591b9302",
+      "name": "Меруерт Салимова",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "52ce78ee-e07e-40ae-b466-c1aeab8b1442",
+      "name": "Молдагалиева М.К.",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "c12f16f1-ea2b-426f-91d9-7a50383f1407",
+      "name": "Нурбаев Ерганат",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "cd9431c4-4824-4ece-bc75-47626651cc55",
+      "name": "Нургалиулы Темирлан",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "1964e7b4-6db0-41a8-b400-72d6a1c3dfd8",
+      "name": "Нурсултан",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "e22b8953-5572-4728-9109-666fb10fe28e",
+      "name": "Рахимжанова Мира",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "7f3b73d4-33c5-465f-86e0-d54591c4fa9c",
+      "name": "Светлана Загорская",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "85d5b01d-e341-4d7d-81c2-d4f2a31d58c1",
+      "name": "Султан Киргиз",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    },
+    {
+      "id": "016f95b4-936d-48af-a9f2-5df808fb189c",
+      "name": "Хасенов Ардак",
+      "role": "employee",
+      "level": "1",
+      "email": null
+    }
+  ],
+  "skipped": []
+}

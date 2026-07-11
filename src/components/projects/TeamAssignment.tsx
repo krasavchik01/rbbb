@@ -56,9 +56,6 @@ export const TeamAssignment: React.FC<TeamAssignmentProps> = ({
         const filteredEmps = employees
           .filter(emp => {
             // Исключаем уже назначенных в ДРУГИЕ слоты
-            const usedIds = Object.values(teamSlots).filter(Boolean) as string[];
-            if (usedIds.includes(emp.id) && emp.id !== assignedEmpId) return false;
-
             if (!q) return true;
             const nameMatch = emp.name.toLowerCase().includes(q);
             const roleLabel = (ROLE_LABELS[emp.role as UserRole] || emp.role || '').toLowerCase();

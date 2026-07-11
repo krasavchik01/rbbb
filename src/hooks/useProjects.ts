@@ -4,6 +4,7 @@ import { Database } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
 import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
+import { findCompanyByAnyValue } from '@/types/companies';
 
 type Company = Database['public']['Tables']['companies']['Row'];
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -292,7 +293,10 @@ export function useProjects() {
     }
     const settingsCompanies = appSettings.companies || [];
     const allowedNames = user.allowedCompanyIds
-      .map((id: string) => (settingsCompanies as any[]).find((c: any) => c.id === id)?.name)
+      .flatMap((id: string) => {
+        const company = findCompanyByAnyValue(id, settingsCompanies as any);
+        return [id, company?.id, company?.name, company?.fullName].filter(Boolean);
+      })
       .filter(Boolean) as string[];
     if (allowedNames.length === 0) return allProjects;
     return allProjects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));

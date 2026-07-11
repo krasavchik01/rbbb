@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -31,7 +32,7 @@ import {
   withPartnerSet,
   type TeamMember,
 } from '@/lib/projectTeam';
-import { PROJECT_ROLES, normalizeUserRole, type UserRole } from '@/types/roles';
+import { PROJECT_ROLES, type UserRole } from '@/types/roles';
 import {
   Briefcase,
   Search,
@@ -51,6 +52,109 @@ function memberId(member: any): string | undefined {
   return member?.userId || member?.id || member?.employeeId;
 }
 
+function employeeLabel(employee: any): string {
+  return employee?.name || employee?.full_name || employee?.email || employee?.id || '';
+}
+
+function EmployeeSearchSelect({
+  employees,
+  value,
+  onChange,
+  placeholder = 'Выберите сотрудника',
+  allowEmpty = true,
+  emptyLabel = 'Не назначен',
+  className = '',
+}: {
+  employees: any[];
+  value?: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  allowEmpty?: boolean;
+  emptyLabel?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = employees.find((employee: any) => employee.id === value);
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    return employees
+      .filter((employee: any) => {
+        if (!q) return true;
+        const label = employeeLabel(employee).toLowerCase();
+        const role = String(employee?.role || '').toLowerCase();
+        const email = String(employee?.email || '').toLowerCase();
+        return label.includes(q) || role.includes(q) || email.includes(q);
+      })
+      .slice(0, 80);
+  }, [employees, q]);
+
+  const pick = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(next) => {
+      setOpen(next);
+      if (!next) setQuery('');
+    }}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className={`justify-between bg-background font-normal ${className}`}>
+          <span className="truncate">{selected ? employeeLabel(selected) : placeholder}</span>
+          <Search className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-0" align="start">
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Введите 2-3 буквы..."
+              className="h-9 pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-72 overflow-y-auto p-1">
+          {allowEmpty && (
+            <button
+              type="button"
+              className="flex w-full items-center rounded px-2 py-2 text-left text-sm hover:bg-accent"
+              onClick={() => pick(NONE)}
+            >
+              {emptyLabel}
+            </button>
+          )}
+          {filtered.length === 0 ? (
+            <div className="px-2 py-6 text-center text-sm text-muted-foreground">Совпадений нет</div>
+          ) : (
+            filtered.map((employee: any) => (
+              <button
+                type="button"
+                key={employee.id}
+                className="flex w-full items-center justify-between gap-2 rounded px-2 py-2 text-left text-sm hover:bg-accent"
+                onClick={() => pick(employee.id)}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{employeeLabel(employee)}</span>
+                  {(employee.role || employee.email) && (
+                    <span className="block truncate text-xs text-muted-foreground">{employee.role || employee.email}</span>
+                  )}
+                </span>
+                {employee.id === value && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function buildTeamDraft(team: TeamMember[]): TeamDraft {
   const draft: TeamDraft = {};
   for (const role of PROJECT_ROLES) draft[role.role] = NONE;
@@ -59,10 +163,6 @@ function buildTeamDraft(team: TeamMember[]): TeamDraft {
     draft[member.role] = memberId(member) || NONE;
   }
   return draft;
-}
-
-function employeeProjectRole(employee: any): UserRole {
-  return normalizeUserRole(employee?.role, employee?.level);
 }
 
 function buildTeamFromDraft(
@@ -111,24 +211,16 @@ export default function AssignPartners() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [teamDrafts, setTeamDrafts] = useState<Record<string, TeamDraft>>({});
 
-  const partnerEmployees = useMemo(
-    () => (employees as any[]).filter((e) => employeeProjectRole(e) === 'partner'),
+  const assignableEmployees = useMemo(
+    () => [...(employees as any[])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru')),
     [employees],
   );
 
   const employeesByRole = useMemo(() => {
     const map = new Map<string, any[]>();
-    for (const role of PROJECT_ROLES) map.set(role.role, []);
-    for (const emp of employees as any[]) {
-      const role = employeeProjectRole(emp);
-      if (!map.has(role)) continue;
-      map.get(role)!.push(emp);
-    }
-    for (const list of map.values()) {
-      list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
-    }
+    for (const role of PROJECT_ROLES) map.set(role.role, assignableEmployees);
     return map;
-  }, [employees]);
+  }, [assignableEmployees]);
 
   const companyOptions = useMemo(() => {
     const set = new Set<string>();
@@ -273,11 +365,11 @@ export default function AssignPartners() {
       return;
     }
     if (mode === 'assign' && !bulkPartnerId) {
-      toast({ title: 'Выберите партнёра', description: 'В нижней панели — Select «Партнёр».', variant: 'destructive' });
+      toast({ title: 'Выберите партнёра', description: 'В нижней панели выберите партнёра через поиск.', variant: 'destructive' });
       return;
     }
 
-    const partnerEmp = partnerEmployees.find((e: any) => e.id === bulkPartnerId);
+    const partnerEmp = assignableEmployees.find((e: any) => e.id === bulkPartnerId);
     const partnerName = partnerEmp?.name || 'Партнёр';
 
     setBusy(true);
@@ -390,13 +482,14 @@ export default function AssignPartners() {
             {filter === 'with_partner' && (
               <div>
                 <Label className="text-xs">Какой партнёр</Label>
-                <Select value={filterPartnerId} onValueChange={setFilterPartnerId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Любой</SelectItem>
-                    {partnerEmployees.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <EmployeeSearchSelect
+                  employees={assignableEmployees}
+                  value={filterPartnerId === 'any' ? undefined : filterPartnerId}
+                  onChange={(value) => setFilterPartnerId(value === NONE ? 'any' : value)}
+                  placeholder="Любой"
+                  emptyLabel="Любой"
+                  className="w-full"
+                />
               </div>
             )}
             <div>
@@ -471,7 +564,7 @@ export default function AssignPartners() {
                         <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200"><AlertTriangle className="w-3 h-3 mr-1" /> нет партнёра</Badge>
                       )}
                       <Button type="button" variant={isEditing ? 'secondary' : 'outline'} size="sm" className="h-8 px-2 text-xs" onClick={() => openTeamEditor(id, team)}>
-                        <Pencil className="w-3 h-3 mr-1" /> {isEditing ? 'Закрыть' : team.length ? 'Изменить' : 'Команда'}
+                        <Pencil className="w-3 h-3 mr-1" /> {isEditing ? 'Готово' : team.length ? 'Изменить' : 'Команда'}
                       </Button>
                     </div>
 
@@ -483,13 +576,14 @@ export default function AssignPartners() {
                             return (
                               <div key={role.role}>
                                 <Label className="text-xs">{role.label} · {role.bonusPercent}%</Label>
-                                <Select value={draft[role.role] || NONE} onValueChange={(value) => setDraftRole(id, role.role, value)}>
-                                  <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={NONE}>Не назначен</SelectItem>
-                                    {options.map((emp: any) => <SelectItem key={emp.id} value={emp.id}>{emp.name || emp.email}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
+                                <EmployeeSearchSelect
+                                  employees={options}
+                                  value={draft[role.role] === NONE ? undefined : draft[role.role]}
+                                  onChange={(value) => setDraftRole(id, role.role, value)}
+                                  placeholder="Не назначен"
+                                  emptyLabel="Не назначен"
+                                  className="w-full"
+                                />
                               </div>
                             );
                           })}
@@ -515,12 +609,14 @@ export default function AssignPartners() {
         <Card className="border-primary/40 shadow-2xl bg-background/95 backdrop-blur">
           <CardContent className="p-3 flex flex-wrap items-center gap-3">
             <Badge variant="secondary" className="text-sm">Выбрано: <b className="ml-1">{selected.size}</b></Badge>
-            <Select value={bulkPartnerId} onValueChange={setBulkPartnerId}>
-              <SelectTrigger className="w-[240px]"><SelectValue placeholder="Партнёр для выбранных…" /></SelectTrigger>
-              <SelectContent>
-                {partnerEmployees.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Нет сотрудников с ролью «partner»</div> : partnerEmployees.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <EmployeeSearchSelect
+              employees={assignableEmployees}
+              value={bulkPartnerId}
+              onChange={(value) => setBulkPartnerId(value === NONE ? '' : value)}
+              placeholder="Партнёр для выбранных..."
+              emptyLabel="Не выбран"
+              className="w-[260px]"
+            />
             <Button size="sm" disabled={busy || selected.size === 0 || !bulkPartnerId} onClick={() => apply('assign')}>
               <CheckCircle2 className="w-4 h-4 mr-2" /> Назначить партнёра ({selected.size})
             </Button>

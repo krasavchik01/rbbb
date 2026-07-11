@@ -5,6 +5,16 @@ import { supabase } from '@/integrations/supabase/client';
 
 const API_BASE = typeof window !== 'undefined' ? '' : process.env.API_BASE || 'http://localhost:3000';
 
+function toHeaderAscii(value: unknown): string {
+  return String(value ?? '').replace(/[^\x20-\x7E]/g, '').trim();
+}
+
+function encodeHeaderText(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  return encodeURIComponent(raw);
+}
+
 export interface RequestOptions extends RequestInit {
   headers?: Record<string, string>;
 }
@@ -45,9 +55,15 @@ export async function apiRequest<T = any>(
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
-        if (user.id) headers['x-user-id'] = user.id;
-        if (user.name) headers['x-user-name'] = user.name;
-        if (user.role) headers['x-user-role'] = user.role;
+        const userId = toHeaderAscii(user.id);
+        const userRole = toHeaderAscii(user.role);
+        const userName = encodeHeaderText(user.name);
+        if (userId) {
+          headers['x-user-id'] = userId;
+          headers['x-suite-user-id'] = userId;
+        }
+        if (userName) headers['x-user-name'] = userName;
+        if (userRole) headers['x-user-role'] = userRole;
       } catch (e) {
         console.error('Failed to parse user from localStorage:', e);
       }

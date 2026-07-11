@@ -1,0 +1,2040 @@
+{
+  "mode": "dry-run",
+  "createdAt": "2026-06-08T06:34:31.608Z",
+  "totalRows": 14870,
+  "duplicateGroupCount": 169,
+  "deleteCandidateCount": 171,
+  "keptCount": 169,
+  "duplicateGroups": [
+    {
+      "keyHash": "38ad8237d4d8afdd",
+      "groupSize": 2,
+      "keepId": "44fceef0-3d6d-478c-ae15-2eb07872a2fa",
+      "deleteIds": [
+        "92138c3c-c1d3-403c-a044-bbc603eb3b6a"
+      ],
+      "workDate": "2026-01-16",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "260a24c4551f1e32",
+      "groupSize": 2,
+      "keepId": "458dfebf-a55c-4a40-a675-120ecc77abb4",
+      "deleteIds": [
+        "aa23144d-1297-4d30-9bda-4b54568a8ce1"
+      ],
+      "workDate": "2026-03-12",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6dd45991b8085844",
+      "groupSize": 2,
+      "keepId": "23ee84e6-846f-439f-857c-ca97a3cecd71",
+      "deleteIds": [
+        "a8f85f01-8b48-4645-bde2-ec18a4dcb810"
+      ],
+      "workDate": "2026-06-25",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5ff7a956fd78fce1",
+      "groupSize": 2,
+      "keepId": "ace36148-ec00-4d5a-8626-8ff8505a4a33",
+      "deleteIds": [
+        "e0e74d3e-e5b1-4de0-ba10-8506f7b81178"
+      ],
+      "workDate": "2026-03-15",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b449a5004f7ff6f3",
+      "groupSize": 2,
+      "keepId": "ba54bed8-18c2-4751-8003-7c036298bc39",
+      "deleteIds": [
+        "ba54bed8-18c2-4751-8003-7c036298bc39"
+      ],
+      "workDate": "2024-12-02",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "0577e8e004cf9259",
+      "groupSize": 2,
+      "keepId": "316eaf70-62e0-4852-ae0d-2f62ba16569b",
+      "deleteIds": [
+        "316eaf70-62e0-4852-ae0d-2f62ba16569b"
+      ],
+      "workDate": "2024-12-03",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "3f7d9eb943904cab",
+      "groupSize": 2,
+      "keepId": "b0819f22-b1fc-4374-9b4b-3bee15e27934",
+      "deleteIds": [
+        "b0819f22-b1fc-4374-9b4b-3bee15e27934"
+      ],
+      "workDate": "2024-12-04",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "3c0e30bbe9d66f8e",
+      "groupSize": 2,
+      "keepId": "e97cbe87-5fb4-4e0e-8a46-4c25b73c14b1",
+      "deleteIds": [
+        "e97cbe87-5fb4-4e0e-8a46-4c25b73c14b1"
+      ],
+      "workDate": "2024-12-05",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "83946c6d92ff14a7",
+      "groupSize": 2,
+      "keepId": "3a6f948a-b548-4c02-a75e-f3163e8e967e",
+      "deleteIds": [
+        "3a6f948a-b548-4c02-a75e-f3163e8e967e"
+      ],
+      "workDate": "2024-12-06",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "840ba02e3eb36467",
+      "groupSize": 2,
+      "keepId": "696b5ca2-a6d4-4b7d-abf3-7c22fc9ed821",
+      "deleteIds": [
+        "696b5ca2-a6d4-4b7d-abf3-7c22fc9ed821"
+      ],
+      "workDate": "2024-12-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "026a019a1dfbaf38",
+      "groupSize": 2,
+      "keepId": "ea626fe5-d4de-4c06-8f85-4343fef49295",
+      "deleteIds": [
+        "ea626fe5-d4de-4c06-8f85-4343fef49295"
+      ],
+      "workDate": "2025-01-08",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b6651a5d07f37391",
+      "groupSize": 2,
+      "keepId": "26b492f1-6f18-4a92-bd5c-f5305405eb33",
+      "deleteIds": [
+        "26b492f1-6f18-4a92-bd5c-f5305405eb33"
+      ],
+      "workDate": "2025-01-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "85bd805ff6c7a892",
+      "groupSize": 2,
+      "keepId": "a7de173c-c8d5-4d0e-8360-32909520bdbd",
+      "deleteIds": [
+        "a7de173c-c8d5-4d0e-8360-32909520bdbd"
+      ],
+      "workDate": "2025-06-05",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "2403014f7231bdfa",
+      "groupSize": 2,
+      "keepId": "5e838485-f90a-4dc4-8789-07b1c2dc09c9",
+      "deleteIds": [
+        "5e838485-f90a-4dc4-8789-07b1c2dc09c9"
+      ],
+      "workDate": "2025-06-06",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "fa0562523bfcf97d",
+      "groupSize": 2,
+      "keepId": "7c7fbbfa-a84f-4bdd-8e71-f02a904e886f",
+      "deleteIds": [
+        "7c7fbbfa-a84f-4bdd-8e71-f02a904e886f"
+      ],
+      "workDate": "2025-06-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6acfc3587351c50a",
+      "groupSize": 2,
+      "keepId": "d8e70cd5-5d10-4d89-b147-cb80dd39a697",
+      "deleteIds": [
+        "d8e70cd5-5d10-4d89-b147-cb80dd39a697"
+      ],
+      "workDate": "2025-06-10",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "aeb4c43f77044cd8",
+      "groupSize": 2,
+      "keepId": "de17386a-00ff-4650-8248-4bcf8417a351",
+      "deleteIds": [
+        "de17386a-00ff-4650-8248-4bcf8417a351"
+      ],
+      "workDate": "2025-06-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c5a1214ac3b1d22e",
+      "groupSize": 2,
+      "keepId": "376c17c8-0ccd-42ef-81cc-0a9120b4845c",
+      "deleteIds": [
+        "376c17c8-0ccd-42ef-81cc-0a9120b4845c"
+      ],
+      "workDate": "2025-06-12",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c91a00b37addab74",
+      "groupSize": 2,
+      "keepId": "0046434e-30a7-4236-a173-be6ce998261d",
+      "deleteIds": [
+        "0046434e-30a7-4236-a173-be6ce998261d"
+      ],
+      "workDate": "2025-06-13",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7f8514dbf8f035c6",
+      "groupSize": 2,
+      "keepId": "7ca76216-ef93-4558-862c-f9966e4ee025",
+      "deleteIds": [
+        "7ca76216-ef93-4558-862c-f9966e4ee025"
+      ],
+      "workDate": "2025-06-16",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "cf86b6864d280fde",
+      "groupSize": 2,
+      "keepId": "3202ef72-3a0e-4c99-beab-e730bbbfe363",
+      "deleteIds": [
+        "3202ef72-3a0e-4c99-beab-e730bbbfe363"
+      ],
+      "workDate": "2025-06-17",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6a141d304bd66eed",
+      "groupSize": 2,
+      "keepId": "04f7faaf-17f2-4d2c-89ae-b504f22f5616",
+      "deleteIds": [
+        "04f7faaf-17f2-4d2c-89ae-b504f22f5616"
+      ],
+      "workDate": "2025-06-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c72bbc480dfe3df3",
+      "groupSize": 2,
+      "keepId": "0a77d589-c932-4a25-8993-4c5df110287a",
+      "deleteIds": [
+        "0a77d589-c932-4a25-8993-4c5df110287a"
+      ],
+      "workDate": "2025-06-19",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "bfd447d1750adbbd",
+      "groupSize": 2,
+      "keepId": "352c764d-c04e-4b9c-9d29-b692263fa43b",
+      "deleteIds": [
+        "352c764d-c04e-4b9c-9d29-b692263fa43b"
+      ],
+      "workDate": "2025-07-08",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "e2d363505b1de900",
+      "groupSize": 2,
+      "keepId": "56d69834-dce8-4aec-a614-38822ae907b8",
+      "deleteIds": [
+        "56d69834-dce8-4aec-a614-38822ae907b8"
+      ],
+      "workDate": "2025-07-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "eb2d115ce9085a71",
+      "groupSize": 2,
+      "keepId": "5e5a4e63-40e0-4069-9af6-305848d66e6e",
+      "deleteIds": [
+        "5e5a4e63-40e0-4069-9af6-305848d66e6e"
+      ],
+      "workDate": "2025-07-10",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "71ecb092fbc88179",
+      "groupSize": 2,
+      "keepId": "0fc66845-f3b7-49aa-b140-4f5d0bc8c9a4",
+      "deleteIds": [
+        "0fc66845-f3b7-49aa-b140-4f5d0bc8c9a4"
+      ],
+      "workDate": "2025-07-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "0c107fe52deeeedb",
+      "groupSize": 2,
+      "keepId": "e6ebca71-cd88-4e61-a8f9-10f4bd2c1254",
+      "deleteIds": [
+        "e6ebca71-cd88-4e61-a8f9-10f4bd2c1254"
+      ],
+      "workDate": "2025-07-14",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "35cd85e0675d83b2",
+      "groupSize": 2,
+      "keepId": "cb212f57-6ee7-47a0-a235-57153e7e9eed",
+      "deleteIds": [
+        "cb212f57-6ee7-47a0-a235-57153e7e9eed"
+      ],
+      "workDate": "2025-07-15",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c3fed405e65095d8",
+      "groupSize": 2,
+      "keepId": "3f382a70-5fa4-4295-ad9b-b82fba91c40c",
+      "deleteIds": [
+        "3f382a70-5fa4-4295-ad9b-b82fba91c40c"
+      ],
+      "workDate": "2025-07-16",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "bc83ec3f59eb3e57",
+      "groupSize": 2,
+      "keepId": "851da608-f0b6-4dd9-9aa5-b4a6fead1483",
+      "deleteIds": [
+        "851da608-f0b6-4dd9-9aa5-b4a6fead1483"
+      ],
+      "workDate": "2024-10-22",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4511c5f95c2e6d4b",
+      "groupSize": 2,
+      "keepId": "5ec83cd6-6c29-47d1-b752-ec29a135ca3b",
+      "deleteIds": [
+        "5ec83cd6-6c29-47d1-b752-ec29a135ca3b"
+      ],
+      "workDate": "2024-10-23",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "778cc0c5c74a3586",
+      "groupSize": 2,
+      "keepId": "dc895322-69c7-4da6-ab3a-3c90342edee7",
+      "deleteIds": [
+        "dc895322-69c7-4da6-ab3a-3c90342edee7"
+      ],
+      "workDate": "2024-10-24",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "85706dbfce3afb82",
+      "groupSize": 2,
+      "keepId": "ea97c36a-0978-4889-9c35-d0b2ad50170a",
+      "deleteIds": [
+        "ea97c36a-0978-4889-9c35-d0b2ad50170a"
+      ],
+      "workDate": "2024-10-28",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b57507e9c15c5b6e",
+      "groupSize": 2,
+      "keepId": "fdba1b6d-b3d0-4e14-8ed7-27346568c8ae",
+      "deleteIds": [
+        "fdba1b6d-b3d0-4e14-8ed7-27346568c8ae"
+      ],
+      "workDate": "2024-10-29",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7834a1528b863e68",
+      "groupSize": 2,
+      "keepId": "a3ec12a7-caec-4896-bc46-751327fd0ec7",
+      "deleteIds": [
+        "a3ec12a7-caec-4896-bc46-751327fd0ec7"
+      ],
+      "workDate": "2024-10-30",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "81bf7bd6b86f473d",
+      "groupSize": 2,
+      "keepId": "8359f603-9730-4a0d-ada8-9f063b02a2b6",
+      "deleteIds": [
+        "8359f603-9730-4a0d-ada8-9f063b02a2b6"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5f240153167ad8c9",
+      "groupSize": 2,
+      "keepId": "03f0bd4b-208d-4ae3-a09f-79ed625522a4",
+      "deleteIds": [
+        "03f0bd4b-208d-4ae3-a09f-79ed625522a4"
+      ],
+      "workDate": "2024-11-01",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8d0001c87e38b963",
+      "groupSize": 2,
+      "keepId": "b4cb850b-d674-4cd8-9c07-188117dd5e5d",
+      "deleteIds": [
+        "b4cb850b-d674-4cd8-9c07-188117dd5e5d"
+      ],
+      "workDate": "2024-11-04",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "749260523b0b0f49",
+      "groupSize": 2,
+      "keepId": "1b49db29-442d-4076-9f73-ed5e1aebb79b",
+      "deleteIds": [
+        "1b49db29-442d-4076-9f73-ed5e1aebb79b"
+      ],
+      "workDate": "2024-11-05",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "988fe817287f00aa",
+      "groupSize": 2,
+      "keepId": "01ac9d05-1252-45f2-ad41-f3c9019f5421",
+      "deleteIds": [
+        "01ac9d05-1252-45f2-ad41-f3c9019f5421"
+      ],
+      "workDate": "2024-11-06",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c3dc17893d05dba1",
+      "groupSize": 2,
+      "keepId": "abec9fd1-144a-45cb-8b67-1d24ba518299",
+      "deleteIds": [
+        "abec9fd1-144a-45cb-8b67-1d24ba518299"
+      ],
+      "workDate": "2024-11-07",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "3a2aa634b4732f18",
+      "groupSize": 2,
+      "keepId": "1301d9be-92c8-4e6a-83cf-d67a10937651",
+      "deleteIds": [
+        "1301d9be-92c8-4e6a-83cf-d67a10937651"
+      ],
+      "workDate": "2024-11-08",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "828c49fda1d0d0dd",
+      "groupSize": 2,
+      "keepId": "fa245960-37ea-4273-b0f8-264e02837335",
+      "deleteIds": [
+        "fa245960-37ea-4273-b0f8-264e02837335"
+      ],
+      "workDate": "2024-11-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8d308f376dc7db81",
+      "groupSize": 2,
+      "keepId": "b0b71dbc-5358-4bee-a4be-32ea66c7d558",
+      "deleteIds": [
+        "b0b71dbc-5358-4bee-a4be-32ea66c7d558"
+      ],
+      "workDate": "2024-10-08",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "dfb2e9832f8d7f19",
+      "groupSize": 2,
+      "keepId": "abb101b6-745f-405b-8ca4-c0ffa377c02f",
+      "deleteIds": [
+        "abb101b6-745f-405b-8ca4-c0ffa377c02f"
+      ],
+      "workDate": "2024-10-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6f163af2b2c85dc6",
+      "groupSize": 2,
+      "keepId": "274b0e59-d4b0-4f42-a8b9-cb8b1ab784b5",
+      "deleteIds": [
+        "274b0e59-d4b0-4f42-a8b9-cb8b1ab784b5"
+      ],
+      "workDate": "2024-10-10",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7907cefb20827df0",
+      "groupSize": 2,
+      "keepId": "bd8dbda0-d277-4b85-b94d-c2f89f0d40f3",
+      "deleteIds": [
+        "bd8dbda0-d277-4b85-b94d-c2f89f0d40f3"
+      ],
+      "workDate": "2024-10-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b4c51837f77a184c",
+      "groupSize": 2,
+      "keepId": "d946d72a-0859-443d-8bb5-17ec1eb077d5",
+      "deleteIds": [
+        "d946d72a-0859-443d-8bb5-17ec1eb077d5"
+      ],
+      "workDate": "2024-10-14",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "72a895ce546eddf1",
+      "groupSize": 2,
+      "keepId": "4bcfc203-fd5e-40e7-84f2-02fef11fc30b",
+      "deleteIds": [
+        "4bcfc203-fd5e-40e7-84f2-02fef11fc30b"
+      ],
+      "workDate": "2024-10-15",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "84e9925d46003d7f",
+      "groupSize": 2,
+      "keepId": "9257655e-b09c-47bd-b4d7-d93bc77dd34e",
+      "deleteIds": [
+        "9257655e-b09c-47bd-b4d7-d93bc77dd34e"
+      ],
+      "workDate": "2024-10-16",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "62a8d7f01c8797e7",
+      "groupSize": 2,
+      "keepId": "e22474a7-537d-45eb-be41-e4c7517eed85",
+      "deleteIds": [
+        "e22474a7-537d-45eb-be41-e4c7517eed85"
+      ],
+      "workDate": "2024-10-17",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8ee5a8b0a879d13e",
+      "groupSize": 2,
+      "keepId": "99a6f61c-6446-46e5-8198-27fbf16af99a",
+      "deleteIds": [
+        "99a6f61c-6446-46e5-8198-27fbf16af99a"
+      ],
+      "workDate": "2024-10-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6580e075677d9232",
+      "groupSize": 2,
+      "keepId": "e1f0a61b-3818-4c82-b270-eb2978c7cad2",
+      "deleteIds": [
+        "e1f0a61b-3818-4c82-b270-eb2978c7cad2"
+      ],
+      "workDate": "2024-10-21",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "977f4b0ec5151e53",
+      "groupSize": 2,
+      "keepId": "1bc6a093-8069-47e2-adc1-c3892c98f061",
+      "deleteIds": [
+        "1bc6a093-8069-47e2-adc1-c3892c98f061"
+      ],
+      "workDate": "2024-11-12",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "64c5b9ed93c26f81",
+      "groupSize": 2,
+      "keepId": "b44f9776-640e-4bec-aaee-dcacef170175",
+      "deleteIds": [
+        "b44f9776-640e-4bec-aaee-dcacef170175"
+      ],
+      "workDate": "2024-11-13",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "83ccfe43404cbc57",
+      "groupSize": 2,
+      "keepId": "84152373-ce26-4092-bf36-5112ac418b03",
+      "deleteIds": [
+        "f3a8d5ae-72af-4bd0-9f17-4a98d12d2638"
+      ],
+      "workDate": "2025-08-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8dc86d843ed2724f",
+      "groupSize": 2,
+      "keepId": "6419ac7a-d642-4f02-ab32-1b9084db5acc",
+      "deleteIds": [
+        "90cac5ac-ec45-4549-a13e-95547a798cde"
+      ],
+      "workDate": "2025-11-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8213e8c2ad3b48d5",
+      "groupSize": 2,
+      "keepId": "67de19dc-04ba-48e4-9949-75cff120b018",
+      "deleteIds": [
+        "b0fdf75d-dc6f-436e-bbe8-3a4a3d3c6fc4"
+      ],
+      "workDate": "2025-03-19",
+      "hours": 4,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "55dce46fdfb76d8a",
+      "groupSize": 2,
+      "keepId": "4a1717c0-e868-4dcd-9703-edc9eb402618",
+      "deleteIds": [
+        "f37d91f4-d367-481f-88e7-ee0962f0d6e8"
+      ],
+      "workDate": "2026-03-03",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "945ba0b2cdd3fe52",
+      "groupSize": 2,
+      "keepId": "1f409049-a139-4039-a474-a5bccd93095d",
+      "deleteIds": [
+        "7f1404b6-0c50-4306-b4c8-f88b48a6c724"
+      ],
+      "workDate": "2024-11-12",
+      "hours": 1,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b95ea65bd71b2eb9",
+      "groupSize": 2,
+      "keepId": "65a19979-1c07-4894-b2f2-795c2c1d6d3b",
+      "deleteIds": [
+        "b69e7b05-e7ea-45b2-a350-b75e928b31fd"
+      ],
+      "workDate": "2024-11-22",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "47321d7f2640f355",
+      "groupSize": 2,
+      "keepId": "22cea16f-1162-474a-a0dc-e24c19ad0244",
+      "deleteIds": [
+        "7bbd024a-2032-46f2-becb-3c917564101d"
+      ],
+      "workDate": "2024-11-25",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "2d15601a064204ab",
+      "groupSize": 2,
+      "keepId": "49bb6d8c-9bff-4db9-b963-7a1a5ccfb4a5",
+      "deleteIds": [
+        "5cfeb46a-13d2-4af6-ae3e-a00f121f2463"
+      ],
+      "workDate": "2024-11-26",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "fda647842fcba022",
+      "groupSize": 2,
+      "keepId": "b9d64c7c-5c41-4918-bf33-7064dc099ff9",
+      "deleteIds": [
+        "dba8d3f1-4012-4812-a0e1-207e4dbd9570"
+      ],
+      "workDate": "2024-11-27",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "13c543d97715fd2d",
+      "groupSize": 2,
+      "keepId": "29dd3a73-9ef2-4fc1-816c-6a17bba2d4dc",
+      "deleteIds": [
+        "4ab33d82-8032-4dc1-b0df-d31a9a899007"
+      ],
+      "workDate": "2024-11-28",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7fd4363031550285",
+      "groupSize": 2,
+      "keepId": "07dbdfe5-35e9-44d1-b7d7-2b095817443c",
+      "deleteIds": [
+        "1ee0abfa-60ee-49c7-a84a-fcc26799865b"
+      ],
+      "workDate": "2024-11-29",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "24046f4e72472bbb",
+      "groupSize": 2,
+      "keepId": "0da168ef-5553-4f0b-9a81-d617b9eb860b",
+      "deleteIds": [
+        "7aaaee63-9aa2-4263-934a-4fb8e34a72e5"
+      ],
+      "workDate": "2025-06-06",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "2e4f4e6f78243173",
+      "groupSize": 2,
+      "keepId": "2855cc9c-92d0-4e9c-bab8-42063371bafb",
+      "deleteIds": [
+        "ca462d64-0d4d-4f0f-be9f-79bf775c0106"
+      ],
+      "workDate": "2025-05-20",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "0f24cc99d2be3d9b",
+      "groupSize": 2,
+      "keepId": "82fdfdc7-a37f-4845-bc1f-60dcbe9c5878",
+      "deleteIds": [
+        "aa74ac3b-8c21-4585-b22b-931d007fc8eb"
+      ],
+      "workDate": "2025-05-21",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "d64f14bde6f8da04",
+      "groupSize": 2,
+      "keepId": "99665932-352d-4c78-a802-bb42022e3eac",
+      "deleteIds": [
+        "ee47a36d-acc9-4eff-9cb4-fa8518349073"
+      ],
+      "workDate": "2025-05-22",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "0fa8dd464fb9c6de",
+      "groupSize": 2,
+      "keepId": "68e70877-8c8d-4bb1-bb1e-7a44c4d43d96",
+      "deleteIds": [
+        "f5d9c7c0-01ef-4228-96b8-e24c43000fb9"
+      ],
+      "workDate": "2025-05-23",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6d821899df38fd1f",
+      "groupSize": 2,
+      "keepId": "0380e56a-4ab0-4c64-87b0-6506a7f5330a",
+      "deleteIds": [
+        "476b87bf-2e73-49c9-8f17-7b543cc04215"
+      ],
+      "workDate": "2025-05-26",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8ebf10696a013eaf",
+      "groupSize": 2,
+      "keepId": "3fbfae52-18bf-4f7c-8afd-de76fcd211fe",
+      "deleteIds": [
+        "649e6d11-3800-4fb9-a591-c4115672ab27"
+      ],
+      "workDate": "2025-05-27",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "36ee3a3284f8215b",
+      "groupSize": 2,
+      "keepId": "c7ab868c-7593-4c31-bbfc-d08b9965ed73",
+      "deleteIds": [
+        "caa42205-c3ee-4c59-b6fc-98eeb298c87a"
+      ],
+      "workDate": "2025-05-28",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "694b1627a07d6092",
+      "groupSize": 2,
+      "keepId": "307c6c8d-92c8-4a26-9fe1-3ed2bbf9e40b",
+      "deleteIds": [
+        "f0782ac6-224d-47ce-83a8-8e42918d25b9"
+      ],
+      "workDate": "2025-05-29",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6cb36f8fa80a9a8f",
+      "groupSize": 2,
+      "keepId": "1535447e-253c-456d-86bc-9bb9106bb766",
+      "deleteIds": [
+        "20487a5e-42fb-42dc-9d45-8a0ca9794870"
+      ],
+      "workDate": "2025-05-30",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "292fe81db023f97f",
+      "groupSize": 2,
+      "keepId": "22b07e81-ab79-4e8a-ad74-2acbeb3974e7",
+      "deleteIds": [
+        "8acbf2fe-587f-4924-8fc2-9cd411f0c70f"
+      ],
+      "workDate": "2025-06-02",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "1e8e10f3066912ea",
+      "groupSize": 2,
+      "keepId": "2bf726eb-c372-402d-b7f8-4373691c0818",
+      "deleteIds": [
+        "2db1f1de-4f88-49f4-8c73-9471268c8d61"
+      ],
+      "workDate": "2025-06-03",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "925f20fb8de70ffe",
+      "groupSize": 2,
+      "keepId": "9ba22230-df39-43f2-9356-da4a6b581e17",
+      "deleteIds": [
+        "e115f758-28c8-4cb2-96f6-7d033475703a"
+      ],
+      "workDate": "2025-06-04",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "a6f6e55b728c3093",
+      "groupSize": 2,
+      "keepId": "3bcca7ff-4f39-4f5b-b3ce-4a0754785bb2",
+      "deleteIds": [
+        "d82c4c51-8464-4fa8-afbe-d4162ad15b6e"
+      ],
+      "workDate": "2025-06-05",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "82cc4a736282e7a8",
+      "groupSize": 2,
+      "keepId": "1266228e-6832-4ab0-9b57-f1d40e26f0db",
+      "deleteIds": [
+        "b9e08dc4-3e0f-48d4-b389-eaf6908645e5"
+      ],
+      "workDate": "2025-06-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "2c02370357c24e50",
+      "groupSize": 2,
+      "keepId": "36463ef8-15ea-4372-98e9-5dd222e04e8f",
+      "deleteIds": [
+        "70767efc-4acb-4fd0-99fc-409733115721"
+      ],
+      "workDate": "2025-06-10",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "fd57b5bad62bda41",
+      "groupSize": 2,
+      "keepId": "819a3e5d-ef5b-4a56-8183-dd93ca91abeb",
+      "deleteIds": [
+        "bbd14e1c-590e-42cd-9a5d-5f28378896a9"
+      ],
+      "workDate": "2025-06-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4d79cadbd79abbbb",
+      "groupSize": 2,
+      "keepId": "a9076b77-5a21-4e35-87d4-d653473d8070",
+      "deleteIds": [
+        "bf757c77-da3c-454c-b89e-e1bf78ef0859"
+      ],
+      "workDate": "2025-06-12",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7a7010d64bfbb217",
+      "groupSize": 2,
+      "keepId": "6a7393ac-897e-4203-9316-31fd30c9581d",
+      "deleteIds": [
+        "aac22dae-1029-4b95-95af-65ae46c96df5"
+      ],
+      "workDate": "2025-06-13",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "f13d10db53d7c6ab",
+      "groupSize": 2,
+      "keepId": "32bf064a-fb16-4548-a052-b125b0eedaae",
+      "deleteIds": [
+        "b7fdcc6d-866a-495b-98eb-6c7f56cac502"
+      ],
+      "workDate": "2025-06-16",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "1b0e4d8a690fb4a1",
+      "groupSize": 2,
+      "keepId": "cdff43de-1f2e-4a0e-a88e-89d638d2d957",
+      "deleteIds": [
+        "dcc6b090-dc46-403d-93a8-e9e4d6a77494"
+      ],
+      "workDate": "2025-06-17",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "afd9b21c5d2df9af",
+      "groupSize": 2,
+      "keepId": "01b80350-8fad-4918-9179-e10fc880c129",
+      "deleteIds": [
+        "566b1230-4fb0-4fb8-9a12-7b97e2652bef"
+      ],
+      "workDate": "2025-06-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b06a39d10876a487",
+      "groupSize": 2,
+      "keepId": "2cf26190-91ee-47b5-9b10-7b8e5ed40e20",
+      "deleteIds": [
+        "d718bf3d-95fb-45be-b905-cd88baf06a7b"
+      ],
+      "workDate": "2025-06-19",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "59bc983652e8a142",
+      "groupSize": 2,
+      "keepId": "2f6f05a9-2bb6-4395-9c0f-ea9df84af5c0",
+      "deleteIds": [
+        "84a759d1-257f-4583-aa62-74ac1ae81485"
+      ],
+      "workDate": "2025-06-20",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "358c4bb5c96a218b",
+      "groupSize": 2,
+      "keepId": "40467a65-9358-42e0-92bd-3a1ef7bad27d",
+      "deleteIds": [
+        "942f9392-2957-4d54-81f7-73fcfba5ef18"
+      ],
+      "workDate": "2025-06-23",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "28a00bf255ae8763",
+      "groupSize": 2,
+      "keepId": "7e9be29a-0884-49ef-b2dc-4550a0221222",
+      "deleteIds": [
+        "7eed26d1-289e-4b77-9b70-d0bc10807d45"
+      ],
+      "workDate": "2025-06-24",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "cff2c4551217e1f0",
+      "groupSize": 2,
+      "keepId": "15b68df8-e556-4adc-b2db-7afd158ecb6c",
+      "deleteIds": [
+        "a702c613-8d62-470d-a495-63ccab73b4fb"
+      ],
+      "workDate": "2025-06-25",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "e21ef166e99cd12b",
+      "groupSize": 2,
+      "keepId": "53f5adcd-9666-4b93-9c95-a7767eba4235",
+      "deleteIds": [
+        "d053787e-5c35-4c7e-b4a5-9037e319eea6"
+      ],
+      "workDate": "2025-06-26",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c32b1d1b4502033d",
+      "groupSize": 2,
+      "keepId": "8c5ff53d-62f1-4988-8b04-c6d0563c5a4d",
+      "deleteIds": [
+        "dceb1076-0992-4b30-b389-8eed0e1fcff9"
+      ],
+      "workDate": "2025-06-27",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "340ba5e0854c700e",
+      "groupSize": 2,
+      "keepId": "0b26f264-1846-454c-ac90-e06f6c0591d1",
+      "deleteIds": [
+        "edc792b3-3dc1-43dd-85fe-88b82b591465"
+      ],
+      "workDate": "2025-06-30",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "fa26fba3d1894add",
+      "groupSize": 2,
+      "keepId": "02af5c71-2ce7-4b35-8f44-505622754be6",
+      "deleteIds": [
+        "86477cb1-285c-45ea-b6b1-4e92e1df6c16"
+      ],
+      "workDate": "2025-07-01",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "bec817a87ac25a4f",
+      "groupSize": 2,
+      "keepId": "0d463f6b-c811-4957-9bd7-9cb238085191",
+      "deleteIds": [
+        "46be304e-44fb-4408-bf26-b9db0665ec8c"
+      ],
+      "workDate": "2025-07-02",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "be1cf24e4ac30691",
+      "groupSize": 2,
+      "keepId": "726eeb40-bbea-4cb5-91f3-83fc37657784",
+      "deleteIds": [
+        "72b3ff48-ac04-4162-85fa-7ea41998c451"
+      ],
+      "workDate": "2025-07-03",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "e10aa60ff1edf705",
+      "groupSize": 2,
+      "keepId": "888f189e-2f19-4484-a78a-e10262b2c187",
+      "deleteIds": [
+        "d5866af6-2797-4eb3-ab00-51551399928d"
+      ],
+      "workDate": "2025-07-04",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4ed4ee472b30337a",
+      "groupSize": 2,
+      "keepId": "1340bdc5-ded9-4405-8b20-65f6120c9b3a",
+      "deleteIds": [
+        "1ab0aa67-6f91-4806-84c4-a49abc9f92c5"
+      ],
+      "workDate": "2025-07-08",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "fbc08b79232f8c64",
+      "groupSize": 2,
+      "keepId": "e3440e2c-0f73-4036-9fb6-0622bfd677da",
+      "deleteIds": [
+        "f9158153-0a66-4de9-8f7c-df155ff88a8a"
+      ],
+      "workDate": "2025-07-09",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "475af3a56099b534",
+      "groupSize": 2,
+      "keepId": "241b2ac3-7b3d-4140-a7db-028a7c906164",
+      "deleteIds": [
+        "cbe3ebf3-7053-4e92-954b-0e35491f30b0"
+      ],
+      "workDate": "2025-07-10",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "e3c39ed71d23f7ad",
+      "groupSize": 2,
+      "keepId": "5151dac0-43cb-445d-a9aa-b10cdce6e81d",
+      "deleteIds": [
+        "92857d9c-a8ab-478f-9b00-c09392ff5e7c"
+      ],
+      "workDate": "2025-07-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "45706751cdc25fd8",
+      "groupSize": 2,
+      "keepId": "080e88df-290e-4ef9-88cd-69d37de93f1f",
+      "deleteIds": [
+        "79f0426c-938c-4c26-b71e-c1b881bc5443"
+      ],
+      "workDate": "2025-07-14",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b8997c1e6eade4e2",
+      "groupSize": 2,
+      "keepId": "d7a8c3dc-6e6f-4e1a-a011-0bb39d875774",
+      "deleteIds": [
+        "ec777c7c-3328-426f-a6a6-6bb8d80f798a"
+      ],
+      "workDate": "2025-07-15",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5df202ed6e6ccf52",
+      "groupSize": 2,
+      "keepId": "4c1bae32-1591-4bcf-bc0c-7d28964f501f",
+      "deleteIds": [
+        "eada7f2f-2314-4562-b145-638074591eaf"
+      ],
+      "workDate": "2025-07-16",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "fbe1f7ba819b1d42",
+      "groupSize": 2,
+      "keepId": "5f436a03-16e1-486e-a078-bbd2cb3a4af0",
+      "deleteIds": [
+        "8bb9a2c8-68d2-4061-b252-a0ab8d958f5a"
+      ],
+      "workDate": "2025-07-17",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "71f5d05ad5522a0a",
+      "groupSize": 2,
+      "keepId": "7ad15423-58e8-4ba2-aa6c-42c04c3e99f8",
+      "deleteIds": [
+        "84a0c432-c531-40c8-a40e-7a6696227299"
+      ],
+      "workDate": "2025-07-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "cd6f676fb0489533",
+      "groupSize": 2,
+      "keepId": "59208d68-f2bf-470a-90f8-37d7f4e84f62",
+      "deleteIds": [
+        "c6349322-9f03-4ac2-a56d-0f4bb2c4377d"
+      ],
+      "workDate": "2025-07-21",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "904935f405633b32",
+      "groupSize": 2,
+      "keepId": "107e5f0c-5f7c-4c90-8c32-536546ca57bf",
+      "deleteIds": [
+        "75b1092a-19b7-4adc-a229-845d4e783a31"
+      ],
+      "workDate": "2025-07-22",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4e4f909bf54f1bc2",
+      "groupSize": 2,
+      "keepId": "24dde913-c009-4338-88b3-bd7ec8494608",
+      "deleteIds": [
+        "80ec121f-3a7c-43d9-9de2-961f61cf65ac"
+      ],
+      "workDate": "2025-07-23",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "3a99ce46da598a3c",
+      "groupSize": 2,
+      "keepId": "1fe1a87b-ede9-444d-a133-324679bf491c",
+      "deleteIds": [
+        "64c2030a-cc62-4cb6-84d1-8d5c6f60589a"
+      ],
+      "workDate": "2025-07-24",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "ea9ac11b430c5194",
+      "groupSize": 2,
+      "keepId": "01148a31-8b60-42dc-ac27-8befee97582f",
+      "deleteIds": [
+        "703c15ab-5024-4c93-aa73-08a471cad9a9"
+      ],
+      "workDate": "2025-07-25",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "d1066b79127dfadd",
+      "groupSize": 2,
+      "keepId": "02b306cf-e165-4ebd-83b1-5f3d17cbf884",
+      "deleteIds": [
+        "43fd6b78-0544-462c-874e-50bbe652b3c5"
+      ],
+      "workDate": "2025-07-28",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b472a5c157d3e608",
+      "groupSize": 2,
+      "keepId": "9cd2461d-8045-4b48-8952-a379d5cf3741",
+      "deleteIds": [
+        "c3abce06-ae7e-4c47-9f5c-9fc1e1edbe54"
+      ],
+      "workDate": "2025-07-29",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7e5fb20f664a5612",
+      "groupSize": 2,
+      "keepId": "7fa9841a-bf0e-4d49-9678-31ad71120841",
+      "deleteIds": [
+        "bdec5b14-679e-4717-b0dd-de92270e3fd0"
+      ],
+      "workDate": "2025-07-30",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "1828f867b1edbed0",
+      "groupSize": 2,
+      "keepId": "5a99f5a9-b697-47b4-a41a-011190db45b0",
+      "deleteIds": [
+        "866706e1-8c96-4262-af70-b9e2f09cfdc0"
+      ],
+      "workDate": "2025-07-31",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "dc863082f059121f",
+      "groupSize": 2,
+      "keepId": "52b7061e-f244-4913-a2e0-1610c7c46c04",
+      "deleteIds": [
+        "6553ef40-1804-4e29-a398-e9eecd3903a1"
+      ],
+      "workDate": "2025-08-01",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "449201f78a288998",
+      "groupSize": 2,
+      "keepId": "08dd2179-7a67-41a2-8a8c-4570c2d721a8",
+      "deleteIds": [
+        "6bcc51c2-88b1-416d-92fb-478ad147b89e"
+      ],
+      "workDate": "2025-08-04",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "19508942cc0aab70",
+      "groupSize": 2,
+      "keepId": "9a06d6d2-f4ee-41aa-8c5d-ba0046b40d43",
+      "deleteIds": [
+        "cacbb5f1-3912-476a-a729-b765c356eb7a"
+      ],
+      "workDate": "2025-08-05",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "65ebe1208ff3a83b",
+      "groupSize": 2,
+      "keepId": "638d5f39-f4cb-4f71-88b7-4aab4c7be065",
+      "deleteIds": [
+        "7b2d9971-bebd-4c43-a1fe-0850801753bf"
+      ],
+      "workDate": "2025-08-06",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "bb2a1b43686d2d5b",
+      "groupSize": 2,
+      "keepId": "3006f2eb-bad6-47b7-a232-19e8142efc82",
+      "deleteIds": [
+        "443edd7a-8afd-4430-8078-3dab9af9ea54"
+      ],
+      "workDate": "2025-08-07",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "2e7d9fc570792395",
+      "groupSize": 2,
+      "keepId": "0f39e317-59c3-4f22-ae09-edc0337dfccc",
+      "deleteIds": [
+        "f5e8b959-d447-4fc6-9ee8-e04fe4ec342f"
+      ],
+      "workDate": "2025-08-08",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "713849a0edaee880",
+      "groupSize": 2,
+      "keepId": "2848e702-c181-48c8-832a-d14cafe9b852",
+      "deleteIds": [
+        "da30b14e-e79f-43ba-94b6-dba37e36da9e"
+      ],
+      "workDate": "2025-08-11",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "c02378777ceec28d",
+      "groupSize": 2,
+      "keepId": "2572aa2f-24e6-4341-9fb9-93596710971d",
+      "deleteIds": [
+        "4d394539-6ff0-40c8-95e3-c1ebe637e0e1"
+      ],
+      "workDate": "2025-08-12",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5c4e25d06d930533",
+      "groupSize": 2,
+      "keepId": "24eeb57a-58ee-420a-bf72-c27e22aadc40",
+      "deleteIds": [
+        "3f43c594-f202-4480-809c-d5164f072181"
+      ],
+      "workDate": "2025-08-13",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "d618ba6635f0462a",
+      "groupSize": 2,
+      "keepId": "879809df-033d-4443-9f57-297ea79002d9",
+      "deleteIds": [
+        "b8fd1f8a-d1ca-4899-bbc0-e84a94ffaf85"
+      ],
+      "workDate": "2025-08-14",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "1261faf8e816de19",
+      "groupSize": 2,
+      "keepId": "6d748cc7-b913-41d4-b18a-7920e54c2e22",
+      "deleteIds": [
+        "b8cbbcba-46bc-420e-b574-0ddce3b79804"
+      ],
+      "workDate": "2025-08-15",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "ae62332879c1a286",
+      "groupSize": 2,
+      "keepId": "e78991e5-d74d-4225-b49b-5c8465918e16",
+      "deleteIds": [
+        "ee528fb7-ccbb-4e8b-87a7-188170230cd9"
+      ],
+      "workDate": "2025-08-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "01cce7399433c4b0",
+      "groupSize": 2,
+      "keepId": "6331c165-73e2-4475-80c8-e3d3b724b25a",
+      "deleteIds": [
+        "fbd07d63-b77d-446a-8be0-91361198022c"
+      ],
+      "workDate": "2025-08-19",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "44cf64b95a587327",
+      "groupSize": 2,
+      "keepId": "0017a548-1f8c-4b55-b140-cc62aab4f4c2",
+      "deleteIds": [
+        "3b5b1208-9e5e-453f-8a59-658bd1986376"
+      ],
+      "workDate": "2025-08-20",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "6e8a28defc14cb31",
+      "groupSize": 2,
+      "keepId": "16d20669-4b98-475b-827a-c57eb14f5f55",
+      "deleteIds": [
+        "e46f2e77-8320-4997-bea4-6ab41131213a"
+      ],
+      "workDate": "2025-08-21",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "74341f09894a1154",
+      "groupSize": 2,
+      "keepId": "1fd45225-f50c-4492-a11a-340727d37aec",
+      "deleteIds": [
+        "c05e05cc-536a-428f-8c3f-58a4b291932c"
+      ],
+      "workDate": "2025-08-22",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "f8006cedc25125a5",
+      "groupSize": 2,
+      "keepId": "c6f112e2-b2db-475a-a9a7-06127a8d4fb4",
+      "deleteIds": [
+        "cb600a22-5ac3-4efb-beed-50ca7227fe71"
+      ],
+      "workDate": "2025-08-23",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4bbf941457344e58",
+      "groupSize": 2,
+      "keepId": "1a97117d-9f71-45a7-84e4-c435eb94ad4e",
+      "deleteIds": [
+        "eefa98de-3d2e-48c4-9ca5-fbef992b2d89"
+      ],
+      "workDate": "2025-08-25",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "3a71c99ceeb52a1c",
+      "groupSize": 2,
+      "keepId": "721f2d24-75e0-4a5b-abc4-37cc4c11fd84",
+      "deleteIds": [
+        "fd72539a-945e-4cdd-a0f4-f7afa6cb3d93"
+      ],
+      "workDate": "2025-08-26",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "44673146ad6bc986",
+      "groupSize": 2,
+      "keepId": "d45fa86f-6d58-43a2-9e32-cdd186967db1",
+      "deleteIds": [
+        "fd2c0a1a-6529-496b-b681-ee6701489430"
+      ],
+      "workDate": "2025-08-27",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "adf6d7675d98b569",
+      "groupSize": 2,
+      "keepId": "8230000d-5caf-4bc1-9c87-37d139a8ce3d",
+      "deleteIds": [
+        "99619048-119a-488d-85b4-9db1c2f4312f"
+      ],
+      "workDate": "2025-08-28",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "a401b54ed0a69484",
+      "groupSize": 2,
+      "keepId": "0bbdaaed-2597-4b3f-b466-6feb825498b8",
+      "deleteIds": [
+        "4d1ee5c3-6707-44ec-beb4-ccf3312c3dd1"
+      ],
+      "workDate": "2025-08-29",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "cdfc398f22223274",
+      "groupSize": 2,
+      "keepId": "42186fe5-76bb-40e2-b7ac-232f8c72a6fa",
+      "deleteIds": [
+        "5fb29c58-7f5f-492e-a543-76a0982bd3c1"
+      ],
+      "workDate": "2025-09-02",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "87850ed464b96891",
+      "groupSize": 2,
+      "keepId": "0781f795-1b32-4902-8a5a-449064acb612",
+      "deleteIds": [
+        "6fee5f8c-9bba-4806-b330-fee5a2b3efc3"
+      ],
+      "workDate": "2025-09-03",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "99a25937a2a0c3df",
+      "groupSize": 2,
+      "keepId": "06634e40-5e12-4c99-a9fb-a0c7cb44e2f4",
+      "deleteIds": [
+        "722393ea-c17f-4456-b211-d58377251e30"
+      ],
+      "workDate": "2025-09-04",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "8dcc197af07d9c27",
+      "groupSize": 2,
+      "keepId": "2e9d9a68-ce46-40d6-9940-4bf390533b98",
+      "deleteIds": [
+        "3289f332-f41a-4664-afa5-9f43164ecc01"
+      ],
+      "workDate": "2025-09-05",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5cfd7c968558e590",
+      "groupSize": 2,
+      "keepId": "c38342be-617f-40b8-82a3-24041e7305d3",
+      "deleteIds": [
+        "c8e9c547-edc5-4f41-a1bd-bd78f6fa09ad"
+      ],
+      "workDate": "2025-01-13",
+      "hours": 4,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "07d2074c327b3bf0",
+      "groupSize": 2,
+      "keepId": "614a9ce3-7408-45e4-aeac-be3bab288724",
+      "deleteIds": [
+        "c6c8a66b-3a31-4b44-9f6b-e0b25bd677a9"
+      ],
+      "workDate": "2025-06-26",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "d809de59388ac50e",
+      "groupSize": 3,
+      "keepId": "0366fbb5-b386-4856-bf33-99468000ad26",
+      "deleteIds": [
+        "2f06afda-263e-482e-aac1-9f571026dbdc",
+        "dfe1bed3-4ff6-4904-b0a3-580976ce0a0e"
+      ],
+      "workDate": "2025-06-17",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "9b64140d8ba083eb",
+      "groupSize": 3,
+      "keepId": "92eb86bb-e49d-4538-b14e-06b5ff157490",
+      "deleteIds": [
+        "cc14797b-6cb4-4f89-abde-94d63ef65c18",
+        "d3b1f2f0-41e7-403a-91c5-4fe9ff94c50b"
+      ],
+      "workDate": "2025-06-18",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "93a2ddebb48a8803",
+      "groupSize": 2,
+      "keepId": "561863f3-9651-4e4a-b24a-c12b43e79332",
+      "deleteIds": [
+        "99956979-d343-4cdc-850d-13706e87275f"
+      ],
+      "workDate": "2025-06-27",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b311a4e2c0769e66",
+      "groupSize": 2,
+      "keepId": "e7508348-a6bc-480e-95e6-87067128ba96",
+      "deleteIds": [
+        "fec23868-7cad-44c8-a262-c60dddff80c5"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.42,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5fb53fec5c189392",
+      "groupSize": 2,
+      "keepId": "6467a7d6-c8ab-49c7-bf47-6ee673d65e9e",
+      "deleteIds": [
+        "681c0092-0552-43a3-906d-a61b9219e1fb"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.46,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "56380cdd7a8b7980",
+      "groupSize": 2,
+      "keepId": "7596d20c-cbc7-4511-a39d-8fcf251df3cc",
+      "deleteIds": [
+        "dd21f365-23f7-467e-b255-6abadebf4443"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.5,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4f8920982367fd2c",
+      "groupSize": 2,
+      "keepId": "325b6dd8-4086-40d3-8e18-b0a89a0b3af5",
+      "deleteIds": [
+        "d56b3ddd-95fe-4639-9f0b-28449b5ca652"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.54,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "7622c0165f86a1f0",
+      "groupSize": 2,
+      "keepId": "894337a7-2a0b-4f21-8878-b32d211c62a2",
+      "deleteIds": [
+        "adaa8c85-fb5b-4d22-bfd4-f08aef2ce2db"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.58,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "4144d5f6c7028f4f",
+      "groupSize": 2,
+      "keepId": "01a86356-644c-4ea4-8149-6b0ad2d18a20",
+      "deleteIds": [
+        "ca988355-598a-45d7-b430-b2c0904732f7"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.63,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b4d151382e25fa6c",
+      "groupSize": 2,
+      "keepId": "30c2eba9-6db5-41be-a2c9-9218d6616ea4",
+      "deleteIds": [
+        "d8475f19-aa7e-437a-8510-b9b660239e6f"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.67,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "3a98207520843987",
+      "groupSize": 2,
+      "keepId": "f4c95ac0-78b6-4245-9ffd-5538e803d690",
+      "deleteIds": [
+        "fa253ba4-19ce-42f1-8177-0779332b80fe"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.71,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "008effa317b3a41d",
+      "groupSize": 2,
+      "keepId": "2bf857ea-8630-42ac-ad80-bee7193a4c07",
+      "deleteIds": [
+        "8d839aa7-f5db-4672-8df1-9308ca078757"
+      ],
+      "workDate": "2024-10-31",
+      "hours": 0.75,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b2ea9af45f2a8509",
+      "groupSize": 2,
+      "keepId": "239f47fe-f556-40a4-a971-233e77c80e30",
+      "deleteIds": [
+        "95c507cf-0757-4e56-9abf-2bf28e0fc497"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.42,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "cd0b5224528c2401",
+      "groupSize": 2,
+      "keepId": "b4e71bc3-12fb-4468-8623-3ba12f3cde84",
+      "deleteIds": [
+        "e6fc4b1e-a727-4c01-be98-82ae3b4eb4b5"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.46,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "d00627930bb09944",
+      "groupSize": 2,
+      "keepId": "0ac4637d-9d54-4326-ba5a-45e3c850224d",
+      "deleteIds": [
+        "0f56d29e-8f33-4706-a75d-95b6020431e3"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.5,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b1887dfa49973379",
+      "groupSize": 2,
+      "keepId": "43826f30-97c9-47d1-976c-325edf2cf240",
+      "deleteIds": [
+        "861be0b9-49e1-4e1e-86d1-f5c12dd6800a"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.54,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "0a926aa98c6c4beb",
+      "groupSize": 2,
+      "keepId": "7b093aac-2989-4f48-bca2-bdc2e6310021",
+      "deleteIds": [
+        "b7dda2ac-e2fb-44aa-868c-f89541b6c1d9"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.58,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "78c82017b67e6c5c",
+      "groupSize": 2,
+      "keepId": "2ce6081b-c4a0-4b42-8c76-bce2ec651dc0",
+      "deleteIds": [
+        "e9fb06ea-9759-4e56-9cc5-b98e5b2f1873"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.63,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "a4913717207cc5b7",
+      "groupSize": 2,
+      "keepId": "15c83a6a-e9aa-4c58-a167-8a2363c56f9e",
+      "deleteIds": [
+        "e616e998-5ec3-4b87-ab0f-819a6666fc1d"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.67,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5346e55cead6e224",
+      "groupSize": 2,
+      "keepId": "e7763d2d-73aa-4506-b9e4-d66ba235137a",
+      "deleteIds": [
+        "fe623224-6c8a-4cc6-a081-92f9b3056d93"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.71,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "b20ed5635cc533da",
+      "groupSize": 2,
+      "keepId": "e74860dc-89eb-46c4-845c-ff7fc5a1c008",
+      "deleteIds": [
+        "f188997c-83ed-4be1-b3f6-d4521514bea5"
+      ],
+      "workDate": "2024-11-21",
+      "hours": 0.75,
+      "status": "submitted",
+      "source": "import"
+    },
+    {
+      "keyHash": "5b637b3a58de2028",
+      "groupSize": 2,
+      "keepId": "02c243af-4b92-4fcc-bef3-fcb7646c7ee6",
+      "deleteIds": [
+        "ab06d784-ad0a-4194-96f4-8ea8417397e2"
+      ],
+      "workDate": "2024-11-29",
+      "hours": 8,
+      "status": "submitted",
+      "source": "import"
+    }
+  ]
+}

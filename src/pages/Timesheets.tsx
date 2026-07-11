@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+﻿import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { useEmployees } from '@/hooks/useSupabaseData';
 import { useProjects } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import {
   listTimesheets,
   createEntry,
@@ -127,6 +128,13 @@ const AUDIT_SECTIONS_GROUPED: { group: string; items: string[] }[] = [
 ];
 
 const getProjectName = (project: any) => project?.name || project?.title || 'Без проекта';
+const getProjectCompany = (project: any): string =>
+  project?.ourCompany ||
+  project?.company ||
+  project?.companyName ||
+  project?.notes?.ourCompany ||
+  project?.notes?.companyName ||
+  '';
 const getProjectClient = (project: any): string => {
   // project.client пришёл из mapSupabaseProject как объект
   // {name, website, activity, city, contacts}. Раньше функция возвращала
@@ -143,6 +151,39 @@ const getProjectClient = (project: any): string => {
     ''
   );
 };
+
+const getProjectSearchText = (project: any): string => [
+  project?.id,
+  getProjectName(project),
+  getProjectClient(project),
+  getProjectCompany(project),
+  project?.contractNumber,
+  project?.notes?.contractNumber,
+  project?.startDate,
+  project?.deadline,
+  project?.notes?.period,
+].filter(Boolean).join(' ');
+
+function normalizeIdentity(value: any): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function teamMemberId(member: any): string {
+  const employee = member?.employee || member?.profile || member?.user || {};
+  return member?.userId || member?.user_id || member?.employeeId || member?.employee_id || employee?.id || member?.id || '';
+}
+
+function teamMemberMatchesUser(member: any, user: any): boolean {
+  const employee = member?.employee || member?.profile || member?.user || {};
+  const memberId = normalizeIdentity(teamMemberId(member));
+  const memberEmail = normalizeIdentity(member?.userEmail || member?.user_email || member?.employeeEmail || member?.employee_email || employee?.email || member?.email);
+  const memberName = normalizeIdentity(member?.userName || member?.user_name || member?.employeeName || member?.employee_name || employee?.name || employee?.full_name || member?.name);
+  return (
+    (!!user?.id && memberId === normalizeIdentity(user.id)) ||
+    (!!user?.email && memberEmail === normalizeIdentity(user.email)) ||
+    (!!user?.name && memberName === normalizeIdentity(user.name))
+  );
+}
 
 // Combobox с поиском по аудиторским секциям. Группы (Планирование, Активы,…)
 // рендерятся через CommandGroup. Подходит для длинных списков, который не
@@ -261,21 +302,24 @@ function ProjectCombobox({
   const renderItem = (p: any) => {
     const name = getProjectName(p);
     const client = getProjectClient(p);
-    // CommandItem matches по value — кладём туда и название, и клиента,
-    // чтобы поиск находил по обоим.
+    const company = getProjectCompany(p);
+    // CommandItem matches по value — кладём туда реальные поля проекта,
+    // чтобы поиск находил по названию, клиенту, нашей компании, договору и датам.
     return (
       <CommandItem
         key={p.id}
-        value={`${name} ${client}`}
+        value={getProjectSearchText(p)}
         onSelect={() => {
           onChange(p.id);
           setOpen(false);
         }}
       >
         <Check className={cn('mr-2 h-4 w-4', value === p.id ? 'opacity-100' : 'opacity-0')} />
-        <div className="flex flex-col min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <span className="truncate">{name}</span>
-          {client && <span className="text-xs text-muted-foreground truncate">{client}</span>}
+          <span className="text-xs text-muted-foreground truncate">
+            {[client, company].filter(Boolean).join(' · ')}
+          </span>
         </div>
       </CommandItem>
     );
@@ -294,7 +338,7 @@ function ProjectCombobox({
             triggerClassName,
           )}
         >
-          <span className="truncate flex-1 text-left">{selected ? getProjectName(selected) : placeholder}</span>
+          <span className="min-w-0 flex-1 overflow-hidden truncate text-left">{selected ? getProjectName(selected) : placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -342,6 +386,7 @@ export default function Timesheets() {
   const { projects = [] } = useProjects();
   const { employees = [] } = useEmployees();
   const { toast } = useToast();
+  const [timesheetProjects, setTimesheetProjects] = useState<any[]>([]);
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'submitted' | 'approved' | 'rejected'>('all');
@@ -377,7 +422,27 @@ export default function Timesheets() {
 
   // Проверяем, может ли пользователь заполнять тайм-щиты
   const canFillTimesheets = user && user.role !== 'ceo' && user.role !== 'deputy_director';
-  const canReviewTimesheets = !!user && ['ceo', 'admin', 'deputy_director', 'partner', 'manager_1', 'manager_2', 'manager_3'].includes(user.role);
+  const canReviewTimesheets = !!user && ['ceo', 'admin', 'deputy_director', 'hr', 'partner'].includes(user.role);
+  const canReviewAllTimesheets = !!user && ['ceo', 'admin', 'deputy_director', 'hr'].includes(user.role);
+
+  useEffect(() => {
+    let active = true;
+    supabaseDataStore.getProjects()
+      .then((loadedProjects) => {
+        if (active) setTimesheetProjects(Array.isArray(loadedProjects) ? loadedProjects : []);
+      })
+      .catch(() => {
+        if (active) setTimesheetProjects([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const allProjects = useMemo(
+    () => (timesheetProjects.length > 0 ? timesheetProjects : projects as any[]).slice(),
+    [timesheetProjects, projects],
+  );
   
   // Проекты, где пользователь в команде. Используется для группы «Мои проекты»
   // в комбобоксе — но в общем списке доступны ВСЕ проекты, чтобы можно было
@@ -385,26 +450,20 @@ export default function Timesheets() {
   const myProjectIds = useMemo(() => {
     const ids = new Set<string>();
     if (!user) return ids;
-    for (const p of projects as any[]) {
+    for (const p of allProjects) {
       const team = p.team || [];
-      if (team.some((m: any) => {
-        const memberId = m.userId || m.id || m.employeeId;
-        return memberId === user.id;
-      })) {
+      if (team.some((member: any) => teamMemberMatchesUser(member, user))) {
         ids.add(p.id);
       }
     }
     return ids;
-  }, [projects, user]);
-
-  // Полный список проектов для комбобокса — все, не только «свои».
-  const allProjects = useMemo(() => (projects as any[]).slice(), [projects]);
+  }, [allProjects, user]);
 
   // Маппинг записи из БД в UI-формат (старый локальный TimesheetEntry).
   const toUiEntry = useCallback(
     (e: DbTimesheetEntry): TimesheetEntry => {
       const employee = employees.find((emp: any) => emp.id === e.employeeId);
-      const project = e.projectId ? projects.find((p: any) => p.id === e.projectId) : null;
+      const project = e.projectId ? allProjects.find((p: any) => p.id === e.projectId) : null;
       return {
         id: e.id,
         employeeId: e.employeeId,
@@ -420,7 +479,7 @@ export default function Timesheets() {
         reviewedAt: e.reviewedAt,
       };
     },
-    [employees, projects],
+    [employees, allProjects],
   );
 
   // Загружаем тайм-шиты из Supabase.
@@ -436,11 +495,14 @@ export default function Timesheets() {
   // Фильтруем тайм-щиты по текущему пользователю (если не админ/CEO)
   const visibleTimesheets = useMemo(() => {
     if (!user) return [];
-    if (canReviewTimesheets) {
+    if (canReviewAllTimesheets) {
       return timesheets;
     }
+    if (canReviewTimesheets && user.role === 'partner') {
+      return timesheets.filter((ts) => ts.employeeId === user.id || (!!ts.projectId && myProjectIds.has(ts.projectId)));
+    }
     return timesheets.filter(ts => ts.employeeId === user.id);
-  }, [timesheets, user, canReviewTimesheets]);
+  }, [timesheets, user, canReviewTimesheets, canReviewAllTimesheets, myProjectIds]);
 
   // Фильтрация
   const filteredTimesheets = useMemo(() => {
@@ -478,7 +540,7 @@ export default function Timesheets() {
 
     const projectName = formData.isAdminWork
       ? ADMIN_WORK_LABEL
-      : getProjectName(projects.find((p: any) => p.id === formData.projectId));
+      : getProjectName(allProjects.find((p: any) => p.id === formData.projectId));
     const projectId = formData.isAdminWork ? null : formData.projectId;
     const hours = parseFloat(formData.hours);
     const description = formData.description || (formData.isAdminWork ? 'Офисная работа без проекта' : 'Работа над проектом');
@@ -705,11 +767,11 @@ export default function Timesheets() {
                 Добавить
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg w-[calc(100vw-2rem)] sm:w-full max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden p-0 sm:w-full">
+              <DialogHeader className="shrink-0 border-b px-6 py-4">
                 <DialogTitle>{editingTimesheet ? 'Редактировать тайм-щит' : 'Новый тайм-щит'}</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 mt-2">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
                 {/* Тип работы: проект ИЛИ административная (в офисе, без проекта) */}
                 <label className="flex items-start gap-3 p-3 rounded-lg border bg-amber-50/40 dark:bg-amber-900/10 cursor-pointer hover:bg-amber-50/70 dark:hover:bg-amber-900/20 transition">
                   <input
@@ -792,7 +854,9 @@ export default function Timesheets() {
                     className="bg-muted/40 border-0 focus-visible:ring-1 resize-none"
                   />
                 </div>
-                <div className="flex justify-end gap-2 pt-1">
+              </div>
+              <div className="shrink-0 border-t bg-background px-6 py-3">
+                <div className="flex justify-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => {
                     setShowAddDialog(false);
                     setEditingTimesheet(null);
