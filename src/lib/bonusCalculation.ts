@@ -184,7 +184,10 @@ export function computeProjectBonus(
   for (const m of team) {
     const role = (m?.role || m?.role_on_project) as UserRole | undefined;
     if (!role) continue;
-    if (!DEFAULT_DISTRIBUTION.hasOwnProperty(role) && !(distribution as any).hasOwnProperty(role)) continue;
+    if (
+      !Object.prototype.hasOwnProperty.call(DEFAULT_DISTRIBUTION, role)
+      && !Object.prototype.hasOwnProperty.call(distribution, role)
+    ) continue;
     const userId = m?.userId || m?.id || m?.employeeId;
     if (!userId) continue;
 
@@ -219,7 +222,7 @@ export function computeProjectBonus(
   const roleBonuses: Record<string, number> = {};
   for (const r of BONUS_ROLES) roleBonuses[r.role] = 0;
   for (const m of members) {
-    if (roleBonuses.hasOwnProperty(m.role)) roleBonuses[m.role] += m.finalAmount;
+    if (Object.prototype.hasOwnProperty.call(roleBonuses, m.role)) roleBonuses[m.role] += m.finalAmount;
   }
 
   const totalPaidBonuses = members.reduce((s, m) => s + m.finalAmount, 0);

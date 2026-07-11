@@ -134,8 +134,12 @@ export async function getAppSettings(): Promise<AppSettings> {
         showDemoUsers: false,
         officeLocation: {
           enabled: data.office_location_enabled ?? DEFAULT_SETTINGS.officeLocation.enabled,
-          latitude: Number(data.office_latitude) ?? DEFAULT_SETTINGS.officeLocation.latitude,
-          longitude: Number(data.office_longitude) ?? DEFAULT_SETTINGS.officeLocation.longitude,
+          latitude: Number.isFinite(Number(data.office_latitude))
+            ? Number(data.office_latitude)
+            : DEFAULT_SETTINGS.officeLocation.latitude,
+          longitude: Number.isFinite(Number(data.office_longitude))
+            ? Number(data.office_longitude)
+            : DEFAULT_SETTINGS.officeLocation.longitude,
           radiusMeters: data.office_radius_meters ?? DEFAULT_SETTINGS.officeLocation.radiusMeters,
           address: data.office_address ?? DEFAULT_SETTINGS.officeLocation.address
         },

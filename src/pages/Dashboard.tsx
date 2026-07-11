@@ -544,7 +544,7 @@ export default function Dashboard() {
             0;
           revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + safeNumber(amount);
         }
-      } catch { }
+      } catch { /* Ignore malformed legacy project dates. */ }
     });
 
     return months.slice(0, 6).map(month => ({
@@ -631,7 +631,7 @@ export default function Dashboard() {
           warning++;
           urgentList.push({ project, daysLeft, urgency: 'warning' });
         }
-      } catch { }
+      } catch { /* Ignore malformed legacy project deadlines. */ }
     });
 
     // Сортируем по срочности

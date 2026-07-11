@@ -27,7 +27,7 @@ async function quickLogin(page: any, user: any) {
 
 test.describe('Быстрая проверка полного цикла проекта', () => {
   let projectName = '';
-  let projectId: string | null = null;
+  const _projectId: string | null = null;
 
   test('Полный цикл: создание -> утверждение -> завершение -> бонус', async ({ page }) => {
     console.log('\n🚀 Начинаем полный цикл проекта...\n');

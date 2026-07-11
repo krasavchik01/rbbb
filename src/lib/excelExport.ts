@@ -176,7 +176,7 @@ function excelDateToISO(excelDate: any): string | null {
     for (const format of dateFormats) {
       if (format.test(excelDate)) {
         // Парсим DD.MM.YYYY или DD/MM/YYYY
-        const parts = excelDate.split(/[.\/]/);
+        const parts = excelDate.split(/[./]/);
         if (parts.length === 3) {
           let day, month, year;
           if (parts[0].length === 4) {
@@ -284,7 +284,7 @@ function parseContacts(contactsText: string): Array<{
     }
     
     // Email (без префикса)
-    const emailMatch = line.match(/^[\w\.-]+@[\w\.-]+\.\w+$/i);
+    const emailMatch = line.match(/^[\w.-]+@[\w.-]+\.\w+$/i);
     if (emailMatch) {
       if (currentContact.name) {
         currentContact.email = emailMatch[0];
@@ -295,7 +295,7 @@ function parseContacts(contactsText: string): Array<{
     }
     
     // Телефон (8xxx, +7xxx, формат с пробелами/дефисами)
-    const phoneMatch = line.match(/([8\+]\s?7?\s?[\d\s\-\(\)]{10,})/);
+    const phoneMatch = line.match(/([8+]\s?7?\s?[\d\s()-]{10,})/);
     if (phoneMatch) {
       const phone = phoneMatch[0].replace(/\s/g, ' ').trim();
       if (currentContact.name) {
@@ -519,8 +519,8 @@ export async function importProjectsFromExcel(file: File): Promise<{ projects: a
                                         null;
             
             // Приоритет: если есть сумма С НДС - используем её, иначе без НДС
-            let amountRaw = amountWithVATRaw || amountWithoutVATRaw || 0;
-            let isAmountWithVAT = !!amountWithVATRaw; // Флаг что это сумма С НДС
+            const amountRaw = amountWithVATRaw || amountWithoutVATRaw || 0;
+            const isAmountWithVAT = !!amountWithVATRaw; // Флаг что это сумма С НДС
             
             // Логирование для отладки
             console.log(`💰 Парсинг суммы для проекта ${row['Наименование'] || row['Клиент']}:`, {

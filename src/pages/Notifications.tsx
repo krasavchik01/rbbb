@@ -167,7 +167,7 @@ export default function Notifications() {
     if (!actionUrl) return;
 
     // Если это ссылка на проект, загружаем проект и передаем в state
-    const projectMatch = actionUrl.match(/^\/projects?\/([^\/]+)/);
+    const projectMatch = actionUrl.match(/^\/projects?\/([^/]+)/);
     if (projectMatch) {
       const projectId = projectMatch[1];
 

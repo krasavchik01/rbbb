@@ -53,7 +53,7 @@ export function NotificationBell() {
     
     if (notification.action_url) {
       // Если это ссылка на проект, загружаем проект и передаем в state
-      const projectMatch = notification.action_url.match(/^\/project\/([^\/]+)/);
+      const projectMatch = notification.action_url.match(/^\/project\/([^/]+)/);
       if (projectMatch) {
         const projectId = projectMatch[1];
         

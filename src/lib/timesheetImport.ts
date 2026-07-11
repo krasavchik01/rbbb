@@ -135,8 +135,8 @@ export function parseDate(raw: any): string | null {
   // 1.10.2024 / 02.10.24 / 23.10.2024 / 2024-10-01
   let m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (m) {
-    let d = m[1];
-    let mo = m[2];
+    const d = m[1];
+    const mo = m[2];
     let y = m[3];
     if (y.length === 2) y = '20' + y;
     return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;

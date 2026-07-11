@@ -13,13 +13,13 @@ const safeStorage: Storage = {
     try { return localStorage.getItem(key); } catch { return null; }
   },
   setItem: (key: string, value: string) => {
-    try { localStorage.setItem(key, value); } catch {}
+    try { localStorage.setItem(key, value); } catch { /* Storage may be unavailable in hardened browsers. */ }
   },
   removeItem: (key: string) => {
-    try { localStorage.removeItem(key); } catch {}
+    try { localStorage.removeItem(key); } catch { /* Storage may be unavailable in hardened browsers. */ }
   },
   clear: () => {
-    try { localStorage.clear(); } catch {}
+    try { localStorage.clear(); } catch { /* Storage may be unavailable in hardened browsers. */ }
   },
   key: (index: number) => {
     try { return localStorage.key(index); } catch { return null; }

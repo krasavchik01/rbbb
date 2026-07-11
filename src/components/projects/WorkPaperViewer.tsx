@@ -175,15 +175,16 @@ export function WorkPaperViewer({
   // Рендеринг элементов структуры
   const renderElement = (element: StructureElement, index: number) => {
     switch (element.type) {
-      case 'header':
+      case 'header': {
         const HeaderTag = `h${element.level || 2}` as keyof JSX.IntrinsicElements;
         return (
           <HeaderTag key={index} className="font-semibold mt-6 mb-4 first:mt-0">
             {element.label}
           </HeaderTag>
         );
+      }
 
-      case 'static_text':
+      case 'static_text': {
         const content = element.content || 
           (element.content_from === 'purpose' ? template.purpose : '');
         return (
@@ -191,6 +192,7 @@ export function WorkPaperViewer({
             {content}
           </p>
         );
+      }
 
       case 'table':
         return renderTable(element as TableElement, index);
@@ -282,7 +284,7 @@ export function WorkPaperViewer({
           </div>
         );
 
-      case 'static_checklist':
+      case 'static_checklist': {
         const items = element.items ||
           (element.content_from === 'procedures_template' ? template.procedures_template : []) ||
           [];
@@ -304,6 +306,7 @@ export function WorkPaperViewer({
             ))}
           </div>
         );
+      }
 
       case 'file_upload':
         return (

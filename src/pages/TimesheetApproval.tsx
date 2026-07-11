@@ -422,9 +422,8 @@ export default function TimesheetApproval() {
     return n;
   };
 
-  const activeBucketGroups = useMemo(
-    () => Array.from(buckets[bucketTab].values()).sort((a, b) => b.totalHours - a.totalHours),
-    [buckets, bucketTab],
+  const activeBucketGroups = Array.from(buckets[bucketTab].values()).sort(
+    (a, b) => b.totalHours - a.totalHours,
   );
 
   // Все id записей в одном проекте — для кнопки «Утвердить весь проект».
@@ -437,7 +436,7 @@ export default function TimesheetApproval() {
   };
 
   // Все id во всех проектах текущего бакета — для «Утвердить всё показанное».
-  const allEntryIdsInBucket = useMemo((): string[] => {
+  const allEntryIdsInBucket = (() => {
     const ids: string[] = [];
     for (const g of activeBucketGroups) {
       for (const empEntries of g.byEmployee.values()) {
@@ -445,7 +444,7 @@ export default function TimesheetApproval() {
       }
     }
     return ids;
-  }, [activeBucketGroups]);
+  })();
 
   return (
     <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto pb-24">

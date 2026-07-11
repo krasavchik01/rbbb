@@ -269,9 +269,7 @@ export function BonusesOverviewWidget() {
   const { projects = [] } = useProjects();
   const navigate = useNavigate();
 
-  if (!user) return null;
-  const visible = ['ceo', 'deputy_director', 'admin'].includes(user.role);
-  if (!visible) return null;
+  const visible = !!user && ['ceo', 'deputy_director', 'admin'].includes(user.role);
 
   // Фильтр: только completed проекты с end_date / deadline в 2024-2025.
   // Проще: status='completed' (после нашего скрипта закрытия 2024-2025
@@ -302,6 +300,8 @@ export function BonusesOverviewWidget() {
     }
     return s;
   }, [rows]);
+
+  if (!user || !visible) return null;
 
   const toPay = Math.max(0, totals.totalBonuses - paidTotal);
 

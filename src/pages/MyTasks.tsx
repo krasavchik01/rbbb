@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -90,14 +90,14 @@ export default function MyTasks() {
     }
   };
 
-  const counts = useMemo(() => {
+  const counts = (() => {
     const c = { pending: 0, in_progress: 0, done: 0, cancelled: 0 };
     for (const t of tasks) c[t.status] = (c[t.status] || 0) + 1;
     return c;
-  }, [tasks]);
+  })();
 
   // Сортировка: pending+in_progress первыми, потом по приоритету, потом по дедлайну
-  const sorted = useMemo(() => {
+  const sorted = (() => {
     const order = { pending: 0, in_progress: 1, done: 2, cancelled: 3 };
     const prio = { urgent: 0, high: 1, medium: 2, low: 3 };
     return [...tasks].sort((a, b) => {
@@ -107,7 +107,7 @@ export default function MyTasks() {
       const db = b.due_date ? new Date(b.due_date).getTime() : Infinity;
       return da - db;
     });
-  }, [tasks]);
+  })();
 
   return (
     <div className="max-w-4xl mx-auto pb-24 space-y-4">

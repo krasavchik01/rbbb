@@ -536,7 +536,7 @@ export default function Projects() {
             const year = date.getFullYear().toString();
             if (!isNaN(Number(year))) years.add(year);
           }
-        } catch { }
+        } catch { /* Ignore malformed legacy notes. */ }
       }
     });
     return Array.from(years).sort((a, b) => Number(b) - Number(a));
@@ -598,7 +598,7 @@ export default function Projects() {
               const parsed = JSON.parse(project.notes);
               return parsed?.contract?.currency || parsed?.currency;
             }
-          } catch { }
+          } catch { /* Ignore malformed legacy notes. */ }
           return null;
         })()
       ];
@@ -628,7 +628,7 @@ export default function Projects() {
             const parsed = JSON.parse(project.notes);
             return parsed?.finances?.amountWithoutVAT || parsed?.contract?.amountWithoutVAT || parsed?.amountWithoutVAT || parsed?.amount;
           }
-        } catch { }
+        } catch { /* Ignore malformed legacy notes. */ }
         return null;
       })()
     ];
@@ -676,7 +676,7 @@ export default function Projects() {
             const parsed = JSON.parse(project.notes);
             return parsed?.amountWithVAT || parsed?.finances?.amountWithVAT;
           }
-        } catch { }
+        } catch { /* Ignore malformed legacy notes. */ }
         return null;
       })()
     ];
@@ -1475,7 +1475,7 @@ export default function Projects() {
     try {
       const raw = localStorage.getItem(`rb_project_data_${projectId}`);
       if (raw) localData = JSON.parse(raw);
-    } catch {}
+    } catch { /* Ignore malformed local draft data. */ }
 
     // ── Договор (реальный файл или ссылка на скан) ──────────
     let projectFiles: any[] = [];

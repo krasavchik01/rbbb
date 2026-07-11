@@ -29,10 +29,11 @@ export function ProjectWorkflow({ project, userRole, onStatusChange }: ProjectWo
         return (project.team?.length || 0) >= 2;
       case 'auto_tasks_created':
         return (project.tasks?.length || 0) > 0;
-      case 'tasks_70_percent_done':
+      case 'tasks_70_percent_done': {
         if (!project.tasks?.length) return false;
         const doneTasks = project.tasks.filter(t => t.status === 'done').length;
         return (doneTasks / project.tasks.length) >= 0.7;
+      }
       case 'quality_checklist_100':
         // Здесь должна быть проверка чек-листа качества
         return true; // Заглушка
