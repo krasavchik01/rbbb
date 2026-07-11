@@ -622,6 +622,42 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          message: string
+          type: string
+          read: boolean
+          action_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          message: string
+          type: string
+          read?: boolean
+          action_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          message?: string
+          type?: string
+          read?: boolean
+          action_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -661,6 +697,48 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      project_data: {
+        Row: {
+          id: string
+          project_id: string
+          template_id: string
+          template_version: number
+          passport_data: Json
+          stages_data: Json
+          completion_status: Json
+          history: Json
+          created_at: string | null
+          updated_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          template_id: string
+          template_version?: number
+          passport_data?: Json
+          stages_data?: Json
+          completion_status?: Json
+          history?: Json
+          created_at?: string | null
+          updated_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          template_id?: string
+          template_version?: number
+          passport_data?: Json
+          stages_data?: Json
+          completion_status?: Json
+          history?: Json
+          created_at?: string | null
+          updated_at?: string | null
+          created_by?: string | null
         }
         Relationships: []
       }

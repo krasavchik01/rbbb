@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import type { UserRole } from '@/types/roles';
 
 const STORAGE_KEYS = {
@@ -18,6 +19,10 @@ const STORAGE_KEYS = {
   RESPONSES: 'rb_project_survey_responses',
   PROPOSALS: 'rb_project_survey_proposals',
 };
+
+function asJson(value: unknown): Json {
+  return JSON.parse(JSON.stringify(value)) as Json;
+}
 
 export type SurveyProjectStatusVote =
   | 'in_progress'
@@ -181,7 +186,7 @@ function responseToRow(r: SurveyResponse) {
     user_name: r.userName,
     user_role: r.userRole,
     status: r.status,
-    answers: r.answers,
+    answers: asJson(r.answers),
     submitted_at: r.submittedAt || null,
     updated_at: new Date().toISOString(),
   };
@@ -218,9 +223,9 @@ function proposalToRow(p: SurveyProposal) {
     project_id: p.projectId,
     project_name: p.projectName,
     status: p.status,
-    proposed_team: p.proposedTeam,
+    proposed_team: asJson(p.proposedTeam),
     proposed_status: p.proposedStatus,
-    status_votes: p.statusVotes,
+    status_votes: asJson(p.statusVotes),
     respondents_count: p.respondentsCount,
     participants_count: p.participantsCount,
     confidence: p.confidence,

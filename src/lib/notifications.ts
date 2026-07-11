@@ -4,17 +4,16 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 
-export interface Notification {
-  id: string;
-  user_id: string;
-  title: string;
-  message: string;
+type NotificationRow = Database['public']['Tables']['notifications']['Row'];
+
+export interface Notification extends Omit<NotificationRow, 'type'> {
   type: 'info' | 'success' | 'warning' | 'error';
-  read: boolean;
-  action_url?: string;
-  created_at: string;
-  updated_at: string;
+}
+
+function toNotification(row: NotificationRow): Notification {
+  return { ...row, type: row.type as Notification['type'] };
 }
 
 // Звуковое оповещение
@@ -47,7 +46,7 @@ export const getNotifications = async (userId: string): Promise<Notification[]> 
     }
 
     console.log(`✅ [getNotifications] Загружено ${data?.length || 0} уведомлений для userId: ${userId}`);
-    return data || [];
+    return (data || []).map(toNotification);
   } catch (error) {
     console.error('❌ [getNotifications] Ошибка:', error);
     return [];
@@ -89,7 +88,7 @@ export const addNotification = async (notification: Omit<Notification, 'id' | 'c
     // Воспроизводим звук
     playNotificationSound();
 
-    return data as Notification;
+    return toNotification(data);
   } catch (error) {
     console.error('❌ [addNotification] Ошибка:', error);
     return null;
@@ -240,7 +239,7 @@ export const subscribeToNotifications = (userId: string, callback: (notification
       },
       (payload) => {
         console.log('🆕 [subscribeToNotifications] Новое уведомление:', payload);
-        callback(payload.new as Notification);
+        callback(toNotification(payload.new as NotificationRow));
         playNotificationSound();
       }
     )

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 
 export interface Task {
   id: string;
@@ -18,6 +19,9 @@ export interface Task {
   created_at: string;
   updated_at: string;
 }
+
+type TaskInsert = Database['public']['Tables']['tasks']['Insert'];
+export type TaskCreateInput = Pick<TaskInsert, 'title'> & Partial<Omit<TaskInsert, 'title'>>;
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -44,7 +48,7 @@ export function useTasks() {
     loadTasks();
   }, [loadTasks]);
 
-  const createTask = useCallback(async (task: Partial<Task>): Promise<Task> => {
+  const createTask = useCallback(async (task: TaskCreateInput): Promise<Task> => {
     const { data, error } = await supabase
       .from('tasks')
       .insert(task)

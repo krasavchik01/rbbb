@@ -35,5 +35,6 @@ export const ROUTE_ACCESS = {
 } satisfies Record<string, readonly UserRole[]>;
 
 export function roleCanAccessRoute(role: UserRole, path: keyof typeof ROUTE_ACCESS): boolean {
-  return ROUTE_ACCESS[path].includes(role);
+  const allowedRoles: readonly UserRole[] = ROUTE_ACCESS[path];
+  return allowedRoles.includes(role);
 }
