@@ -12,6 +12,7 @@ import {
   sourceKey,
   summarizeRbiReview,
 } from './core.mjs';
+import { buildTimesheetFileEvidence } from './timesheet-files.mjs';
 
 const SOURCES = {
   rbi: 'reports/rbi-project-enrichment-dryrun/dryrun.json',
@@ -275,6 +276,8 @@ const rbiNotFound = rbiRows.filter((row) => row.oldMatchType === 'not_found');
 const externalPeople = buildExternalPeople(rbiRows);
 const kenzhekulovRows = buildKenzhekulovRows(kenzhekulovAnalysis.rows || [], projects, timesheets);
 assertEqual(kenzhekulovRows.length, 52, 'Kenzhekulov source rows');
+const timesheetFileRows = buildTimesheetFileEvidence({ reimportEvidence, timesheets });
+assertEqual(timesheetFileRows.length, 3, 'Timesheet file comparison rows');
 
 const sharedLedgerRows = timesheets.filter((row) => row.reviewer_notes === LEDGER_APPROVAL_MARKER);
 const result = {
@@ -333,7 +336,7 @@ const result = {
   },
   timesheetFiles: {
     reimportGeneratedAt: reimportEvidence.generatedAt || '',
-    rows: [],
+    rows: timesheetFileRows,
   },
 };
 
@@ -352,4 +355,12 @@ console.log(JSON.stringify({
     confirmedApplied: result.kenzhekulov.rows.filter((row) => row.status === 'confirmed_applied').length,
     needsReview: result.kenzhekulov.rows.filter((row) => row.status !== 'confirmed_applied').length,
   },
+  timesheetFiles: result.timesheetFiles.rows.map((row) => ({
+    employeeName: row.employeeName,
+    rootRows: row.root.rows,
+    rawRows: row.raw.rows,
+    driveRows: row.driveDraft.rows,
+    liveRows: row.liveBatchV3.rows,
+    status: row.status,
+  })),
 }, null, 2));
