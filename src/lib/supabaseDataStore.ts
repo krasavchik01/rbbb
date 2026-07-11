@@ -8,6 +8,17 @@ import { Database } from '@/integrations/supabase/types';
 import { mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
 import { apiDelete, apiGet, apiPost, apiPostFormData } from '@/lib/api';
 import { dedupeProjectFiles } from '@/lib/contractData';
+import {
+  getProjectNotes,
+  mergeProjectNotes,
+  parseProjectNotes,
+  serializeProjectNotes,
+} from '@/lib/projectNotes';
+import type {
+  CanonicalProjectFinances,
+  CanonicalProjectNotes,
+  CanonicalTeamMember,
+} from '@/types/project-domain';
 
 // Типы из Supabase
 type SupabaseEmployee = Database['public']['Tables']['employees']['Row'];
@@ -27,8 +38,26 @@ export interface Employee extends Omit<SupabaseEmployee, 'role' | 'level'> {
   phone?: string;
 }
 
-export interface Project extends Omit<SupabaseProject, 'status'> {
-  status: 'В работе' | 'На проверке' | 'Черновик' | 'Завершён' | 'Приостановлен';
+export type EmployeeCreateInput = Omit<Employee, 'id' | 'created_at' | 'updated_at' | 'password'> & {
+  password?: string | null;
+};
+
+export type ProjectUiStatus =
+  | 'active'
+  | 'in_progress'
+  | 'completed'
+  | 'draft'
+  | 'approval'
+  | 'approved'
+  | 'cancelled'
+  | 'В работе'
+  | 'На проверке'
+  | 'Черновик'
+  | 'Завершён'
+  | 'Приостановлен';
+
+export interface Project extends Omit<SupabaseProject, 'notes' | 'status'> {
+  status: ProjectUiStatus;
   clientName?: string;
   clientWebsite?: string;
   contractNumber?: string;
@@ -42,13 +71,18 @@ export interface Project extends Omit<SupabaseProject, 'status'> {
   approvalDate?: string;
   completionPercent?: number;
   completion?: number;
-  team?: any[];
-  tasks?: any[];
+  companyName?: string;
+  company?: string;
+  currency?: string;
+  files?: any[];
+  team: CanonicalTeamMember[];
+  tasks: any[];
   contract?: any;
   client?: any;
-  finances?: any;
+  finances?: CanonicalProjectFinances;
   updated_at: string | null;
-  notes: any;
+  notes: CanonicalProjectNotes;
+  notesParseError?: string;
 }
 
 export interface Timesheet extends SupabaseTimesheet {
@@ -86,6 +120,71 @@ function extensionForUpload(file: File): string {
   if (mime.includes('png')) return '.png';
   if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';
   return '';
+}
+
+function recordValue(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
+  const parsed = parseProjectNotes(proj.notes);
+  const notes = parsed.ok ? parsed.value : {};
+  const contract = recordValue(notes.contract);
+  const client = recordValue(notes.client);
+  const finances = notes.finances;
+  const notesStatus = typeof notes.status === 'string' ? notes.status : undefined;
+  const status: ProjectUiStatus = notesStatus
+    ? notesStatus as ProjectUiStatus
+    : proj.status === 'completed'
+      ? 'completed'
+      : 'В работе';
+  const notesName = typeof notes.name === 'string' ? notes.name : undefined;
+  const clientName = typeof notes.clientName === 'string'
+    ? notes.clientName
+    : typeof client.name === 'string' ? client.name : undefined;
+  const companyName = typeof notes.companyName === 'string'
+    ? notes.companyName
+    : typeof notes.ourCompany === 'string' ? notes.ourCompany : undefined;
+
+  return {
+    ...proj,
+    status,
+    notes,
+    ...(parsed.ok ? {} : { notesParseError: parsed.error }),
+    name: notesName || proj.name || clientName || 'Без названия',
+    clientName,
+    contractNumber: typeof notes.contractNumber === 'string'
+      ? notes.contractNumber
+      : typeof contract.number === 'string' ? contract.number : undefined,
+    contractDate: typeof notes.contractDate === 'string'
+      ? notes.contractDate
+      : typeof contract.date === 'string' ? contract.date : undefined,
+    amountWithoutVAT: Number(finances?.amountWithoutVAT)
+      || Number(contract.amountWithoutVAT)
+      || Number(notes.amountWithoutVAT)
+      || Number(notes.amount)
+      || 0,
+    ourCompany: typeof notes.ourCompany === 'string' ? notes.ourCompany : companyName,
+    companyName,
+    company: companyName,
+    currency: typeof contract.currency === 'string'
+      ? contract.currency
+      : typeof notes.currency === 'string' ? notes.currency : 'KZT',
+    completionPercent: typeof notes.completionPercent === 'number'
+      ? notes.completionPercent
+      : proj.kpi_percentage || 0,
+    completion: typeof notes.completionPercent === 'number'
+      ? notes.completionPercent
+      : typeof notes.completion === 'number' ? notes.completion : proj.kpi_percentage || 0,
+    team: Array.isArray(notes.team) ? notes.team : [],
+    tasks: Array.isArray(notes.tasks) ? notes.tasks : [],
+    files: Array.isArray(notes.files) ? notes.files : undefined,
+    finances,
+    contract: Object.keys(contract).length > 0 ? contract : undefined,
+    client: Object.keys(client).length > 0 ? client : undefined,
+  };
 }
 
 function safeStorageFileName(file: File): string {
@@ -186,9 +285,10 @@ class SupabaseDataStore {
     return employees;
   }
 
-  async createEmployee(employee: Omit<Employee, 'id' | 'created_at' | 'updated_at'> & { password?: string }): Promise<Employee> {
+  async createEmployee(employee: EmployeeCreateInput): Promise<Employee> {
     const newEmployee: Employee = {
       ...employee,
+      password: employee.password ?? null,
       id: `emp_${Date.now()}`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -446,28 +546,43 @@ class SupabaseDataStore {
         .single();
 
       if (currentProject) {
-        const existingNotes = typeof currentProject.notes === 'string'
-          ? JSON.parse(currentProject.notes)
-          : currentProject.notes || {};
-
-        const nextWorkflowStatus = updates.status || updates.notes?.status || existingNotes.status || currentProject.status;
-        const nextCompletion = updates.completionPercent ?? updates.completion ?? existingNotes.completionPercent ?? currentProject.kpi_percentage ?? 0;
-        const mergedNotes = {
-          ...existingNotes,
-          ...updates,
-          status: nextWorkflowStatus,
-          completionPercent: nextCompletion,
-          updated_at: new Date().toISOString()
-        };
+        const existingNotes = getProjectNotes({ notes: currentProject.notes });
+        const { notes: updateNotes, ...noteFields } = updates || {};
+        const notesPatch: Partial<CanonicalProjectNotes> = updateNotes && typeof updateNotes === 'object'
+          ? updateNotes
+          : {};
+        const nextWorkflowStatus = updates.status
+          || notesPatch.status
+          || existingNotes.status
+          || currentProject.status
+          || 'active';
+        const nextCompletion = updates.completionPercent
+          ?? updates.completion
+          ?? existingNotes.completionPercent
+          ?? currentProject.kpi_percentage
+          ?? 0;
+        const mergedNotes = mergeProjectNotes(currentProject.notes, {
+          ...noteFields,
+          ...notesPatch,
+          status: String(nextWorkflowStatus),
+          completionPercent: Number(nextCompletion),
+          updated_at: new Date().toISOString(),
+        });
 
         const supabaseStatus = mapWorkflowStatusToSupabaseStatus(nextWorkflowStatus);
+        const serializedNotes = serializeProjectNotes(mergedNotes);
+        const nextName = updates.name
+          || updates.client?.name
+          || (typeof existingNotes.name === 'string' ? existingNotes.name : undefined)
+          || currentProject.name
+          || 'Без названия';
         const { error: updateError } = await supabase
           .from('projects')
           .update({
-            notes: JSON.stringify(mergedNotes),
-            name: updates.name || updates.client?.name || existingNotes.name || currentProject.name || 'Без названия',
+            notes: serializedNotes,
+            name: nextName,
             status: supabaseStatus,
-            kpi_percentage: nextCompletion,
+            kpi_percentage: Number(nextCompletion),
             updated_at: new Date().toISOString()
           })
           .eq('id', id);
@@ -475,10 +590,10 @@ class SupabaseDataStore {
         if (!updateError) {
           return this.mapSupabaseProject({
             ...currentProject,
-            name: updates.name || updates.client?.name || existingNotes.name || currentProject.name,
-            notes: JSON.stringify(mergedNotes),
+            name: nextName,
+            notes: serializedNotes,
             status: supabaseStatus,
-            kpi_percentage: nextCompletion,
+            kpi_percentage: Number(nextCompletion),
             updated_at: new Date().toISOString()
           } as SupabaseProject);
         }
@@ -559,98 +674,7 @@ class SupabaseDataStore {
   }
 
   private mapSupabaseProject(proj: SupabaseProject): Project {
-    // Попытка распарсить notes как исходный объект проекта, если он сохранён при вставке
-    let notes: any = undefined;
-    try {
-      const raw: any = (proj as any).notes;
-      if (raw) {
-        notes = typeof raw === 'string' ? JSON.parse(raw) : raw;
-
-        // Логирование для отладки (только для первых проектов)
-        if (import.meta.env.DEV && Math.random() < 0.1) { // 10% проектов
-          console.log('🔍 mapSupabaseProject - парсинг notes:', {
-            project_id: proj.id,
-            project_name: proj.name,
-            notes_type: typeof raw,
-            notes_finances: notes?.finances,
-            notes_finances_amount: notes?.finances?.amountWithoutVAT,
-            notes_contract: notes?.contract,
-            notes_amountWithoutVAT: notes?.amountWithoutVAT
-          });
-        }
-      }
-    } catch (err) {
-      console.error('❌ Ошибка парсинга notes:', err, 'для проекта:', proj.id);
-    }
-
-    // Маппинг статуса из Supabase в UI
-    const mappedStatus = (() => {
-      if (proj.status === 'completed') return 'completed';
-      if (proj.status === 'in_progress' && notes?.status === 'completed') return 'completed';
-
-      // Пытаемся взять статус из notes, так как он там более точный (русский)
-      const notesStatus = notes?.status;
-      if (notesStatus) {
-        return notesStatus;
-      }
-
-      // Иначе маппим из enum
-      switch (proj.status) {
-        case 'in_progress': return 'В работе';
-        case 'completed': return 'Завершён';
-        case 'active': return 'В работе';
-        default: return 'Черновик';
-      }
-    })();
-
-    // Важно: не сливаем notes на верхний уровень, чтобы избежать дублей
-    // Вместо этого возвращаем структуру где notes доступен отдельно
-    const mapped: Project = {
-      ...proj,
-      status: mappedStatus,
-      // Извлекаем только нужные поля из notes, без дублирования
-      name: notes?.name || proj.name || notes?.client?.name || 'Без названия',
-      clientName: notes?.clientName || notes?.client?.name,
-      contractNumber: notes?.contractNumber || notes?.contract?.number,
-      contractDate: notes?.contractDate || notes?.contract?.date,
-      amountWithoutVAT: notes?.finances?.amountWithoutVAT ||
-        notes?.contract?.amountWithoutVAT ||
-        notes?.amountWithoutVAT ||
-        notes?.amount,
-      ourCompany: notes?.ourCompany || notes?.companyName,
-      companyName: notes?.companyName || notes?.ourCompany,
-      currency: notes?.contract?.currency || notes?.currency || 'KZT',
-      // Извлекаем процент выполнения из notes или из kpi_percentage
-      completionPercent: notes?.completionPercent || proj.kpi_percentage || 0,
-      completion: notes?.completionPercent || notes?.completion || proj.kpi_percentage || 0,
-      // Извлекаем команду и задачи из notes
-      team: notes?.team || [],
-      tasks: notes?.tasks || [],
-      finances: notes?.finances || undefined,
-      // Сохраняем notes отдельно для доступа к полным данным
-      notes: notes,
-      // Маппим contract если он есть в notes
-      contract: notes?.contract || (notes?.contractNumber ? {
-        number: notes.contractNumber,
-        date: notes.contractDate,
-        serviceEndDate: notes?.contract?.serviceEndDate || notes.serviceTerm || proj.deadline,
-        serviceStartDate: notes?.contract?.serviceStartDate || proj.start_date,
-        amountWithoutVAT: notes?.finances?.amountWithoutVAT ||
-          notes?.contract?.amountWithoutVAT ||
-          notes?.amountWithoutVAT,
-        currency: notes?.contract?.currency || notes?.currency || 'KZT',
-      } : undefined),
-      // Маппим client если есть
-      client: notes?.client || (notes?.clientName ? {
-        name: notes.clientName,
-        website: notes.clientWebsite,
-        activity: notes.clientActivity,
-        city: notes.clientCity,
-        contacts: notes.client?.contacts || [],
-      } : undefined),
-    } as unknown as Project;
-
-    return mapped;
+    return mapSupabaseProjectRow(proj);
   }
 
 
@@ -1045,9 +1069,9 @@ class SupabaseDataStore {
       if (file) {
         // 1. Физическое удаление
         try {
-          if (file.isSeafile) {
+          if (file.isSeafile && file.storagePath) {
             await apiDelete(`/api/seafile/file?path=${encodeURIComponent(file.storagePath)}`);
-          } else if (!fileId.startsWith('old_contract_') && this.fileApiUrl) {
+          } else if (!fileId.startsWith('old_contract_') && this.fileApiUrl && file.storagePath) {
             // Удаляем со старого локального NAS (легаси поддержка)
             await fetch(`${this.fileApiUrl}/files/${file.storagePath}`, {
               method: 'DELETE'

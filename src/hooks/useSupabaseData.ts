@@ -3,11 +3,18 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabaseDataStore, Employee, Project, Company } from '@/lib/supabaseDataStore';
+import {
+  supabaseDataStore,
+  type Company,
+  type Employee,
+  type EmployeeCreateInput,
+  type Project,
+} from '@/lib/supabaseDataStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
 import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
 import { findCompanyByAnyValue } from '@/types/companies';
+import { getProjectNotes } from '@/lib/projectNotes';
 
 // Хук для сотрудников
 export function useEmployees() {
@@ -34,7 +41,7 @@ export function useEmployees() {
     loadEmployees();
   }, [loadEmployees]);
 
-  const createEmployee = useCallback(async (employee: Omit<Employee, 'id' | 'created_at' | 'updated_at'>) => {
+  const createEmployee = useCallback(async (employee: EmployeeCreateInput) => {
     try {
       const newEmployee = await supabaseDataStore.createEmployee(employee);
       setEmployees(prev => [...prev, newEmployee]);
@@ -83,18 +90,7 @@ export function useEmployees() {
 }
 
 function getProjectTeamMembers(project: any): any[] {
-  if (Array.isArray(project?.team)) return project.team;
-  const raw = project?.notes;
-  if (raw && typeof raw === 'object' && Array.isArray(raw.team)) return raw.team;
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed?.team) ? parsed.team : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
+  return getProjectNotes(project).team || [];
 }
 
 function normalizeIdentity(value: any): string {

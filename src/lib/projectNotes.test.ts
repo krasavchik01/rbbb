@@ -6,6 +6,7 @@ import {
   parseProjectNotes,
   serializeProjectNotes,
 } from './projectNotes';
+import { mapSupabaseProjectRow } from './supabaseDataStore';
 
 describe('projectNotes', () => {
   it('parses string, object and empty notes', () => {
@@ -54,5 +55,24 @@ describe('projectNotes', () => {
     });
 
     expect(notes.team?.[0].userId).toBe('right');
+  });
+
+  it('maps invalid DB notes without inventing a team and exposes the parse error', () => {
+    const mapped = mapSupabaseProjectRow({
+      id: 'p1',
+      name: 'DB name',
+      notes: '{broken',
+      status: 'active',
+      start_date: '2026-01-01',
+      deadline: '2026-12-31',
+      partner_id: null,
+      manager_id: null,
+      kpi_percentage: 0,
+      created_at: null,
+      updated_at: null,
+    });
+
+    expect(mapped.team).toEqual([]);
+    expect(mapped.notesParseError).toBeTruthy();
   });
 });

@@ -29,7 +29,8 @@ import {
   Search,
   Plus
 } from "lucide-react";
-import { useProjects } from "@/hooks/useDataStore";
+import { useEmployees, useProjects } from "@/hooks/useSupabaseData";
+import { useTasks } from "@/hooks/useTasks";
 import { ProjectVitals } from "@/components/projects/ProjectVitals";
 import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheets";
 import { useToast } from "@/hooks/use-toast";
@@ -38,7 +39,6 @@ import { useProjectDataSync } from "@/hooks/useProjectDataSync";
 import { ProjectV3 } from "@/types/project-v3";
 import { TEAM_ROLE_SLOTS } from "@/types/roles";
 
-import { useEmployees } from "@/hooks/useSupabaseData";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -88,7 +88,8 @@ export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects, tasks: allTasks } = useProjects();
+  const { projects } = useProjects();
+  const { tasks: allTasks } = useTasks();
   const { employees } = useEmployees();
   const { toast } = useToast();
   const { user } = useAuth();

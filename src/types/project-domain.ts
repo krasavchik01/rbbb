@@ -52,6 +52,13 @@ export interface CanonicalProjectFinances extends UnknownRecord {
   profitMargin?: number;
 }
 
+export interface CanonicalProjectFile extends UnknownRecord {
+  id?: string;
+  isSeafile?: boolean;
+  storagePath?: string;
+  category?: string;
+}
+
 export interface CanonicalProjectNotes extends UnknownRecord {
   name?: string;
   status?: string;
@@ -61,7 +68,7 @@ export interface CanonicalProjectNotes extends UnknownRecord {
   finances?: CanonicalProjectFinances;
   contract?: UnknownRecord;
   client?: UnknownRecord;
-  files?: unknown[];
+  files?: CanonicalProjectFile[];
   tasks?: unknown[];
 }
 

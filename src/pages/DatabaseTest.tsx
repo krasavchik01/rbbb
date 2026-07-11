@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { useEmployees, useProjects } from '@/hooks/useDataStore';
+import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,10 @@ export default function DatabaseTest() {
       await createEmployee({
         name: newEmpName,
         email: newEmpEmail,
-        role: 'assistant_1',
+        role: 'assistant',
+        level: '1',
+        password: null,
+        whatsapp: null,
         department: 'Тестовый',
       });
       setSuccess('Сотрудник успешно создан!');
