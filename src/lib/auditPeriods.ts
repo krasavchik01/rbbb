@@ -14,8 +14,8 @@ export interface AuditPeriod {
   deadline?: string;
   taskIds?: string[];
   documentIds?: string[];
-  team?: any[];
-  teamSource?: 'period' | 'project' | 'empty';
+  team?: CanonicalTeamMember[];
+  teamSource?: 'period' | 'empty';
   amountWithoutVAT?: number;
   sourceProjectId?: string;
   createdBy: string;
@@ -60,22 +60,12 @@ export interface AuditProjectGroup {
 }
 
 function parseNotes(project: any): any {
-  const notes = project?.notes;
-  if (!notes) return {};
-  if (typeof notes === 'object') return notes;
-  if (typeof notes !== 'string') return {};
-
-  try {
-    const parsed = JSON.parse(notes);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+  return getProjectNotes(project);
 }
 
 export function getAuditPeriods(project: any): AuditPeriod[] {
   const notes = parseNotes(project);
-  const raw = project?.auditPeriods || notes?.auditPeriods || [];
+  const raw = notes?.auditPeriods || [];
   return Array.isArray(raw) ? raw.filter((period) => period?.id && period?.name) : [];
 }
 
@@ -126,15 +116,15 @@ export function buildAuditPeriod(input: AuditPeriodInput): AuditPeriod {
   };
 }
 
-function getProjectTeam(project: any): any[] {
+function getProjectTeam(project: any): CanonicalTeamMember[] {
   const notes = parseNotes(project);
-  const team = project?.team || notes?.team || [];
+  const team = notes?.team || [];
   return Array.isArray(team) ? team : [];
 }
 
 export function getProjectPartnerIdFromNotes(project: any): string | null {
-  const partner = getProjectTeam(project).find((member: any) => member?.role === 'partner');
-  return partner?.userId || partner?.id || null;
+  const partner = getProjectTeam(project).find((member) => member.role === 'partner');
+  return partner?.userId || null;
 }
 
 export function getEffectivePartnerId(project: any, auditPeriodId?: string | null): string | null {
@@ -189,10 +179,10 @@ function getProjectStatus(project: any): AuditPeriodStatus {
 }
 
 function getProjectPartner(project: any): { id?: string; name?: string } {
-  const partner = getProjectTeam(project).find((member: any) => member?.role === 'partner');
+  const partner = getProjectTeam(project).find((member) => member.role === 'partner');
   return {
-    id: partner?.userId || partner?.id,
-    name: partner?.userName || partner?.name || partner?.employee?.name,
+    id: partner?.userId,
+    name: partner?.userName,
   };
 }
 
@@ -272,8 +262,8 @@ export function projectToAuditPeriod(project: any, index = 0): AuditPeriod {
     deadline: getProjectDeadline(project),
     taskIds: [],
     documentIds: [],
-    team: getProjectTeam(project),
-    teamSource: 'project',
+    team: [],
+    teamSource: 'empty',
     sourceProjectId,
     createdBy: project?.createdBy || project?.notes?.createdBy || 'system',
     createdAt: project?.created_at || now,
@@ -332,3 +322,5 @@ export function groupProjectsByAuditRoot(projects: any[]): AuditProjectGroup[] {
 
   return Array.from(map.values());
 }
+import { getProjectNotes } from '@/lib/projectNotes';
+import type { CanonicalTeamMember } from '@/types/project-domain';

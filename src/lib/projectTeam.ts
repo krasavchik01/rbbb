@@ -13,34 +13,18 @@
 
 import { PROJECT_ROLES, normalizeUserRole } from '@/types/roles';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
+import { getProjectNotes } from '@/lib/projectNotes';
+import type { CanonicalTeamMember } from '@/types/project-domain';
 export { getEffectivePartnerId } from '@/lib/auditPeriods';
 
-export interface TeamMember {
-  userId: string;
-  userName: string;
-  role: string;
-  bonusPercent: number;
-  assignedAt: string;
-  assignedBy: string;
-}
+export type TeamMember = CanonicalTeamMember;
 
 /**
  * Извлекает team[] из проекта (с фронтового вида или из raw notes).
  */
 export function getProjectTeam(project: any): TeamMember[] {
-  if (!project) return [];
-  if (Array.isArray(project.team)) return project.team;
-  const raw = project.notes;
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed?.team) ? parsed.team : [];
-    } catch {
-      return [];
-    }
-  }
-  if (raw && Array.isArray(raw.team)) return raw.team;
-  return [];
+  const team = getProjectNotes(project).team;
+  return Array.isArray(team) ? team : [];
 }
 
 /**

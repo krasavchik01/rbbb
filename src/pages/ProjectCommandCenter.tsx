@@ -737,12 +737,11 @@ function mergePeriods(rows: any[]): AuditPeriod[] {
       seen.add(key);
       const existingTeamSource = (period as any).teamSource as string | undefined;
       const hasOwnTeam = existingTeamSource === 'period' || (!existingTeamSource && Array.isArray(period.team) && period.team.length > 0);
-      const inheritedTeam = !hasOwnTeam && Array.isArray(row.team) && row.team.length > 0;
       periods.push({
         ...period,
         sourceProjectId: period.sourceProjectId || row.id,
-        team: hasOwnTeam ? period.team : inheritedTeam ? row.team : [],
-        teamSource: hasOwnTeam ? 'period' : inheritedTeam ? 'project' : 'empty',
+        team: hasOwnTeam ? period.team : [],
+        teamSource: hasOwnTeam ? 'period' : 'empty',
       } as AuditPeriod);
     }
   }
@@ -750,16 +749,15 @@ function mergePeriods(rows: any[]): AuditPeriod[] {
   return periods;
 }
 
-function attachProjectTeamToPeriods(periods: AuditPeriod[], team: any[], sourceProjectId?: string): AuditPeriod[] {
+function keepExplicitPeriodTeams(periods: AuditPeriod[], sourceProjectId?: string): AuditPeriod[] {
   return (periods || []).map((period) => {
     const existingTeamSource = (period as any).teamSource as string | undefined;
     const hasOwnTeam = existingTeamSource === 'period' || (!existingTeamSource && Array.isArray(period.team) && period.team.length > 0);
-    const inheritedTeam = !hasOwnTeam && Array.isArray(team) && team.length > 0;
     return {
       ...period,
       sourceProjectId: period.sourceProjectId || sourceProjectId,
-      team: hasOwnTeam ? period.team : inheritedTeam ? team : [],
-      teamSource: hasOwnTeam ? 'period' : inheritedTeam ? 'project' : 'empty',
+      team: hasOwnTeam ? period.team : [],
+      teamSource: hasOwnTeam ? 'period' : 'empty',
     } as AuditPeriod;
   });
 }
@@ -1005,7 +1003,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const hasContract = rowHasContractEvidence({ project, contract, contractFiles });
       const startDate = rawProjectStartDate(project);
       const deadline = rawProjectDeadline(project);
-      const periods = attachProjectTeamToPeriods(projectPeriods(project), team, project.id);
+      const periods = keepExplicitPeriodTeams(projectPeriods(project), project.id);
       const realTeam = coverageTeam(team, periods);
       const readiness = projectReadiness({
         status,
@@ -2267,9 +2265,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                     )}
                                     {row.periods.map((period) => {
                                       const team = periodTeam(period);
-                                      const teamSource = (period as any).teamSource as 'period' | 'project' | 'empty' | undefined;
+                                      const teamSource = period.teamSource;
                                       const periodHasOwnTeam = teamSource === 'period';
-                                      const periodUsesProjectTeam = teamSource === 'project';
                                       return (
                                         <div key={period.id} className="rounded-md border bg-muted/10 px-3 py-3 text-sm">
                                           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2334,7 +2331,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                 {periodStatusLabel(period.status)}
                                               </Badge>
                                               <Badge variant={periodHasOwnTeam ? 'default' : 'outline'} className="text-[11px]">
-                                                {periodHasOwnTeam ? 'своя команда периода' : periodUsesProjectTeam ? 'команда проекта' : 'не распределено'}
+                                                {periodHasOwnTeam ? 'своя команда периода' : 'не распределено'}
                                               </Badge>
                                             </div>
                                             <div className="flex flex-wrap items-center justify-end gap-2">
