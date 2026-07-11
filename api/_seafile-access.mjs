@@ -265,18 +265,6 @@ async function userCanAccessProject(supabase, user, projectId) {
     return true;
   }
 
-  if (user.idKey) {
-    const { data: teamRows, error: teamError } = await supabase
-      .from('project_team')
-      .select('id')
-      .eq('project_id', projectId)
-      .eq('employee_id', user.id)
-      .limit(1);
-
-    if (teamError) throw teamError;
-    if (Array.isArray(teamRows) && teamRows.length > 0) return true;
-  }
-
   return notesContainUser(parseNotes(project.notes), user);
 }
 

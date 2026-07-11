@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -78,6 +79,12 @@ function reqFor(user) {
 
 test.afterEach(() => {
   __setSeafileAccessSupabaseFactoryForTests(null);
+});
+
+test('Seafile project access does not consult legacy team tables', () => {
+  const source = fs.readFileSync(new URL('../api/_seafile-access.mjs', import.meta.url), 'utf8');
+  assert.equal(source.includes(".from('project_team')"), false);
+  assert.equal(source.includes(".from('project_participants')"), false);
 });
 
 test('project team member can read Seafile project files from notes.team', async () => {
