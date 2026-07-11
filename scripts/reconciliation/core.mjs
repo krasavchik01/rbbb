@@ -62,6 +62,14 @@ function tokens(value) {
   return normalizeText(value).split(' ').filter((token) => token.length >= 2);
 }
 
+const CLIENT_STOPWORDS = new Set([
+  'тоо', 'ао', 'чк', 'ооо', 'ип', 'llp', 'ltd', 'limited', 'company', 'компания',
+]);
+
+function clientTokens(value) {
+  return tokens(value).filter((token) => !CLIENT_STOPWORDS.has(token));
+}
+
 function projectDisplayName(project) {
   const notes = project?.notes && typeof project.notes === 'object' ? project.notes : {};
   return notes.name || notes.clientName || project?.name || '';
@@ -73,25 +81,27 @@ function extractYears(values) {
 
 export function scoreProject(entry, project) {
   const clientNorm = normalizeText(entry?.clientName);
-  const clientTokens = tokens(entry?.clientName);
+  const sourceClientTokens = clientTokens(entry?.clientName);
   const displayName = projectDisplayName(project);
   const projectNorm = normalizeText(displayName);
   const projectTokens = tokens(displayName);
   const auditNorm = normalizeText(entry?.auditType);
 
   let score = 0;
-  if (clientTokens.length > 0) {
+  if (sourceClientTokens.length > 0) {
     const projectTokenSet = new Set(projectTokens);
-    const directHits = clientTokens.filter((token) => projectTokenSet.has(token) || projectNorm.includes(token));
+    const directHits = sourceClientTokens.filter((token) => projectTokenSet.has(token) || projectNorm.includes(token));
     if (directHits.length === 0) return 0;
-    if (clientTokens.length >= 3 && directHits.length === 1) score -= 45;
+    if (sourceClientTokens.length >= 3 && directHits.length === 1) score -= 45;
+  } else {
+    return 0;
   }
 
   if (clientNorm && projectNorm === clientNorm) score += 120;
   if (clientNorm && (projectNorm.includes(clientNorm) || clientNorm.includes(projectNorm))) score += 85;
 
-  const tokenHits = clientTokens.filter((token) => projectTokens.includes(token) || projectNorm.includes(token)).length;
-  if (clientTokens.length > 0) score += Math.round((tokenHits / clientTokens.length) * 50);
+  const tokenHits = sourceClientTokens.filter((token) => projectTokens.includes(token) || projectNorm.includes(token)).length;
+  score += Math.round((tokenHits / sourceClientTokens.length) * 50);
 
   const entryYears = extractYears([
     entry?.auditType,

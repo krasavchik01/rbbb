@@ -8,6 +8,7 @@ import {
   parseExcelDate,
   parseHours,
   rowFingerprint,
+  scoreProject,
   sourceKey,
   summarizeRbiReview,
 } from '../scripts/reconciliation/core.mjs';
@@ -63,6 +64,16 @@ test('uses the historical RBI score bands', () => {
   assert.equal(classifyProjectCandidates([{ score: 82 }, { score: 71 }]), 'probable');
   assert.equal(classifyProjectCandidates([{ score: 105 }, { score: 92 }]), 'exact');
   assert.equal(classifyProjectCandidates([{ score: 104 }, { score: 96 }]), 'conflict');
+});
+
+test('does not match projects only by a legal entity token', () => {
+  assert.equal(
+    scoreProject(
+      { clientName: 'ТОО ТИМ', auditType: '', auditPeriod: '', starts: [], ends: [] },
+      { name: 'ТОО Aidarly Mining', notes: {} },
+    ),
+    0,
+  );
 });
 
 test('parses Excel serial dates and valid hours', () => {
