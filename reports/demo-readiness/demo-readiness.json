@@ -1,8 +1,18 @@
 {
-  "generatedAt": "2026-07-12T07:14:29.774Z",
-  "testedProductCommit": "6e5d26f",
+  "generatedAt": "2026-07-12T07:17:09.757Z",
+  "testedProductCommit": "4a4eadf",
   "status": "local_demo_ready",
-  "productionStatus": "not_deployed_or_smoke_verified_in_this_pass",
+  "productionStatus": "reachable_but_current_branch_not_deployed",
+  "productionInspection": {
+    "inspectedAt": "2026-07-12T07:17:00.000Z",
+    "url": "https://rbbb.vercel.app/",
+    "httpStatus": 200,
+    "deploymentCreatedAt": "2026-07-01T17:12:47+05:00",
+    "deploymentStatus": "Ready",
+    "deployedAsset": "index-DcVRf7fc.js",
+    "localAsset": "index-D3xf-t9p.js",
+    "currentBranchDeployed": false
+  },
   "evidence": {
     "roles": 23,
     "rolePageSurfaces": 147,

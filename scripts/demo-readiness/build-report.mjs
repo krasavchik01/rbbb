@@ -24,7 +24,17 @@ const report = {
   generatedAt,
   testedProductCommit: commit,
   status: 'local_demo_ready',
-  productionStatus: 'not_deployed_or_smoke_verified_in_this_pass',
+  productionStatus: 'reachable_but_current_branch_not_deployed',
+  productionInspection: {
+    inspectedAt: '2026-07-12T07:17:00.000Z',
+    url: 'https://rbbb.vercel.app/',
+    httpStatus: 200,
+    deploymentCreatedAt: '2026-07-01T17:12:47+05:00',
+    deploymentStatus: 'Ready',
+    deployedAsset: 'index-DcVRf7fc.js',
+    localAsset: 'index-D3xf-t9p.js',
+    currentBranchDeployed: false,
+  },
   evidence: {
     roles: roles.length,
     rolePageSurfaces: 147,
@@ -104,6 +114,8 @@ const md = `# RBBB — готовность к демонстрации гене
 Локальный демонстрационный контур готов: интерфейс проверен по всем ${roles.length} ролям, карточка проекта проверена отдельно для каждой роли, а цепочка «проект → цена → команда → файлы → часы → бонусы» подтверждена реалистичным сценарием без записи в production.
 
 Это не означает, что текущая ветка уже опубликована в production. Перед показом на боевом адресе нужны деплой и короткий smoke-test реальных учётных записей и Seafile.
+
+Read-only проверка production: \`https://rbbb.vercel.app/\` отвечает HTTP 200, но активный deployment создан 01.07.2026 и содержит другой bundle (\`index-DcVRf7fc.js\` против локального \`index-D3xf-t9p.js\`). Текущая ветка там ещё не опубликована.
 
 ## Что доказано автоматикой
 
