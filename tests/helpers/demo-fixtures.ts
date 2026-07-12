@@ -309,3 +309,12 @@ export async function loginAsDemoRole(page: Page, role: UserRole) {
   }, role);
   return journal;
 }
+
+export async function waitForDemoApp(page: Page) {
+  await page.waitForFunction(
+    () => document.body.innerText.trim() !== 'Загрузка...',
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.waitForTimeout(100);
+}
