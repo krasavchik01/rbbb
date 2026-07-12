@@ -22,6 +22,7 @@
     "audit:live": "node scripts/audit-rbbb-live-state.mjs",
     "audit:reconciliation": "node scripts/reconciliation/collect-rbbb-reconciliation.mjs",
     "audit:auth-readiness": "node scripts/audit-supabase-auth-readiness.mjs",
+    "report:demo-readiness": "node scripts/demo-readiness/build-report.mjs",
     "test:access": "playwright test tests/access/role-page-access.spec.ts --project=chromium --reporter=line",
     "test:routes": "node --test tests/navigation-routes.test.mjs"
   },

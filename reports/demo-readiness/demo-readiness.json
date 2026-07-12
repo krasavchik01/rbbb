@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-07-12T07:14:29.774Z",
+  "testedProductCommit": "6e5d26f",
+  "status": "local_demo_ready",
+  "productionStatus": "not_deployed_or_smoke_verified_in_this_pass",
+  "evidence": {
+    "roles": 23,
+    "rolePageSurfaces": 147,
+    "roleCorrectSidebars": 23,
+    "staticRolePageChecks": 170,
+    "dynamicProjectRoleChecks": 23,
+    "executiveWorkflowChecks": 7,
+    "fixtureSafetyChecks": 1,
+    "routePermissionChecks": 568
+  },
+  "qualityGates": {
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "lintErrors": 0,
+    "lintWarnings": 875,
+    "unitTests": {
+      "passed": 83,
+      "failed": 0
+    },
+    "nodeTests": {
+      "passed": 41,
+      "failed": 0
+    }
+  },
+  "demoProject": {
+    "name": "АО Демонстрационный клиент — аудит 2026",
+    "contractWithoutVatKzt": 48000000,
+    "contractWithVatKzt": 53760000,
+    "teamMembers": 3,
+    "approvedHours": 14,
+    "submittedHours": 4,
+    "seafileDocuments": 1,
+    "bonusMode": "preliminary_locked"
+  },
+  "sourcesOfTruth": {
+    "project": "projects + projects.notes",
+    "projectTeam": "projects.notes.team",
+    "periodTeam": "projects.notes.auditPeriods[].team",
+    "timesheets": "timesheet_entries; only approved rows enter final calculations",
+    "bonusDraft": "projects.notes.finances.teamBonuses",
+    "paymentRegistry": "bonuses",
+    "files": "Seafile + project metadata",
+    "interface": "/projects with role-based permissions"
+  },
+  "liveReadOnlyBaseline": {
+    "observedAt": "2026-07-12T07:13:53.231Z",
+    "source": "rbbb-live-audit-2026-07-12T07-13-53-231Z.json",
+    "projects": 1043,
+    "employees": 140,
+    "approvedTimesheetRows": 14629,
+    "approvedHours": 110364.4,
+    "rbiProjects": 144,
+    "rbiParticipants": 152,
+    "bonusesRows": 0,
+    "projectTeamRows": 0,
+    "projectParticipantRows": 0
+  },
+  "importExceptions": {
+    "rbiConflicts": 66,
+    "rbiNotFoundRows": 123,
+    "kenzhekulovProjectsNotFound": 5,
+    "unknownWorkbookStatus": [
+      "Аманов Онгар.xlsx",
+      "Бадамбаева Сауле(1).xlsx",
+      "Сартаева Гаухар(1).xlsx"
+    ]
+  },
+  "safety": [
+    "All demo browser traffic is intercepted and journaled.",
+    "No production mutations are allowed by the demo harness.",
+    "Bonus payment registration is intentionally unavailable while percentages and registry are unconfirmed.",
+    "Imports are not rerun automatically."
+  ]
+}
