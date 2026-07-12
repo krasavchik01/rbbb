@@ -36,14 +36,15 @@ export function ProjectFileManager({
   initialFiles = []
 }: ProjectFileManagerProps) {
   const { toast } = useToast();
-  const [files, setFiles] = useState<ProjectFile[]>(initialFiles as ProjectFile[]);
+  const [files, setFiles] = useState<ProjectFile[]>(() => dedupeProjectFiles(initialFiles) as ProjectFile[]);
   const [isUploading, setIsUploading] = useState(false);
 
   // Обновляем файлы когда приходят initialFiles
   useEffect(() => {
     if (!Array.isArray(initialFiles)) return;
-    setFiles(initialFiles as ProjectFile[]);
-    onFilesChange?.(initialFiles as ProjectFile[]);
+    const normalizedFiles = dedupeProjectFiles(initialFiles) as ProjectFile[];
+    setFiles(normalizedFiles);
+    onFilesChange?.(normalizedFiles);
   }, [initialFiles]);
 
   // Загрузка списка файлов
@@ -51,20 +52,23 @@ export function ProjectFileManager({
     try {
       // Сначала пробуем API
       const projectFiles = await supabaseDataStore.getProjectFiles(projectId);
+      const normalizedProjectFiles = dedupeProjectFiles(projectFiles) as ProjectFile[];
       // Если API вернул пустой массив, используем initialFiles
-      if (projectFiles.length === 0 && initialFiles.length > 0) {
-        setFiles(initialFiles as ProjectFile[]);
-        onFilesChange?.(initialFiles as ProjectFile[]);
+      if (normalizedProjectFiles.length === 0 && initialFiles.length > 0) {
+        const normalizedInitialFiles = dedupeProjectFiles(initialFiles) as ProjectFile[];
+        setFiles(normalizedInitialFiles);
+        onFilesChange?.(normalizedInitialFiles);
         return;
       }
-      setFiles(projectFiles);
-      onFilesChange?.(projectFiles);
+      setFiles(normalizedProjectFiles);
+      onFilesChange?.(normalizedProjectFiles);
     } catch (error: any) {
       console.error('Error loading files:', error);
       // При ошибке используем initialFiles
       if (initialFiles.length > 0) {
-        setFiles(initialFiles as ProjectFile[]);
-        onFilesChange?.(initialFiles as ProjectFile[]);
+        const normalizedInitialFiles = dedupeProjectFiles(initialFiles) as ProjectFile[];
+        setFiles(normalizedInitialFiles);
+        onFilesChange?.(normalizedInitialFiles);
         return;
       }
       toast({
@@ -179,17 +183,25 @@ export function ProjectFileManager({
     loadFiles();
   }, [loadFiles]);
 
-  const getFileIcon = (fileType: string) => {
-    if (fileType.includes('pdf')) return '📄';
-    if (fileType.includes('word') || fileType.includes('document')) return '📝';
-    if (fileType.includes('image')) return '🖼️';
+  const getFileIcon = (fileType?: string) => {
+    const normalizedType = String(fileType || '').toLowerCase();
+    if (normalizedType.includes('pdf')) return '📄';
+    if (normalizedType.includes('word') || normalizedType.includes('document')) return '📝';
+    if (normalizedType.includes('image')) return '🖼️';
     return '📎';
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const formatFileSize = (bytes?: number) => {
+    const safeBytes = Number(bytes) || 0;
+    if (safeBytes < 1024) return `${safeBytes} B`;
+    if (safeBytes < 1024 * 1024) return `${(safeBytes / 1024).toFixed(1)} KB`;
+    return `${(safeBytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatUploadDate = (value?: string) => {
+    if (!value) return 'дата не указана';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'дата не указана' : date.toLocaleDateString('ru-RU');
   };
 
   const categoryForFile = (file: globalThis.File): ProjectFile['category'] => {
@@ -311,7 +323,7 @@ export function ProjectFileManager({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{file.fileName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.fileSize)} • {file.category || 'other'} • {new Date(file.uploadedAt).toLocaleDateString('ru-RU')}
+                      {formatFileSize(file.fileSize)} • {file.category || 'other'} • {formatUploadDate(file.uploadedAt)}
                     </p>
                   </div>
                 </div>
@@ -320,6 +332,8 @@ export function ProjectFileManager({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDownloadFile(file)}
+                    aria-label={`Скачать файл: ${file.fileName}`}
+                    title="Скачать файл"
                   >
                     <Download className="w-4 h-4" />
                   </Button>
@@ -329,6 +343,8 @@ export function ProjectFileManager({
                       size="sm"
                       onClick={() => handleDeleteFile(file)}
                       className="text-destructive hover:text-destructive"
+                      aria-label={`Удалить файл: ${file.fileName}`}
+                      title="Удалить файл"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>

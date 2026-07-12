@@ -126,6 +126,9 @@ export default function Bonuses() {
   const canApproveBonusPayout = isCeoOrAdmin;
   const canEditBonuses = isCeoOrAdmin;
   const personalView = !isCeoOrAdmin;
+  // До утверждения реестра и бизнес-процентов технический расчёт нельзя
+  // превращать в финальное закрытие проекта или платёжную запись.
+  const finalRegistryApprovalEnabled = false;
 
   const approveProjectBonuses = async (
     project: any,
@@ -504,9 +507,11 @@ export default function Bonuses() {
   // Используется только если canApproveBonusPayout (CEO/admin).
   const ceoTableActions: CEOSummaryActions | undefined = canApproveBonusPayout
     ? {
-        approveAndClose: async (project, settings) => {
-          await approveProjectBonuses(project, settings);
-        },
+        ...(finalRegistryApprovalEnabled ? {
+          approveAndClose: async (project, settings) => {
+            await approveProjectBonuses(project, settings);
+          },
+        } : {}),
         addTeamRole: async (projectId, employeeId, role) => {
           await addProjectTeamRole(projectId, employeeId, role);
         },
@@ -593,6 +598,15 @@ export default function Bonuses() {
           </div>
         </div>
       </Card>
+
+      {canEditBonuses && !finalRegistryApprovalEnabled && (
+        <Card className="p-4 border border-amber-300 bg-amber-50/70">
+          <p className="font-semibold text-sm text-amber-900">Регистрация выплат временно заблокирована</p>
+          <p className="mt-1 text-sm text-amber-800">
+            Суммы ниже — предварительный расчёт. Кнопка финального утверждения появится только после сверки реестра и подтверждения процентов.
+          </p>
+        </Card>
+      )}
 
       {/* Статистика */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

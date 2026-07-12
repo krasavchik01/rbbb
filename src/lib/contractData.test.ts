@@ -68,6 +68,30 @@ describe('contractData', () => {
     expect(projectContractFiles(project).map((file) => file.fileName)).toContain('Скан договора');
   });
 
+  it('normalizes Seafile metadata for the project file UI', () => {
+    const [file] = projectFiles({
+      notes: {
+        files: [{
+          id: 'seafile-1',
+          name: 'Договор.pdf',
+          type: 'application/pdf',
+          size: 248_320,
+          path: '/project/Договор.pdf',
+          source: 'seafile',
+          uploadedAt: '2026-01-15T08:30:00.000Z',
+        }],
+      },
+    });
+
+    expect(file).toMatchObject({
+      fileName: 'Договор.pdf',
+      fileType: 'application/pdf',
+      fileSize: 248_320,
+      storagePath: '/project/Договор.pdf',
+      isSeafile: true,
+    });
+  });
+
   it('reads project dates from all supported legacy fields', () => {
     expect(projectStartDate({ notes: { startDate: '2025-01-01' } })).toBe('2025-01-01');
     expect(projectDeadline({ notes: { serviceTerm: '2025-12-31' } })).toBe('2025-12-31');

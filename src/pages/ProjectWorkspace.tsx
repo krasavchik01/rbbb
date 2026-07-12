@@ -351,6 +351,8 @@ export default function ProjectWorkspace() {
             variant="ghost"
             size="icon"
             className="flex-shrink-0"
+            aria-label="Вернуться к списку проектов"
+            title="Вернуться к списку проектов"
             onClick={() => {
               // Возвращаемся в SPA-историю, чтобы сохранить фильтры/сортировку
               // /projects в URL. Если истории нет (прямой переход по ссылке) —
@@ -738,6 +740,7 @@ export default function ProjectWorkspace() {
             companyId={project?.companyId || project?.notes?.companyId || ''}
             companyName={project?.companyName || project?.notes?.companyName || ''}
             projectFiles={normalizedFiles}
+            canEdit={isProcurementOrAdmin}
             onContractUpdate={async (updatedContract, uploadedFiles = []) => {
               if (project) {
                 const contractUpdate = buildContractUpdate(project, updatedContract, uploadedFiles);
@@ -860,7 +863,6 @@ export default function ProjectWorkspace() {
                 }) : current);
               }
             }}
-            canEdit={isProcurementOrAdmin}
           />
         </TabsContent>
       </Tabs>
