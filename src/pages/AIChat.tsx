@@ -319,7 +319,7 @@ export default function AIChat() {
                 className="resize-none min-h-[40px] max-h-[120px]"
                 disabled={busy}
               />
-              <Button size="default" onClick={() => send()} disabled={busy || !input.trim()} className="h-10">
+              <Button size="default" onClick={() => send()} disabled={busy || !input.trim()} className="h-10" aria-label="Отправить сообщение" title="Отправить">
                 <Send className="w-4 h-4" />
               </Button>
             </div>

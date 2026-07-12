@@ -2091,6 +2091,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 className="h-7 w-7"
                                 disabled={savingProjectId === row.id}
                                 onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)}
+                                aria-label={`Уменьшить процент бонуса для ${row.name}`}
+                                title="Уменьшить бонус на 1%"
                               >
                                 <Minus className="h-3.5 w-3.5" />
                               </Button>
@@ -2104,6 +2106,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 className="h-7 w-7"
                                 disabled={savingProjectId === row.id}
                                 onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)}
+                                aria-label={`Увеличить процент бонуса для ${row.name}`}
+                                title="Увеличить бонус на 1%"
                               >
                                 <Plus className="h-3.5 w-3.5" />
                               </Button>

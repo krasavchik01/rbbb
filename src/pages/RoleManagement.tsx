@@ -163,6 +163,8 @@ export default function RoleManagement() {
                                 setSelectedRole(role.id);
                                 handleEditRole();
                               }}
+                              aria-label={`Редактировать роль: ${role.name}`}
+                              title="Редактировать роль"
                             >
                               <Edit className="w-3 h-3" />
                             </Button>

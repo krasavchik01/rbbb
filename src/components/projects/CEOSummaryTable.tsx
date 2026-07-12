@@ -1040,7 +1040,15 @@ function PercentStepper({
   const set = (next: number) => onChange(clamp(next));
   return (
     <div className="inline-grid grid-cols-[28px_64px_28px] items-center rounded-md border border-border bg-background overflow-hidden">
-      <Button type="button" variant="ghost" size="icon" className="h-8 w-7 rounded-none" onClick={() => set(value - 1)}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-7 rounded-none"
+        onClick={() => set(value - 1)}
+        aria-label={`Уменьшить значение: ${value}%`}
+        title="Уменьшить на 1%"
+      >
         <Minus className="w-3.5 h-3.5" />
       </Button>
       <div className="relative border-x border-border">
@@ -1054,7 +1062,15 @@ function PercentStepper({
         />
         <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
       </div>
-      <Button type="button" variant="ghost" size="icon" className="h-8 w-7 rounded-none" onClick={() => set(value + 1)}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-7 rounded-none"
+        onClick={() => set(value + 1)}
+        aria-label={`Увеличить значение: ${value}%`}
+        title="Увеличить на 1%"
+      >
         <Plus className="w-3.5 h-3.5" />
       </Button>
     </div>

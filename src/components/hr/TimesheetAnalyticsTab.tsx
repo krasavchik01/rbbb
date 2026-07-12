@@ -464,13 +464,13 @@ export default function TimesheetAnalyticsTab() {
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
+              <Button size="sm" variant="outline" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Предыдущий месяц" title="Предыдущий месяц">
                 <ChevronLeft className="w-4 h-4" />
               </Button>
               <div className="font-semibold text-lg min-w-[160px] text-center capitalize">
                 {month.label}
               </div>
-              <Button size="sm" variant="outline" onClick={() => setMonth((m) => shiftMonth(m, 1))}>
+              <Button size="sm" variant="outline" onClick={() => setMonth((m) => shiftMonth(m, 1))} aria-label="Следующий месяц" title="Следующий месяц">
                 <ChevronRight className="w-4 h-4" />
               </Button>
               <Button

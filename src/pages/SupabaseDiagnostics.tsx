@@ -294,7 +294,13 @@ export default function SupabaseDiagnostics() {
     <div className="space-y-6 animate-fade-in p-4 md:p-0 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/settings')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/settings')}
+          aria-label="Вернуться к настройкам"
+          title="Вернуться к настройкам"
+        >
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">

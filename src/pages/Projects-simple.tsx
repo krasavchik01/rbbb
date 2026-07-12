@@ -1965,6 +1965,8 @@ export default function Projects() {
                   setIsDeleteDialogOpen(true);
                 }}
                 className="text-destructive hover:text-destructive"
+                aria-label={`Удалить проект ${project.name || project.clientName || ''}`}
+                title="Удалить проект"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

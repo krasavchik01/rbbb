@@ -440,7 +440,13 @@ export default function CreateProjectProcurement() {
     <div className="space-y-6 animate-fade-in p-4 md:p-0 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/projects')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/projects')}
+          aria-label="Вернуться к проектам"
+          title="Вернуться к проектам"
+        >
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">

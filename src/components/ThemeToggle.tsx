@@ -19,7 +19,13 @@ export function ThemeToggle() {
   };
 
   return (
-    <Button variant="ghost" size="sm" onClick={toggleTheme}>
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={toggleTheme}
+      aria-label={theme === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}
+      title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+    >
       {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
     </Button>
   );

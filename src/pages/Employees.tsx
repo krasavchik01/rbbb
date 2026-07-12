@@ -435,11 +435,23 @@ export default function Employees() {
               )}
               <td className="p-4">
                 <div className="flex gap-2 justify-center">
-                  <Button size="sm" variant="outline" onClick={() => setSelectedEmployee(emp)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedEmployee(emp)}
+                    aria-label={`Открыть карточку сотрудника: ${emp.name}`}
+                    title="Открыть карточку сотрудника"
+                  >
                     <Eye className="w-4 h-4" />
                   </Button>
                   {isManager && (
-                    <Button size="sm" variant="default" onClick={() => { setSelectedEmployee(emp); setIsAssignDialogOpen(true); }}>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => { setSelectedEmployee(emp); setIsAssignDialogOpen(true); }}
+                      aria-label={`Назначить проект сотруднику: ${emp.name}`}
+                      title="Назначить проект"
+                    >
                       <Plus className="w-4 h-4" />
                     </Button>
                   )}
