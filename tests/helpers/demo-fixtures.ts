@@ -296,17 +296,24 @@ export async function installDemoNetwork(page: Page): Promise<DemoNetworkJournal
 export async function loginAsDemoRole(page: Page, role: UserRole) {
   const journal = await installDemoNetwork(page);
   await page.goto('/');
-  await page.evaluate((currentRole) => {
+  const roleEmployeeIds: Partial<Record<UserRole, string>> = {
+    ceo: DEMO_EMPLOYEE_IDS.ceo,
+    partner: DEMO_EMPLOYEE_IDS.partner,
+    manager_1: DEMO_EMPLOYEE_IDS.manager,
+    assistant_1: DEMO_EMPLOYEE_IDS.assistant,
+    procurement: DEMO_EMPLOYEE_IDS.procurement,
+  };
+  await page.evaluate(({ currentRole, employeeId }) => {
     localStorage.clear();
     localStorage.setItem('user', JSON.stringify({
-      id: `demo-${currentRole}`,
+      id: employeeId,
       email: `${currentRole}@demo.invalid`,
       name: `Демо ${currentRole}`,
       role: currentRole,
       department: 'Демонстрация',
       position: currentRole,
     }));
-  }, role);
+  }, { currentRole: role, employeeId: roleEmployeeIds[role] || `demo-${role}` });
   return journal;
 }
 
