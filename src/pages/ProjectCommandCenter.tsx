@@ -946,6 +946,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkCompanyId, setBulkCompanyId] = useState('');
+  const [bulkCompanyAssignOpen, setBulkCompanyAssignOpen] = useState(false);
+  const [bulkAssigningCompany, setBulkAssigningCompany] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [periodNameDraft, setPeriodNameDraft] = useState('');
@@ -965,6 +968,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canManageTeam = user?.role === 'ceo' || user?.role === 'admin' || user?.role === 'deputy_director';
   const canCloseProjects = user?.role === 'ceo' || user?.role === 'admin';
   const canDeleteProjects = user?.role === 'admin' || user?.role === 'ceo';
+  const canBulkAssignCompany = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const canSelectProjects = canDeleteProjects || canBulkAssignCompany;
   const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = canManageTeam || user?.role === 'partner';
@@ -1423,6 +1428,54 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       });
     } finally {
       setBulkDeleting(false);
+    }
+  };
+
+  const assignCompanyToSelectedProjects = async () => {
+    if (!canBulkAssignCompany || !updateProject || bulkAssigningCompany || selectedProjectIds.size === 0) return;
+    const company = companyOptions.find((option) => option.key === bulkCompanyId)?.company;
+    if (!company) {
+      toast({
+        title: 'Выберите компанию',
+        description: 'Выберите компанию, которую нужно назначить отмеченным проектам.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setBulkAssigningCompany(true);
+    const ids = Array.from(selectedProjectIds);
+    const failedIds: string[] = [];
+    const patch = {
+      companyId: company.id,
+      companyName: company.name,
+      company: company.name,
+      ourCompany: company.name,
+    };
+
+    try {
+      for (let index = 0; index < ids.length; index += 20) {
+        const batch = ids.slice(index, index + 20);
+        const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, patch)));
+        results.forEach((result, resultIndex) => {
+          if (result.status === 'rejected' || !result.value) failedIds.push(batch[resultIndex]);
+        });
+      }
+      setSelectedProjectIds(new Set(failedIds));
+      setBulkCompanyAssignOpen(false);
+      toast({
+        title: failedIds.length > 0 ? 'Назначение завершено частично' : 'Компания назначена',
+        description: `Компания «${company.name}» назначена для ${ids.length - failedIds.length} проектов.${failedIds.length > 0 ? ` Не сохранено: ${failedIds.length}.` : ''}`,
+        variant: failedIds.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось назначить компанию',
+        description: error?.message || 'Попробуйте ещё раз.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkAssigningCompany(false);
     }
   };
 
@@ -2115,7 +2168,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           )}
         </Card>
 
-        {canDeleteProjects && (
+        {canSelectProjects && (
           <Card className="p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={toggleAllFilteredProjects} disabled={filteredProjectIds.length === 0}>
@@ -2127,13 +2180,39 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedProjectIds(new Set())}>
                     Снять весь выбор
                   </Button>
-                  <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Удалить выбранные
-                  </Button>
+                  {canBulkAssignCompany && (
+                    <>
+                      <Select value={bulkCompanyId} onValueChange={setBulkCompanyId} disabled={bulkAssigningCompany}>
+                        <SelectTrigger className="w-[250px]" aria-label="Выбрать компанию для выбранных проектов">
+                          <SelectValue placeholder="Назначить компанию" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {companyOptions.map((company) => (
+                            <SelectItem key={company.key} value={company.key}>{company.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setBulkCompanyAssignOpen(true)}
+                        disabled={!bulkCompanyId || bulkAssigningCompany}
+                      >
+                        Назначить компанию выбранным
+                      </Button>
+                    </>
+                  )}
+                  {canDeleteProjects && (
+                    <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Удалить выбранные
+                    </Button>
+                  )}
                 </>
               ) : (
-                <span className="text-sm text-muted-foreground">Отметьте проекты чекбоксами для массового удаления</span>
+                <span className="text-sm text-muted-foreground">
+                  Отметьте проекты чекбоксами для массового назначения компании{canDeleteProjects ? ' или удаления' : ''}.
+                </span>
               )}
             </div>
           </Card>
@@ -2144,7 +2223,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[76px]">
-                  {canDeleteProjects && (
+                  {canSelectProjects && (
                     <input
                       type="checkbox"
                       checked={allFilteredProjectsSelected}
@@ -2190,13 +2269,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                       <TableRow className="align-top hover:bg-muted/35">
                         <TableCell className="py-3">
                           <div className="flex items-center gap-1">
-                          {canDeleteProjects && (
+                          {canSelectProjects && (
                             <input
                               type="checkbox"
                               checked={projectIdsForRow(row).every((projectId) => selectedProjectIds.has(projectId))}
                               onChange={() => toggleProjectRowSelection(row)}
                               aria-label={`Выбрать проект ${row.name}`}
-                              title="Выбрать для массового удаления"
+                              title="Выбрать для массовой операции"
                               className="h-4 w-4 shrink-0 accent-primary"
                             />
                           )}
@@ -2780,6 +2859,29 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             </TableBody>
           </table>
         </Card>
+
+        <AlertDialog open={bulkCompanyAssignOpen} onOpenChange={setBulkCompanyAssignOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Назначить компанию выбранным проектам?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Компания «{companyOptions.find((option) => option.key === bulkCompanyId)?.name || 'не выбрана'}» будет назначена для {selectedProjectIds.size} проектов. Договоры, команда, часы, бонусы и файлы не изменятся.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkAssigningCompany}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  void assignCompanyToSelectedProjects();
+                }}
+                disabled={bulkAssigningCompany || !bulkCompanyId}
+              >
+                {bulkAssigningCompany ? 'Назначаю…' : `Назначить ${selectedProjectIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
           <AlertDialogContent>

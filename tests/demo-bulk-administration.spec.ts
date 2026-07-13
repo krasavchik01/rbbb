@@ -67,6 +67,30 @@ test.describe('bulk administration and deputy project status', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
+  test('deputy director can prepare a bulk company assignment but cannot bulk delete', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    const projectCheckbox = page.getByRole('checkbox', { name: `Выбрать проект ${demoProject.name}`, exact: true });
+    await expect(projectCheckbox).toBeVisible();
+    await projectCheckbox.check();
+    const companySelect = page.getByRole('combobox', { name: 'Выбрать компанию для выбранных проектов', exact: true });
+    const bulkAssign = page.getByRole('button', { name: 'Назначить компанию выбранным', exact: true });
+    await expect(companySelect).toBeVisible();
+    await expect(bulkAssign).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Удалить выбранные', exact: true })).toHaveCount(0);
+
+    await companySelect.click();
+    await page.getByRole('option').first().click();
+    await bulkAssign.click();
+    await expect(page.getByRole('heading', { name: 'Назначить компанию выбранным проектам?', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Назначить 1', exact: true }).click();
+    await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
+
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('CEO can select employees in bulk while the current account stays protected', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/hr?tab=employees');
