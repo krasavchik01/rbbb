@@ -78,6 +78,20 @@ export function useEmployees() {
     }
   }, []);
 
+  const deleteEmployees = useCallback(async (ids: Iterable<string>) => {
+    try {
+      const result = await supabaseDataStore.deleteEmployees(ids);
+      if (result.deletedIds.length > 0) {
+        const deleted = new Set(result.deletedIds);
+        setEmployees((prev) => prev.filter((employee) => !deleted.has(String(employee.id))));
+      }
+      return result;
+    } catch (err: any) {
+      console.error('❌ useEmployees: Bulk delete failed:', err);
+      throw err;
+    }
+  }, []);
+
   return {
     employees,
     loading,
@@ -85,6 +99,7 @@ export function useEmployees() {
     createEmployee,
     updateEmployee,
     deleteEmployee,
+    deleteEmployees,
     refresh: loadEmployees,
   };
 }
@@ -239,6 +254,20 @@ export function useProjects() {
     }
   }, []);
 
+  const deleteProjects = useCallback(async (ids: Iterable<string>) => {
+    try {
+      const result = await supabaseDataStore.deleteProjects(ids);
+      if (result.deletedIds.length > 0) {
+        const deleted = new Set(result.deletedIds);
+        setAllProjects((prev) => prev.filter((project) => !deleted.has(String(project.id))));
+      }
+      return result;
+    } catch (err: any) {
+      console.error('❌ useProjects: Bulk delete failed:', err);
+      throw err;
+    }
+  }, []);
+
   return {
     projects,
     loading,
@@ -246,6 +275,7 @@ export function useProjects() {
     createProject,
     updateProject,
     deleteProject,
+    deleteProjects,
     refresh: loadProjects,
   };
 }

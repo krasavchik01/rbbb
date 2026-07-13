@@ -42,6 +42,11 @@ export type EmployeeCreateInput = Omit<Employee, 'id' | 'created_at' | 'updated_
   password?: string | null;
 };
 
+export interface BulkDeleteResult {
+  deletedIds: string[];
+  failedIds: string[];
+}
+
 export type ProjectUiStatus =
   | 'active'
   | 'in_progress'
@@ -114,6 +119,13 @@ function recordValue(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, any>
     : {};
+}
+
+function uniqueIdChunks(ids: Iterable<string>, size = 50): string[][] {
+  const unique = Array.from(new Set(Array.from(ids, (id) => String(id).trim()).filter(Boolean)));
+  const chunks: string[][] = [];
+  for (let index = 0; index < unique.length; index += size) chunks.push(unique.slice(index, index + size));
+  return chunks;
 }
 
 export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
@@ -447,6 +459,46 @@ class SupabaseDataStore {
     return true;
   }
 
+  async deleteEmployees(ids: Iterable<string>): Promise<BulkDeleteResult> {
+    const idChunks = uniqueIdChunks(ids);
+    const requestedIds = idChunks.flat();
+    if (requestedIds.length === 0) return { deletedIds: [], failedIds: [] };
+
+    if (this.isOnline) {
+      const failed = new Set<string>();
+      for (const chunk of idChunks) {
+        const { error } = await supabase.from('employees').delete().in('id', chunk);
+        if (error) {
+          console.error('❌ Bulk employee delete failed:', error);
+          chunk.forEach((id) => failed.add(id));
+        }
+      }
+
+      const remaining = new Set<string>();
+      for (const chunk of idChunks) {
+        const { data, error } = await supabase.from('employees').select('id').in('id', chunk);
+        if (error) {
+          chunk.forEach((id) => failed.add(id));
+          continue;
+        }
+        (data || []).forEach((row) => remaining.add(String(row.id)));
+      }
+      remaining.forEach((id) => failed.add(id));
+      const deletedIds = requestedIds.filter((id) => !failed.has(id));
+      const localEmployees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES)
+        .filter((employee) => !deletedIds.includes(String(employee.id)));
+      this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, localEmployees);
+      return { deletedIds, failedIds: requestedIds.filter((id) => failed.has(id)) };
+    }
+
+    const requested = new Set(requestedIds);
+    const employees = this.getFromLocalStorage<Employee>(STORAGE_KEYS.EMPLOYEES);
+    const existing = new Set(employees.map((employee) => String(employee.id)));
+    const deletedIds = requestedIds.filter((id) => existing.has(id));
+    this.saveToLocalStorage(STORAGE_KEYS.EMPLOYEES, employees.filter((employee) => !requested.has(String(employee.id))));
+    return { deletedIds, failedIds: requestedIds.filter((id) => !existing.has(id)) };
+  }
+
   // === PROJECTS ===
 
   async getProjects(): Promise<Project[]> {
@@ -608,6 +660,44 @@ class SupabaseDataStore {
       console.error('❌ Error deleting project:', err);
       throw err;
     }
+  }
+
+  async deleteProjects(ids: Iterable<string>): Promise<BulkDeleteResult> {
+    const idChunks = uniqueIdChunks(ids);
+    const requestedIds = idChunks.flat();
+    if (requestedIds.length === 0) return { deletedIds: [], failedIds: [] };
+
+    const failed = new Set<string>();
+    for (const chunk of idChunks) {
+      try {
+        for (const table of ['project_files', 'project_amendments', 'project_data'] as const) {
+          const { error } = await supabase.from(table as any).delete().in('project_id', chunk);
+          if (error && error.code !== '42P01' && error.code !== '42703') {
+            console.warn(`Could not bulk clean ${table}:`, error);
+          }
+        }
+        const { error } = await supabase.from('projects').delete().in('id', chunk);
+        if (error) throw error;
+      } catch (error) {
+        console.error('❌ Bulk project delete failed:', error);
+        chunk.forEach((id) => failed.add(id));
+      }
+    }
+
+    for (const chunk of idChunks) {
+      const { data, error } = await supabase.from('projects').select('id').in('id', chunk);
+      if (error) {
+        chunk.forEach((id) => failed.add(id));
+        continue;
+      }
+      (data || []).forEach((row) => failed.add(String(row.id)));
+    }
+
+    const deletedIds = requestedIds.filter((id) => !failed.has(id));
+    const projects = this.getFromLocalStorage<Project>(STORAGE_KEYS.PROJECTS)
+      .filter((project) => !deletedIds.includes(String(project.id)));
+    this.saveToLocalStorage(STORAGE_KEYS.PROJECTS, projects);
+    return { deletedIds, failedIds: requestedIds.filter((id) => failed.has(id)) };
   }
 
   // === COMPANIES ===

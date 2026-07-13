@@ -35,3 +35,7 @@ tmp/
 
 # Локальные read-only отчёты аудита auth могут содержать masked email/id сотрудников.
 reports/auth-readiness-audit*.json
+
+# Снимки перед live-удалением содержат полные карточки проектов и остаются
+# только на рабочем компьютере; в GitHub их отправлять нельзя.
+reports/project-purge/

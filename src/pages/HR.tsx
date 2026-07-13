@@ -38,11 +38,12 @@ import {
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import TimesheetAnalyticsTab from "@/components/hr/TimesheetAnalyticsTab";
+import { planEmployeeBulkDeletion } from "@/lib/employeeBulkActions";
 
 export default function HR() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { employees = [], loading, refresh } = useEmployees();
+  const { employees = [], loading, refresh, deleteEmployees } = useEmployees();
   const { projects = [] } = useProjects();
   // /hr?tab=timesheet|employees|analytics — для deeplink из сайдбара.
   const [searchParams] = useSearchParams();
@@ -55,6 +56,9 @@ export default function HR() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [newEmployee, setNewEmployee] = useState({
     name: "",
     email: "",
@@ -195,6 +199,30 @@ export default function HR() {
     const matchesRole = filterRole === "all" || emp.role === filterRole;
     return matchesSearch && matchesDept && matchesRole;
   });
+  const selectableFilteredEmployeeIds = filteredEmployees
+    .map((employee: any) => String(employee.id))
+    .filter((id: string) => id !== String(user?.id || ''));
+  const allFilteredEmployeesSelected = selectableFilteredEmployeeIds.length > 0
+    && selectableFilteredEmployeeIds.every((id: string) => selectedEmployeeIds.has(id));
+
+  const toggleEmployeeSelection = (employeeId: string) => {
+    if (employeeId === String(user?.id || '')) return;
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      if (next.has(employeeId)) next.delete(employeeId);
+      else next.add(employeeId);
+      return next;
+    });
+  };
+
+  const toggleAllFilteredEmployees = () => {
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      if (allFilteredEmployeesSelected) selectableFilteredEmployeeIds.forEach((id: string) => next.delete(id));
+      else selectableFilteredEmployeeIds.forEach((id: string) => next.add(id));
+      return next;
+    });
+  };
 
   // Получаем уникальные отделы и роли
   const uniqueDepartments = Array.from(new Set(employees.map((e: any) => e.department).filter(Boolean)));
@@ -361,9 +389,19 @@ export default function HR() {
       return;
     }
 
+    const plan = planEmployeeBulkDeletion(employees as any[], [String(selectedEmployee?.id || '')], user?.id);
+    if (plan.allowedIds.length === 0) {
+      toast({
+        title: 'Удаление остановлено',
+        description: 'Нельзя удалить текущего пользователя или последнего CEO/admin.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      await supabaseDataStore.deleteEmployee(selectedEmployee.id);
-      await refresh();
+      const result = await deleteEmployees(plan.allowedIds);
+      if (result.failedIds.length > 0) throw new Error('База не подтвердила удаление сотрудника');
       setIsDeleteDialogOpen(false);
       setSelectedEmployee(null);
       toast({
@@ -376,6 +414,39 @@ export default function HR() {
         description: "Не удалось удалить сотрудника",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleBulkDeleteEmployees = async () => {
+    if (!isAdmin || isBulkDeleting) return;
+    const plan = planEmployeeBulkDeletion(employees as any[], selectedEmployeeIds, user?.id);
+    if (plan.allowedIds.length === 0) {
+      toast({
+        title: 'Удаление остановлено',
+        description: 'Нельзя удалить текущего пользователя или всех CEO/admin.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    try {
+      const result = await deleteEmployees(plan.allowedIds);
+      setSelectedEmployeeIds(new Set(result.failedIds));
+      setIsBulkDeleteDialogOpen(false);
+      toast({
+        title: result.failedIds.length > 0 ? 'Удаление завершено частично' : 'Сотрудники удалены',
+        description: `Удалено: ${result.deletedIds.length}. Часы и история проектов сохранены.${result.failedIds.length > 0 ? ` Ошибок: ${result.failedIds.length}.` : ''}`,
+        variant: result.failedIds.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось удалить сотрудников',
+        description: error?.message || 'Попробуйте ещё раз',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -978,6 +1049,25 @@ export default function HR() {
             </SelectContent>
           </Select>
         </div>
+        {isAdmin && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
+            <Button type="button" variant="outline" size="sm" onClick={toggleAllFilteredEmployees} disabled={selectableFilteredEmployeeIds.length === 0}>
+              {allFilteredEmployeesSelected ? 'Снять выбор с найденных' : `Выбрать найденных (${selectableFilteredEmployeeIds.length})`}
+            </Button>
+            {selectedEmployeeIds.size > 0 && (
+              <>
+                <Badge variant="secondary">Выбрано: {selectedEmployeeIds.size}</Badge>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedEmployeeIds(new Set())}>
+                  Снять весь выбор
+                </Button>
+                <Button type="button" variant="destructive" size="sm" onClick={() => setIsBulkDeleteDialogOpen(true)}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Удалить выбранных
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Employee List */}
@@ -987,6 +1077,17 @@ export default function HR() {
             <Card key={employee.id} className="p-4 hover:shadow-lg transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
+                  {isAdmin && (
+                    <input
+                      type="checkbox"
+                      checked={selectedEmployeeIds.has(String(employee.id))}
+                      disabled={String(employee.id) === String(user?.id || '')}
+                      onChange={() => toggleEmployeeSelection(String(employee.id))}
+                      aria-label={`Выбрать сотрудника ${employee.name || employee.email || employee.id}`}
+                      title={String(employee.id) === String(user?.id || '') ? 'Нельзя удалить текущего пользователя' : 'Выбрать для массового удаления'}
+                      className="h-4 w-4 shrink-0 accent-primary"
+                    />
+                  )}
                   <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
                     <span className="text-lg font-bold text-primary">
                       {employee.name ? employee.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2) : 'UN'}
@@ -1002,6 +1103,8 @@ export default function HR() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={String(employee.id) === String(user?.id || '')}
+                      title={String(employee.id) === String(user?.id || '') ? 'Нельзя удалить текущего пользователя' : 'Удалить сотрудника'}
                       onClick={() => {
                         // Заполняем форму редактирования данными сотрудника
                         const isAuditor = ['partner','manager_1','manager_2','manager_3','supervisor_3','supervisor_2','supervisor_1','tax_specialist_1','tax_specialist_2','assistant_3','assistant_2','assistant_1'].includes(employee.role);
@@ -1754,6 +1857,26 @@ export default function HR() {
               <Trash2 className="w-4 h-4 mr-2" />
               Удалить
               </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Удалить выбранных сотрудников?</DialogTitle>
+            <DialogDescription>
+              Выбрано карточек: {selectedEmployeeIds.size}. Утверждённые часы и историческое участие в проектах сохранятся. Текущий пользователь и последний CEO/admin защищены от удаления.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkDeleteDialogOpen(false)} disabled={isBulkDeleting}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDeleteEmployees} disabled={isBulkDeleting}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              {isBulkDeleting ? 'Удаляю…' : `Удалить ${selectedEmployeeIds.size}`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

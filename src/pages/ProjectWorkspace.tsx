@@ -121,8 +121,8 @@ export default function ProjectWorkspace() {
     || projectStatus === 'pending_approval';
   const canEditTeam = isAdmin || isCEO || (isDeputy && isAssemblyPhase);
 
-  const isCompleted = projectStatus === 'completed';
-  const isInProgress = projectStatus === 'in_progress';
+  const isCompleted = projectStatus === 'completed' || projectStatus === 'closed' || projectStatus === 'Завершён';
+  const isInProgress = projectStatus === 'in_progress' || projectStatus === 'active' || projectStatus === 'В работе';
   const isPendingPaymentApproval = projectStatus === 'pending_payment_approval';
   const isReadyToComplete = projectStatus === 'ready_to_complete';
 
@@ -132,8 +132,8 @@ export default function ProjectWorkspace() {
   //   3) CEO в /bonuses одобряет выплату бонусов → completed.
   // Раньше PM и партнёр имели одну кнопку «Завершить» — это не соответствовало
   // ролевой модели фирмы, где партнёр в начале только видит, а в конце утверждает.
-  const canMarkReady = (isPM || isAdmin) && (isInProgress || projectStatus === 'approved' || projectStatus === 'planning');
-  const canApproveCompletion = (isPartner || isAdmin) && isReadyToComplete;
+  const canMarkReady = (isPM || isAdmin || isDeputy) && (isInProgress || projectStatus === 'approved' || projectStatus === 'planning');
+  const canApproveCompletion = (isPartner || isAdmin || isDeputy) && isReadyToComplete;
   // Директор/зам видят только общую информацию, без деталей методологии
   const normalizedContract = useMemo(() => readProjectContract(project), [project]);
   const normalizedFiles = useMemo(() => readProjectFiles(project), [project]);
@@ -876,7 +876,9 @@ export default function ProjectWorkspace() {
             <div className="min-w-0 flex-1">
               <h3 className="font-semibold mb-2">Готов к закрытию?</h3>
               <p className="text-sm text-muted-foreground">
-                Как PM, отметь проект готовым. Партнёр проекта получит уведомление и утвердит завершение, после чего CEO одобрит бонусы.
+                {isDeputy
+                  ? 'Как заместитель директора, отметьте проект готовым. После проверки его можно сразу передать CEO для утверждения бонусов.'
+                  : 'Как PM, отметь проект готовым. Партнёр проекта получит уведомление и утвердит завершение, после чего CEO одобрит бонусы.'}
               </p>
             </div>
             <Button
@@ -897,7 +899,9 @@ export default function ProjectWorkspace() {
             <div className="min-w-0 flex-1">
               <h3 className="font-semibold mb-2">Проект готов — твоё утверждение</h3>
               <p className="text-sm text-muted-foreground">
-                Как партнёр, утверди завершение. Проект уйдёт CEO в раздел «Бонусы» с финальным расчётом по таймщитам.
+                {isDeputy
+                  ? 'Как заместитель директора, подтвердите готовность. Проект уйдёт CEO в раздел «Бонусы» с финальным расчётом по утверждённым таймшитам.'
+                  : 'Как партнёр, утверди завершение. Проект уйдёт CEO в раздел «Бонусы» с финальным расчётом по таймщитам.'}
               </p>
             </div>
             <Button

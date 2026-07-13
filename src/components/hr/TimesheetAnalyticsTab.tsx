@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/popover';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { listTimesheets, type TimesheetEntry } from '@/lib/timesheets';
+import { buildMonthCalendar, createHrTimesheetWorkbook } from '@/lib/hrTimesheetWorkbook';
 import {
   Bar,
   BarChart,
@@ -102,17 +103,6 @@ function shiftMonth(m: MonthRange, delta: number): MonthRange {
   return makeMonth(d.getFullYear(), d.getMonth());
 }
 
-// Стандартная норма часов в месяц для KZ при 5-дневке (≈ 168). Считаем как
-// «рабочих дней месяца × 8», чтобы было честно (фев — меньше, июль — больше).
-function calcMonthlyNorm(m: MonthRange): number {
-  let workdays = 0;
-  for (let d = 1; d <= m.daysInMonth; d++) {
-    const dow = new Date(m.year, m.month, d).getDay();
-    if (dow !== 0 && dow !== 6) workdays++;
-  }
-  return workdays * 8;
-}
-
 function dateKey(d: Date | string): string {
   if (typeof d === 'string') return d.slice(0, 10);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -157,8 +147,8 @@ export default function TimesheetAnalyticsTab() {
   const [drilldownId, setDrilldownId] = useState<string | null>(null);
   const [busyExport, setBusyExport] = useState(false);
 
-  // Норма за месяц — берём по рабочим дням × 8.
-  const norm = useMemo(() => calcMonthlyNorm(month), [month]);
+  const monthCalendar = useMemo(() => buildMonthCalendar(month.year, month.month), [month.year, month.month]);
+  const norm = monthCalendar.normHours;
 
   // ── loading ──
   const reload = useCallback(async () => {
@@ -338,33 +328,19 @@ export default function TimesheetAnalyticsTab() {
   // ── список строк табеля (с фильтром по поиску) ──
   const visibleEmployees = useMemo(() => {
     const q = search.trim().toLowerCase();
-    // Берём только тех, у кого есть часы за месяц — иначе строка пустая
-    // и засоряет. Если HR хочет видеть всех — можно убрать фильтр позже.
-    const withHours = Array.from(hoursByEmployee.keys())
-      .map((id) => employeeById.get(id))
-      .filter(Boolean) as any[];
+    // Полный табель обязан показывать и сотрудников без часов: HR сразу видит
+    // пробелы, а не получает ложное ощущение полного покрытия.
+    const allEmployees = Array.from(employeeById.values()).filter(Boolean) as any[];
     const filtered = q
-      ? withHours.filter((e) => (e.name || '').toLowerCase().includes(q))
-      : withHours;
+      ? allEmployees.filter((e) => (e.name || '').toLowerCase().includes(q))
+      : allEmployees;
     return filtered.sort((a, b) =>
       (hoursByEmployee.get(b.id) || 0) - (hoursByEmployee.get(a.id) || 0),
     );
   }, [hoursByEmployee, employeeById, search]);
 
   // Дни месяца (1..daysInMonth) с маркером выходного.
-  const daysOfMonth = useMemo(() => {
-    const out: { day: number; date: string; isWeekend: boolean }[] = [];
-    const pad = (n: number) => String(n).padStart(2, '0');
-    for (let d = 1; d <= month.daysInMonth; d++) {
-      const dow = new Date(month.year, month.month, d).getDay();
-      out.push({
-        day: d,
-        date: `${month.year}-${pad(month.month + 1)}-${pad(d)}`,
-        isWeekend: dow === 0 || dow === 6,
-      });
-    }
-    return out;
-  }, [month]);
+  const daysOfMonth = monthCalendar.days;
 
   // ── drill-down ──
   const drillEmployee = drilldownId ? employeeById.get(drilldownId) : null;
@@ -378,56 +354,6 @@ export default function TimesheetAnalyticsTab() {
     setBusyExport(true);
     try {
       const XLSX = await loadXlsx();
-      const wb = XLSX.utils.book_new();
-
-      // Лист 1: матрица табеля
-      const matrixRows: any[][] = [];
-      const header = ['Сотрудник', ...daysOfMonth.map((d) => d.day), 'Итого', 'Норма', 'Δ'];
-      matrixRows.push(header);
-      for (const emp of visibleEmployees) {
-        const row: any[] = [emp.name];
-        const empMatrix = matrix.get(emp.id) || new Map<string, number>();
-        for (const d of daysOfMonth) {
-          const v = empMatrix.get(d.date) || 0;
-          row.push(v > 0 ? Number(v.toFixed(1)) : '');
-        }
-        const total = hoursByEmployee.get(emp.id) || 0;
-        row.push(Number(total.toFixed(1)));
-        row.push(norm);
-        row.push(Number((total - norm).toFixed(1)));
-        matrixRows.push(row);
-      }
-      const ws1 = XLSX.utils.aoa_to_sheet(matrixRows);
-      // Ширина колонок: первая широкая, дни узкие, итог — средние.
-      ws1['!cols'] = [
-        { wch: 28 },
-        ...daysOfMonth.map(() => ({ wch: 4 })),
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws1, `Табель ${month.label}`);
-
-      // Лист 2: сводка по сотрудникам
-      const empSummary: any[][] = [['Сотрудник', 'Часов', 'Дней', 'Ср.день', 'Норма', 'Δ']];
-      for (const emp of visibleEmployees) {
-        const h = hoursByEmployee.get(emp.id) || 0;
-        const d = daysByEmployee.get(emp.id)?.size || 0;
-        empSummary.push([
-          emp.name,
-          Number(h.toFixed(1)),
-          d,
-          d > 0 ? Number((h / d).toFixed(1)) : 0,
-          norm,
-          Number((h - norm).toFixed(1)),
-        ]);
-      }
-      const ws2 = XLSX.utils.aoa_to_sheet(empSummary);
-      ws2['!cols'] = [{ wch: 28 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
-      XLSX.utils.book_append_sheet(wb, ws2, 'Сводка');
-
-      // Лист 3: по проектам (все, отсортированы по убыванию часов)
-      const projSummary: any[][] = [['Проект', 'Часов', 'Компания']];
       const allProjectsSorted = Array.from(hoursByProject.entries())
         .map(([key, hours]) => {
           const id = key.startsWith('__noproj__:') ? null : key;
@@ -439,12 +365,20 @@ export default function TimesheetAnalyticsTab() {
           };
         })
         .sort((a, b) => b.hours - a.hours);
-      for (const p of allProjectsSorted) {
-        projSummary.push([p.name, p.hours, p.company]);
-      }
-      const ws3 = XLSX.utils.aoa_to_sheet(projSummary);
-      ws3['!cols'] = [{ wch: 50 }, { wch: 10 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, ws3, 'Проекты');
+      const employeeSummary = new Map(visibleEmployees.map((employee) => [
+        String(employee.id),
+        {
+          hours: hoursByEmployee.get(employee.id) || 0,
+          days: daysByEmployee.get(employee.id)?.size || 0,
+        },
+      ]));
+      const wb = createHrTimesheetWorkbook(XLSX, {
+        month: monthCalendar,
+        employees: visibleEmployees,
+        matrix,
+        employeeSummary,
+        projects: allProjectsSorted,
+      });
 
       const fname = `Табель_${month.year}-${String(month.month + 1).padStart(2, '0')}.xlsx`;
       XLSX.writeFile(wb, fname);
@@ -452,8 +386,8 @@ export default function TimesheetAnalyticsTab() {
       setBusyExport(false);
     }
   }, [
-    daysOfMonth, visibleEmployees, matrix, hoursByEmployee, daysByEmployee,
-    norm, hoursByProject, projectById, month,
+    visibleEmployees, matrix, hoursByEmployee, daysByEmployee,
+    hoursByProject, projectById, month, monthCalendar,
   ]);
 
   // ── render ──

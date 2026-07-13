@@ -1,0 +1,34 @@
+{
+  "observedAt": "2026-07-13T10:46:12.144Z",
+  "totals": {
+    "projects": 890,
+    "employees": 141,
+    "approvedTimesheets": 14629,
+    "approvedHours": 110364.4,
+    "badProjectNotes": 0
+  },
+  "rbi": {
+    "markedProjects": 136,
+    "assignedMembers": 130,
+    "duplicateTeamKeys": 0
+  },
+  "partnerLedger": {
+    "markedProjects": 59,
+    "approvedRows": 839,
+    "approvedHours": 6233.8,
+    "statusCounts": {
+      "approved": 839
+    }
+  },
+  "registries": {
+    "bonuses": {
+      "count": 0
+    },
+    "projectTeam": {
+      "count": 0
+    },
+    "projectParticipants": {
+      "count": 0
+    }
+  }
+}

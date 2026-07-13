@@ -5,6 +5,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
@@ -39,6 +49,13 @@ import {
   type ProjectHoursTotals,
 } from '@/lib/timesheets';
 import { calculateProjectFinances } from '@/types/project-v3';
+import {
+  buildProjectStatusUpdate,
+  MANAGED_PROJECT_STATUS_LABELS,
+  projectStatusOptionsForRole,
+  type ManagedProjectStatus,
+} from '@/lib/projectStatusActions';
+import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import type { CanonicalTeamMember } from '@/types/project-domain';
 import type * as XLSXNs from 'xlsx';
@@ -910,7 +927,7 @@ function EmployeeSearchAdd({
 
 export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommandScope }) {
   const { user } = useAuth();
-  const { projects = [], loading: projectsLoading, updateProject, deleteProject } = useProjects();
+  const { projects = [], loading: projectsLoading, updateProject, deleteProject, deleteProjects } = useProjects();
   const { employees = [] } = useEmployees();
   const [appSettings] = useAppSettings();
   const { toast } = useToast();
@@ -926,6 +943,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [periodNameDraft, setPeriodNameDraft] = useState('');
@@ -944,7 +964,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canSeeContractMoney = isExecutive || isProcurement;
   const canManageTeam = user?.role === 'ceo' || user?.role === 'admin' || user?.role === 'deputy_director';
   const canCloseProjects = user?.role === 'ceo' || user?.role === 'admin';
-  const canDeleteProjects = user?.role === 'admin';
+  const canDeleteProjects = user?.role === 'admin' || user?.role === 'ceo';
+  const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = canManageTeam || user?.role === 'partner';
 
   const assignableEmployees = useMemo(
@@ -1263,6 +1285,28 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return Array.from(new Set((row.projectIds?.length ? row.projectIds : [row.id]).filter(Boolean)));
   };
 
+  const filteredProjectIds = Array.from(new Set(filteredRows.flatMap(projectIdsForRow)));
+  const allFilteredProjectsSelected = filteredProjectIds.length > 0
+    && filteredProjectIds.every((projectId) => selectedProjectIds.has(projectId));
+
+  const toggleProjectRowSelection = (row: (typeof rows)[number]) => {
+    const ids = projectIdsForRow(row);
+    const rowSelected = ids.every((id) => selectedProjectIds.has(id));
+    setSelectedProjectIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => rowSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
+  const toggleAllFilteredProjects = () => {
+    setSelectedProjectIds((current) => {
+      const next = new Set(current);
+      filteredProjectIds.forEach((id) => allFilteredProjectsSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
   const exportFilteredRows = async () => {
     if (filteredRows.length === 0) {
       toast({
@@ -1352,6 +1396,87 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       toast({
         title: 'Не удалось удалить проект',
         description: error?.message || 'Проверьте права удаления в базе',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingProjectId(null);
+    }
+  };
+
+  const deleteSelectedProjects = async () => {
+    if (!canDeleteProjects || bulkDeleting || selectedProjectIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const result = await deleteProjects(selectedProjectIds);
+      setSelectedProjectIds(new Set(result.failedIds));
+      setBulkDeleteOpen(false);
+      toast({
+        title: result.failedIds.length > 0 ? 'Удаление завершено частично' : 'Проекты удалены',
+        description: `Удалено записей: ${result.deletedIds.length}.${result.failedIds.length > 0 ? ` Не удалено: ${result.failedIds.length}.` : ''}`,
+        variant: result.failedIds.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось удалить проекты',
+        description: error?.message || 'Попробуйте ещё раз',
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const setProjectStatus = async (row: (typeof rows)[number], nextStatus: ManagedProjectStatus) => {
+    if (!canManageProjectStatus || !user || !updateProject) return;
+    if (!statusOptions.some((option) => option.value === nextStatus)) return;
+    const ids = projectIdsForRow(row);
+    setSavingProjectId(`${row.id}:status`);
+    try {
+      await Promise.all(ids.map(async (projectId) => {
+        const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId)) || row.project;
+        const statusUpdate = buildProjectStatusUpdate({
+          project: sourceProject,
+          nextStatus,
+          actor: user,
+        });
+        let notes: Record<string, any> = statusUpdate.notes;
+        if (nextStatus === 'pending_payment_approval') {
+          const projectWithStatus = { ...sourceProject, ...statusUpdate, notes };
+          const finances = calculateProjectFinances(projectWithStatus as any);
+          notes = {
+            ...notes,
+            finances: {
+              ...(sourceProject?.notes?.finances || {}),
+              ...(sourceProject?.finances || {}),
+              ...finances,
+            },
+          };
+        }
+        await updateProject(projectId, { ...statusUpdate, notes });
+      }));
+
+      if (nextStatus === 'pending_payment_approval') {
+        const ceoIds = (employees as any[])
+          .filter((employee) => employee.role === 'ceo' || employee.role === 'admin')
+          .map((employee) => employee.id);
+        if (ceoIds.length > 0) {
+          await notifyProjectReadyForCeoBonuses({
+            projectName: row.name,
+            ceoIds,
+            partnerName: user.name,
+            projectId: row.id,
+          });
+        }
+      }
+
+      toast({
+        title: nextStatus === 'pending_payment_approval' ? 'Проект готов к бонусам' : 'Статус изменён',
+        description: `${row.name}: ${MANAGED_PROJECT_STATUS_LABELS[nextStatus]}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось изменить статус',
+        description: error?.message || 'Попробуйте ещё раз',
         variant: 'destructive',
       });
     } finally {
@@ -1990,11 +2115,46 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           )}
         </Card>
 
+        {canDeleteProjects && (
+          <Card className="p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={toggleAllFilteredProjects} disabled={filteredProjectIds.length === 0}>
+                {allFilteredProjectsSelected ? 'Снять выбор с найденных' : `Выбрать найденные (${filteredProjectIds.length})`}
+              </Button>
+              {selectedProjectIds.size > 0 ? (
+                <>
+                  <Badge variant="secondary">Выбрано записей: {selectedProjectIds.size}</Badge>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedProjectIds(new Set())}>
+                    Снять весь выбор
+                  </Button>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Удалить выбранные
+                  </Button>
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">Отметьте проекты чекбоксами для массового удаления</span>
+              )}
+            </div>
+          </Card>
+        )}
+
         <Card className="overflow-x-auto overflow-y-hidden">
           <table className={`${isExecutive ? 'min-w-[1540px]' : 'min-w-[1100px]'} w-full caption-bottom text-sm`}>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[48px]" />
+                <TableHead className="w-[76px]">
+                  {canDeleteProjects && (
+                    <input
+                      type="checkbox"
+                      checked={allFilteredProjectsSelected}
+                      onChange={toggleAllFilteredProjects}
+                      aria-label="Выбрать все отфильтрованные проекты"
+                      title="Выбрать все отфильтрованные проекты"
+                      className="h-4 w-4 accent-primary"
+                    />
+                  )}
+                </TableHead>
                 <TableHead>Проект</TableHead>
                 <TableHead className="hidden min-w-[180px] lg:table-cell">Вид проекта</TableHead>
                 <TableHead className="min-w-[190px]">Срок / периоды</TableHead>
@@ -2029,6 +2189,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                     <Fragment key={row.id}>
                       <TableRow className="align-top hover:bg-muted/35">
                         <TableCell className="py-3">
+                          <div className="flex items-center gap-1">
+                          {canDeleteProjects && (
+                            <input
+                              type="checkbox"
+                              checked={projectIdsForRow(row).every((projectId) => selectedProjectIds.has(projectId))}
+                              onChange={() => toggleProjectRowSelection(row)}
+                              aria-label={`Выбрать проект ${row.name}`}
+                              title="Выбрать для массового удаления"
+                              className="h-4 w-4 shrink-0 accent-primary"
+                            />
+                          )}
                           <Button
                             type="button"
                             variant="ghost"
@@ -2040,6 +2211,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                           >
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </Button>
+                          </div>
                         </TableCell>
                         <TableCell className="py-3">
                           <Link to={`/project/${row.id}`} className="font-medium leading-snug hover:underline">
@@ -2070,6 +2242,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         </TableCell>
                         <TableCell className="py-3">
                           <div className="space-y-1.5">
+                            {canManageProjectStatus && (
+                              <Select
+                                value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined}
+                                onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)}
+                                disabled={savingProjectId === `${row.id}:status`}
+                              >
+                                <SelectTrigger className="h-8 min-w-[170px] text-xs" aria-label={`Изменить статус проекта ${row.name}`}>
+                                  <SelectValue placeholder={MANAGED_PROJECT_STATUS_LABELS[row.status as ManagedProjectStatus] || row.status || 'Выберите статус'} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {statusOptions.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
                             <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>
                               {row.readiness.label}
                             </Badge>
@@ -2592,6 +2780,31 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             </TableBody>
           </table>
         </Card>
+
+        <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить выбранные проекты?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Будет удалено записей: {selectedProjectIds.size}. Утверждённые таймшиты и физические файлы Seafile сохраняются, но проекты исчезнут из рабочего свода. Действие нельзя отменить из интерфейса.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkDeleting}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  void deleteSelectedProjects();
+                }}
+                disabled={bulkDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {bulkDeleting ? 'Удаляю…' : `Удалить ${selectedProjectIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
