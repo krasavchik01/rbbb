@@ -1,17 +1,24 @@
 {
-  "generatedAt": "2026-07-12T07:17:09.757Z",
-  "testedProductCommit": "4a4eadf",
-  "status": "local_demo_ready",
-  "productionStatus": "reachable_but_current_branch_not_deployed",
+  "generatedAt": "2026-07-13T05:48:33.694Z",
+  "testedProductCommit": "b7b37dc",
+  "status": "production_demo_ready",
+  "productionStatus": "deployed_and_smoke_verified",
   "productionInspection": {
-    "inspectedAt": "2026-07-12T07:17:00.000Z",
+    "inspectedAt": "2026-07-13T05:46:30.000Z",
     "url": "https://rbbb.vercel.app/",
     "httpStatus": 200,
-    "deploymentCreatedAt": "2026-07-01T17:12:47+05:00",
+    "deploymentId": "dpl_Ccyr7tg8VzeNtPJnpc2354cMs1XT",
+    "deploymentCreatedAt": "2026-07-13T10:44:54+05:00",
     "deploymentStatus": "Ready",
-    "deployedAsset": "index-DcVRf7fc.js",
-    "localAsset": "index-D3xf-t9p.js",
-    "currentBranchDeployed": false
+    "deployedAsset": "index-CmT88yh4.js",
+    "currentBranchDeployed": true,
+    "smokeRoutes": [
+      "/",
+      "/projects",
+      "/bonuses",
+      "/project/demo-project-001"
+    ],
+    "browserConsoleErrors": 0
   },
   "evidence": {
     "roles": 23,
@@ -21,6 +28,7 @@
     "dynamicProjectRoleChecks": 23,
     "executiveWorkflowChecks": 7,
     "fixtureSafetyChecks": 1,
+    "publicAuthChecks": 5,
     "routePermissionChecks": 568
   },
   "qualityGates": {

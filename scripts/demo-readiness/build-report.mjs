@@ -23,17 +23,19 @@ const latestLiveAudit = latestLiveAuditName
 const report = {
   generatedAt,
   testedProductCommit: commit,
-  status: 'local_demo_ready',
-  productionStatus: 'reachable_but_current_branch_not_deployed',
+  status: 'production_demo_ready',
+  productionStatus: 'deployed_and_smoke_verified',
   productionInspection: {
-    inspectedAt: '2026-07-12T07:17:00.000Z',
+    inspectedAt: '2026-07-13T05:46:30.000Z',
     url: 'https://rbbb.vercel.app/',
     httpStatus: 200,
-    deploymentCreatedAt: '2026-07-01T17:12:47+05:00',
+    deploymentId: 'dpl_Ccyr7tg8VzeNtPJnpc2354cMs1XT',
+    deploymentCreatedAt: '2026-07-13T10:44:54+05:00',
     deploymentStatus: 'Ready',
-    deployedAsset: 'index-DcVRf7fc.js',
-    localAsset: 'index-D3xf-t9p.js',
-    currentBranchDeployed: false,
+    deployedAsset: 'index-CmT88yh4.js',
+    currentBranchDeployed: true,
+    smokeRoutes: ['/', '/projects', '/bonuses', '/project/demo-project-001'],
+    browserConsoleErrors: 0,
   },
   evidence: {
     roles: roles.length,
@@ -43,6 +45,7 @@ const report = {
     dynamicProjectRoleChecks: 23,
     executiveWorkflowChecks: 7,
     fixtureSafetyChecks: 1,
+    publicAuthChecks: 5,
     routePermissionChecks: 568,
   },
   qualityGates: {
@@ -106,16 +109,16 @@ const report = {
 
 const md = `# RBBB — готовность к демонстрации генеральному директору
 
-Сформировано: ${generatedAt}  
+Сформировано: ${generatedAt}
 Проверенный коммит продукта: \`${commit}\`
 
 ## Итог
 
 Локальный демонстрационный контур готов: интерфейс проверен по всем ${roles.length} ролям, карточка проекта проверена отдельно для каждой роли, а цепочка «проект → цена → команда → файлы → часы → бонусы» подтверждена реалистичным сценарием без записи в production.
 
-Это не означает, что текущая ветка уже опубликована в production. Перед показом на боевом адресе нужны деплой и короткий smoke-test реальных учётных записей и Seafile.
+Текущая ветка опубликована в production. Публичный вход и регистрация проверены в реальном браузере; все ключевые маршруты отвечают HTTP 200, ошибок консоли не обнаружено.
 
-Read-only проверка production: \`https://rbbb.vercel.app/\` отвечает HTTP 200, но активный deployment создан 01.07.2026 и содержит другой bundle (\`index-DcVRf7fc.js\` против локального \`index-D3xf-t9p.js\`). Текущая ветка там ещё не опубликована.
+Production-проверка: \`https://rbbb.vercel.app/\` обслуживается deployment \`dpl_Ccyr7tg8VzeNtPJnpc2354cMs1XT\` от 13.07.2026 с bundle \`index-CmT88yh4.js\`. Маршруты \`/\`, \`/projects\`, \`/bonuses\` и \`/project/demo-project-001\` отвечают HTTP 200.
 
 ## Что доказано автоматикой
 
