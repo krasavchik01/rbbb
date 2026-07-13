@@ -28,6 +28,7 @@ import { TEAM_ROLE_SLOTS } from "@/types/roles";
 
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
+import { legacyProjectCompanyLabel } from "@/lib/userCompanyAccess";
 
 import { supabase } from "@/integrations/supabase/client";
 import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses, notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
@@ -154,7 +155,16 @@ export default function ProjectWorkspace() {
       : project?.notes || {};
     return {
       id: String(project?.companyId || notes?.companyId || ''),
-      name: String(project?.companyName || project?.ourCompany || project?.company || notes?.companyName || notes?.ourCompany || notes?.company || ''),
+      name: String(
+        project?.companyName
+        || project?.ourCompany
+        || project?.company
+        || notes?.companyName
+        || notes?.ourCompany
+        || notes?.company
+        || legacyProjectCompanyLabel(project)
+        || '',
+      ),
     };
   }, [project]);
 

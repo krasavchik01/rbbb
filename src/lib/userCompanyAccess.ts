@@ -157,13 +157,33 @@ export function projectHasMissingCompanyIdentity(project: any): boolean {
     project?.company,
   ].find((value) => typeof value === 'string' && value.trim().length > 0);
 
-  if (!companyIdentity) return true;
+  return !companyIdentity;
+}
 
-  // В историческом импорте comp-rb-a не являлся назначением компании: это
-  // техническая заглушка, из-за которой проект не попадал в очередь разбора.
-  // Не нормализуем её в RB Partners автоматически — компанию должен выбрать
-  // руководитель по фактическому проекту.
-  return String(companyIdentity).trim().toLowerCase() === 'comp-rb-a';
+export function legacyProjectCompanyLabel(project: any): string | null {
+  let notes = project?.notes;
+  if (typeof notes === 'string') {
+    try { notes = JSON.parse(notes); } catch { notes = null; }
+  }
+
+  const companyIdentity = [
+    notes?.companyId,
+    notes?.companyName,
+    notes?.ourCompany,
+    notes?.company,
+    project?.companyId,
+    project?.companyName,
+    project?.ourCompany,
+    project?.company,
+  ].find((value) => typeof value === 'string' && value.trim().length > 0);
+
+  return String(companyIdentity || '').trim().toLowerCase() === 'comp-rb-a'
+    ? 'RB A+Partners (историческое назначение)'
+    : null;
+}
+
+export function projectHasLegacyUnresolvedCompanyIdentity(project: any): boolean {
+  return legacyProjectCompanyLabel(project) !== null;
 }
 
 /**
@@ -179,5 +199,8 @@ export function projectIsVisibleWithinCompanyScope(
   if (projectMatchesAllowedCompanies(project, allowedCompanyNames)) return true;
 
   const canTriageUnassignedCompany = ['ceo', 'admin', 'deputy_director'].includes(role || '');
-  return canTriageUnassignedCompany && projectHasMissingCompanyIdentity(project);
+  return canTriageUnassignedCompany && (
+    projectHasMissingCompanyIdentity(project)
+    || projectHasLegacyUnresolvedCompanyIdentity(project)
+  );
 }

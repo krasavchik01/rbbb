@@ -30,7 +30,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { useAppSettings } from '@/lib/appSettings';
-import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
+import {
+  legacyProjectCompanyLabel,
+  projectHasLegacyUnresolvedCompanyIdentity,
+  projectHasMissingCompanyIdentity,
+  projectMatchesAllowedCompanies,
+} from '@/lib/userCompanyAccess';
 import {
   contractFileUrl as readContractFileUrl,
   dedupeProjectFiles,
@@ -78,7 +83,7 @@ type ProjectSort = 'default' | 'deadline_asc' | 'deadline_desc' | 'amount_desc' 
 type ProjectCommandScope = 'executive' | 'operations';
 type TableDetailLevel = 'compact' | 'detailed';
 type PartnerFilter = 'all' | 'unassigned' | string;
-type CompanyFilter = 'all' | 'missing' | string;
+type CompanyFilter = 'all' | 'missing' | 'legacy' | string;
 type YearFilter = 'all' | string;
 type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
 type PeriodDraft = { name: string; startDate: string; endDate: string; deadline: string };
@@ -126,6 +131,8 @@ function projectCompany(project: any): string {
   const notes = readProjectNotes(project);
   const value = project?.companyName || project?.ourCompany || project?.company || notes?.companyName || notes?.ourCompany || notes?.company;
   if (value) return value;
+  const legacyCompany = legacyProjectCompanyLabel(project);
+  if (legacyCompany) return legacyCompany;
   return (
     project?.companyName ||
     project?.ourCompany ||
@@ -510,6 +517,14 @@ function rowMatchesCompanyOption(row: any, company: CompanyOption): boolean {
   const allowedNames = companyAllowedNames(company);
   if (allowedNames.length === 0) return false;
   return rowSourceProjects(row).some((project) => projectMatchesAllowedCompanies(project, allowedNames));
+}
+
+function rowHasMissingCompany(row: any): boolean {
+  return rowSourceProjects(row).some((project) => projectHasMissingCompanyIdentity(project));
+}
+
+function rowHasLegacyCompany(row: any): boolean {
+  return rowSourceProjects(row).some((project) => projectHasLegacyUnresolvedCompanyIdentity(project));
 }
 
 function yearsFromText(value: string): string[] {
@@ -1226,6 +1241,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const selectedCompanyLabel = useMemo(() => {
     if (companyFilter === 'all') return '';
     if (companyFilter === 'missing') return 'Наша компания не указана';
+    if (companyFilter === 'legacy') return 'RB A+Partners (историческое назначение)';
     return companyOptions.find((item) => item.key === companyFilter)?.name || '';
   }, [companyFilter, companyOptions]);
 
@@ -1241,7 +1257,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const haystack = `${row.company} ${row.name} ${row.client} ${row.type} ${row.startDate} ${row.deadline} ${periodText} ${Object.values(row.teamColumns).join(' ')} ${coverageTeamText}`.toLowerCase();
       if (query && !haystack.includes(query)) return false;
       if (companyFilter === 'missing') {
-        if (companyOptions.some((option) => rowMatchesCompanyOption(row, option.company))) return false;
+        if (!rowHasMissingCompany(row)) return false;
+      } else if (companyFilter === 'legacy') {
+        if (!rowHasLegacyCompany(row)) return false;
       } else if (companyFilter !== 'all') {
         const company = companyOptions.find((option) => option.key === companyFilter)?.company;
         if (!company || !rowMatchesCompanyOption(row, company)) return false;
@@ -2022,10 +2040,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Наша компания" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все наши компании</SelectItem>
-                  <SelectItem value="missing">Наша компания не указана</SelectItem>
-                  {companyOptions.map((company) => (
+                  <SelectContent>
+                    <SelectItem value="all">Все наши компании</SelectItem>
+                    <SelectItem value="missing">Наша компания не указана</SelectItem>
+                    <SelectItem value="legacy">RB A+Partners (историческое назначение)</SelectItem>
+                    {companyOptions.map((company) => (
                     <SelectItem key={company.key} value={company.key}>
                       {company.name} · {company.count}
                     </SelectItem>

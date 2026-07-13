@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  legacyProjectCompanyLabel,
+  projectHasLegacyUnresolvedCompanyIdentity,
   projectHasMissingCompanyIdentity,
   projectIsVisibleWithinCompanyScope,
 } from './userCompanyAccess';
@@ -9,8 +11,11 @@ describe('projectHasMissingCompanyIdentity', () => {
     expect(projectHasMissingCompanyIdentity({ notes: { clientName: 'Клиент без компании' } })).toBe(true);
   });
 
-  it('treats the historical comp-rb-a marker as an unassigned company', () => {
-    expect(projectHasMissingCompanyIdentity({ notes: { companyId: 'comp-rb-a' } })).toBe(true);
+  it('preserves the historical comp-rb-a company identity instead of calling it missing', () => {
+    const project = { notes: { companyId: 'comp-rb-a' } };
+    expect(projectHasMissingCompanyIdentity(project)).toBe(false);
+    expect(projectHasLegacyUnresolvedCompanyIdentity(project)).toBe(true);
+    expect(legacyProjectCompanyLabel(project)).toBe('RB A+Partners (историческое назначение)');
   });
 
   it('does not treat a project with a company identity as missing', () => {
