@@ -134,3 +134,44 @@ export function projectMatchesAllowedCompanies(
     return normalized.includes(normalizedAllowed) || normalizedAllowed.includes(normalized);
   });
 }
+
+/**
+ * Определяет именно отсутствие «нашей компании». Клиент и название проекта
+ * намеренно не участвуют: они не являются исполнителем и не должны скрывать
+ * запись из очереди назначения компании.
+ */
+export function projectHasMissingCompanyIdentity(project: any): boolean {
+  let notes = project?.notes;
+  if (typeof notes === 'string') {
+    try { notes = JSON.parse(notes); } catch { notes = null; }
+  }
+
+  const companyIdentity = [
+    notes?.companyId,
+    notes?.companyName,
+    notes?.ourCompany,
+    notes?.company,
+    project?.companyId,
+    project?.companyName,
+    project?.ourCompany,
+    project?.company,
+  ].find((value) => typeof value === 'string' && value.trim().length > 0);
+
+  return !companyIdentity;
+}
+
+/**
+ * Проверяет видимость проекта в компании пользователя. Руководящие роли могут
+ * дополнительно видеть записи без назначенной компании, чтобы разобрать их и
+ * назначить исполнителя, но не получают доступ к чужим назначенным компаниям.
+ */
+export function projectIsVisibleWithinCompanyScope(
+  project: any,
+  allowedCompanyNames: string[],
+  role?: string | null,
+): boolean {
+  if (projectMatchesAllowedCompanies(project, allowedCompanyNames)) return true;
+
+  const canTriageUnassignedCompany = ['ceo', 'admin', 'deputy_director'].includes(role || '');
+  return canTriageUnassignedCompany && projectHasMissingCompanyIdentity(project);
+}

@@ -46,6 +46,27 @@ test.describe('bulk administration and deputy project status', () => {
     expect(network.mutationRequests).toEqual([]);
   });
 
+  test('deputy director can assign a company while an assistant stays read-only', async ({ page }) => {
+    let network = await loginAsDemoRole(page, 'deputy_director');
+    await page.goto(`/project/${demoProject.id}`);
+    await waitForDemoApp(page);
+    const companySelect = page.getByRole('combobox', { name: 'Выбрать компанию проекта', exact: true });
+    const saveCompany = page.getByRole('button', { name: 'Назначить компанию', exact: true });
+    await expect(companySelect).toBeVisible();
+    await expect(saveCompany).toBeVisible();
+    await companySelect.click();
+    await page.getByRole('option').first().click();
+    await saveCompany.click();
+    await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
+    expect(network.productionMutations).toEqual([]);
+
+    network = await loginAsDemoRole(page, 'assistant_1');
+    await page.goto(`/project/${demoProject.id}`);
+    await waitForDemoApp(page);
+    await expect(page.getByRole('button', { name: 'Назначить компанию', exact: true })).toHaveCount(0);
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('CEO can select employees in bulk while the current account stays protected', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/hr?tab=employees');

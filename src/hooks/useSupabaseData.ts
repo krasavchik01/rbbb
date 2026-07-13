@@ -12,7 +12,7 @@ import {
 } from '@/lib/supabaseDataStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
-import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
+import { projectIsVisibleWithinCompanyScope } from '@/lib/userCompanyAccess';
 import { findCompanyByAnyValue } from '@/types/companies';
 import { getProjectNotes } from '@/lib/projectNotes';
 
@@ -204,7 +204,9 @@ export function useProjects() {
         .filter(Boolean) as string[];
 
       if (allowedNames.length === 0) return allProjects;
-      return allProjects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));
+      return allProjects.filter((project) => (
+        projectIsVisibleWithinCompanyScope(project, allowedNames, user.role)
+      ));
     }
 
     const canViewAllProjects = user && ['ceo', 'admin', 'deputy_director', 'procurement'].includes(user.role);

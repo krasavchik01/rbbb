@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
@@ -26,6 +27,7 @@ import { useProjectDataSync } from "@/hooks/useProjectDataSync";
 import { TEAM_ROLE_SLOTS } from "@/types/roles";
 
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
+import { useAppSettings } from "@/lib/appSettings";
 
 import { supabase } from "@/integrations/supabase/client";
 import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses, notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
@@ -73,11 +75,12 @@ export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects } = useProjects();
+  const { projects, updateProject } = useProjects();
   const { tasks: allTasks } = useTasks();
   const { employees } = useEmployees();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [appSettings] = useAppSettings();
 
   // Получаем проект из state (если передан при навигации)
   const projectFromState = (location.state as any)?.project;
@@ -95,6 +98,8 @@ export default function ProjectWorkspace() {
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeType, setNewEmployeeType] = useState<'staff' | 'gph' | 'subcontract'>('staff');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [companyDraftId, setCompanyDraftId] = useState('');
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
 
   // Дополнительные соглашения
   const [amendments, setAmendments] = useState<ProjectAmendment[]>([]);
@@ -108,6 +113,7 @@ export default function ProjectWorkspace() {
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
+  const canManageProjectCompany = isCEO || isAdmin || isDeputy;
   const canEditAuditPeriods = isPartner || isAdmin || isCEO || isDeputy;
   const projectStatus = project?.notes?.status || project?.status;
   // Управление командой: admin/ceo — всегда, deputy_director — пока проект не
@@ -138,6 +144,65 @@ export default function ProjectWorkspace() {
   const normalizedContract = useMemo(() => readProjectContract(project), [project]);
   const normalizedFiles = useMemo(() => readProjectFiles(project), [project]);
   const normalizedFinances = useMemo(() => readProjectFinances(project), [project]);
+  const activeCompanies = useMemo(
+    () => (appSettings.companies || []).filter((company) => company?.id && company?.name && company.isActive !== false),
+    [appSettings.companies],
+  );
+  const currentProjectCompany = useMemo(() => {
+    const notes = typeof project?.notes === 'string'
+      ? (() => { try { return JSON.parse(project.notes); } catch { return {}; } })()
+      : project?.notes || {};
+    return {
+      id: String(project?.companyId || notes?.companyId || ''),
+      name: String(project?.companyName || project?.ourCompany || project?.company || notes?.companyName || notes?.ourCompany || notes?.company || ''),
+    };
+  }, [project]);
+
+  useEffect(() => {
+    const matched = activeCompanies.find((company) => (
+      company.id === currentProjectCompany.id
+      || company.name === currentProjectCompany.name
+      || company.fullName === currentProjectCompany.name
+    ));
+    setCompanyDraftId(matched?.id || '');
+  }, [activeCompanies, currentProjectCompany]);
+
+  const saveProjectCompany = async () => {
+    if (!project || !updateProject || isSavingCompany) return;
+    const company = activeCompanies.find((candidate) => candidate.id === companyDraftId);
+    if (!company) {
+      toast({
+        title: 'Выберите компанию',
+        description: 'Сначала выберите компанию-исполнителя из списка.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingCompany(true);
+    const patch = {
+      companyId: company.id,
+      companyName: company.name,
+      company: company.name,
+      ourCompany: company.name,
+    };
+    try {
+      const saved = await updateProject(project.id || id || '', patch);
+      if (saved) setProject(saved as any);
+      toast({
+        title: currentProjectCompany.name ? 'Компания изменена' : 'Компания назначена',
+        description: `${project.name || 'Проект'}: ${company.name}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось сохранить компанию',
+        description: error?.message || 'Попробуйте ещё раз.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingCompany(false);
+    }
+  };
   const normalizedStartDate = useMemo(() => readProjectStartDate(project), [project]);
   const normalizedDeadline = useMemo(() => readProjectDeadline(project), [project]);
 
@@ -413,6 +478,44 @@ export default function ProjectWorkspace() {
           variant="expanded"
         />
       </Card>
+
+      {canManageProjectCompany && (
+        <Card className="border-primary/20 bg-primary/5 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Наша компания</p>
+              <p className="text-sm text-muted-foreground">
+                {currentProjectCompany.name || 'Не указана — назначьте компанию, чтобы проект попал в корректный рабочий свод.'}
+              </p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+              <Select
+                value={companyDraftId}
+                onValueChange={setCompanyDraftId}
+                disabled={isSavingCompany || activeCompanies.length === 0}
+              >
+                <SelectTrigger className="w-full sm:w-[280px]" aria-label="Выбрать компанию проекта">
+                  <SelectValue placeholder="Выберите компанию" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeCompanies.map((company) => (
+                    <SelectItem key={company.id} value={company.id}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                onClick={() => void saveProjectCompany()}
+                disabled={isSavingCompany || !companyDraftId || activeCompanies.length === 0}
+              >
+                {isSavingCompany ? 'Сохраняю…' : 'Назначить компанию'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Статистика задач */}
       {projectTasks.length > 0 && (
