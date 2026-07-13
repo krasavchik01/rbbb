@@ -26,15 +26,15 @@ const report = {
   status: 'production_demo_ready',
   productionStatus: 'deployed_and_smoke_verified',
   productionInspection: {
-    inspectedAt: '2026-07-13T05:46:30.000Z',
+    inspectedAt: generatedAt,
     url: 'https://rbbb.vercel.app/',
     httpStatus: 200,
-    deploymentId: 'dpl_Ccyr7tg8VzeNtPJnpc2354cMs1XT',
-    deploymentCreatedAt: '2026-07-13T10:44:54+05:00',
+    deploymentId: 'dpl_Bz4WhbY8d5VnERKowymuiQHs7bRS',
+    deploymentCreatedAt: '2026-07-13T16:06:34+05:00',
     deploymentStatus: 'Ready',
-    deployedAsset: 'index-CmT88yh4.js',
+    deployedAsset: 'index-D14J9xbL.js',
     currentBranchDeployed: true,
-    smokeRoutes: ['/', '/projects', '/bonuses', '/project/demo-project-001'],
+    smokeRoutes: ['/', '/projects', '/hr', '/bonuses', '/project/demo-project-001'],
     browserConsoleErrors: 0,
   },
   evidence: {
@@ -47,14 +47,16 @@ const report = {
     fixtureSafetyChecks: 1,
     publicAuthChecks: 5,
     routePermissionChecks: 568,
+    bulkAdministrationChecks: 4,
+    activeBrowserChecks: 797,
   },
   qualityGates: {
     typecheck: 'passed',
     productionBuild: 'passed',
     lintErrors: 0,
     lintWarnings: 875,
-    unitTests: { passed: 83, failed: 0 },
-    nodeTests: { passed: 41, failed: 0 },
+    unitTests: { passed: 91, failed: 0 },
+    nodeTests: { passed: 63, failed: 0 },
   },
   demoProject: {
     name: 'АО Демонстрационный клиент — аудит 2026',
@@ -104,6 +106,7 @@ const report = {
     'No production mutations are allowed by the demo harness.',
     'Bonus payment registration is intentionally unavailable while percentages and registry are unconfirmed.',
     'Imports are not rerun automatically.',
+    'The live project purge kept consortium and unrecognized companies, preserved timesheets and left Seafile objects untouched.',
   ],
 };
 
@@ -118,7 +121,7 @@ const md = `# RBBB — готовность к демонстрации гене
 
 Текущая ветка опубликована в production. Публичный вход и регистрация проверены в реальном браузере; все ключевые маршруты отвечают HTTP 200, ошибок консоли не обнаружено.
 
-Production-проверка: \`https://rbbb.vercel.app/\` обслуживается deployment \`dpl_Ccyr7tg8VzeNtPJnpc2354cMs1XT\` от 13.07.2026 с bundle \`index-CmT88yh4.js\`. Маршруты \`/\`, \`/projects\`, \`/bonuses\` и \`/project/demo-project-001\` отвечают HTTP 200.
+Production-проверка: \`https://rbbb.vercel.app/\` обслуживается deployment \`${report.productionInspection.deploymentId}\` от 13.07.2026 с bundle \`${report.productionInspection.deployedAsset}\`. Маршруты \`/\`, \`/projects\`, \`/hr\`, \`/bonuses\` и \`/project/demo-project-001\` отвечают HTTP 200.
 
 ## Что доказано автоматикой
 
@@ -131,6 +134,8 @@ Production-проверка: \`https://rbbb.vercel.app/\` обслуживает
 | Сквозные бизнес-сценарии | 7 / 7 |
 | Изоляция от production | 1 / 1 |
 | Матрица разрешений маршрутов | 568 / 568 |
+| Массовое администрирование и статус заместителя | 4 / 4 |
+| Полный активный браузерный прогон | 797 / 797 |
 
 ## Ворота качества
 
@@ -139,8 +144,8 @@ Production-проверка: \`https://rbbb.vercel.app/\` обслуживает
 | TypeScript | пройдено |
 | Production build | пройдено |
 | Линтер | 0 ошибок; 875 старых предупреждений |
-| Модульные тесты | 83 / 83 |
-| Серверные тесты | 41 / 41 |
+| Модульные тесты | 91 / 91 |
+| Серверные тесты | 63 / 63 |
 
 На каждом экране проверяются загрузка без падения, отсутствие 404/NaN/undefined, понятные имена видимых кнопок, корректные внутренние ссылки, отсутствие ошибок консоли и отсутствие неразрешённых внешних записей.
 
@@ -176,11 +181,12 @@ Production-проверка: \`https://rbbb.vercel.app/\` обслуживает
 | Файлы | Seafile + metadata проекта |
 | Единый интерфейс | \`/projects\` с правами по ролям |
 
-## Live-БД: read-only снимок от 12.07.2026
+## Live-БД: проверка после безопасной очистки от 13.07.2026
 
-- 1 043 проекта и 140 сотрудников.
-- 14 629 утверждённых строк таймшитов на 110 364,4 часа.
-- RBI: 144 проекта и 152 участника.
+- Проектов: ${report.liveReadOnlyBaseline.projects.toLocaleString('ru-RU')}; сотрудников: ${report.liveReadOnlyBaseline.employees.toLocaleString('ru-RU')}.
+- ${report.liveReadOnlyBaseline.approvedTimesheetRows.toLocaleString('ru-RU')} утверждённых строк таймшитов на ${report.liveReadOnlyBaseline.approvedHours.toLocaleString('ru-RU')} часа.
+- RBI: ${report.liveReadOnlyBaseline.rbiProjects.toLocaleString('ru-RU')} проектов и ${report.liveReadOnlyBaseline.rbiParticipants.toLocaleString('ru-RU')} участников после удаления проектов исключённых компаний.
+- Удалено 149 чистых проектов Anderson/Parker; консорциумы и неопределённые компании сохранены. Таймшиты и физические файлы Seafile не удалялись.
 - \`bonuses\`, \`project_team\`, \`project_participants\`: по 0 строк.
 
 ## Что намеренно не скрыто
@@ -193,7 +199,7 @@ Production-проверка: \`https://rbbb.vercel.app/\` обслуживает
 
 ## Чек-лист непосредственно перед встречей
 
-- Опубликовать текущую ветку на целевое окружение.
+- Убедиться, что основной адрес открывает deployment \`${report.productionInspection.deploymentId}\`.
 - Проверить вход реальными учётными записями CEO, procurement и assistant.
 - Открыть один реальный проект и убедиться, что Seafile выдаёт список и ссылку скачивания.
 - Не запускать импорты, миграции и регистрацию выплат во время демонстрации.
