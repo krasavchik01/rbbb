@@ -157,7 +157,13 @@ export function projectHasMissingCompanyIdentity(project: any): boolean {
     project?.company,
   ].find((value) => typeof value === 'string' && value.trim().length > 0);
 
-  return !companyIdentity;
+  if (!companyIdentity) return true;
+
+  // В историческом импорте comp-rb-a не являлся назначением компании: это
+  // техническая заглушка, из-за которой проект не попадал в очередь разбора.
+  // Не нормализуем её в RB Partners автоматически — компанию должен выбрать
+  // руководитель по фактическому проекту.
+  return String(companyIdentity).trim().toLowerCase() === 'comp-rb-a';
 }
 
 /**

@@ -32,7 +32,7 @@ import { notifyProjectApproved, notifyProjectRejected, notifyPMAssigned, notifyT
 import { getNotifications } from "@/lib/notifications";
 import { useEmployees } from "@/hooks/useSupabaseData";
 import { useAppSettings } from "@/lib/appSettings";
-import { projectMatchesAllowedCompanies } from "@/lib/userCompanyAccess";
+import { projectIsVisibleWithinCompanyScope } from "@/lib/userCompanyAccess";
 import { findCompanyByAnyValue } from "@/types/companies";
 
 export default function ProjectApproval() {
@@ -137,7 +137,7 @@ export default function ProjectApproval() {
         })
         .filter(Boolean) as string[];
       if (allowedNames.length > 0) {
-        filtered = filtered.filter(p => projectMatchesAllowedCompanies(p, allowedNames));
+        filtered = filtered.filter(p => projectIsVisibleWithinCompanyScope(p, allowedNames, user?.role));
       } else {
         filtered = supaProjects as any[];
       }

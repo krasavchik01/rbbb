@@ -9,6 +9,10 @@ describe('projectHasMissingCompanyIdentity', () => {
     expect(projectHasMissingCompanyIdentity({ notes: { clientName: 'Клиент без компании' } })).toBe(true);
   });
 
+  it('treats the historical comp-rb-a marker as an unassigned company', () => {
+    expect(projectHasMissingCompanyIdentity({ notes: { companyId: 'comp-rb-a' } })).toBe(true);
+  });
+
   it('does not treat a project with a company identity as missing', () => {
     expect(projectHasMissingCompanyIdentity({
       notes: { companyId: 'mak', companyName: 'ТОО МАК' },
@@ -33,5 +37,11 @@ describe('projectHasMissingCompanyIdentity', () => {
       ['ТОО МАК'],
       'assistant_1',
     )).toBe(false);
+
+    expect(projectIsVisibleWithinCompanyScope(
+      { notes: { companyId: 'comp-rb-a' } },
+      ['ТОО МАК'],
+      'deputy_director',
+    )).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
-import { projectMatchesAllowedCompanies } from '@/lib/userCompanyAccess';
+import { projectIsVisibleWithinCompanyScope } from '@/lib/userCompanyAccess';
 import { findCompanyByAnyValue } from '@/types/companies';
 
 /**
@@ -29,6 +29,6 @@ export function useFilteredProjects<T>(projects: T[]): T[] {
 
     if (allowedNames.length === 0) return projects;
 
-    return projects.filter((p) => projectMatchesAllowedCompanies(p, allowedNames));
-  }, [projects, user?.allowedCompanyIds, appSettings.companies]);
+    return projects.filter((project) => projectIsVisibleWithinCompanyScope(project, allowedNames, user.role));
+  }, [projects, user?.allowedCompanyIds, user?.role, appSettings.companies]);
 }
