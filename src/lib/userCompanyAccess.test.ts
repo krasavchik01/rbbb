@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   legacyProjectCompanyLabel,
-  projectHasLegacyUnresolvedCompanyIdentity,
   projectHasMissingCompanyIdentity,
   projectIsVisibleWithinCompanyScope,
+  projectMatchesAllowedCompanies,
 } from './userCompanyAccess';
 
 describe('projectHasMissingCompanyIdentity', () => {
@@ -11,11 +11,11 @@ describe('projectHasMissingCompanyIdentity', () => {
     expect(projectHasMissingCompanyIdentity({ notes: { clientName: 'Клиент без компании' } })).toBe(true);
   });
 
-  it('preserves the historical comp-rb-a company identity instead of calling it missing', () => {
+  it('maps the historical comp-rb-a company code to ТОО МАК', () => {
     const project = { notes: { companyId: 'comp-rb-a' } };
     expect(projectHasMissingCompanyIdentity(project)).toBe(false);
-    expect(projectHasLegacyUnresolvedCompanyIdentity(project)).toBe(true);
-    expect(legacyProjectCompanyLabel(project)).toBe('RB A+Partners (историческое назначение)');
+    expect(legacyProjectCompanyLabel(project)).toBe('ТОО МАК');
+    expect(projectMatchesAllowedCompanies(project, ['mak'])).toBe(true);
   });
 
   it('does not treat a project with a company identity as missing', () => {

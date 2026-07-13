@@ -178,12 +178,8 @@ export function legacyProjectCompanyLabel(project: any): string | null {
   ].find((value) => typeof value === 'string' && value.trim().length > 0);
 
   return String(companyIdentity || '').trim().toLowerCase() === 'comp-rb-a'
-    ? 'RB A+Partners (историческое назначение)'
+    ? 'ТОО МАК'
     : null;
-}
-
-export function projectHasLegacyUnresolvedCompanyIdentity(project: any): boolean {
-  return legacyProjectCompanyLabel(project) !== null;
 }
 
 /**
@@ -199,8 +195,5 @@ export function projectIsVisibleWithinCompanyScope(
   if (projectMatchesAllowedCompanies(project, allowedCompanyNames)) return true;
 
   const canTriageUnassignedCompany = ['ceo', 'admin', 'deputy_director'].includes(role || '');
-  return canTriageUnassignedCompany && (
-    projectHasMissingCompanyIdentity(project)
-    || projectHasLegacyUnresolvedCompanyIdentity(project)
-  );
+  return canTriageUnassignedCompany && projectHasMissingCompanyIdentity(project);
 }

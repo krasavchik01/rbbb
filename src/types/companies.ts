@@ -126,6 +126,7 @@ export const DEFAULT_COMPANIES: Company[] = [
 
 const COMPANY_ID_ALIASES: Record<string, string> = {
   mak: 'mak',
+  'comp-rb-a': 'mak',
   too_mak: 'mak',
   'тоо_мак': 'mak',
   'тоомак': 'mak',
