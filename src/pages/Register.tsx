@@ -281,6 +281,8 @@ const Register = () => {
                           className="absolute right-0 top-0 h-full px-2 hover:bg-transparent text-slate-400 hover:text-white"
                           onClick={() => setShowPassword(!showPassword)}
                           disabled={isLoading}
+                          aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+                          title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
                         >
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
@@ -307,6 +309,8 @@ const Register = () => {
                           className="absolute right-0 top-0 h-full px-2 hover:bg-transparent text-slate-400 hover:text-white"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           disabled={isLoading}
+                          aria-label={showConfirmPassword ? 'Скрыть повтор пароля' : 'Показать повтор пароля'}
+                          title={showConfirmPassword ? 'Скрыть повтор пароля' : 'Показать повтор пароля'}
                         >
                           {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
