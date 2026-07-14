@@ -927,7 +927,16 @@ function EmployeeSearchAdd({
                 aria-label="Добавить ГПХ"
                 data-testid="add-contractor"
                 className="flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-accent"
-                onClick={addContractor}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  addContractor();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  addContractor();
+                }}
               >
                 <span className="font-medium">Добавить ГПХ / субподряд</span>
                 <span className="text-xs text-muted-foreground">Указать сумму</span>
@@ -1170,6 +1179,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       };
     });
   }, [projects, hoursTotals, canSeeContractMoney]);
+
+  const gphEditorRow = gphEditorRowId ? rows.find((row) => row.id === gphEditorRowId) : undefined;
 
   const summary = useMemo(() => {
     return rows.reduce(
@@ -2844,41 +2855,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               </div>
 
-                              {canManageContractors && gphEditorRowId === row.id && (
-                                <div className="rounded-md border bg-background">
-                                  <div className="flex flex-col gap-3 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                      <div className="text-sm font-semibold">ГПХ / субподряд</div>
-                                      <div className="text-xs text-muted-foreground">Укажите сумму ГПХ: она вычитается из базы бонуса и сразу пересчитывает финансовый свод.</div>
-                                    </div>
-                                    <Button type="button" variant="ghost" size="sm" onClick={() => setGphEditorRowId(null)}>Отмена</Button>
-                                  </div>
-                                  <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
-                                    <Input
-                                      aria-label={`Сумма ГПХ для проекта ${row.name}`}
-                                      data-testid="contractor-amount-input"
-                                      type="number"
-                                      min="0"
-                                      step="1000"
-                                      inputMode="numeric"
-                                      value={contractorAmountDrafts[row.id] ?? String(Number(row.finances.totalContractorsAmount) || 0)}
-                                      onChange={(event) => setContractorAmountDrafts((current) => ({ ...current, [row.id]: event.target.value }))}
-                                      className="sm:max-w-xs"
-                                    />
-                                    <span className="text-sm text-muted-foreground">₸</span>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      data-testid="save-contractor-amount"
-                                      disabled={savingProjectId === `${row.id}:contractors`}
-                                      onClick={() => void saveContractorAmount(row)}
-                                    >
-                                      {savingProjectId === `${row.id}:contractors` ? 'Сохраняю…' : 'Учесть ГПХ'}
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-
                               {isExecutive && (
                                 <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
                                   <MetricBox label="Сумма без НДС" value={`${money.format(row.amount)} ₸`} />
@@ -3006,6 +2982,46 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             </TableBody>
           </table>
         </Card>
+
+        <AlertDialog open={Boolean(gphEditorRow)} onOpenChange={(open) => !open && setGphEditorRowId(null)}>
+          {gphEditorRow && (
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Добавить ГПХ / субподряд</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {gphEditorRow.name}. Укажите сумму: она будет вычтена из базы бонуса, а финансовый свод пересчитается сразу.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="flex items-center gap-2">
+                <Input
+                  aria-label={`Сумма ГПХ для проекта ${gphEditorRow.name}`}
+                  data-testid="contractor-amount-input"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  inputMode="numeric"
+                  autoFocus
+                  value={contractorAmountDrafts[gphEditorRow.id] ?? String(Number(gphEditorRow.finances.totalContractorsAmount) || 0)}
+                  onChange={(event) => setContractorAmountDrafts((current) => ({ ...current, [gphEditorRow.id]: event.target.value }))}
+                />
+                <span className="text-sm text-muted-foreground">₸</span>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={savingProjectId === `${gphEditorRow.id}:contractors`}>Отмена</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="save-contractor-amount"
+                  disabled={savingProjectId === `${gphEditorRow.id}:contractors`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void saveContractorAmount(gphEditorRow);
+                  }}
+                >
+                  {savingProjectId === `${gphEditorRow.id}:contractors` ? 'Сохраняю…' : 'Учесть ГПХ'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          )}
+        </AlertDialog>
 
         <AlertDialog open={bulkCompanyAssignOpen} onOpenChange={setBulkCompanyAssignOpen}>
           <AlertDialogContent>
