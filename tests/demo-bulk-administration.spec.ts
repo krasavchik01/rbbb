@@ -8,10 +8,12 @@ test.describe('bulk administration and deputy project status', () => {
     await waitForDemoApp(page);
 
     await page.locator('tr').filter({ hasText: demoProject.name }).first().getByRole('button').first().click();
-    const gphInput = page.getByRole('spinbutton', { name: `Сумма ГПХ для проекта ${demoProject.name}`, exact: true });
+    await page.getByRole('button', { name: 'Добавить', exact: true }).first().click();
+    await page.getByTestId('add-contractor').click();
+    const gphInput = page.getByTestId('contractor-amount-input');
     await expect(gphInput).toBeVisible();
     await gphInput.fill('250000');
-    await page.getByRole('button', { name: 'Учесть ГПХ', exact: true }).click();
+    await page.getByTestId('save-contractor-amount').click();
     await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
     expect(network.productionMutations).toEqual([]);
   });

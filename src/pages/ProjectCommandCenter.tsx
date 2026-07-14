@@ -867,10 +867,12 @@ function EmployeeSearchAdd({
   employees,
   disabled,
   onPick,
+  onAddContractor,
 }: {
   employees: any[];
   disabled?: boolean;
   onPick: (employeeId: string) => void;
+  onAddContractor?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -881,12 +883,17 @@ function EmployeeSearchAdd({
         if (!q) return true;
         const haystack = `${employeeName(employee)} ${employee?.email || ''} ${employee?.role || ''}`.toLowerCase();
         return haystack.includes(q);
-      })
-      .slice(0, 80);
+      });
   }, [employees, q]);
 
   const pick = (employeeId: string) => {
     onPick(employeeId);
+    setOpen(false);
+    setQuery('');
+  };
+
+  const addContractor = () => {
+    onAddContractor?.();
     setOpen(false);
     setQuery('');
   };
@@ -913,6 +920,21 @@ function EmployeeSearchAdd({
           </div>
         </div>
         <div className="max-h-[280px] overflow-y-auto p-1">
+          {onAddContractor && (
+            <>
+              <button
+                type="button"
+                aria-label="Добавить ГПХ"
+                data-testid="add-contractor"
+                className="flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm hover:bg-accent"
+                onClick={addContractor}
+              >
+                <span className="font-medium">Добавить ГПХ / субподряд</span>
+                <span className="text-xs text-muted-foreground">Указать сумму</span>
+              </button>
+              <div className="my-1 border-t" />
+            </>
+          )}
           {filtered.length === 0 && (
             <div className="px-2 py-6 text-center text-sm text-muted-foreground">Ничего не найдено</div>
           )}
@@ -954,6 +976,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
   const [contractorAmountDrafts, setContractorAmountDrafts] = useState<Record<string, string>>({});
+  const [gphEditorRowId, setGphEditorRowId] = useState<string | null>(null);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -1631,6 +1654,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         },
       });
       setContractorAmountDrafts((current) => ({ ...current, [row.id]: String(amount) }));
+      setGphEditorRowId(null);
       toast({ title: 'ГПХ сохранён', description: `${money.format(amount)} ₸ учтено в расчёте бонуса.` });
     } catch (error: any) {
       toast({ title: 'Не удалось сохранить ГПХ', description: error?.message || 'Повторите попытку', variant: 'destructive' });
@@ -2718,6 +2742,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                       employees={assignableEmployees}
                                                       disabled={savingProjectId === `${row.id}:${period.id}:add:${column.key}`}
                                                       onPick={(employeeId) => addPeriodTeamMember(row, period, column.key, employeeId)}
+                                                      onAddContractor={canManageContractors ? () => setGphEditorRowId(row.id) : undefined}
                                                     />
                                                   )}
                                                   {members.length === 0 && !canManageTeam && (
@@ -2819,18 +2844,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               </div>
 
-                              {canManageContractors && (
+                              {canManageContractors && gphEditorRowId === row.id && (
                                 <div className="rounded-md border bg-background">
                                   <div className="flex flex-col gap-3 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                       <div className="text-sm font-semibold">ГПХ / субподряд</div>
-                                      <div className="text-xs text-muted-foreground">Сумма вычитается из базы бонуса и сразу пересчитывает финансовый свод.</div>
+                                      <div className="text-xs text-muted-foreground">Укажите сумму ГПХ: она вычитается из базы бонуса и сразу пересчитывает финансовый свод.</div>
                                     </div>
-                                    <Badge variant="outline" className="w-fit">Можно изменить заместителю директора</Badge>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => setGphEditorRowId(null)}>Отмена</Button>
                                   </div>
                                   <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
                                     <Input
                                       aria-label={`Сумма ГПХ для проекта ${row.name}`}
+                                      data-testid="contractor-amount-input"
                                       type="number"
                                       min="0"
                                       step="1000"
@@ -2843,6 +2869,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                     <Button
                                       type="button"
                                       size="sm"
+                                      data-testid="save-contractor-amount"
                                       disabled={savingProjectId === `${row.id}:contractors`}
                                       onClick={() => void saveContractorAmount(row)}
                                     >
@@ -2886,6 +2913,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                             employees={assignableEmployees}
                                             disabled={savingProjectId === `${row.id}:add:${column.key}`}
                                             onPick={(employeeId) => addTeamMember(row, column.key, employeeId)}
+                                            onAddContractor={canManageContractors ? () => setGphEditorRowId(row.id) : undefined}
                                           />
                                         )}
                                         <div className="space-y-2">
