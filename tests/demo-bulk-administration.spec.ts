@@ -2,6 +2,20 @@ import { expect, test } from '@playwright/test';
 import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
 test.describe('bulk administration and deputy project status', () => {
+  test('deputy director can add a GPH amount from the project summary', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    await page.locator('tr').filter({ hasText: demoProject.name }).first().getByRole('button').first().click();
+    const gphInput = page.getByRole('spinbutton', { name: `Сумма ГПХ для проекта ${demoProject.name}`, exact: true });
+    await expect(gphInput).toBeVisible();
+    await gphInput.fill('250000');
+    await page.getByRole('button', { name: 'Учесть ГПХ', exact: true }).click();
+    await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('shows a compact loading indicator while timesheet entries are fetched', async ({ page }) => {
     await loginAsDemoRole(page, 'ceo');
     let releaseTimesheetsRequest!: () => void;

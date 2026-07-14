@@ -1328,12 +1328,42 @@ function ProjectDetail({
                   <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                     {actions.adjustAmount && (
                       <>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-7 w-7"
+                          title="Уменьшить бонус на 10 000 ₸"
+                          aria-label={`Уменьшить бонус ${empName(m.userId, m.userName)} на 10 000 ₸`}
+                          disabled={busy}
+                          onClick={() => setAdjustDraft((current) => ({
+                            ...current,
+                            [m.userId]: String(Math.max(0, Number(current[m.userId] ?? m.finalAmount) - 10_000)),
+                          }))}
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </Button>
                         <Input
                           type="number"
+                          min="0"
+                          step="10000"
                           value={draft ?? String(Math.round(m.finalAmount))}
                           onChange={(e) => setAdjustDraft((p) => ({ ...p, [m.userId]: e.target.value }))}
                           className="h-7 text-xs w-28"
                         />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-7 w-7"
+                          title="Увеличить бонус на 10 000 ₸"
+                          aria-label={`Увеличить бонус ${empName(m.userId, m.userName)} на 10 000 ₸`}
+                          disabled={busy}
+                          onClick={() => setAdjustDraft((current) => ({
+                            ...current,
+                            [m.userId]: String(Math.max(0, Number(current[m.userId] ?? m.finalAmount) + 10_000)),
+                          }))}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onAdjust} disabled={busy}>
                           Сохранить
                         </Button>

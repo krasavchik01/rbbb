@@ -18,6 +18,11 @@ export interface EmailTemplate {
   text: string;
 }
 
+export interface DeadlineReminderConfig {
+  recipients: string[];
+  enabled: boolean;
+}
+
 const getAPIBase = (): string => {
   try {
     if (typeof window !== 'undefined' && window.location?.origin) {
@@ -117,6 +122,25 @@ export const testSMTPConnection = async (
     body: JSON.stringify({ config, testRecipient }),
   });
   return readJSON(response);
+};
+
+export const loadDeadlineReminderConfig = async (): Promise<DeadlineReminderConfig> => {
+  const response = await fetch(`${getAPIBase()}/api/deadline-reminders`, {
+    method: 'GET',
+    headers: await getAuthHeaders(),
+  });
+  const payload = await readJSON(response);
+  return payload.config || { recipients: [], enabled: true };
+};
+
+export const saveDeadlineReminderConfig = async (config: DeadlineReminderConfig): Promise<DeadlineReminderConfig> => {
+  const response = await fetch(`${getAPIBase()}/api/deadline-reminders`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ config }),
+  });
+  const payload = await readJSON(response);
+  return payload.config || config;
 };
 
 export const requestPasswordResetEmail = async (

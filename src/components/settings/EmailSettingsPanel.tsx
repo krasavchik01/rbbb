@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, Mail, Save, Send, TestTube } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Mail, Plus, Save, Send, TestTube, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { loadSMTPConfig, saveSMTPConfig, testSMTPConnection, type SMTPConfig } from '@/lib/emailService';
+import {
+  loadDeadlineReminderConfig,
+  loadSMTPConfig,
+  saveDeadlineReminderConfig,
+  saveSMTPConfig,
+  testSMTPConnection,
+  type SMTPConfig,
+} from '@/lib/emailService';
 import { useToast } from '@/hooks/use-toast';
 
 const emptyConfig: SMTPConfig = {
@@ -40,6 +47,10 @@ export function EmailSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deadlineRecipients, setDeadlineRecipients] = useState<string[]>([]);
+  const [deadlineRecipientDraft, setDeadlineRecipientDraft] = useState('');
+  const [deadlineRemindersEnabled, setDeadlineRemindersEnabled] = useState(true);
+  const [savingDeadlineRecipients, setSavingDeadlineRecipients] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -52,6 +63,13 @@ export function EmailSettingsPanel() {
       }
       setLoading(false);
     });
+    loadDeadlineReminderConfig()
+      .then((saved) => {
+        if (!mounted) return;
+        setDeadlineRecipients(Array.isArray(saved.recipients) ? saved.recipients : []);
+        setDeadlineRemindersEnabled(saved.enabled !== false);
+      })
+      .catch(() => undefined);
 
     return () => {
       mounted = false;
@@ -65,6 +83,41 @@ export function EmailSettingsPanel() {
   const updateConfig = (updates: Partial<SMTPConfig>) => {
     setConfig((current) => ({ ...current, ...updates }));
     setResult(null);
+  };
+
+  const addDeadlineRecipient = () => {
+    const email = deadlineRecipientDraft.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      toast({ title: 'Укажите корректный email', variant: 'destructive' });
+      return;
+    }
+    if (deadlineRecipients.includes(email)) {
+      setDeadlineRecipientDraft('');
+      return;
+    }
+    setDeadlineRecipients((current) => [...current, email]);
+    setDeadlineRecipientDraft('');
+  };
+
+  const saveDeadlineRecipients = async () => {
+    setSavingDeadlineRecipients(true);
+    try {
+      const saved = await saveDeadlineReminderConfig({
+        recipients: deadlineRecipients,
+        enabled: deadlineRemindersEnabled,
+      });
+      setDeadlineRecipients(saved.recipients || []);
+      setDeadlineRemindersEnabled(saved.enabled !== false);
+      toast({ title: 'Список рассылки сохранён', description: 'Напоминания о сроках будут приходить за 30, 7 и 2 дня.' });
+    } catch (error) {
+      toast({
+        title: 'Не удалось сохранить рассылку',
+        description: error instanceof Error ? error.message : 'Повторите попытку',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingDeadlineRecipients(false);
+    }
   };
 
   const handleSave = async () => {
@@ -281,6 +334,51 @@ export function EmailSettingsPanel() {
             </Button>
           </div>
         </div>
+      </Card>
+
+      <Card className="p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h4 className="flex items-center gap-2 font-semibold"><Send className="h-4 w-4 text-primary" /> Контроль сроков проектов</h4>
+            <p className="mt-1 text-sm text-muted-foreground">Системное письмо уходит за 30 дней, за 7 дней и за 2 дня до срока проекта.</p>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Label htmlFor="deadline-reminders-enabled">Включить</Label>
+            <Switch id="deadline-reminders-enabled" checked={deadlineRemindersEnabled} onCheckedChange={setDeadlineRemindersEnabled} />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            aria-label="Email для рассылки сроков проектов"
+            type="email"
+            placeholder="director@example.kz"
+            value={deadlineRecipientDraft}
+            onChange={(event) => setDeadlineRecipientDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                addDeadlineRecipient();
+              }
+            }}
+          />
+          <Button type="button" variant="outline" onClick={addDeadlineRecipient}><Plus className="mr-2 h-4 w-4" />Добавить</Button>
+        </div>
+        <div className="mt-3 space-y-2">
+          {deadlineRecipients.length === 0 ? (
+            <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">Получатели ещё не добавлены — письма о сроках не будут отправляться.</div>
+          ) : deadlineRecipients.map((email) => (
+            <div key={email} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+              <span className="truncate">{email}</span>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" aria-label={`Удалить ${email} из рассылки`} onClick={() => setDeadlineRecipients((current) => current.filter((item) => item !== email))}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+        <Button type="button" className="mt-4" onClick={saveDeadlineRecipients} disabled={savingDeadlineRecipients}>
+          {savingDeadlineRecipients && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Сохранить список рассылки
+        </Button>
       </Card>
 
       <Card className="p-4 sm:p-6">

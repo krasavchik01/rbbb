@@ -953,6 +953,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [contractorAmountDrafts, setContractorAmountDrafts] = useState<Record<string, string>>({});
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -981,6 +982,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canBulkAssignCompany = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const canSelectProjects = canDeleteProjects || canBulkAssignCompany;
   const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const canManageContractors = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = canManageTeam || user?.role === 'partner';
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
@@ -1577,6 +1579,61 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         description: error?.message || 'Попробуйте еще раз',
         variant: 'destructive',
       });
+    } finally {
+      setSavingProjectId(null);
+    }
+  };
+
+  const saveContractorAmount = async (row: (typeof rows)[number]) => {
+    if (!canManageContractors || !updateProject) return;
+    const rawAmount = contractorAmountDrafts[row.id] ?? String(Number(row.finances.totalContractorsAmount) || 0);
+    const amount = Number(String(rawAmount).replace(/\s/g, '').replace(',', '.'));
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast({ title: 'Укажите корректную сумму ГПХ', variant: 'destructive' });
+      return;
+    }
+
+    setSavingProjectId(`${row.id}:contractors`);
+    try {
+      const existingFinances = {
+        ...(row.project?.notes?.finances || {}),
+        ...(row.project?.finances || {}),
+      };
+      const contractors = Array.isArray(existingFinances.contractors)
+        ? existingFinances.contractors.filter((item: any) => item?.id !== 'command-center-gph')
+        : [];
+      if (amount > 0) {
+        contractors.push({
+          id: 'command-center-gph',
+          name: 'ГПХ / субподряд',
+          amount,
+          source: 'project-command-center',
+          updatedAt: new Date().toISOString(),
+          updatedBy: user?.id,
+        });
+      }
+      const projectWithContractors = {
+        ...row.project,
+        finances: {
+          ...existingFinances,
+          amountWithoutVAT: row.amount,
+          contractors,
+          totalContractorsAmount: amount,
+        },
+      };
+      const recalculated = calculateProjectFinances(projectWithContractors);
+      await updateProject(row.id, {
+        finances: {
+          ...existingFinances,
+          ...recalculated,
+          contractors,
+          totalContractorsAmount: amount,
+        },
+      });
+      setContractorAmountDrafts((current) => ({ ...current, [row.id]: String(amount) }));
+      toast({ title: 'ГПХ сохранён', description: `${money.format(amount)} ₸ учтено в расчёте бонуса.` });
+    } catch (error: any) {
+      toast({ title: 'Не удалось сохранить ГПХ', description: error?.message || 'Повторите попытку', variant: 'destructive' });
     } finally {
       setSavingProjectId(null);
     }
@@ -2761,6 +2818,39 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                   </div>
                                 </div>
                               </div>
+
+                              {canManageContractors && (
+                                <div className="rounded-md border bg-background">
+                                  <div className="flex flex-col gap-3 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                      <div className="text-sm font-semibold">ГПХ / субподряд</div>
+                                      <div className="text-xs text-muted-foreground">Сумма вычитается из базы бонуса и сразу пересчитывает финансовый свод.</div>
+                                    </div>
+                                    <Badge variant="outline" className="w-fit">Можно изменить заместителю директора</Badge>
+                                  </div>
+                                  <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+                                    <Input
+                                      aria-label={`Сумма ГПХ для проекта ${row.name}`}
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      inputMode="numeric"
+                                      value={contractorAmountDrafts[row.id] ?? String(Number(row.finances.totalContractorsAmount) || 0)}
+                                      onChange={(event) => setContractorAmountDrafts((current) => ({ ...current, [row.id]: event.target.value }))}
+                                      className="sm:max-w-xs"
+                                    />
+                                    <span className="text-sm text-muted-foreground">₸</span>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      disabled={savingProjectId === `${row.id}:contractors`}
+                                      onClick={() => void saveContractorAmount(row)}
+                                    >
+                                      {savingProjectId === `${row.id}:contractors` ? 'Сохраняю…' : 'Учесть ГПХ'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
 
                               {isExecutive && (
                                 <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
