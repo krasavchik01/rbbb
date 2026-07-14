@@ -2,6 +2,28 @@ import { expect, test } from '@playwright/test';
 import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
 test.describe('bulk administration and deputy project status', () => {
+  test('shows a compact loading indicator while timesheet entries are fetched', async ({ page }) => {
+    await loginAsDemoRole(page, 'ceo');
+    let releaseTimesheetsRequest!: () => void;
+    const timesheetsRequestGate = new Promise<void>((resolve) => {
+      releaseTimesheetsRequest = resolve;
+    });
+
+    await page.route('**/rest/v1/timesheet_entries*', async (route) => {
+      await timesheetsRequestGate;
+      await route.fallback();
+    });
+
+    const navigation = page.goto('/timesheets');
+    await expect(page.getByRole('status', { name: 'Загружаем таймшиты', exact: true })).toBeVisible();
+    await expect(page.getByText('Загружаем записи…', { exact: true })).toBeVisible();
+
+    releaseTimesheetsRequest();
+    await navigation;
+    await waitForDemoApp(page);
+    await expect(page.getByRole('status', { name: 'Загружаем таймшиты', exact: true })).toHaveCount(0);
+  });
+
   test('shows a clear loading state while the project summary is being fetched', async ({ page }) => {
     await loginAsDemoRole(page, 'ceo');
     let releaseProjectsRequest!: () => void;

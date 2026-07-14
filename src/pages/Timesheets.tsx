@@ -42,7 +42,8 @@ import {
   Edit,
   Trash2,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -388,6 +389,7 @@ export default function Timesheets() {
   const { toast } = useToast();
   const [timesheetProjects, setTimesheetProjects] = useState<any[]>([]);
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
+  const [isLoadingTimesheets, setIsLoadingTimesheets] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'submitted' | 'approved' | 'rejected'>('all');
   // Пустая строка = «все даты». По умолчанию показываем все, иначе при
@@ -484,8 +486,15 @@ export default function Timesheets() {
 
   // Загружаем тайм-шиты из Supabase.
   const reload = useCallback(async () => {
-    const entries = await listTimesheets();
-    setTimesheets(entries.map(toUiEntry));
+    setIsLoadingTimesheets(true);
+    try {
+      const entries = await listTimesheets();
+      setTimesheets(entries.map(toUiEntry));
+    } catch (error) {
+      console.error('[Timesheets] failed to load entries', error);
+    } finally {
+      setIsLoadingTimesheets(false);
+    }
   }, [toUiEntry]);
 
   useEffect(() => {
@@ -759,6 +768,17 @@ export default function Timesheets() {
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">Учет рабочего времени</p>
         </div>
+        {isLoadingTimesheets && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label="Загружаем таймшиты"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+            <span>Загружаем записи…</span>
+          </div>
+        )}
         {canFillTimesheets && (
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
