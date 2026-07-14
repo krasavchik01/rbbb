@@ -984,6 +984,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [contractorNameDrafts, setContractorNameDrafts] = useState<Record<string, string>>({});
   const [contractorAmountDrafts, setContractorAmountDrafts] = useState<Record<string, string>>({});
   const [gphEditorRowId, setGphEditorRowId] = useState<string | null>(null);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
@@ -1618,11 +1619,16 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
-  const saveContractorAmount = async (row: (typeof rows)[number]) => {
+  const addProjectContractor = async (row: (typeof rows)[number]) => {
     if (!canManageContractors || !updateProject) return;
+    const name = contractorNameDrafts[row.id]?.trim() || '';
     const rawAmount = contractorAmountDrafts[row.id] ?? String(Number(row.finances.totalContractorsAmount) || 0);
     const amount = Number(String(rawAmount).replace(/\s/g, '').replace(',', '.'));
-    if (!Number.isFinite(amount) || amount < 0) {
+    if (!name) {
+      toast({ title: 'Укажите ФИО исполнителя ГПХ', variant: 'destructive' });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
       toast({ title: 'Укажите корректную сумму ГПХ', variant: 'destructive' });
       return;
     }
@@ -1633,26 +1639,24 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         ...(row.project?.notes?.finances || {}),
         ...(row.project?.finances || {}),
       };
-      const contractors = Array.isArray(existingFinances.contractors)
-        ? existingFinances.contractors.filter((item: any) => item?.id !== 'command-center-gph')
-        : [];
-      if (amount > 0) {
-        contractors.push({
-          id: 'command-center-gph',
-          name: 'ГПХ / субподряд',
-          amount,
-          source: 'project-command-center',
-          updatedAt: new Date().toISOString(),
-          updatedBy: user?.id,
-        });
-      }
+      const contractors = Array.isArray(existingFinances.contractors) ? [...existingFinances.contractors] : [];
+      contractors.push({
+        id: `command-center-gph-${Date.now()}`,
+        name,
+        amount,
+        type: 'gph',
+        source: 'project-command-center',
+        addedAt: new Date().toISOString(),
+        addedBy: user?.id,
+      });
+      const totalContractorsAmount = contractors.reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
       const projectWithContractors = {
         ...row.project,
         finances: {
           ...existingFinances,
           amountWithoutVAT: row.amount,
           contractors,
-          totalContractorsAmount: amount,
+          totalContractorsAmount,
         },
       };
       const recalculated = calculateProjectFinances(projectWithContractors);
@@ -1661,12 +1665,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           ...existingFinances,
           ...recalculated,
           contractors,
-          totalContractorsAmount: amount,
+          totalContractorsAmount,
         },
       });
-      setContractorAmountDrafts((current) => ({ ...current, [row.id]: String(amount) }));
+      setContractorNameDrafts((current) => ({ ...current, [row.id]: '' }));
+      setContractorAmountDrafts((current) => ({ ...current, [row.id]: '' }));
       setGphEditorRowId(null);
-      toast({ title: 'ГПХ сохранён', description: `${money.format(amount)} ₸ учтено в расчёте бонуса.` });
+      toast({ title: 'Исполнитель ГПХ добавлен', description: `${name}: ${money.format(amount)} ₸ учтено в расчёте бонуса.` });
     } catch (error: any) {
       toast({ title: 'Не удалось сохранить ГПХ', description: error?.message || 'Повторите попытку', variant: 'destructive' });
     } finally {
@@ -2987,25 +2992,48 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           {gphEditorRow && (
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Добавить ГПХ / субподряд</AlertDialogTitle>
+                <AlertDialogTitle>Добавить исполнителя ГПХ</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {gphEditorRow.name}. Укажите сумму: она будет вычтена из базы бонуса, а финансовый свод пересчитается сразу.
+                  {gphEditorRow.name}. Укажите ФИО и сумму. Запись появится в реестре ГПХ проекта, а финансовый свод пересчитается сразу.
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              <div className="flex items-center gap-2">
+              <div className="grid gap-3">
                 <Input
-                  aria-label={`Сумма ГПХ для проекта ${gphEditorRow.name}`}
-                  data-testid="contractor-amount-input"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  inputMode="numeric"
+                  aria-label={`ФИО исполнителя ГПХ для проекта ${gphEditorRow.name}`}
+                  data-testid="contractor-name-input"
+                  placeholder="ФИО исполнителя"
                   autoFocus
-                  value={contractorAmountDrafts[gphEditorRow.id] ?? String(Number(gphEditorRow.finances.totalContractorsAmount) || 0)}
-                  onChange={(event) => setContractorAmountDrafts((current) => ({ ...current, [gphEditorRow.id]: event.target.value }))}
+                  value={contractorNameDrafts[gphEditorRow.id] ?? ''}
+                  onChange={(event) => setContractorNameDrafts((current) => ({ ...current, [gphEditorRow.id]: event.target.value }))}
                 />
-                <span className="text-sm text-muted-foreground">₸</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    aria-label={`Сумма ГПХ для проекта ${gphEditorRow.name}`}
+                    data-testid="contractor-amount-input"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    inputMode="numeric"
+                    placeholder="Сумма"
+                    value={contractorAmountDrafts[gphEditorRow.id] ?? ''}
+                    onChange={(event) => setContractorAmountDrafts((current) => ({ ...current, [gphEditorRow.id]: event.target.value }))}
+                  />
+                  <span className="text-sm text-muted-foreground">₸</span>
+                </div>
               </div>
+              {Array.isArray(gphEditorRow.finances.contractors) && gphEditorRow.finances.contractors.length > 0 && (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="mb-2 font-medium">Уже добавленные ГПХ</div>
+                  <div className="space-y-1 text-muted-foreground">
+                    {gphEditorRow.finances.contractors.map((contractor: any, index: number) => (
+                      <div key={contractor?.id || index} className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 truncate">{contractor?.name || 'Исполнитель не указан'}</span>
+                        <span className="shrink-0 tabular-nums">{money.format(Number(contractor?.amount) || 0)} ₸</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={savingProjectId === `${gphEditorRow.id}:contractors`}>Отмена</AlertDialogCancel>
                 <AlertDialogAction
@@ -3013,7 +3041,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   disabled={savingProjectId === `${gphEditorRow.id}:contractors`}
                   onClick={(event) => {
                     event.preventDefault();
-                    void saveContractorAmount(gphEditorRow);
+                    void addProjectContractor(gphEditorRow);
                   }}
                 >
                   {savingProjectId === `${gphEditorRow.id}:contractors` ? 'Сохраняю…' : 'Учесть ГПХ'}
