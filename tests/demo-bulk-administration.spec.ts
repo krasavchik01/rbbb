@@ -2,6 +2,28 @@ import { expect, test } from '@playwright/test';
 import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
 test.describe('bulk administration and deputy project status', () => {
+  test('shows a clear loading state while the project summary is being fetched', async ({ page }) => {
+    await loginAsDemoRole(page, 'ceo');
+    let releaseProjectsRequest!: () => void;
+    const projectsRequestGate = new Promise<void>((resolve) => {
+      releaseProjectsRequest = resolve;
+    });
+
+    await page.route('**/rest/v1/projects*', async (route) => {
+      await projectsRequestGate;
+      await route.fallback();
+    });
+
+    const navigation = page.goto('/projects');
+    await expect(page.getByRole('status', { name: 'Загружаем свод', exact: true })).toBeVisible();
+    await expect(page.getByText('Получаем проекты, команды и показатели. Это может занять несколько секунд.', { exact: true })).toBeVisible();
+
+    releaseProjectsRequest();
+    await navigation;
+    await waitForDemoApp(page);
+    await expect(page.getByRole('status', { name: 'Загружаем свод', exact: true })).toHaveCount(0);
+  });
+
   test('CEO can select projects in bulk and sees an exact destructive preview', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/projects');

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ChevronDown, ChevronRight, Download, FileSpreadsheet, Filter, Minus, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Download, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -983,6 +983,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = canManageTeam || user?.role === 'partner';
+  const isInitialProjectsLoad = projectsLoading && projects.length === 0;
 
   const assignableEmployees = useMemo(
     () => [...(employees as any[])].sort((a, b) => employeeName(a).localeCompare(employeeName(b), 'ru')),
@@ -1981,7 +1982,25 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen bg-background" aria-busy={isInitialProjectsLoad}>
+      {isInitialProjectsLoad && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Загружаем свод"
+          className="absolute inset-0 z-30 flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background/95 px-6 backdrop-blur-sm"
+        >
+          <div className="flex max-w-sm flex-col items-center rounded-2xl border bg-card px-10 py-9 text-center shadow-lg">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Loader2 className="h-7 w-7 animate-spin" aria-hidden="true" />
+            </div>
+            <h2 className="text-lg font-semibold text-foreground">Загружаем свод</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Получаем проекты, команды и показатели. Это может занять несколько секунд.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="border-b bg-background">
         <div className="px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
