@@ -84,8 +84,9 @@ type TableDetailLevel = 'compact' | 'detailed';
 type PartnerFilter = 'all' | 'unassigned' | string;
 type CompanyFilter = 'all' | 'missing' | string;
 type YearFilter = 'all' | string;
+type BusinessSeasonFilter = 'all' | string;
 type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
-type PeriodDraft = { name: string; startDate: string; endDate: string; deadline: string };
+type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
 type DateRange = { start: Date; end: Date };
 
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
@@ -237,6 +238,13 @@ function periodLabel(period: AuditPeriod): string {
     ? `${formatDate(period.startDate)} - ${formatDate(period.endDate)}`
     : 'даты не указаны';
   return `${period.name} · ${dates}`;
+}
+
+function auditPeriodTypeLabel(type?: AuditPeriod['type']): string {
+  if (type === 'six_months') return '6 месяцев';
+  if (type === 'nine_months') return '9 месяцев';
+  if (type === 'year') return 'Годовой';
+  return 'Особый период';
 }
 
 function deadlineInfo(deadline: string, status: string) {
@@ -582,21 +590,6 @@ function yearRangeEnd(year: number): Date {
   return new Date(year, 11, 31);
 }
 
-function rangesFromYearText(value: string): DateRange[] {
-  const ranges: DateRange[] = [];
-  const text = String(value || '');
-  const rangeRegex = /(20\d{2})(?:\s*[-–—]\s*(20\d{2}))?/g;
-  for (const match of text.matchAll(rangeRegex)) {
-    const startYear = Number(match[1]);
-    const endYear = Number(match[2] || match[1]);
-    if (!Number.isFinite(startYear) || !Number.isFinite(endYear)) continue;
-    const from = Math.min(startYear, endYear);
-    const to = Math.max(startYear, endYear);
-    ranges.push({ start: yearRangeStart(from), end: yearRangeEnd(to) });
-  }
-  return ranges;
-}
-
 function rowDateRanges(row: any): DateRange[] {
   const ranges: DateRange[] = [];
   const projectRange = makeDateRange(row.startDate, row.deadline);
@@ -609,14 +602,45 @@ function rowDateRanges(row: any): DateRange[] {
       const deadlineRange = makeDateRange(period.deadline, period.deadline);
       if (deadlineRange) ranges.push(deadlineRange);
     }
-    ranges.push(...rangesFromYearText(period.name || ''));
-  }
-
-  for (const value of [row.name, row.client, row.company]) {
-    ranges.push(...rangesFromYearText(value || ''));
   }
 
   return ranges;
+}
+
+function businessSeasonRange(year: number): DateRange {
+  return {
+    start: new Date(year - 1, 9, 1),
+    end: new Date(year, 8, 30),
+  };
+}
+
+function businessSeasonYear(date: Date): number {
+  return date.getMonth() >= 9 ? date.getFullYear() + 1 : date.getFullYear();
+}
+
+function businessSeasonLabel(year: number): string {
+  return `Сезон ${year} · октябрь ${year - 1} — сентябрь ${year}`;
+}
+
+function rowBusinessSeasonYears(row: any): number[] {
+  const years = new Set<number>();
+  for (const range of rowDateRanges(row)) {
+    const cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+    const end = new Date(range.end.getFullYear(), range.end.getMonth(), 1);
+    while (cursor.getTime() <= end.getTime()) {
+      years.add(businessSeasonYear(cursor));
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+  return [...years].sort((a, b) => b - a);
+}
+
+function rowMatchesBusinessSeason(row: any, value: BusinessSeasonFilter): boolean {
+  if (value === 'all') return true;
+  const match = value.match(/^season:(20\d{2})$/);
+  if (!match) return true;
+  const season = businessSeasonRange(Number(match[1]));
+  return rowDateRanges(row).some((range) => rangesIntersect(range, season));
 }
 
 function bucketRange(value: string): DateRange | null {
@@ -969,7 +993,7 @@ function EmployeeSearchAdd({
 export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommandScope }) {
   const { user } = useAuth();
   const { projects = [], loading: projectsLoading, updateProject, deleteProject, deleteProjects } = useProjects();
-  const { employees = [] } = useEmployees();
+  const { employees = [], createEmployee } = useEmployees();
   const [appSettings] = useAppSettings();
   const { toast } = useToast();
   const [hoursTotals, setHoursTotals] = useState<Map<string, ProjectHoursTotals>>(new Map());
@@ -979,6 +1003,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all');
   const [partnerFilter, setPartnerFilter] = useState<PartnerFilter>('all');
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
+  const [businessSeasonFilter, setBusinessSeasonFilter] = useState<BusinessSeasonFilter>('all');
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
   const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>('all');
   const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
@@ -987,18 +1014,27 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [contractorNameDrafts, setContractorNameDrafts] = useState<Record<string, string>>({});
   const [contractorAmountDrafts, setContractorAmountDrafts] = useState<Record<string, string>>({});
   const [gphEditorRowId, setGphEditorRowId] = useState<string | null>(null);
+  const [gphAssignmentContext, setGphAssignmentContext] = useState<{
+    rowId: string;
+    roleKey: string;
+    periodId?: string;
+  } | null>(null);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkCompanyId, setBulkCompanyId] = useState('');
   const [bulkCompanyAssignOpen, setBulkCompanyAssignOpen] = useState(false);
   const [bulkAssigningCompany, setBulkAssigningCompany] = useState(false);
+  const [bulkPartnerId, setBulkPartnerId] = useState('');
+  const [bulkPartnerAssignOpen, setBulkPartnerAssignOpen] = useState(false);
+  const [bulkAssigningPartner, setBulkAssigningPartner] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [periodNameDraft, setPeriodNameDraft] = useState('');
   const [addingPeriodRowId, setAddingPeriodRowId] = useState<string | null>(null);
   const [newPeriodDraft, setNewPeriodDraft] = useState<PeriodDraft>({
     name: '',
+    type: 'custom',
     startDate: '',
     endDate: '',
     deadline: '',
@@ -1013,16 +1049,27 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canCloseProjects = user?.role === 'ceo' || user?.role === 'admin';
   const canDeleteProjects = user?.role === 'admin' || user?.role === 'ceo';
   const canBulkAssignCompany = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
-  const canSelectProjects = canDeleteProjects || canBulkAssignCompany;
+  const canBulkAssignPartner = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const canSelectProjects = canDeleteProjects || canBulkAssignCompany || canBulkAssignPartner;
   const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const canManageContractors = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = canManageTeam || user?.role === 'partner';
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
 
+  const openGphAssignment = (rowId: string, roleKey: string, periodId?: string) => {
+    setGphAssignmentContext({ rowId, roleKey, periodId });
+    setGphEditorRowId(rowId);
+  };
+
   const assignableEmployees = useMemo(
     () => [...(employees as any[])].sort((a, b) => employeeName(a).localeCompare(employeeName(b), 'ru')),
     [employees],
+  );
+
+  const partnerEmployees = useMemo(
+    () => assignableEmployees.filter((employee) => String(employee?.role || '').toLowerCase() === 'partner'),
+    [assignableEmployees],
   );
 
   useEffect(() => {
@@ -1183,6 +1230,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const gphEditorRow = gphEditorRowId ? rows.find((row) => row.id === gphEditorRowId) : undefined;
 
+  const partnerTeamTemplate = (partnerId: string): CanonicalTeamMember[] | null => {
+    const source = rows.find((row) => (
+      row.team.length > 1 && row.team.some((member: any) => teamRole(member) === 'partner' && teamMemberId(member) === partnerId)
+    ));
+    return source ? source.team.map((member: CanonicalTeamMember) => ({ ...member })) : null;
+  };
+
   const summary = useMemo(() => {
     return rows.reduce(
       (acc, row) => {
@@ -1247,12 +1301,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const years = new Map<string, number>();
     const quarters = new Map<string, number>();
     const months = new Map<string, number>();
+    const seasons = new Map<string, number>();
 
     for (const row of rows) {
       const keys = rowDateBucketKeys(row);
       for (const key of keys.years) years.set(key, (years.get(key) || 0) + 1);
       for (const key of keys.quarters) quarters.set(key, (quarters.get(key) || 0) + 1);
       for (const key of keys.months) months.set(key, (months.get(key) || 0) + 1);
+      for (const season of rowBusinessSeasonYears(row)) {
+        const key = `season:${season}`;
+        seasons.set(key, (seasons.get(key) || 0) + 1);
+      }
     }
 
     const sortDesc = ([a]: [string, number], [b]: [string, number]) => b.localeCompare(a);
@@ -1262,6 +1321,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       years: [...years.entries()].sort(sortDesc).map(toOption),
       quarters: [...quarters.entries()].sort(sortDesc).map(toOption),
       months: [...months.entries()].sort(sortDesc).map(toOption),
+      seasons: [...seasons.entries()]
+        .sort(sortDesc)
+        .map(([value, count]) => ({ value, label: businessSeasonLabel(Number(value.slice('season:'.length))), count })),
     };
   }, [rows]);
 
@@ -1303,6 +1365,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         return false;
       }
       if (!rowMatchesDateFilter(row, yearFilter)) return false;
+      if (!rowMatchesBusinessSeason(row, businessSeasonFilter)) return false;
+      const exactRange = makeDateRange(dateFromFilter, dateToFilter);
+      if (exactRange && !rowDateRanges(row).some((range) => rangesIntersect(range, exactRange))) return false;
       if (viewFilter === 'working' && row.readiness.level !== 'ready') return false;
       if (viewFilter === 'attention' && row.readiness.level !== 'attention') return false;
       if (viewFilter === 'closed' && row.readiness.level !== 'closed') return false;
@@ -1326,7 +1391,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, viewFilter, deadlineFilter, periodFilter, sortBy]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, sortBy]);
 
   const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 3 : 0);
 
@@ -1506,7 +1571,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         const batch = ids.slice(index, index + 20);
         const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, patch)));
         results.forEach((result, resultIndex) => {
-          if (result.status === 'rejected' || !result.value) failedIds.push(batch[resultIndex]);
+          if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
       }
       setSelectedProjectIds(new Set(failedIds));
@@ -1524,6 +1589,69 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       });
     } finally {
       setBulkAssigningCompany(false);
+    }
+  };
+
+  const assignPartnerToSelectedProjects = async () => {
+    if (!canBulkAssignPartner || !updateProject || bulkAssigningPartner || selectedProjectIds.size === 0) return;
+    const partner = partnerEmployees.find((employee) => employee.id === bulkPartnerId);
+    if (!partner) {
+      toast({ title: 'Выберите партнёра', variant: 'destructive' });
+      return;
+    }
+
+    setBulkAssigningPartner(true);
+    const ids = Array.from(selectedProjectIds);
+    const failedIds: string[] = [];
+    const template = partnerTeamTemplate(partner.id);
+    try {
+      for (let index = 0; index < ids.length; index += 20) {
+        const batch = ids.slice(index, index + 20);
+        const results = await Promise.allSettled(batch.map(async (projectId) => {
+          const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId));
+          if (!sourceProject) throw new Error('Проект не найден');
+          const currentTeam = projectTeam(sourceProject);
+          const partnerMember: CanonicalTeamMember = {
+            userId: partner.id,
+            userName: employeeName(partner),
+            userEmail: partner.email,
+            name: employeeName(partner),
+            role: 'partner',
+            bonusPercent: roleDefaultPercent('partner'),
+            assignedAt: new Date().toISOString(),
+            assignedBy: user?.id || 'bulk-partner',
+          };
+          const sourceTeam = template && template.length > 0 ? template : currentTeam;
+          const nextTeam = sourceTeam
+            .filter((member: any) => teamRole(member) !== 'partner')
+            .map((member: CanonicalTeamMember) => ({ ...member }));
+          nextTeam.unshift(partnerMember);
+          const existingFinances = {
+            ...(sourceProject?.notes?.finances || {}),
+            ...(sourceProject?.finances || {}),
+          };
+          const finances = calculateProjectFinances({
+            ...sourceProject,
+            team: nextTeam,
+            finances: { ...existingFinances, amountWithoutVAT: projectAmount(sourceProject) },
+          });
+          await updateProject(projectId, { team: nextTeam, finances });
+        }));
+        results.forEach((result, resultIndex) => {
+          if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
+        });
+      }
+      setSelectedProjectIds(new Set(failedIds));
+      setBulkPartnerAssignOpen(false);
+      toast({
+        title: failedIds.length > 0 ? 'Партнёр назначен частично' : 'Партнёр и его команда назначены',
+        description: `${employeeName(partner)}: ${ids.length - failedIds.length} проектов.${template ? ' Использован готовый шаблон команды.' : ' У партнёра пока нет шаблона — сохранена команда каждого проекта.'}`,
+        variant: failedIds.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error: any) {
+      toast({ title: 'Не удалось назначить партнёра', description: error?.message || 'Повторите попытку', variant: 'destructive' });
+    } finally {
+      setBulkAssigningPartner(false);
     }
   };
 
@@ -1620,7 +1748,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   };
 
   const addProjectContractor = async (row: (typeof rows)[number]) => {
-    if (!canManageContractors || !updateProject) return;
+    if (!canManageContractors || !updateProject || !createEmployee) return;
     const name = contractorNameDrafts[row.id]?.trim() || '';
     const rawAmount = contractorAmountDrafts[row.id] ?? String(Number(row.finances.totalContractorsAmount) || 0);
     const amount = Number(String(rawAmount).replace(/\s/g, '').replace(',', '.'));
@@ -1635,6 +1763,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     setSavingProjectId(`${row.id}:contractors`);
     try {
+      const sameName = (employees as any[]).find((employee) => (
+        employeeName(employee).trim().toLocaleLowerCase('ru') === name.toLocaleLowerCase('ru')
+      ));
+      const employee = sameName || await createEmployee({
+        name,
+        email: `gph-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@external.invalid`,
+        role: 'employee',
+        level: '1',
+        department: 'ГПХ / внешние исполнители',
+        position: 'Исполнитель ГПХ',
+      } as any);
       const existingFinances = {
         ...(row.project?.notes?.finances || {}),
         ...(row.project?.finances || {}),
@@ -1645,6 +1784,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         name,
         amount,
         type: 'gph',
+        employeeId: employee.id,
+        employeeName: employeeName(employee),
         source: 'project-command-center',
         addedAt: new Date().toISOString(),
         addedBy: user?.id,
@@ -1660,18 +1801,59 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         },
       };
       const recalculated = calculateProjectFinances(projectWithContractors);
-      await updateProject(row.id, {
+      const assignment = gphAssignmentContext?.rowId === row.id ? gphAssignmentContext : null;
+      const assignmentMember = assignment ? {
+        userId: employee.id,
+        userName: employeeName(employee),
+        userEmail: employee.email,
+        name: employeeName(employee),
+        role: assignment.roleKey,
+        bonusPercent: roleDefaultPercent(assignment.roleKey),
+        assignedAt: new Date().toISOString(),
+        assignedBy: user?.id || 'gph-dialog',
+      } : null;
+      let targetProjectId = row.id;
+      let teamPatch: Record<string, unknown> = {};
+      if (assignmentMember && assignment?.periodId) {
+        const period = row.periods.find((item: AuditPeriod) => item.id === assignment.periodId);
+        if (period) {
+          const sourceRow = periodSourceRow(row, period);
+          const sourceProject = sourceRow.project || sourceRow;
+          targetProjectId = sourceProject.id || sourceRow.id || row.id;
+          const basePeriods = persistedPeriodsForProject(sourceProject);
+          const nextPeriods = basePeriods.map((item) => item.id === period.id
+            ? {
+                ...item,
+                team: [
+                  ...periodTeam(item).filter((member: any) => teamRole(member) !== assignment.roleKey),
+                  assignmentMember,
+                ],
+                teamSource: 'period',
+                updatedAt: new Date().toISOString(),
+              }
+            : item);
+          teamPatch = { auditPeriods: nextPeriods };
+        }
+      } else if (assignmentMember) {
+        teamPatch = { team: [...row.team, assignmentMember] };
+      }
+      await updateProject(targetProjectId, {
         finances: {
           ...existingFinances,
           ...recalculated,
           contractors,
           totalContractorsAmount,
         },
+        ...teamPatch,
       });
       setContractorNameDrafts((current) => ({ ...current, [row.id]: '' }));
       setContractorAmountDrafts((current) => ({ ...current, [row.id]: '' }));
       setGphEditorRowId(null);
-      toast({ title: 'Исполнитель ГПХ добавлен', description: `${name}: ${money.format(amount)} ₸ учтено в расчёте бонуса.` });
+      setGphAssignmentContext(null);
+      toast({
+        title: 'Исполнитель ГПХ добавлен в базу и команду',
+        description: `${employeeName(employee)}: ${money.format(amount)} ₸${assignment ? ` · ${TEAM_COLUMNS.find((column) => column.key === assignment.roleKey)?.label || 'роль назначена'}` : ''}`,
+      });
     } catch (error: any) {
       toast({ title: 'Не удалось сохранить ГПХ', description: error?.message || 'Повторите попытку', variant: 'destructive' });
     } finally {
@@ -1731,18 +1913,21 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     setSavingProjectId(`${row.id}:add:${roleKey}`);
     try {
-      const nextTeam = [
-        ...row.team,
-        {
-          userId: employee.id,
-          userName: employeeName(employee),
-          name: employeeName(employee),
-          role: roleKey,
-          bonusPercent: roleDefaultPercent(roleKey),
-          assignedAt: new Date().toISOString(),
-          assignedBy: user?.id || 'inline-table',
-        },
-      ];
+      const nextMember: CanonicalTeamMember = {
+        userId: employee.id,
+        userName: employeeName(employee),
+        userEmail: employee.email,
+        name: employeeName(employee),
+        role: roleKey,
+        bonusPercent: roleDefaultPercent(roleKey),
+        assignedAt: new Date().toISOString(),
+        assignedBy: user?.id || 'inline-table',
+      };
+      const template = roleKey === 'partner' ? partnerTeamTemplate(employee.id) : null;
+      const baseTeam = template && template.length > 0 ? template : row.team;
+      const nextTeam = roleKey === 'partner'
+        ? [nextMember, ...baseTeam.filter((member: any) => teamRole(member) !== 'partner')]
+        : [...baseTeam, nextMember];
       const existingFinances = {
         ...(row.project?.notes?.finances || {}),
         ...(row.project?.finances || {}),
@@ -1757,6 +1942,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       };
       const finances = calculateProjectFinances(projectWithTeam);
       await updateProject(row.id, { team: nextTeam, finances });
+      if (template && template.length > 0) {
+        toast({ title: 'Партнёр и его команда подставлены', description: employeeName(employee) });
+      }
     } catch (error: any) {
       toast({
         title: 'Не удалось добавить участника',
@@ -1820,6 +2008,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setAddingPeriodRowId(row.id);
     setNewPeriodDraft({
       name: `Период ${nextNumber}`,
+      type: 'custom',
       startDate: row.startDate || '',
       endDate: row.deadline || '',
       deadline: row.deadline || '',
@@ -1828,7 +2017,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const cancelAddPeriod = () => {
     setAddingPeriodRowId(null);
-    setNewPeriodDraft({ name: '', startDate: '', endDate: '', deadline: '' });
+    setNewPeriodDraft({ name: '', type: 'custom', startDate: '', endDate: '', deadline: '' });
   };
 
   const addPeriod = async (row: (typeof rows)[number]) => {
@@ -1845,7 +2034,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const nextPeriod: AuditPeriod = {
       id: `period_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name,
-      type: 'custom',
+      type: newPeriodDraft.type,
       startDate: newPeriodDraft.startDate || '',
       endDate: newPeriodDraft.endDate || '',
       deadline: newPeriodDraft.deadline || undefined,
@@ -2204,6 +2393,33 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              <Select value={businessSeasonFilter} onValueChange={(value) => setBusinessSeasonFilter(value as BusinessSeasonFilter)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Бизнес-сезон" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все бизнес-сезоны</SelectItem>
+                  {dateFilterOptions.seasons.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label} · {item.count}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                aria-label="Начало периода фильтра"
+                value={dateFromFilter}
+                onChange={(event) => setDateFromFilter(event.target.value)}
+                title="Показать проекты, пересекающиеся с датой начала"
+              />
+              <Input
+                type="date"
+                aria-label="Конец периода фильтра"
+                value={dateToFilter}
+                onChange={(event) => setDateToFilter(event.target.value)}
+                title="Показать проекты, пересекающиеся с датой окончания"
+              />
               <Select value={viewFilter} onValueChange={(value) => setViewFilter(value as ProjectViewFilter)}>
                 <SelectTrigger className="w-full">
                   <Filter className="mr-2 h-4 w-4" />
@@ -2281,12 +2497,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
             </div>
           </div>
-          {(companyFilter !== 'all' || partnerFilter !== 'all' || yearFilter !== 'all') && (
+          {(companyFilter !== 'all' || partnerFilter !== 'all' || yearFilter !== 'all' || businessSeasonFilter !== 'all' || dateFromFilter || dateToFilter) && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Сверка:</span>
               {companyFilter !== 'all' && <Badge variant="secondary">Наша компания: {selectedCompanyLabel}</Badge>}
               {partnerFilter !== 'all' && <Badge variant="secondary">Партнер: {selectedPartnerLabel}</Badge>}
               {yearFilter !== 'all' && <Badge variant="secondary">Период: {selectedDateFilterLabel}</Badge>}
+              {businessSeasonFilter !== 'all' && <Badge variant="secondary">{dateFilterOptions.seasons.find((item) => item.value === businessSeasonFilter)?.label || 'Бизнес-сезон'}</Badge>}
+              {(dateFromFilter || dateToFilter) && <Badge variant="secondary">Даты: {dateFromFilter || '…'} — {dateToFilter || '…'}</Badge>}
               <span className="ml-auto text-muted-foreground">
                 Найдено: <span className="font-medium text-foreground tabular-nums">{filteredRows.length}</span>
               </span>
@@ -2328,6 +2546,28 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                       </Button>
                     </>
                   )}
+                  {canBulkAssignPartner && (
+                    <>
+                      <Select value={bulkPartnerId} onValueChange={setBulkPartnerId} disabled={bulkAssigningPartner}>
+                        <SelectTrigger className="w-[250px]" aria-label="Выбрать партнёра для выбранных проектов">
+                          <SelectValue placeholder="Назначить партнёра" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {partnerEmployees.map((partner) => (
+                            <SelectItem key={partner.id} value={partner.id}>{employeeName(partner)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setBulkPartnerAssignOpen(true)}
+                        disabled={!bulkPartnerId || bulkAssigningPartner}
+                      >
+                        Назначить партнёра и команду
+                      </Button>
+                    </>
+                  )}
                   {canDeleteProjects && (
                     <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -2337,7 +2577,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </>
               ) : (
                 <span className="text-sm text-muted-foreground">
-                  Отметьте проекты чекбоксами для массового назначения компании{canDeleteProjects ? ' или удаления' : ''}.
+                  Отметьте проекты чекбоксами для массового назначения компании, партнёра с командой{canDeleteProjects ? ' или удаления' : ''}.
                 </span>
               )}
             </div>
@@ -2390,6 +2630,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 filteredRows.map((row) => {
                   const expanded = tableDetailLevel === 'detailed' || !!expandedRows[row.id];
                   const totalBonusAmount = Number(row.finances.totalBonusAmount || row.finances.totalPaidBonuses) || 0;
+                  const closureStatusLabel = row.status === 'pending_payment_approval'
+                    ? 'Готов к бонусам'
+                    : row.status === 'ready_to_complete'
+                      ? 'Готов к закрытию'
+                      : row.readiness.level === 'closed'
+                        ? 'Закрыт'
+                        : 'В работе';
                   return (
                     <Fragment key={row.id}>
                       <TableRow className="align-top hover:bg-muted/35">
@@ -2435,6 +2682,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             <div className="text-xs text-muted-foreground">
                               {formatDate(row.startDate)} - {formatDate(row.deadline)}
                             </div>
+                            {rowBusinessSeasonYears(row).slice(0, 2).map((season) => (
+                              <Badge key={season} variant="secondary" className="mr-1 text-[11px]">
+                                {businessSeasonLabel(season)}
+                              </Badge>
+                            ))}
                             <Badge variant="outline" className={deadlineBadgeClass(row.deadlineState.tone)}>
                               {row.deadlineState.label}
                             </Badge>
@@ -2512,7 +2764,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         <TableCell className="py-3">
                           <div className="flex flex-col items-end gap-2">
                             <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>
-                              {row.readiness.level === 'closed' ? 'Закрыт' : 'В работе'}
+                              {closureStatusLabel}
                             </Badge>
                             {(canCloseProjects || canDeleteProjects) && (
                               <div className="flex flex-wrap justify-end gap-1.5">
@@ -2583,7 +2835,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                   <div className="space-y-2">
                                     {canEditPeriods && addingPeriodRowId === row.id && (
                                       <div className="rounded-md border border-dashed bg-muted/20 px-3 py-3">
-                                        <div className="grid gap-2 md:grid-cols-4">
+                                        <div className="grid gap-2 md:grid-cols-5">
                                           <div className="space-y-1">
                                             <div className="text-xs text-muted-foreground">Название периода</div>
                                             <Input
@@ -2592,6 +2844,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                               placeholder="Например: 2024"
                                               className="h-8"
                                             />
+                                          </div>
+                                          <div className="space-y-1">
+                                            <div className="text-xs text-muted-foreground">Вид аудита</div>
+                                            <Select value={newPeriodDraft.type} onValueChange={(value) => setNewPeriodDraft((draft) => ({ ...draft, type: value as AuditPeriod['type'] }))}>
+                                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="six_months">6 месяцев</SelectItem>
+                                                <SelectItem value="nine_months">9 месяцев</SelectItem>
+                                                <SelectItem value="year">Годовой</SelectItem>
+                                                <SelectItem value="custom">Особый период</SelectItem>
+                                              </SelectContent>
+                                            </Select>
                                           </div>
                                           <div className="space-y-1">
                                             <div className="text-xs text-muted-foreground">Начало</div>
@@ -2715,6 +2979,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                               <Badge variant="outline" className={periodStatusBadgeClass(period.status)}>
                                                 {periodStatusLabel(period.status)}
                                               </Badge>
+                                              <Badge variant="secondary" className="text-[11px]">
+                                                {auditPeriodTypeLabel(period.type)}
+                                              </Badge>
                                               <Badge variant={periodHasOwnTeam ? 'default' : 'outline'} className="text-[11px]">
                                                 {periodHasOwnTeam ? 'своя команда периода' : 'не распределено'}
                                               </Badge>
@@ -2758,7 +3025,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                       employees={assignableEmployees}
                                                       disabled={savingProjectId === `${row.id}:${period.id}:add:${column.key}`}
                                                       onPick={(employeeId) => addPeriodTeamMember(row, period, column.key, employeeId)}
-                                                      onAddContractor={canManageContractors ? () => setGphEditorRowId(row.id) : undefined}
+                                                      onAddContractor={canManageContractors ? () => openGphAssignment(row.id, column.key, period.id) : undefined}
                                                     />
                                                   )}
                                                   {members.length === 0 && !canManageTeam && (
@@ -2894,7 +3161,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                             employees={assignableEmployees}
                                             disabled={savingProjectId === `${row.id}:add:${column.key}`}
                                             onPick={(employeeId) => addTeamMember(row, column.key, employeeId)}
-                                            onAddContractor={canManageContractors ? () => setGphEditorRowId(row.id) : undefined}
+                                            onAddContractor={canManageContractors ? () => openGphAssignment(row.id, column.key) : undefined}
                                           />
                                         )}
                                         <div className="space-y-2">
@@ -2988,7 +3255,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           </table>
         </Card>
 
-        <AlertDialog open={Boolean(gphEditorRow)} onOpenChange={(open) => !open && setGphEditorRowId(null)}>
+        <AlertDialog open={Boolean(gphEditorRow)} onOpenChange={(open) => {
+          if (open) return;
+          setGphEditorRowId(null);
+          setGphAssignmentContext(null);
+        }}>
           {gphEditorRow && (
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -3069,6 +3340,29 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 disabled={bulkAssigningCompany || !bulkCompanyId}
               >
                 {bulkAssigningCompany ? 'Назначаю…' : `Назначить ${selectedProjectIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkPartnerAssignOpen} onOpenChange={setBulkPartnerAssignOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Назначить партнёра выбранным проектам?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Партнёр «{partnerEmployees.find((employee) => employee.id === bulkPartnerId) ? employeeName(partnerEmployees.find((employee) => employee.id === bulkPartnerId)) : 'не выбран'}» будет назначен для {selectedProjectIds.size} проектов. Если у партнёра уже есть команда на другом проекте, она подставится как готовый шаблон.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkAssigningPartner}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={bulkAssigningPartner || !bulkPartnerId}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void assignPartnerToSelectedProjects();
+                }}
+              >
+                {bulkAssigningPartner ? 'Назначаю…' : `Назначить ${selectedProjectIds.size}`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

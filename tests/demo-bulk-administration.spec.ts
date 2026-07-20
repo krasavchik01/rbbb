@@ -18,9 +18,13 @@ test.describe('bulk administration and deputy project status', () => {
     await gphInput.fill('250000');
     await page.getByTestId('save-contractor-amount').click();
     await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
+    await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/employees')).length).toBeGreaterThanOrEqual(2);
+    const employeeCreate = network.mutationRequests.find((request) => request.url.includes('/rest/v1/employees') && (request.body || '').includes('Тестовый Исполнитель'));
     const projectUpdate = network.mutationRequests.find((request) => request.url.includes('/rest/v1/projects'));
+    expect(employeeCreate?.body).toContain('Тестовый Исполнитель');
     expect(projectUpdate?.body).toContain('Тестовый Исполнитель');
     expect(projectUpdate?.body).toContain('250000');
+    expect(projectUpdate?.body).toContain('project_leader');
     expect(network.productionMutations).toEqual([]);
   });
 
