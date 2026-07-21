@@ -63,6 +63,7 @@ import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
 import { ProjectCommandCard } from '@/components/projects/ProjectCommandCard';
+import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import type { CanonicalTeamMember } from '@/types/project-domain';
 import type * as XLSXNs from 'xlsx';
 
@@ -1019,6 +1020,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [openingFileKey, setOpeningFileKey] = useState<string | null>(null);
   const [contractorNameDrafts, setContractorNameDrafts] = useState<Record<string, string>>({});
   const [contractorAmountDrafts, setContractorAmountDrafts] = useState<Record<string, string>>({});
   const [gphEditorRowId, setGphEditorRowId] = useState<string | null>(null);
@@ -1072,6 +1074,24 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = canManageTeam || user?.role === 'partner';
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
+
+  const openContractFile = async (file: any, label: string, key: string) => {
+    const rawUrl = contractFileUrl(file);
+    const storagePath = String(file?.storagePath || file?.path || '');
+    const isSeafileFile = Boolean(file?.isSeafile) || rawUrl.startsWith('seafile://');
+    setOpeningFileKey(key);
+    try {
+      const url = isSeafileFile && storagePath
+        ? await supabaseDataStore.getSeafileDownloadUrl(storagePath)
+        : rawUrl;
+      if (!url || url.startsWith('seafile://')) throw new Error('Безопасная ссылка на файл недоступна');
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (error: any) {
+      toast({ title: 'Не удалось открыть договор', description: error?.message || `Файл «${label}» недоступен`, variant: 'destructive' });
+    } finally {
+      setOpeningFileKey(null);
+    }
+  };
 
   const openGphAssignment = (rowId: string, roleKey: string, periodId?: string) => {
     setGphAssignmentContext({ rowId, roleKey, periodId });
@@ -3305,18 +3325,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                         {row.contractFiles.map((file: any, index: number) => {
                                           const url = contractFileUrl(file);
                                           const label = file?.fileName || file?.name || `Файл ${index + 1}`;
+                                          const fileKey = `${row.id}:${file?.id || label}-${index}`;
                                           return url ? (
-                                            <a
-                                              key={`${file?.id || label}-${index}`}
-                                              href={url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex"
+                                            <Button
+                                              key={fileKey}
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8"
+                                              disabled={openingFileKey === fileKey}
+                                              onClick={() => void openContractFile(file, label, fileKey)}
                                             >
-                                              <Button type="button" variant="outline" size="sm" className="h-8">
-                                                {label}
-                                              </Button>
-                                            </a>
+                                              {openingFileKey === fileKey ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                                              {label}
+                                            </Button>
                                           ) : (
                                             <Badge key={`${label}-${index}`} variant="outline">
                                               {label}

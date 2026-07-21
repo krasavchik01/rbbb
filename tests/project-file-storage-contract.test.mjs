@@ -5,6 +5,7 @@ import test from 'node:test';
 const dataStoreSource = fs.readFileSync(new URL('../src/lib/supabaseDataStore.ts', import.meta.url), 'utf8');
 const fileManagerSource = fs.readFileSync(new URL('../src/components/projects/ProjectFileManager.tsx', import.meta.url), 'utf8');
 const contractEditorSource = fs.readFileSync(new URL('../src/components/projects/ContractEditor.tsx', import.meta.url), 'utf8');
+const commandCenterSource = fs.readFileSync(new URL('../src/pages/ProjectCommandCenter.tsx', import.meta.url), 'utf8');
 
 test('project file upload fails loudly if Seafile metadata cannot be persisted to project notes', () => {
   assert.match(dataStoreSource, /await this\.updateProject\(projectId, \{/);
@@ -23,4 +24,10 @@ test('contract tab opens Seafile contract and amendment links through backend do
   assert.match(contractEditorSource, /supabaseDataStore\.getSeafileDownloadUrl\(storagePath\)/);
   assert.match(contractEditorSource, /openAmendmentFile/);
   assert.match(contractEditorSource, /openProjectFile\(file, label\)/);
+});
+
+test('command center opens Seafile contract files through the authenticated proxy instead of raw links', () => {
+  assert.match(commandCenterSource, /supabaseDataStore\.getSeafileDownloadUrl\(storagePath\)/);
+  assert.match(commandCenterSource, /const isSeafileFile = Boolean\(file\?\.isSeafile\) \|\| rawUrl\.startsWith\('seafile:\/\/'\)/);
+  assert.doesNotMatch(commandCenterSource, /href=\{url\}/);
 });
