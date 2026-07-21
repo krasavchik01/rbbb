@@ -61,6 +61,8 @@ import {
 } from '@/lib/projectStatusActions';
 import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
+import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
+import { ProjectCommandCard } from '@/components/projects/ProjectCommandCard';
 import type { CanonicalTeamMember } from '@/types/project-domain';
 import type * as XLSXNs from 'xlsx';
 
@@ -2829,6 +2831,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 filteredRows.map((row) => {
                   const expanded = tableDetailLevel === 'detailed' || !!expandedRows[row.id];
                   const totalBonusAmount = Number(row.finances.totalBonusAmount || row.finances.totalPaidBonuses) || 0;
+                  const commandModel = buildProjectCommandCenterModel(row.project);
                   const closureStatusLabel = row.status === 'pending_payment_approval'
                     ? 'Готов к бонусам'
                     : row.status === 'ready_to_complete'
@@ -3002,6 +3005,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         <TableRow key={`${row.id}-details`} className="bg-muted/20 hover:bg-muted/20">
                           <TableCell colSpan={tableColSpan} className="p-0">
                             <div className="space-y-4 border-t px-4 py-4">
+                              <ProjectCommandCard
+                                model={commandModel}
+                                projectHref={`/project/${row.id}`}
+                                canSeeContractMoney={canSeeContractMoney}
+                              />
                               <div className="rounded-md border bg-background">
                                 <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
                                   <div className="text-sm font-semibold">Сроки и периоды</div>

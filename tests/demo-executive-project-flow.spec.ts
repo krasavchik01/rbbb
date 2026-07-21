@@ -18,6 +18,25 @@ async function visibleUnnamedButtons(page: Page) {
 }
 
 test.describe('executive demo: project to payment registry', () => {
+  test('CEO command center links company, contract subject, service, stage and period in one project passport', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'ceo');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    await page.getByTitle('Раскрыть').first().click();
+    const passport = page.getByLabel(`Паспорт проекта ${demoProject.name}`);
+    await expect(passport).toBeVisible();
+    await expect(passport.getByText('RBI Audit Kazakhstan', { exact: true })).toBeVisible();
+    await expect(passport.getByText('Финансовый аудит')).toBeVisible();
+    await expect(passport.getByText('Аудит финансовой отчётности')).toBeVisible();
+    await expect(passport.getByText('Годовой аудит', { exact: true })).toBeVisible();
+    await expect(passport.getByText('Годовой аудит 2026', { exact: true })).toBeVisible();
+    await expect(passport.getByText('2025/26 · октябрь—сентябрь')).toBeVisible();
+    await expect(passport.getByText(/48\s*000\s*000\s*₸/)).toBeVisible();
+    expect(network.productionMutations).toEqual([]);
+    expect(network.unhandledRequests).toEqual([]);
+  });
+
   test('CEO sees one transparent project passport with price, team and approved hours', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/projects');
