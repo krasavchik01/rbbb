@@ -922,7 +922,8 @@ class SupabaseDataStore {
           ...(category === 'contract' ? { contract: updatedContract } : {})
         } as any);
       } catch (metadataError) {
-        console.warn('Could not sync uploaded file metadata to project notes:', metadataError);
+        console.error('Could not sync uploaded file metadata to project notes:', metadataError);
+        throw new Error('Файл загружен в Seafile, но не закрепился в карточке проекта. Повторите загрузку или обратитесь к администратору.');
       }
 
       return {

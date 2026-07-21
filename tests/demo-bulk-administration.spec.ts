@@ -161,6 +161,34 @@ test.describe('bulk administration and deputy project status', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
+  test('deputy director can prepare bulk team and project leader assignments', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    await page.locator('tbody input[type="checkbox"]').check();
+
+    await expect(page.getByTestId('bulk-team-template-select')).toBeVisible();
+    await expect(page.getByTestId('bulk-assign-team')).toBeVisible();
+    await expect(page.getByTestId('bulk-leader-select')).toBeVisible();
+    await expect(page.getByTestId('bulk-assign-leader')).toBeVisible();
+
+    await page.getByTestId('bulk-team-template-select').click();
+    await page.getByRole('option').first().click();
+    await page.getByTestId('bulk-assign-team').click();
+    await page.getByTestId('confirm-bulk-team').click();
+    await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
+
+    await page.locator('tbody input[type="checkbox"]').check();
+    await page.getByTestId('bulk-leader-select').click();
+    await page.getByRole('option').first().click();
+    await page.getByTestId('bulk-assign-leader').click();
+    await page.getByTestId('confirm-bulk-leader').click();
+    await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(2);
+
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('CEO can select employees in bulk while the current account stays protected', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/hr?tab=employees');

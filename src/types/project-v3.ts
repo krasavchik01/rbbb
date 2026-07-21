@@ -276,6 +276,7 @@ export interface ProjectStage {
   vatAmount: number;          // Сумма НДС (16%)
   amountWithVAT: number;      // Сумма с НДС
   year?: number;              // Год этапа (для удобства фильтрации)
+  auditPeriodId?: string;     // Единый период аудита, к которому относится этап
 }
 
 // Дополнительная услуга

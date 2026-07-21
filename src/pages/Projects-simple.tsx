@@ -38,7 +38,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 import { getProjectStage, getProjectStageLabel, type ProjectStage as RoadmapProjectStage } from "@/lib/projectStages";
-import { getDisplayAuditPeriods, groupProjectsByAuditRoot } from "@/lib/auditPeriods";
+import { getAuditPeriods, getDisplayAuditPeriods, groupProjectsByAuditRoot } from "@/lib/auditPeriods";
 
 // Простые типы
 interface SimpleProject {
@@ -1756,8 +1756,35 @@ export default function Projects() {
                     currentStages={project.stages || []}
                     onSave={async (stages: ProjectStage[]) => {
                       try {
+                        const now = new Date().toISOString();
+                        const existingPeriods = getAuditPeriods(project);
+                        const stagesWithPeriods = stages.map((stage, index) => ({
+                          ...stage,
+                          auditPeriodId: stage.auditPeriodId || `ap_${projectId}_stage_${index + 1}`,
+                        }));
+                        const auditPeriods = stagesWithPeriods.map((stage, index) => {
+                          const existing = existingPeriods.find((period) => period.id === stage.auditPeriodId)
+                            || existingPeriods.find((period) => period.name === stage.name && period.startDate === stage.startDate && period.endDate === stage.endDate);
+                          return {
+                            ...existing,
+                            id: stage.auditPeriodId,
+                            name: stage.name?.trim() || `Этап ${index + 1}`,
+                            type: existing?.type || 'custom',
+                            startDate: stage.startDate,
+                            endDate: stage.endDate,
+                            deadline: stage.endDate,
+                            status: existing?.status || 'planned',
+                            taskIds: existing?.taskIds || [],
+                            documentIds: existing?.documentIds || [],
+                            sourceProjectId: projectId,
+                            createdBy: existing?.createdBy || user?.id || 'procurement',
+                            createdAt: existing?.createdAt || now,
+                            updatedAt: now,
+                          };
+                        });
                         await supabaseDataStore.updateProject(projectId, {
-                          stages: stages,
+                          stages: stagesWithPeriods,
+                          auditPeriods,
                         });
                         await refreshProjects();
                         toast({

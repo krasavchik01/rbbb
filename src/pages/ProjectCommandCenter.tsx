@@ -78,6 +78,7 @@ type ProjectViewFilter =
   | 'waiting_hours';
 type ProjectDeadlineFilter = 'all' | 'overdue' | 'next_30' | 'no_deadline';
 type ProjectPeriodFilter = 'all' | 'has_periods' | 'no_periods';
+type AuditPeriodTypeFilter = 'all' | AuditPeriod['type'];
 type ProjectSort = 'default' | 'deadline_asc' | 'deadline_desc' | 'amount_desc' | 'hours_desc';
 type ProjectCommandScope = 'executive' | 'operations';
 type TableDetailLevel = 'compact' | 'detailed';
@@ -643,6 +644,10 @@ function rowMatchesBusinessSeason(row: any, value: BusinessSeasonFilter): boolea
   return rowDateRanges(row).some((range) => rangesIntersect(range, season));
 }
 
+function rowMatchesAuditPeriodType(row: any, value: AuditPeriodTypeFilter): boolean {
+  return value === 'all' || (row.periods || []).some((period: AuditPeriod) => period.type === value);
+}
+
 function bucketRange(value: string): DateRange | null {
   const yearMatch = value.match(/^year:(20\d{2})$/);
   if (yearMatch) {
@@ -1008,6 +1013,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [dateToFilter, setDateToFilter] = useState('');
   const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>('all');
+  const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>('all');
   const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
@@ -1028,6 +1034,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [bulkPartnerId, setBulkPartnerId] = useState('');
   const [bulkPartnerAssignOpen, setBulkPartnerAssignOpen] = useState(false);
   const [bulkAssigningPartner, setBulkAssigningPartner] = useState(false);
+  const [bulkTeamTemplateId, setBulkTeamTemplateId] = useState('');
+  const [bulkTeamAssignOpen, setBulkTeamAssignOpen] = useState(false);
+  const [bulkAssigningTeam, setBulkAssigningTeam] = useState(false);
+  const [bulkLeaderId, setBulkLeaderId] = useState('');
+  const [bulkLeaderAssignOpen, setBulkLeaderAssignOpen] = useState(false);
+  const [bulkAssigningLeader, setBulkAssigningLeader] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [periodNameDraft, setPeriodNameDraft] = useState('');
@@ -1050,7 +1062,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canDeleteProjects = user?.role === 'admin' || user?.role === 'ceo';
   const canBulkAssignCompany = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const canBulkAssignPartner = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
-  const canSelectProjects = canDeleteProjects || canBulkAssignCompany || canBulkAssignPartner;
+  const canBulkAssignTeam = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const canBulkAssignLeader = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const canSelectProjects = canDeleteProjects || canBulkAssignCompany || canBulkAssignPartner || canBulkAssignTeam || canBulkAssignLeader;
   const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const canManageContractors = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
   const statusOptions = projectStatusOptionsForRole(user?.role);
@@ -1230,11 +1244,27 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const gphEditorRow = gphEditorRowId ? rows.find((row) => row.id === gphEditorRowId) : undefined;
 
+  const teamTemplates = useMemo(() => {
+    const templates = new Map<string, { id: string; label: string; team: CanonicalTeamMember[] }>();
+    for (const row of rows) {
+      if (!row.team?.length) continue;
+      const partner = row.team.find((member: any) => isPartnerRole(teamRole(member)));
+      const partnerId = partner ? teamMemberId(partner) : '';
+      const id = partnerId ? `partner:${partnerId}` : `project:${row.id}`;
+      if (templates.has(id)) continue;
+      const owner = partner ? teamName(partner) : row.name;
+      templates.set(id, {
+        id,
+        label: `${partner ? 'Команда партнёра' : 'Команда проекта'}: ${owner} · ${row.team.length} чел.`,
+        team: row.team.map((member: CanonicalTeamMember) => ({ ...member })),
+      });
+    }
+    return [...templates.values()].sort((left, right) => left.label.localeCompare(right.label, 'ru'));
+  }, [rows]);
+
   const partnerTeamTemplate = (partnerId: string): CanonicalTeamMember[] | null => {
-    const source = rows.find((row) => (
-      row.team.length > 1 && row.team.some((member: any) => teamRole(member) === 'partner' && teamMemberId(member) === partnerId)
-    ));
-    return source ? source.team.map((member: CanonicalTeamMember) => ({ ...member })) : null;
+    const template = teamTemplates.find((item) => item.id === `partner:${partnerId}`);
+    return template ? template.team.map((member) => ({ ...member })) : null;
   };
 
   const summary = useMemo(() => {
@@ -1381,6 +1411,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (deadlineFilter === 'no_deadline' && row.deadline) return false;
       if (periodFilter === 'has_periods' && row.periods.length === 0) return false;
       if (periodFilter === 'no_periods' && row.periods.length > 0) return false;
+      if (!rowMatchesAuditPeriodType(row, auditPeriodTypeFilter)) return false;
       return true;
     });
 
@@ -1391,7 +1422,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, sortBy]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
 
   const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 3 : 0);
 
@@ -1652,6 +1683,112 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       toast({ title: 'Не удалось назначить партнёра', description: error?.message || 'Повторите попытку', variant: 'destructive' });
     } finally {
       setBulkAssigningPartner(false);
+    }
+  };
+
+  const assignTeamToSelectedProjects = async () => {
+    if (!canBulkAssignTeam || !updateProject || bulkAssigningTeam || selectedProjectIds.size === 0) return;
+    const template = teamTemplates.find((item) => item.id === bulkTeamTemplateId);
+    if (!template) {
+      toast({ title: 'Выберите шаблон команды', variant: 'destructive' });
+      return;
+    }
+
+    setBulkAssigningTeam(true);
+    const ids = Array.from(selectedProjectIds);
+    const failedIds: string[] = [];
+    try {
+      for (let index = 0; index < ids.length; index += 20) {
+        const batch = ids.slice(index, index + 20);
+        const results = await Promise.allSettled(batch.map(async (projectId) => {
+          const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId));
+          if (!sourceProject) throw new Error('Проект не найден');
+          const team = template.team.map((member) => ({ ...member }));
+          const existingFinances = {
+            ...(sourceProject?.notes?.finances || {}),
+            ...(sourceProject?.finances || {}),
+          };
+          const finances = calculateProjectFinances({
+            ...sourceProject,
+            team,
+            finances: { ...existingFinances, amountWithoutVAT: projectAmount(sourceProject) },
+          });
+          await updateProject(projectId, { team, finances });
+        }));
+        results.forEach((result, resultIndex) => {
+          if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
+        });
+      }
+      setSelectedProjectIds(new Set(failedIds));
+      setBulkTeamAssignOpen(false);
+      toast({
+        title: failedIds.length > 0 ? 'Команда назначена частично' : 'Команда назначена',
+        description: `${template.label}: ${ids.length - failedIds.length} проектов. Отдельные команды периодов сохранены.`,
+        variant: failedIds.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error: any) {
+      toast({ title: 'Не удалось назначить команду', description: error?.message || 'Повторите попытку', variant: 'destructive' });
+    } finally {
+      setBulkAssigningTeam(false);
+    }
+  };
+
+  const assignLeaderToSelectedProjects = async () => {
+    if (!canBulkAssignLeader || !updateProject || bulkAssigningLeader || selectedProjectIds.size === 0) return;
+    const employee = assignableEmployees.find((item) => item.id === bulkLeaderId);
+    if (!employee) {
+      toast({ title: 'Выберите руководителя', variant: 'destructive' });
+      return;
+    }
+
+    setBulkAssigningLeader(true);
+    const ids = Array.from(selectedProjectIds);
+    const failedIds: string[] = [];
+    try {
+      for (let index = 0; index < ids.length; index += 20) {
+        const batch = ids.slice(index, index + 20);
+        const results = await Promise.allSettled(batch.map(async (projectId) => {
+          const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId));
+          if (!sourceProject) throw new Error('Проект не найден');
+          const team = projectTeam(sourceProject)
+            .filter((member: any) => !isLeaderRole(teamRole(member)))
+            .map((member: CanonicalTeamMember) => ({ ...member }));
+          team.push({
+            userId: employee.id,
+            userName: employeeName(employee),
+            name: employeeName(employee),
+            userEmail: employee.email,
+            role: 'project_leader',
+            bonusPercent: roleDefaultPercent('project_leader'),
+            assignedAt: new Date().toISOString(),
+            assignedBy: user?.id || 'bulk-leader',
+          });
+          const existingFinances = {
+            ...(sourceProject?.notes?.finances || {}),
+            ...(sourceProject?.finances || {}),
+          };
+          const finances = calculateProjectFinances({
+            ...sourceProject,
+            team,
+            finances: { ...existingFinances, amountWithoutVAT: projectAmount(sourceProject) },
+          });
+          await updateProject(projectId, { team, finances });
+        }));
+        results.forEach((result, resultIndex) => {
+          if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
+        });
+      }
+      setSelectedProjectIds(new Set(failedIds));
+      setBulkLeaderAssignOpen(false);
+      toast({
+        title: failedIds.length > 0 ? 'Руководитель назначен частично' : 'Руководитель назначен',
+        description: `${employeeName(employee)}: ${ids.length - failedIds.length} проектов.`,
+        variant: failedIds.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error: any) {
+      toast({ title: 'Не удалось назначить руководителя', description: error?.message || 'Повторите попытку', variant: 'destructive' });
+    } finally {
+      setBulkAssigningLeader(false);
     }
   };
 
@@ -2323,7 +2460,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
         <Card className="p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-9">
+            <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-10">
               <div className="relative flex-1 md:col-span-2 xl:col-span-2 2xl:col-span-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -2458,6 +2595,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="no_periods">Нет периодов</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={auditPeriodTypeFilter} onValueChange={(value) => setAuditPeriodTypeFilter(value as AuditPeriodTypeFilter)}>
+                <SelectTrigger className="w-full" aria-label="Тип аудиторского периода">
+                  <SelectValue placeholder="Тип периода" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все типы периода</SelectItem>
+                  <SelectItem value="six_months">6 месяцев</SelectItem>
+                  <SelectItem value="nine_months">9 месяцев</SelectItem>
+                  <SelectItem value="year">Годовой</SelectItem>
+                  <SelectItem value="custom">Особый период</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={sortBy} onValueChange={(value) => setSortBy(value as ProjectSort)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -2497,7 +2646,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
             </div>
           </div>
-          {(companyFilter !== 'all' || partnerFilter !== 'all' || yearFilter !== 'all' || businessSeasonFilter !== 'all' || dateFromFilter || dateToFilter) && (
+          {(companyFilter !== 'all' || partnerFilter !== 'all' || yearFilter !== 'all' || businessSeasonFilter !== 'all' || dateFromFilter || dateToFilter || periodFilter !== 'all' || auditPeriodTypeFilter !== 'all') && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Сверка:</span>
               {companyFilter !== 'all' && <Badge variant="secondary">Наша компания: {selectedCompanyLabel}</Badge>}
@@ -2505,6 +2654,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               {yearFilter !== 'all' && <Badge variant="secondary">Период: {selectedDateFilterLabel}</Badge>}
               {businessSeasonFilter !== 'all' && <Badge variant="secondary">{dateFilterOptions.seasons.find((item) => item.value === businessSeasonFilter)?.label || 'Бизнес-сезон'}</Badge>}
               {(dateFromFilter || dateToFilter) && <Badge variant="secondary">Даты: {dateFromFilter || '…'} — {dateToFilter || '…'}</Badge>}
+              {periodFilter !== 'all' && <Badge variant="secondary">{periodFilter === 'has_periods' ? 'Есть периоды' : 'Без периодов'}</Badge>}
+              {auditPeriodTypeFilter !== 'all' && <Badge variant="secondary">{auditPeriodTypeLabel(auditPeriodTypeFilter)}</Badge>}
               <span className="ml-auto text-muted-foreground">
                 Найдено: <span className="font-medium text-foreground tabular-nums">{filteredRows.length}</span>
               </span>
@@ -2568,6 +2719,54 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                       </Button>
                     </>
                   )}
+                  {canBulkAssignTeam && (
+                    <>
+                      <Select value={bulkTeamTemplateId} onValueChange={setBulkTeamTemplateId} disabled={bulkAssigningTeam}>
+                        <SelectTrigger className="w-[290px]" aria-label="Выбрать шаблон команды" data-testid="bulk-team-template-select">
+                          <SelectValue placeholder="Применить готовую команду" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teamTemplates.length === 0 ? (
+                            <SelectItem value="no-team-template" disabled>Нет сохранённых команд</SelectItem>
+                          ) : teamTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>{template.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        data-testid="bulk-assign-team"
+                        onClick={() => setBulkTeamAssignOpen(true)}
+                        disabled={!bulkTeamTemplateId || bulkAssigningTeam}
+                      >
+                        Применить команду
+                      </Button>
+                    </>
+                  )}
+                  {canBulkAssignLeader && (
+                    <>
+                      <Select value={bulkLeaderId} onValueChange={setBulkLeaderId} disabled={bulkAssigningLeader}>
+                        <SelectTrigger className="w-[270px]" aria-label="Выбрать руководителя для выбранных проектов" data-testid="bulk-leader-select">
+                          <SelectValue placeholder="Назначить руководителя" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assignableEmployees.map((employee) => (
+                            <SelectItem key={employee.id} value={employee.id}>{employeeName(employee)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        data-testid="bulk-assign-leader"
+                        onClick={() => setBulkLeaderAssignOpen(true)}
+                        disabled={!bulkLeaderId || bulkAssigningLeader}
+                      >
+                        Назначить руководителя
+                      </Button>
+                    </>
+                  )}
                   {canDeleteProjects && (
                     <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -2577,7 +2776,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </>
               ) : (
                 <span className="text-sm text-muted-foreground">
-                  Отметьте проекты чекбоксами для массового назначения компании, партнёра с командой{canDeleteProjects ? ' или удаления' : ''}.
+                  Отметьте проекты чекбоксами для массового назначения компании, партнёра, готовой команды или руководителя{canDeleteProjects ? ' или удаления' : ''}.
                 </span>
               )}
             </div>
@@ -3363,6 +3562,54 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 }}
               >
                 {bulkAssigningPartner ? 'Назначаю…' : `Назначить ${selectedProjectIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkTeamAssignOpen} onOpenChange={setBulkTeamAssignOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Применить команду к выбранным проектам?</AlertDialogTitle>
+              <AlertDialogDescription>
+                «{teamTemplates.find((template) => template.id === bulkTeamTemplateId)?.label || 'Шаблон не выбран'}» заменит общую команду у {selectedProjectIds.size} проектов. Отдельные команды внутри периодов, договоры, часы, бонусные выплаты и файлы не изменятся.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkAssigningTeam}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="confirm-bulk-team"
+                disabled={bulkAssigningTeam || !bulkTeamTemplateId}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void assignTeamToSelectedProjects();
+                }}
+              >
+                {bulkAssigningTeam ? 'Назначаю…' : `Применить к ${selectedProjectIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkLeaderAssignOpen} onOpenChange={setBulkLeaderAssignOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Назначить руководителя выбранным проектам?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Руководитель «{assignableEmployees.find((employee) => employee.id === bulkLeaderId) ? employeeName(assignableEmployees.find((employee) => employee.id === bulkLeaderId)) : 'не выбран'}» заменит текущего руководителя у {selectedProjectIds.size} проектов. Назначения, отдельно заданные в периодах, останутся без изменений.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkAssigningLeader}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="confirm-bulk-leader"
+                disabled={bulkAssigningLeader || !bulkLeaderId}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void assignLeaderToSelectedProjects();
+                }}
+              >
+                {bulkAssigningLeader ? 'Назначаю…' : `Назначить ${selectedProjectIds.size}`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

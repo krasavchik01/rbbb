@@ -62,3 +62,18 @@
 - [ ] Run role-scoped Playwright cases for deputy director and CEO.
 - [ ] Run `npm run typecheck` and `npm run build`.
 - [ ] Commit only relevant source/tests, push the recovery branch and deploy production.
+
+### Task 6: Bulk role operations and period-linked project structure
+
+**Files:**
+- Modify: `src/pages/ProjectCommandCenter.tsx`
+- Modify: `src/pages/CreateProjectProcurement.tsx`
+- Modify: `src/pages/Projects-simple.tsx`
+- Modify: `src/types/project-v3.ts`
+- Test: `tests/demo-bulk-administration.spec.ts`
+
+- [x] Add independent bulk actions to copy a reusable project-team template and to replace the project leader for every selected project.
+- [x] Preserve explicit period-level teams during bulk changes, while recalculating each project financial snapshot from its new root team.
+- [x] Filter the summary by audit-period length in addition to the existing season and exact-date filters.
+- [x] Persist a linked audit period for each procurement-created contract stage, and create a primary period when a project has no separate stages.
+- [x] Keep stage edits in the legacy procurement list linked to the corresponding audit periods.
