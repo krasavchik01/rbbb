@@ -48,12 +48,13 @@ export const MobileNavigation = () => {
     return allNavItems.filter((item) => canShowNavItem(item, user?.role));
   }, [user?.role]);
 
-  // Берём первые 5 для нижнего меню
-  const bottomNavItems = navItems.slice(0, 5);
+  // Четыре пункта — осознанный mobile предел: длинные подписи не слипаются на 360–390px.
+  // Остальные разделы доступны из меню в шапке.
+  const bottomNavItems = navItems.slice(0, 4);
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 safe-area-bottom">
-      <div className="flex justify-around items-center h-16">
+      <div className="mx-auto flex h-[4.5rem] max-w-lg items-center justify-around px-1">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.to;
@@ -62,14 +63,15 @@ export const MobileNavigation = () => {
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-col items-center justify-center flex-1 h-full space-y-1 transition-colors ${
+              aria-label={item.label}
+              className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
                 isActive
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Icon className={`h-5 w-5 ${isActive ? 'scale-110' : ''}`} />
-              <span className="text-xs font-medium">{item.label}</span>
+              <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'scale-110' : ''}`} />
+              <span className="max-w-full truncate text-[10px] font-medium leading-tight">{item.label}</span>
             </Link>
           );
         })}
