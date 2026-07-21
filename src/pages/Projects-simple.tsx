@@ -38,7 +38,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 import { getProjectStage, getProjectStageLabel, type ProjectStage as RoadmapProjectStage } from "@/lib/projectStages";
-import { getAuditPeriods, getDisplayAuditPeriods, groupProjectsByAuditRoot } from "@/lib/auditPeriods";
+import { getAuditPeriods, getDisplayAuditPeriods, groupProjectsByAuditRoot, type AuditPeriod, type AuditPeriodType } from "@/lib/auditPeriods";
 
 // Простые типы
 interface SimpleProject {
@@ -57,6 +57,17 @@ interface SimpleProject {
 
 // Порог: при меньшем числе карточек overhead виртуализации больше пользы — рендерим обычным grid-ом.
 const VIRTUALIZE_THRESHOLD = 50;
+
+function auditPeriodTypeForRange(startDate: string, endDate: string): AuditPeriodType {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 'custom';
+  const months = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
+  if (months >= 11 && months <= 13) return 'year';
+  if (months >= 8 && months <= 10) return 'nine_months';
+  if (months >= 5 && months <= 7) return 'six_months';
+  return 'custom';
+}
 
 /**
  * Виртуализированная сетка карточек проектов.
@@ -1758,24 +1769,39 @@ export default function Projects() {
                       try {
                         const now = new Date().toISOString();
                         const existingPeriods = getAuditPeriods(project);
+                        const defaultPeriodStart = project.contract.serviceStartDate || project.contract.date || new Date().toISOString().slice(0, 10);
+                        const defaultPeriodEnd = project.contract.serviceEndDate || defaultPeriodStart;
                         const stagesWithPeriods = stages.map((stage, index) => ({
                           ...stage,
                           auditPeriodId: stage.auditPeriodId || `ap_${projectId}_stage_${index + 1}`,
                         }));
-                        const auditPeriods = stagesWithPeriods.map((stage, index) => {
-                          const existing = existingPeriods.find((period) => period.id === stage.auditPeriodId)
+                        const sourceStages = stagesWithPeriods.length > 0 ? stagesWithPeriods : [{
+                          id: `stage_${projectId}_primary`,
+                          name: 'Основной период',
+                          startDate: defaultPeriodStart,
+                          endDate: defaultPeriodEnd,
+                          amountWithoutVAT: amount || 0,
+                          vatAmount: Math.round((amount || 0) * 0.16 * 100) / 100,
+                          amountWithVAT: Math.round((amount || 0) * 1.16 * 100) / 100,
+                          auditPeriodId: `ap_${projectId}_primary`,
+                        } as ProjectStage];
+                        const auditPeriods: AuditPeriod[] = sourceStages.map((stage, index) => {
+                          const periodId = stage.auditPeriodId || `ap_${projectId}_${index + 1}`;
+                          const existing = existingPeriods.find((period) => period.id === periodId)
                             || existingPeriods.find((period) => period.name === stage.name && period.startDate === stage.startDate && period.endDate === stage.endDate);
                           return {
                             ...existing,
-                            id: stage.auditPeriodId,
-                            name: stage.name?.trim() || `Этап ${index + 1}`,
-                            type: existing?.type || 'custom',
-                            startDate: stage.startDate,
-                            endDate: stage.endDate,
-                            deadline: stage.endDate,
+                            id: periodId,
+                            name: stage.name?.trim() || (index === 0 ? 'Основной период' : `Этап ${index + 1}`),
+                            type: auditPeriodTypeForRange(stage.startDate || defaultPeriodStart, stage.endDate || defaultPeriodEnd),
+                            startDate: stage.startDate || defaultPeriodStart,
+                            endDate: stage.endDate || defaultPeriodEnd,
+                            deadline: stage.endDate || defaultPeriodEnd,
                             status: existing?.status || 'planned',
                             taskIds: existing?.taskIds || [],
                             documentIds: existing?.documentIds || [],
+                            team: existing?.team,
+                            teamSource: existing?.teamSource,
                             sourceProjectId: projectId,
                             createdBy: existing?.createdBy || user?.id || 'procurement',
                             createdAt: existing?.createdAt || now,

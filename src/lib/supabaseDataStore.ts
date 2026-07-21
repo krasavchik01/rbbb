@@ -80,6 +80,10 @@ export interface Project extends Omit<SupabaseProject, 'notes' | 'status'> {
   company?: string;
   currency?: string;
   files?: any[];
+  stages?: any[];
+  auditPeriods?: any[];
+  additionalServices?: any[];
+  amendments?: any[];
   team: CanonicalTeamMember[];
   tasks: any[];
   contract?: any;
@@ -181,6 +185,10 @@ export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
     team: Array.isArray(notes.team) ? notes.team : [],
     tasks: Array.isArray(notes.tasks) ? notes.tasks : [],
     files: Array.isArray(notes.files) ? notes.files : undefined,
+    stages: Array.isArray(notes.stages) ? notes.stages : undefined,
+    auditPeriods: Array.isArray(notes.auditPeriods) ? notes.auditPeriods : undefined,
+    additionalServices: Array.isArray(notes.additionalServices) ? notes.additionalServices : undefined,
+    amendments: Array.isArray(notes.amendments) ? notes.amendments : Array.isArray(contract.amendments) ? contract.amendments : undefined,
     finances,
     contract: Object.keys(contract).length > 0 ? contract : undefined,
     client: Object.keys(client).length > 0 ? client : undefined,
