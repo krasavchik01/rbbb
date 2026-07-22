@@ -1,41 +1,22 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
+node_modules/
+dist/
 .env
 .env.*
 !.env.example
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.vercel
-
-# Реальные таймщиты сотрудников (используются только локально для диагностики
-# парсера через scripts/diagnose_timesheet.mjs) — содержат PII, в гит не уходят.
-*.xlsx
-*.xls
+# Deploy/local runtime artifacts
+.vercel/
 tmp/
+*.log
 
-# Локальные read-only отчёты аудита auth могут содержать masked email/id сотрудников.
-reports/auth-readiness-audit*.json
+# Local reports/workbooks generated during data cleanup/imports
+reports/
+*.xlsx
 
-# Снимки перед live-удалением содержат полные карточки проектов и остаются
-# только на рабочем компьютере; в GitHub их отправлять нельзя.
-reports/project-purge/
+# Local Graphify graph artifacts contain machine-specific paths/cache.
+.graphify/
+
+# Local tool/runtime artifacts
+playwright-report/
+test-results/
+supabase/.temp/

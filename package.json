@@ -24,7 +24,11 @@
     "audit:auth-readiness": "node scripts/audit-supabase-auth-readiness.mjs",
     "report:demo-readiness": "node scripts/demo-readiness/build-report.mjs",
     "test:access": "playwright test tests/access/role-page-access.spec.ts --project=chromium --reporter=line",
-    "test:routes": "node --test tests/navigation-routes.test.mjs"
+    "test:routes": "node --test tests/navigation-routes.test.mjs",
+    "graphify:install": "graphify install --project hermes",
+    "graphify:scope": "graphify scope inspect .",
+    "graphify:update": "graphify update . --scope tracked --no-description --no-label",
+    "graphify:summary": "graphify summary .graphify/graph.json"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -88,6 +92,7 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@playwright/test": "^1.56.1",
+    "@sentropic/graphify": "^0.17.1",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
