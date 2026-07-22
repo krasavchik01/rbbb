@@ -51,13 +51,13 @@ test.describe('project passport by every role', () => {
       await expect(page.getByRole('button', { name: 'Изменить состав' })).toHaveCount(canEditTeam ? 1 : 0);
 
       await page.getByRole('tab', { name: /Файлы/ }).click();
-      await expect(page.getByText('Договор_DEMO-2026-001.pdf')).toBeVisible();
+      await expect(page.getByLabel('📁 Файлы').getByText('Договор_DEMO-2026-001.pdf')).toBeVisible();
       await expect(page.getByRole('button', { name: /Скачать файл/ })).toBeVisible();
       await expect(page.getByRole('button', { name: /Добавить файлы/ })).toHaveCount(canEditProject ? 1 : 0);
       await expect(page.getByRole('button', { name: /Удалить файл/ })).toHaveCount(canEditProject ? 1 : 0);
 
       await page.getByRole('tab', { name: /Договор/ }).click();
-      await expect(page.getByText('№DEMO-2026-001')).toBeVisible();
+      await expect(page.getByRole('tabpanel').getByText('№DEMO-2026-001')).toBeVisible();
       const contractPanel = page.getByRole('tabpanel');
       await expect(contractPanel.getByRole('button', { name: 'Редактировать' })).toHaveCount(canEditProject ? 1 : 0);
 

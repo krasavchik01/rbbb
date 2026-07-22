@@ -48,7 +48,14 @@ test.describe('executive demo: project to payment registry', () => {
 
     await projectLink.click();
     await expect(page).toHaveURL(new RegExp(`/project/${DEMO_PROJECT_ID}$`));
-    await expect(page.getByRole('heading', { name: demoProject.name })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Свод проекта' })).toBeVisible();
+    await expect(page.getByLabel('Свод проекта')).toContainText('Вся ключевая информация одной таблицей');
+    await expect(page.getByRole('tab', { name: /Дашборд|Обзор/ })).toHaveCount(0);
+    await expect(page.getByText('Общий прогресс')).toHaveCount(0);
+    await expect(page.getByText('Статус выполнения')).toHaveCount(0);
+    await expect(page.getByText('Таймлайн')).toHaveCount(0);
+    await expect(page.getByText('Управление командой')).toHaveCount(0);
+    await expect(page.getByText('Финансовая сводка')).toHaveCount(0);
     await expect(page.getByText('14ч')).toBeVisible();
     await expect(page.getByText('+4ч ждут партнёра')).toBeVisible();
     await expect(page.getByText('Демо Партнёр').first()).toBeVisible();
@@ -93,7 +100,7 @@ test.describe('executive demo: project to payment registry', () => {
     await page.goto(`/project/${DEMO_PROJECT_ID}`);
     await waitForDemoApp(page);
 
-    await expect(page.getByText('Договор_DEMO-2026-001.pdf')).toBeVisible();
+    await expect(page.getByLabel('📁 Файлы').getByText('Договор_DEMO-2026-001.pdf')).toBeVisible();
     await expect(page.getByText(/242\.5 KB.*other.*15\.01\.2026/)).toBeVisible();
     const downloadButton = page.getByRole('button', { name: /Скачать файл/ });
     await expect(downloadButton).toBeVisible();
@@ -104,7 +111,7 @@ test.describe('executive demo: project to payment registry', () => {
     await expect(page.getByRole('button', { name: 'Изменить состав' })).toHaveCount(0);
 
     await page.getByRole('tab', { name: /Договор/ }).click();
-    await expect(page.getByText('№DEMO-2026-001')).toBeVisible();
+    await expect(page.getByRole('tabpanel').getByText('№DEMO-2026-001')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Редактировать' }).last()).toBeVisible();
     await expect(visibleUnnamedButtons(page)).resolves.toEqual([]);
     expect(network.productionMutations).toEqual([]);

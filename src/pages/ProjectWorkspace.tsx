@@ -4,22 +4,17 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
   CheckCircle2,
   Users,
-  Calendar,
-  DollarSign,
-  Target,
   Edit,
   Plus
 } from "lucide-react";
 import { useEmployees, useProjects } from "@/hooks/useSupabaseData";
 import { useTasks } from "@/hooks/useTasks";
-import { ProjectVitals } from "@/components/projects/ProjectVitals";
 import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheets";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,6 +66,172 @@ const mapProjectAmendmentRecord = (record: any): ProjectAmendment => ({
 const projectFileKey = (file: any): string => (
   file?.id || file?.storagePath || file?.publicUrl || file?.url || file?.fileName || file?.name || ''
 );
+
+const moneyCell = (value: any): string => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) && amount > 0 ? `${amount.toLocaleString('ru-RU')} ₸` : 'Не указано';
+};
+
+const dateCell = (value: any): string => {
+  if (!value) return 'Не указано';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString('ru-RU') : String(value);
+};
+
+const textCell = (value: any, fallback = 'Не указано'): string => {
+  const text = String(value || '').trim();
+  return text || fallback;
+};
+
+const teamRoleLabel = (role: string): string => {
+  const match = TEAM_ROLE_SLOTS.find((slot: any) => slot.key === role);
+  if (match?.label) return match.label;
+  const labels: Record<string, string> = {
+    partner: 'Партнёр',
+    project_leader: 'Руководитель проекта',
+    manager_1: 'Менеджер 1',
+    manager_2: 'Менеджер 2',
+    manager_3: 'Менеджер 3',
+    supervisor_3: 'Супервайзер 3',
+    supervisor_2: 'Супервайзер 2',
+    supervisor_1: 'Супервайзер 1',
+    tax_specialist_1: 'Налоговик 1',
+    tax_specialist_2: 'Налоговик 2',
+    assistant_3: 'Ассистент 3',
+    assistant_2: 'Ассистент 2',
+    assistant_1: 'Ассистент 1',
+    assistant: 'Ассистент',
+  };
+  return labels[role] || role || 'Роль';
+};
+
+type ProjectFlatSummaryProps = {
+  project: any;
+  projectTasks: any[];
+  projectHours?: ProjectHoursTotals;
+  employees: any[];
+  normalizedContract: any;
+  normalizedFinances: any;
+  normalizedFiles: any[];
+  normalizedStartDate: string;
+  normalizedDeadline: string;
+  amendments: ProjectAmendment[];
+  projectStatus: string;
+  currentProjectCompany: { id: string; name: string };
+  canManageProjectCompany: boolean;
+  activeCompanies: any[];
+  companyDraftId: string;
+  setCompanyDraftId: (value: string) => void;
+  saveProjectCompany: () => void;
+  isSavingCompany: boolean;
+  canEditTeam: boolean;
+  onEditTeam: () => void;
+  canSeeFinance: boolean;
+};
+
+function ProjectFlatSummary({
+  project,
+  projectTasks,
+  projectHours,
+  employees,
+  normalizedContract,
+  normalizedFinances,
+  normalizedFiles,
+  normalizedStartDate,
+  normalizedDeadline,
+  amendments,
+  projectStatus,
+  currentProjectCompany,
+  canManageProjectCompany,
+  activeCompanies,
+  companyDraftId,
+  setCompanyDraftId,
+  saveProjectCompany,
+  isSavingCompany,
+  canEditTeam,
+  onEditTeam,
+  canSeeFinance,
+}: ProjectFlatSummaryProps) {
+  const team = project.team || project.notes?.team || [];
+  const periods = project.notes?.auditPeriods || project.auditPeriods || [];
+  const completedTasks = projectTasks.filter((task: any) => isTaskDoneStatus(task.status)).length;
+  const pendingTasks = projectTasks.length - completedTasks;
+  const approvedHours = Number(projectHours?.approved || 0);
+  const pendingHours = Number(projectHours?.pending || 0);
+  const teamByRole = team.map((member: any) => {
+    const employee = employees.find((item: any) => item.id === (member.userId || member.id || member.employeeId));
+    const name = employee?.name || member.name || member.userName || member.employeeName || 'Не назначен';
+    return `${teamRoleLabel(member.role)}: ${name}`;
+  }).join('\n');
+  const periodText = periods.length
+    ? periods.map((period: any) => `${textCell(period.name || period.title, 'Период')} · ${dateCell(period.startDate)} — ${dateCell(period.endDate || period.deadline)} · ${textCell(period.status, 'статус не указан')}`).join('\n')
+    : 'Периоды не заведены';
+  const fileText = normalizedFiles.length
+    ? normalizedFiles.map((file: any) => file.name || file.fileName || file.path || 'Файл').join('\n')
+    : 'Файлы не прикреплены';
+  const rowClass = 'border-b align-top last:border-b-0';
+  const labelClass = 'w-[210px] bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground';
+  const valueClass = 'px-3 py-2 text-sm whitespace-pre-line';
+
+  return (
+    <section aria-label="Свод проекта" className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="flex flex-col gap-1 border-b bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold">Свод проекта</h2>
+          <p className="text-sm text-muted-foreground">Вся ключевая информация одной таблицей — без карточек.</p>
+        </div>
+        <Badge variant="outline">{getProjectStatusLabel(projectStatus)}</Badge>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left">
+          <tbody>
+            <tr className={rowClass}><th className={labelClass}>Клиент / проект</th><td className={valueClass}>{textCell(project.name || project.client?.name)}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Предмет / услуга</th><td className={valueClass}>{textCell(normalizedContract?.subject || project.notes?.description || project.description)}\n{textCell(project.type || project.project_type || project.notes?.type, 'Вид услуги не указан')}</td></tr>
+            <tr className={rowClass}>
+              <th className={labelClass}>Наша компания</th>
+              <td className={valueClass}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <span>{textCell(currentProjectCompany.name)}</span>
+                  {canManageProjectCompany && (
+                    <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">
+                      <Select value={companyDraftId} onValueChange={setCompanyDraftId} disabled={isSavingCompany || activeCompanies.length === 0}>
+                        <SelectTrigger className="h-9 w-full sm:w-[240px]" aria-label="Выбрать компанию проекта"><SelectValue placeholder="Выберите компанию" /></SelectTrigger>
+                        <SelectContent>{activeCompanies.map((company) => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <Button type="button" size="sm" onClick={saveProjectCompany} disabled={isSavingCompany || !companyDraftId || activeCompanies.length === 0}>{isSavingCompany ? 'Сохраняю…' : 'Назначить компанию'}</Button>
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+            <tr className={rowClass}><th className={labelClass}>Договор</th><td className={valueClass}>№{textCell(normalizedContract?.number, 'не указан')} · {dateCell(normalizedContract?.date)}\n{textCell(normalizedContract?.subject)}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Сроки</th><td className={valueClass}>{dateCell(normalizedStartDate || normalizedContract?.serviceStartDate)} — {dateCell(normalizedDeadline || normalizedContract?.serviceEndDate)}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Этапы / периоды</th><td className={valueClass}>{periodText}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Задачи</th><td className={valueClass}>{completedTasks} из {projectTasks.length} выполнено · в работе: {pendingTasks}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Часы</th><td className={valueClass}>{approvedHours}ч утверждено{pendingHours > 0 ? ` · +${pendingHours}ч ждут партнёра` : ''}</td></tr>
+            <tr className={rowClass}>
+              <th className={labelClass}>Команда</th>
+              <td className={valueClass}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <span>{teamByRole || 'Команда пока не назначена'}</span>
+                  {canEditTeam && <Button type="button" size="sm" variant="outline" onClick={onEditTeam}><Edit className="mr-2 h-4 w-4" />Изменить состав</Button>}
+                </div>
+              </td>
+            </tr>
+            {canSeeFinance && (
+              <>
+                <tr className={rowClass}><th className={labelClass}>Финансы</th><td className={valueClass}>Сумма без НДС: {moneyCell(normalizedFinances?.amountWithoutVAT)}\nБаза бонусов: {moneyCell(normalizedFinances?.bonusBase)}\nБонусный пул: {moneyCell(normalizedFinances?.totalBonusAmount)}\nГрязный доход: {moneyCell(normalizedFinances?.grossProfit)}</td></tr>
+                <tr className={rowClass}><th className={labelClass}>Расходы</th><td className={valueClass}>ГПХ / субподряд: {moneyCell(normalizedFinances?.totalContractorsAmount)}\nПредрасход: {moneyCell(normalizedFinances?.preExpenseAmount)}\nИтого расходы: {moneyCell(normalizedFinances?.totalCosts)}</td></tr>
+              </>
+            )}
+            <tr className={rowClass}><th className={labelClass}>Файлы</th><td className={valueClass}>{fileText}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Доп. соглашения</th><td className={valueClass}>{amendments.length ? amendments.map((item) => `№${item.number || '—'} от ${dateCell(item.date)} · ${textCell(item.description, '')}`).join('\n') : 'Нет доп. соглашений'}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -479,326 +640,45 @@ export default function ProjectWorkspace() {
         </div>
       </div>
 
-      {/* Vitals: единый индикатор — стадия, задачи, команда, часы */}
-      <Card className="p-4">
-        <ProjectVitals
-          project={project}
-          tasks={projectTasks}
-          hours={projectHours}
-          variant="expanded"
-        />
-      </Card>
+      <ProjectFlatSummary
+        project={project}
+        projectTasks={projectTasks}
+        projectHours={projectHours}
+        employees={employees || []}
+        normalizedContract={normalizedContract}
+        normalizedFinances={normalizedFinances}
+        normalizedFiles={normalizedFiles}
+        normalizedStartDate={normalizedStartDate}
+        normalizedDeadline={normalizedDeadline}
+        amendments={amendments}
+        projectStatus={projectStatus}
+        currentProjectCompany={currentProjectCompany}
+        canManageProjectCompany={canManageProjectCompany}
+        activeCompanies={activeCompanies}
+        companyDraftId={companyDraftId}
+        setCompanyDraftId={setCompanyDraftId}
+        saveProjectCompany={() => void saveProjectCompany()}
+        isSavingCompany={isSavingCompany}
+        canEditTeam={canEditTeam}
+        onEditTeam={() => {
+          loadTeamIntoSlots(project);
+          setShowTeamDialog(true);
+        }}
+        canSeeFinance={Boolean(
+          (project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || ''))
+          || !project.financialVisibility
+          || ((normalizedFinances?.amountWithoutVAT > 0 || project.finances) && (isPartner || isDirector || isAdmin || isPM))
+        )}
+      />
 
-      {canManageProjectCompany && (
-        <Card className="border-primary/20 bg-primary/5 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">Наша компания</p>
-              <p className="text-sm text-muted-foreground">
-                {currentProjectCompany.name || 'Не указана — назначьте компанию, чтобы проект попал в корректный рабочий свод.'}
-              </p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-              <Select
-                value={companyDraftId}
-                onValueChange={setCompanyDraftId}
-                disabled={isSavingCompany || activeCompanies.length === 0}
-              >
-                <SelectTrigger className="w-full sm:w-[280px]" aria-label="Выбрать компанию проекта">
-                  <SelectValue placeholder="Выберите компанию" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeCompanies.map((company) => (
-                    <SelectItem key={company.id} value={company.id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                onClick={() => void saveProjectCompany()}
-                disabled={isSavingCompany || !companyDraftId || activeCompanies.length === 0}
-              >
-                {isSavingCompany ? 'Сохраняю…' : 'Назначить компанию'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Статистика задач */}
-      {projectTasks.length > 0 && (
-        <Card className="p-6">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Задачи проекта</span>
-              <span className="text-sm text-muted-foreground">
-                {projectTasks.filter((t: any) => isTaskDoneStatus(t.status)).length} из {projectTasks.length} выполнено
-              </span>
-            </div>
-            <Progress
-              value={projectTasks.length > 0 ?
-                (projectTasks.filter((t: any) => isTaskDoneStatus(t.status)).length / projectTasks.length) * 100 : 0}
-              className="h-3"
-            />
-          </div>
-        </Card>
-      )}
-
-      {/* Ранее здесь была старая информационная панель. Теперь вся эта информация перенесена в красивый Дашборд ниже. */}
-
-      {/* Вкладки с информацией о проекте */}
-      <Tabs defaultValue={isProcurement ? "files" : "dashboard"} className="w-full">
+      {/* Вкладки оставлены только для редактирования/детальных рабочих операций. Основная информация выше в своде. */}
+      <Tabs defaultValue={isProcurement ? "files" : "periods"} className="w-full">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
-          {!isProcurement && <TabsTrigger value="dashboard" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📊 <span className="hidden sm:inline">Дашборд</span><span className="sm:hidden">Обзор</span></TabsTrigger>}
           {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">✅ Задачи</TabsTrigger>}
           <TabsTrigger value="periods" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📆 Периоды</TabsTrigger>
           <TabsTrigger value="files" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📁 Файлы</TabsTrigger>
           <TabsTrigger value="contract" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📜 Договор</TabsTrigger>
         </TabsList>
-
-        {/* Главный Дашборд для всех ролей */}
-        {project && (
-          <TabsContent value="dashboard" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-
-              {/* Главный прогресс */}
-              <Card className="p-6 bg-primary/5 border-primary/20 flex flex-col justify-center items-center text-center lg:col-span-1 shadow-sm">
-                <Target className="w-12 h-12 text-primary mb-4" />
-                <h3 className="text-xl font-bold mb-2">Общий прогресс</h3>
-                <div className="w-full max-w-[200px] mb-2">
-                  <div className="flex justify-between text-sm font-medium mb-1">
-                    <span>Выполнено</span>
-                    <span className="text-blue-700">{project.completionPercent || project.completion || 0}%</span>
-                  </div>
-                  <Progress value={project.completionPercent || project.completion || 0} className="h-3" />
-                </div>
-                <Badge variant={projectStatus === 'completed' ? 'default' : 'secondary'} className="mt-4 text-sm px-4 py-1">
-                  {getProjectStatusLabel(projectStatus)}
-                </Badge>
-              </Card>
-
-              {/* Текущий этап и задачи */}
-              <Card className="p-6 lg:col-span-2 shadow-sm border-border">
-                <div className="flex items-center gap-2 mb-6">
-                  <CheckCircle2 className="w-6 h-6 text-primary" />
-                  <h3 className="text-xl font-bold">Статус выполнения</h3>
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Статус проекта</span>
-                      <span className="text-sm font-bold">{project.completionPercent || project.completion || 0}%</span>
-                    </div>
-                    <p className="font-semibold text-lg mb-2 truncate">{getProjectStatusLabel(projectStatus)}</p>
-                    <Progress value={project.completionPercent || project.completion || 0} className="h-2" />
-                  </div>
-
-                  {/* Сводка по задачам */}
-                  {(() => {
-                    const total = projectTasks.length;
-                    const completed = projectTasks.filter(t => isTaskDoneStatus(t.status)).length;
-                    const inProgress = projectTasks.filter(t => t.status === 'in_progress').length;
-                    const tasksPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-                    return (
-                      <div className="bg-secondary/40 p-4 rounded-xl border border-secondary/60">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Задачи проекта</span>
-                          <span className="text-sm font-bold">{completed} / {total}</span>
-                        </div>
-                        <div className="flex gap-4">
-                          <div className="flex-1 flex flex-col justify-center">
-                            <Progress value={tasksPercent} className="h-2 mb-1" />
-                          </div>
-                          <div className="flex gap-3 text-sm">
-                            <div className="flex items-center gap-1.5 border-l-2 border-amber-500 pl-2">
-                              <span className="text-muted-foreground">В работе:</span>
-                              <span className="font-semibold">{inProgress}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 border-l-2 border-green-500 pl-2">
-                              <span className="text-muted-foreground">Готово:</span>
-                              <span className="font-semibold">{completed}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </Card>
-
-              {/* Временная шкала */}
-              <Card className="p-6 lg:col-span-1 shadow-sm border-border flex flex-col justify-center">
-                <div className="flex items-center gap-2 mb-4">
-                  <Calendar className="w-6 h-6 text-primary" />
-                  <h3 className="text-xl font-bold">Таймлайн</h3>
-                </div>
-                {(() => {
-                  let daysTotal = 0, daysPassed = 0, daysRemaining = 0, timeProgress = 0;
-                  const endStr = normalizedDeadline || project.contract?.serviceEndDate || project.deadline;
-                  const startStr = normalizedStartDate || project.createdAt;
-
-                  if (startStr && endStr) {
-                    const start = new Date(startStr).getTime();
-                    const end = new Date(endStr).getTime();
-                    const now = new Date().getTime();
-
-                    if (end > start) {
-                      daysTotal = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-                      daysPassed = Math.max(0, Math.ceil((now - start) / (1000 * 60 * 60 * 24)));
-                      daysRemaining = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
-                      timeProgress = Math.min(100, Math.max(0, Math.round((daysPassed / daysTotal) * 100)));
-                    }
-                  }
-
-                  return endStr ? (
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Осталось дней</p>
-                        <p className={`text-4xl font-bold ${daysRemaining < 3 ? 'text-red-500' : daysRemaining < 10 ? 'text-amber-500' : 'text-foreground'}`}>
-                          {daysRemaining > 0 ? daysRemaining : 0}
-                        </p>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>Старт</span>
-                          <span>Финиш</span>
-                        </div>
-                        <Progress value={timeProgress} className={`h-2 ${daysRemaining < 3 ? '[&>div]:bg-red-500' : timeProgress > 80 ? '[&>div]:bg-amber-500' : ''}`} />
-                      </div>
-
-                      <div className="bg-secondary/40 p-3 rounded-lg flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Дедлайн:</span>
-                        <span className="font-medium">{new Date(endStr).toLocaleDateString('ru-RU')}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center text-muted-foreground py-4">Сроки не заданы</div>
-                  );
-                })()}
-              </Card>
-
-              {/* Команда проекта */}
-              <Card className="p-6 lg:col-span-4 shadow-sm border-border">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-6 h-6 text-primary" />
-                    <h3 className="text-xl font-bold">Управление командой</h3>
-                  </div>
-                  {canEditTeam && (
-                    <Button onClick={() => {
-                      loadTeamIntoSlots(project);
-                      setShowTeamDialog(true);
-                    }} variant="outline">
-                      <Edit className="w-4 h-4 mr-2" />
-                      Изменить состав
-                    </Button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {(project.team || project.notes?.team || []).map((member: any, index: number) => {
-                    const isExternal = member.type === 'gph' || member.type === 'subcontract';
-                    const employee = !isExternal ? employees.find((e: any) => e.id === (member.userId || member.id || member.employeeId)) : null;
-                    const roleLabel = member.role === 'partner' ? 'Партнер' :
-                      member.role === 'manager_1' ? 'Менеджер 1' :
-                        member.role === 'senior_auditor' ? 'Ст. аудитор' :
-                          member.role === 'assistant' ? 'Ассистент' : member.role || 'Участник';
-                    const displayName = employee?.name || member.name || member.userName || 'Неизвестный';
-                    return (
-                      <div key={index} className={`flex items-center gap-3 p-3 bg-card shadow-sm rounded-xl border transition-colors ${isExternal ? 'border-orange-200 hover:border-orange-400' : 'border-border hover:border-primary/30'}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${isExternal ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'bg-primary/10 text-primary'}`}>
-                          {displayName[0]}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate" title={displayName}>
-                            {displayName}
-                          </p>
-                          <div className="flex items-center gap-1.5">
-                            {isExternal && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-orange-300 text-orange-600">
-                                {member.type === 'gph' ? 'ГПХ' : 'Субподряд'}
-                              </Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground">{roleLabel}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {(!project.team || project.team.length === 0) && (
-                    <div className="col-span-full text-center py-6 text-muted-foreground border-2 border-dashed rounded-xl">
-                      Команда пока не назначена
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              {/* Финансовая сводка */}
-              {((project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || '')) ||
-                !project.financialVisibility || ((normalizedFinances?.amountWithoutVAT > 0 || project.finances) && (isPartner || isDirector || isAdmin || isPM))) ? (
-                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-muted/30 border-border">
-                  <div className="col-span-full flex items-center gap-2 mb-2">
-                    <DollarSign className="w-6 h-6 text-green-600" />
-                    <h3 className="text-xl font-bold">Финансовая сводка</h3>
-                  </div>
-
-                  <div className="bg-card p-4 rounded-lg border border-border">
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
-                    <p className="text-2xl font-bold">
-                      {normalizedFinances?.amountWithoutVAT ? Number(normalizedFinances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
-                    </p>
-                  </div>
-
-                  <div className="bg-card p-4 rounded-lg border border-border">
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">База бонусов</p>
-                    <p className="text-2xl font-bold">
-                      {normalizedFinances?.bonusBase ? Number(normalizedFinances.bonusBase).toLocaleString('ru-RU') : '0'} ₸
-                    </p>
-                  </div>
-
-                  {(isDirector || isAdmin || isPartner || isPM) && (
-                    <div className="bg-card p-4 rounded-lg border border-green-500/20">
-                      <p className="text-xs text-green-700 font-medium uppercase tracking-wider mb-1">Общие бонусы</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {normalizedFinances?.totalBonusAmount ? Number(normalizedFinances.totalBonusAmount).toLocaleString('ru-RU') : '0'} ₸
-                      </p>
-                    </div>
-                  )}
-
-                  {(isDirector || isAdmin || isPartner || isPM) && (
-                    <div className="bg-card p-4 rounded-lg border border-blue-500/20">
-                      <p className="text-xs text-blue-700 font-medium uppercase tracking-wider mb-1">Валовая прибыль</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {normalizedFinances?.grossProfit ? Number(normalizedFinances.grossProfit).toLocaleString('ru-RU') : '0'} ₸
-                      </p>
-                    </div>
-                  )}
-                </Card>
-              ) : (normalizedFinances?.amountWithoutVAT > 0 || project.finances) ? (
-                <Card className="p-6 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 border-border">
-                  <div className="col-span-full flex items-center gap-2 mb-2">
-                    <DollarSign className="w-6 h-6 text-muted-foreground" />
-                    <h3 className="text-xl font-bold text-muted-foreground">Финансовая информация</h3>
-                  </div>
-
-                  <div className="bg-card p-4 rounded-lg border border-border">
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Сумма без НДС</p>
-                    <p className="text-2xl font-bold">
-                      {normalizedFinances?.amountWithoutVAT ? Number(normalizedFinances.amountWithoutVAT).toLocaleString('ru-RU') : '0'} ₸
-                    </p>
-                  </div>
-                  <div className="bg-card p-4 rounded-lg border border-border flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground text-center">Детальная финансовая информация доступна руководству, партнёрам и менеджерам</p>
-                  </div>
-                </Card>
-              ) : null}
-            </div>
-          </TabsContent>
-        )}
 
         {/* Вкладка задач */}
         {!(isDirector || isAdmin) && (
