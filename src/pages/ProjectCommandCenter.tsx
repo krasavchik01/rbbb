@@ -62,7 +62,12 @@ import {
 import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
+import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPermissions';
 import { ProjectCommandCard } from '@/components/projects/ProjectCommandCard';
+import { ProjectDataIntegrityDrawer } from '@/components/projects/ProjectDataIntegrityDrawer';
+import { ProjectPortfolioPulse } from '@/components/projects/ProjectPortfolioPulse';
+import { ProjectWorkloadChart, type WorkloadItem } from '@/components/projects/ProjectWorkloadChart';
+import { CommandCenterColumnFilter } from '@/components/projects/CommandCenterColumnFilter';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import type { CanonicalTeamMember } from '@/types/project-domain';
 import type * as XLSXNs from 'xlsx';
@@ -92,6 +97,8 @@ type BusinessSeasonFilter = 'all' | string;
 type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
 type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
 type DateRange = { start: Date; end: Date };
+type ColumnFilterKey = 'company' | 'project' | 'service' | 'period' | 'status' | 'money';
+type ColumnFilterState = Record<ColumnFilterKey, string>;
 
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
@@ -651,6 +658,66 @@ function rowMatchesAuditPeriodType(row: any, value: AuditPeriodTypeFilter): bool
   return value === 'all' || (row.periods || []).some((period: AuditPeriod) => period.type === value);
 }
 
+const EMPTY_COLUMN_FILTERS: ColumnFilterState = {
+  company: '',
+  project: '',
+  service: '',
+  period: '',
+  status: '',
+  money: '',
+};
+
+function columnFilterTokens(value: string): string[] {
+  return String(value || '')
+    .toLowerCase()
+    .split(/[,;|\n]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function textColumnMatches(haystack: string, filter: string): boolean {
+  const tokens = columnFilterTokens(filter);
+  if (tokens.length === 0) return true;
+  const normalized = String(haystack || '').toLowerCase();
+  return tokens.some((token) => normalized.includes(token));
+}
+
+function moneyColumnMatches(amount: number, filter: string): boolean {
+  const raw = String(filter || '').trim();
+  if (!raw) return true;
+  const range = raw.match(/^\s*(\d[\d\s]*)?\s*-\s*(\d[\d\s]*)?\s*$/);
+  if (range && (range[1] || range[2])) {
+    const min = range[1] ? Number(range[1].replace(/\s/g, '')) : Number.NEGATIVE_INFINITY;
+    const max = range[2] ? Number(range[2].replace(/\s/g, '')) : Number.POSITIVE_INFINITY;
+    return amount >= min && amount <= max;
+  }
+  const exact = Number(raw.replace(/\s/g, ''));
+  if (Number.isFinite(exact)) return amount >= exact;
+  return textColumnMatches(String(amount), raw);
+}
+
+function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean): boolean {
+  const partnerLeaderText = [
+    ...(row.partnerNames || []),
+    ...(row.coverageTeam || row.team || []).filter((member: any) => isLeaderRole(teamRole(member))).map(teamName),
+  ].join(' ');
+  const periodText = (row.periods || []).map((period: AuditPeriod) => `${period.name} ${periodLabel(period)} ${auditPeriodTypeLabel(period.type)}`).join(' ');
+  const statusText = `${row.status} ${row.readiness?.label || ''} ${(row.readiness?.issues || []).join(' ')} ${row.deadlineState?.label || ''}`;
+
+  return (
+    textColumnMatches(row.company, filters.company) &&
+    textColumnMatches(`${row.name} ${row.client}`, filters.project) &&
+    textColumnMatches(row.type, filters.service) &&
+    textColumnMatches(periodText, filters.period) &&
+    textColumnMatches(`${statusText} ${partnerLeaderText}`, filters.status) &&
+    (!canSeeMoney || moneyColumnMatches(Number(row.amount || 0), filters.money))
+  );
+}
+
+function hasActiveColumnFilters(filters: ColumnFilterState): boolean {
+  return Object.values(filters).some((value) => String(value || '').trim().length > 0);
+}
+
 function bucketRange(value: string): DateRange | null {
   const yearMatch = value.match(/^year:(20\d{2})$/);
   if (yearMatch) {
@@ -1007,6 +1074,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [hoursTotals, setHoursTotals] = useState<Map<string, ProjectHoursTotals>>(new Map());
   const [memberHours, setMemberHours] = useState<Map<string, ProjectHoursTotals>>(new Map());
   const [search, setSearch] = useState('');
+  const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(EMPTY_COLUMN_FILTERS);
   const [viewFilter, setViewFilter] = useState<ProjectViewFilter>('all');
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all');
   const [partnerFilter, setPartnerFilter] = useState<PartnerFilter>('all');
@@ -1059,20 +1127,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const effectiveScope: ProjectCommandScope =
     scope || (user?.role === 'ceo' || user?.role === 'admin' ? 'executive' : 'operations');
   const isExecutive = effectiveScope === 'executive';
-  const isProcurement = user?.role === 'procurement';
-  const canSeeContractMoney = isExecutive || isProcurement;
-  const canManageTeam = user?.role === 'ceo' || user?.role === 'admin' || user?.role === 'deputy_director';
-  const canCloseProjects = user?.role === 'ceo' || user?.role === 'admin';
-  const canDeleteProjects = user?.role === 'admin' || user?.role === 'ceo';
-  const canBulkAssignCompany = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
-  const canBulkAssignPartner = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
-  const canBulkAssignTeam = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
-  const canBulkAssignLeader = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const capabilities = projectCommandCenterCapabilities(user?.role);
+  const canSeeContractMoney = capabilities.canSeeContractMoney || isExecutive;
+  const canManageTeam = capabilities.canManageTeam;
+  const canCloseProjects = capabilities.canCloseProjects;
+  const canDeleteProjects = capabilities.canDeleteProjects;
+  const canBulkAssignCompany = capabilities.canBulkAssignCompany;
+  const canBulkAssignPartner = capabilities.canBulkAssignPartner;
+  const canBulkAssignTeam = capabilities.canBulkAssignTeam;
+  const canBulkAssignLeader = capabilities.canBulkAssignLeader;
   const canSelectProjects = canDeleteProjects || canBulkAssignCompany || canBulkAssignPartner || canBulkAssignTeam || canBulkAssignLeader;
-  const canManageProjectStatus = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
-  const canManageContractors = !!user && ['admin', 'ceo', 'deputy_director'].includes(user.role);
+  const canManageProjectStatus = capabilities.canManageProjectStatus;
+  const canManageContractors = capabilities.canManageContractors;
   const statusOptions = projectStatusOptionsForRole(user?.role);
-  const canEditPeriods = canManageTeam || user?.role === 'partner';
+  const canEditPeriods = capabilities.canEditPeriods;
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
 
   const openContractFile = async (file: any, label: string, key: string) => {
@@ -1321,6 +1389,38 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     );
   }, [rows]);
 
+  const workloadItems = useMemo<WorkloadItem[]>(() => {
+    const map = new Map<string, WorkloadItem>();
+    for (const row of rows) {
+      const activeProject = row.readiness?.level !== 'closed' ? 1 : 0;
+      for (const member of row.coverageTeam || row.team || []) {
+        const name = teamName(member);
+        const id = teamMemberId(member) || name;
+        const current = map.get(id) || { name, approvedHours: 0, pendingHours: 0, activeProjects: 0 };
+        const memberKey = teamMemberId(member);
+        const hours = memberKey ? memberHours.get(hoursPairKey(memberKey, row.id)) : undefined;
+        current.approvedHours += Number(hours?.approved || 0);
+        current.pendingHours += Number(hours?.pending || 0);
+        current.activeProjects += activeProject;
+        map.set(id, current);
+      }
+    }
+    return [...map.values()]
+      .filter((item) => item.approvedHours > 0 || item.pendingHours > 0 || item.activeProjects > 0)
+      .sort((a, b) => (b.approvedHours + b.pendingHours + b.activeProjects * 2) - (a.approvedHours + a.pendingHours + a.activeProjects * 2))
+      .slice(0, 8);
+  }, [rows, memberHours]);
+
+  const applyPulseView = (view: 'all' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours') => {
+    if (view === 'overdue' || view === 'next_30' || view === 'no_deadline') {
+      setDeadlineFilter(view);
+      setViewFilter('all');
+      return;
+    }
+    setDeadlineFilter('all');
+    setViewFilter(view);
+  };
+
   const partnerOptions = useMemo(() => {
     const map = new Map<string, { key: string; name: string; count: number }>();
 
@@ -1434,6 +1534,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (periodFilter === 'has_periods' && row.periods.length === 0) return false;
       if (periodFilter === 'no_periods' && row.periods.length > 0) return false;
       if (!rowMatchesAuditPeriodType(row, auditPeriodTypeFilter)) return false;
+      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney)) return false;
       return true;
     });
 
@@ -1444,9 +1545,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney]);
 
   const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 3 : 0);
+  const setColumnFilter = (key: ColumnFilterKey, value: string) => {
+    setColumnFilters((current) => ({ ...current, [key]: value }));
+  };
+  const clearColumnFilter = (key: ColumnFilterKey) => setColumnFilter(key, '');
+  const activeColumnFilters = hasActiveColumnFilters(columnFilters);
 
   const toggleRow = (projectId: string) => {
     setExpandedRows((prev) => ({ ...prev, [projectId]: !prev[projectId] }));
@@ -2480,6 +2586,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           {isExecutive && <SummaryItem label="Бонусы" value={`${money.format(summary.bonuses)} ₸`} />}
         </div>
 
+        <ProjectPortfolioPulse summary={summary} onApplyView={applyPulseView} />
+        <ProjectWorkloadChart items={workloadItems} />
+
         <Card className="p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-10">
@@ -2652,6 +2761,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </Select>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setViewFilter('all'); setDeadlineFilter('next_30'); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
+                CEO daily
+              </Button>
+              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setViewFilter('no_contract'); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
+                Need contract data
+              </Button>
+              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setViewFilter('attention'); setDeadlineFilter('overdue'); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
+                At risk
+              </Button>
+              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setSearch(user?.name || user?.email || ''); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
+                My portfolio
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -2806,6 +2927,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         )}
 
         <Card className="overflow-x-auto overflow-y-hidden">
+          {activeColumnFilters && (
+            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2 text-xs">
+              <span className="font-medium">Фильтры колонок:</span>
+              {Object.entries(columnFilters).filter(([, value]) => value.trim()).map(([key, value]) => (
+                <Badge key={key} variant="secondary">{key}: {value}</Badge>
+              ))}
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setColumnFilters(EMPTY_COLUMN_FILTERS)}>
+                Сбросить фильтры колонок
+              </Button>
+            </div>
+          )}
           <table className={`${isExecutive ? 'min-w-[1540px]' : 'min-w-[1100px]'} w-full caption-bottom text-sm`}>
             <TableHeader>
               <TableRow>
@@ -2821,11 +2953,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                     />
                   )}
                 </TableHead>
-                <TableHead>Проект</TableHead>
-                <TableHead className="hidden min-w-[180px] lg:table-cell">Вид проекта</TableHead>
-                <TableHead className="min-w-[190px]">Срок / периоды</TableHead>
-                <TableHead className="min-w-[130px]">Статус</TableHead>
-                {canSeeContractMoney && <TableHead className="min-w-[140px] text-right">Сумма</TableHead>}
+                <TableHead>
+                  Проект
+                  <CommandCenterColumnFilter label="Проект / клиент" value={columnFilters.project} active={!!columnFilters.project} onChange={(value) => setColumnFilter('project', value)} onClear={() => clearColumnFilter('project')} />
+                </TableHead>
+                <TableHead className="hidden min-w-[180px] lg:table-cell">
+                  Вид проекта
+                  <CommandCenterColumnFilter label="Вид услуги" value={columnFilters.service} active={!!columnFilters.service} onChange={(value) => setColumnFilter('service', value)} onClear={() => clearColumnFilter('service')} />
+                </TableHead>
+                <TableHead className="min-w-[190px]">
+                  Срок / периоды
+                  <CommandCenterColumnFilter label="Период / дедлайн" value={columnFilters.period} active={!!columnFilters.period} onChange={(value) => setColumnFilter('period', value)} onClear={() => clearColumnFilter('period')} />
+                </TableHead>
+                <TableHead className="min-w-[130px]">
+                  Статус
+                  <CommandCenterColumnFilter label="Статус / партнёр / руководитель" value={columnFilters.status} active={!!columnFilters.status} onChange={(value) => setColumnFilter('status', value)} onClear={() => clearColumnFilter('status')} />
+                </TableHead>
+                {canSeeContractMoney && <TableHead className="min-w-[140px] text-right">Сумма <CommandCenterColumnFilter label="Сумма договора" value={columnFilters.money} placeholder="Напр. 1000000-5000000" active={!!columnFilters.money} onChange={(value) => setColumnFilter('money', value)} onClear={() => clearColumnFilter('money')} /></TableHead>}
                 {isExecutive && <TableHead className="min-w-[180px] text-center">Бонусный пул</TableHead>}
                 {isExecutive && <TableHead className="min-w-[150px] text-right">Бонусы</TableHead>}
                 {isExecutive && <TableHead className="min-w-[150px] text-right">Грязный доход</TableHead>}
@@ -3030,6 +3174,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 projectHref={`/project/${row.id}`}
                                 canSeeContractMoney={canSeeContractMoney}
                               />
+                              <ProjectDataIntegrityDrawer model={commandModel} canRepair={canManageTeam || canManageProjectStatus} />
                               <div className="rounded-md border bg-background">
                                 <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
                                   <div className="text-sm font-semibold">Сроки и периоды</div>
