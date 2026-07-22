@@ -1,6 +1,6 @@
 import { getAuditPeriods, type AuditPeriod } from '@/lib/auditPeriods';
 import { projectContract, projectFiles, projectNotes } from '@/lib/contractData';
-import { PROJECT_TYPE_LABELS, type ContractInfo, type ProjectType, type ProjectStage } from '@/types/project-v3';
+import { calculateProjectFinances, PROJECT_TYPE_LABELS, type ContractInfo, type ProjectType, type ProjectStage } from '@/types/project-v3';
 
 export type ProjectDataWarningCode =
   | 'missing_company'
@@ -58,6 +58,19 @@ export interface ProjectCommandCenterModel {
     serviceEndDate: string | null;
     amountWithoutVAT: number | null;
     contractFileCount: number;
+  };
+  finance: {
+    amountWithoutVAT: number | null;
+    gphAmount: number | null;
+    preExpenseAmount: number | null;
+    bonusBase: number | null;
+    bonusPercent: number | null;
+    plannedBonusPool: number | null;
+    plannedAllocatedBonuses: number | null;
+    confirmedPaidBonuses: number | null;
+    bonusDelta: number | null;
+    grossIncome: number | null;
+    profitMargin: number | null;
   };
   businessSeason: BusinessSeason | null;
   stagePeriods: CommandCenterStagePeriod[];
@@ -120,10 +133,80 @@ function isContractFile(file: any): boolean {
   return category === 'contract' || category === 'contract_scan' || Boolean(file?.isContract) || /договор|contract/i.test(String(file?.fileName ?? file?.name ?? ''));
 }
 
+function positiveMoney(value: unknown): number | null {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function confirmedPaidBonusTotal(teamBonuses: Record<string, any>): number {
+  return Object.values(teamBonuses || {}).reduce((sum, bonus: any) => {
+    if (!bonus?.paidAt) return sum;
+    return sum + (Number(bonus.amount || 0) || 0);
+  }, 0);
+}
+
+function buildFinanceSummary(project: any, amountWithoutVAT: number | null): ProjectCommandCenterModel['finance'] {
+  if (!amountWithoutVAT) {
+    return {
+      amountWithoutVAT: null,
+      gphAmount: null,
+      preExpenseAmount: null,
+      bonusBase: null,
+      bonusPercent: null,
+      plannedBonusPool: null,
+      plannedAllocatedBonuses: null,
+      confirmedPaidBonuses: null,
+      bonusDelta: null,
+      grossIncome: null,
+      profitMargin: null,
+    };
+  }
+
+  try {
+    const finances = calculateProjectFinances({
+      ...project,
+      contract: {
+        ...(project?.contract || {}),
+        amountWithoutVAT,
+      },
+    });
+    const plannedAllocatedBonuses = Number(finances.totalPaidBonuses || 0) || 0;
+    const confirmedPaidBonuses = confirmedPaidBonusTotal(finances.teamBonuses || {});
+
+    return {
+      amountWithoutVAT,
+      gphAmount: Number(finances.totalContractorsAmount || 0) || 0,
+      preExpenseAmount: Number(finances.preExpenseAmount || 0) || 0,
+      bonusBase: Number(finances.bonusBase || 0) || 0,
+      bonusPercent: Number(finances.bonusPercent || 0) || 0,
+      plannedBonusPool: Number(finances.totalBonusAmount || 0) || 0,
+      plannedAllocatedBonuses,
+      confirmedPaidBonuses,
+      bonusDelta: plannedAllocatedBonuses - confirmedPaidBonuses,
+      grossIncome: Number(finances.grossProfit || 0) || 0,
+      profitMargin: Number(finances.profitMargin || 0) || 0,
+    };
+  } catch {
+    return {
+      amountWithoutVAT,
+      gphAmount: null,
+      preExpenseAmount: null,
+      bonusBase: null,
+      bonusPercent: null,
+      plannedBonusPool: null,
+      plannedAllocatedBonuses: null,
+      confirmedPaidBonuses: null,
+      bonusDelta: null,
+      grossIncome: null,
+      profitMargin: null,
+    };
+  }
+}
+
 export function buildProjectCommandCenterModel(project: any): ProjectCommandCenterModel {
   const notes = projectNotes(project);
   const contract: Partial<ContractInfo> & { contractNumber?: string; contractDate?: string } = projectContract(project) || {};
-  const amount = Number(contract.amountWithoutVAT || 0);
+  const amount = positiveMoney(contract.amountWithoutVAT);
   const stages = projectStages(project, notes);
   const periods = getAuditPeriods(project);
   const periodsById = new Map(periods.map((period) => [period.id, period]));
@@ -163,7 +246,7 @@ export function buildProjectCommandCenterModel(project: any): ProjectCommandCent
   if (!subject) warnings.push(warning('missing_contract_subject', 'Не указан предмет договора', 'critical'));
   if (!serviceLabel) warnings.push(warning('missing_service_type', 'Не указан вид услуги', 'critical'));
   if (!startDate || !endDate) warnings.push(warning('missing_contract_dates', 'Не указан срок оказания услуг', 'critical'));
-  if (amount <= 0) warnings.push(warning('missing_contract_amount', 'Не указана сумма договора без НДС', 'critical'));
+  if (amount === null) warnings.push(warning('missing_contract_amount', 'Не указана сумма договора без НДС', 'critical'));
   if (contractFileCount === 0) warnings.push(warning('missing_contract_file', 'Не загружен файл договора'));
   if (stages.length === 0) warnings.push(warning('missing_stage', 'Не создан этап договора', 'critical'));
   if (stagePeriods.some((item) => !item.linked)) warnings.push(warning('stage_without_period', 'Есть этап без связанного периода', 'critical'));
@@ -173,9 +256,10 @@ export function buildProjectCommandCenterModel(project: any): ProjectCommandCent
   if (new Set(linkedIds).size !== linkedIds.length) warnings.push(warning('duplicate_period_stage_link', 'Один период связан с несколькими этапами', 'critical'));
 
   const stageAmountTotal = stagePeriods.reduce((total, item) => total + (item.stageAmountWithoutVAT || 0), 0);
-  if (amount > 0 && stageAmountTotal > 0 && Math.abs(amount - stageAmountTotal) > 0.01) {
+  if (amount !== null && stageAmountTotal > 0 && Math.abs(amount - stageAmountTotal) > 0.01) {
     warnings.push(warning('stage_amount_mismatch', 'Сумма этапов не равна сумме договора'));
   }
+  const finance = buildFinanceSummary(project, amount);
 
   return {
     projectId: String(project?.id || ''),
@@ -190,9 +274,10 @@ export function buildProjectCommandCenterModel(project: any): ProjectCommandCent
       subject,
       serviceStartDate: startDate,
       serviceEndDate: endDate,
-      amountWithoutVAT: amount > 0 ? amount : null,
+      amountWithoutVAT: amount,
       contractFileCount,
     },
+    finance,
     businessSeason: businessSeasonForDate(startDate ?? endDate),
     stagePeriods,
     warnings: uniqueWarnings(warnings),

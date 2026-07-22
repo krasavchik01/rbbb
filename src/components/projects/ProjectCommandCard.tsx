@@ -18,6 +18,14 @@ function dateRange(startDate: string | null, endDate: string | null): string {
   return `${format(startDate)} — ${format(endDate)}`;
 }
 
+function moneyValue(value: number | null): string {
+  return value === null ? 'Не указано' : `${money.format(value)} ₸`;
+}
+
+function percentValue(value: number | null): string {
+  return value === null ? 'Не указано' : `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+}
+
 export function ProjectCommandCard({ model, projectHref, canSeeContractMoney }: ProjectCommandCardProps) {
   const criticalWarnings = model.warnings.filter((item) => item.severity === 'critical');
 
@@ -84,9 +92,27 @@ export function ProjectCommandCard({ model, projectHref, canSeeContractMoney }: 
           <Field label="Наша компания" value={model.companyName || 'Не указана'} />
           <Field label="Клиент" value={model.clientName || 'Не указан'} />
           <div className="border-t pt-3">
-            <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Сумма договора без НДС</div>
+            <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Финансовый waterfall CEO</div>
             {canSeeContractMoney ? (
-              <div className="font-semibold tabular-nums">{model.contract.amountWithoutVAT === null ? 'Не указана' : `${money.format(model.contract.amountWithoutVAT)} ₸`}</div>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <FinancePill label="Сумма без НДС" value={moneyValue(model.finance.amountWithoutVAT)} strong />
+                  <FinancePill label="ГПХ / подряд" value={moneyValue(model.finance.gphAmount)} />
+                  <FinancePill label="Предрасход" value={moneyValue(model.finance.preExpenseAmount)} />
+                  <FinancePill label="База бонуса" value={moneyValue(model.finance.bonusBase)} strong />
+                  <FinancePill label={`Пул бонусов · ${percentValue(model.finance.bonusPercent)}`} value={moneyValue(model.finance.plannedBonusPool)} strong />
+                  <FinancePill label="План распределён" value={moneyValue(model.finance.plannedAllocatedBonuses)} />
+                  <FinancePill label="Подтверждено выплачено" value={moneyValue(model.finance.confirmedPaidBonuses)} />
+                  <FinancePill label="Разница план/факт" value={moneyValue(model.finance.bonusDelta)} />
+                </div>
+                <div className="rounded-md border bg-emerald-50/60 px-3 py-2 text-sm dark:bg-emerald-950/20">
+                  <div className="text-xs text-muted-foreground">Грязный доход</div>
+                  <div className="font-semibold tabular-nums">
+                    {moneyValue(model.finance.grossIncome)}
+                    {model.finance.profitMargin !== null && <span className="ml-2 text-xs font-normal text-muted-foreground">маржа {percentValue(model.finance.profitMargin)}</span>}
+                  </div>
+                </div>
+              </div>
             ) : <div className="text-sm text-muted-foreground">Недоступно для вашей роли</div>}
           </div>
           {model.businessSeason && <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground"><CalendarRange className="mr-1 inline h-3.5 w-3.5" /> {model.businessSeason.label}</div>}
@@ -101,6 +127,15 @@ function Field({ label, value, emphasis = false }: { label: string; value: strin
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={emphasis ? 'mt-0.5 text-sm font-medium leading-relaxed' : 'mt-0.5 text-sm leading-relaxed'}>{value}</div>
+    </div>
+  );
+}
+
+function FinancePill({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="rounded-md border bg-background px-2.5 py-2">
+      <div className="text-[11px] leading-tight text-muted-foreground">{label}</div>
+      <div className={strong ? 'mt-1 font-semibold tabular-nums' : 'mt-1 font-medium tabular-nums'}>{value}</div>
     </div>
   );
 }
