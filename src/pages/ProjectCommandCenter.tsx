@@ -528,6 +528,221 @@ function buildProjectExportRows(
   });
 }
 
+const LEGACY_ROLE_EXPORT_COLUMNS = [
+  { key: 'partner', name: 'Партнер', amount: 'Сумма партнера' },
+  { key: 'project_leader', name: 'Руководитель проекта', amount: 'Сумма руководителя' },
+  { key: 'supervisor_3', name: 'Супервайзер 3', amount: 'Сумма СВ3' },
+  { key: 'supervisor_2', name: 'Супервайзер 2', amount: 'Сумма СВ2' },
+  { key: 'supervisor_1', name: 'Супервайзер 1', amount: 'Сумма СВ1' },
+  { key: 'tax_specialist_1', name: 'Налоговик 1', amount: 'Сумма налог. 1' },
+  { key: 'tax_specialist_2', name: 'Налоговик 2', amount: 'Сумма налог. 2' },
+  { key: 'assistant_3', name: 'Ассистент 3', amount: 'Сумма асс. 3' },
+  { key: 'assistant_2', name: 'Ассистент 2', amount: 'Сумма асс. 2' },
+  { key: 'assistant_1', name: 'Ассистент 1', amount: 'Сумма асс. 1' },
+] as const;
+
+const LEGACY_CEO_EXPORT_HEADERS = [
+  '№',
+  'Проект / клиент',
+  'Вид проекта',
+  'Наша компания',
+  'Договор',
+  'Дата договора',
+  'Предмет договора',
+  'Срок оказания услуг',
+  'Сумма без НДС',
+  'Статус',
+  'Бонус %',
+  'Итого бонусный пул',
+  ...LEGACY_ROLE_EXPORT_COLUMNS.flatMap((column) => [column.name, column.amount]),
+  'ГПХ / субподряд',
+  'Сумма ГПХ',
+  'Предрасход',
+  'Итого бонусы',
+  'Разница план/факт',
+  'Итого расходы',
+  'База после расходов',
+  'Грязный доход',
+] as const;
+
+type LegacyExportColumn = typeof LEGACY_CEO_EXPORT_HEADERS[number];
+type LegacyExportRow = Record<LegacyExportColumn, string | number>;
+
+function legacyMoney(value: unknown): number {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function legacyRowTeam(row: any): any[] {
+  return row.coverageTeam || row.team || [];
+}
+
+function legacyRoleMembers(row: any, role: string): any[] {
+  return legacyRowTeam(row).filter((member) => teamRole(member) === role);
+}
+
+function legacyRoleNames(row: any, role: string): string {
+  return legacyRoleMembers(row, role).map(teamName).filter(Boolean).join(', ');
+}
+
+function legacyRoleBonus(row: any, role: string): number {
+  return legacyRoleMembers(row, role).reduce((sum, member) => sum + memberBonusAmount(member, row.finances || {}), 0);
+}
+
+function legacyContractors(row: any): any[] {
+  const finances = row.finances || {};
+  const projectFinances = readProjectFinances(row.project || {});
+  return [
+    ...(Array.isArray(finances.contractors) ? finances.contractors : []),
+    ...(Array.isArray(projectFinances.contractors) ? projectFinances.contractors : []),
+  ];
+}
+
+function legacyContractorNames(row: any): string {
+  const names = legacyContractors(row)
+    .map((contractor) => contractor?.name || contractor?.label || contractor?.description)
+    .filter(Boolean);
+  return Array.from(new Set(names)).join(', ');
+}
+
+function legacyContractorAmount(row: any): number {
+  const explicit = legacyMoney(row.finances?.totalContractorsAmount);
+  if (explicit > 0) return explicit;
+  return legacyContractors(row).reduce((sum, contractor) => sum + legacyMoney(contractor?.amount), 0);
+}
+
+function legacyServiceRange(row: any): string {
+  const model = buildProjectCommandCenterModel(row.project || {});
+  const start = model.contract.serviceStartDate || row.startDate;
+  const end = model.contract.serviceEndDate || row.deadline;
+  if (!start && !end) return '';
+  return `${formatDate(start)} - ${formatDate(end)}`;
+}
+
+function legacyExportRow(row: any, index: number): LegacyExportRow {
+  const model = buildProjectCommandCenterModel(row.project || {});
+  const gphAmount = legacyContractorAmount(row);
+  const preExpense = legacyMoney(row.finances?.preExpenseAmount);
+  const contractAmount = model.contract.amountWithoutVAT ?? legacyMoney(row.amount);
+  const bonusPool = legacyMoney(row.finances?.totalBonusAmount);
+  const plannedBonuses = LEGACY_ROLE_EXPORT_COLUMNS.reduce((sum, column) => sum + legacyRoleBonus(row, column.key), 0);
+  const paidBonuses = legacyMoney(row.finances?.totalPaidBonuses);
+  const totalCosts = gphAmount + preExpense;
+  const baseAfterCosts = Math.max(0, legacyMoney(contractAmount) - totalCosts);
+  const result: LegacyExportRow = {
+    '№': index + 1,
+    'Проект / клиент': `${row.name || ''}${row.client ? `\n${row.client}` : ''}`,
+    'Вид проекта': row.type || '',
+    'Наша компания': row.company || '',
+    'Договор': model.contract.number || exportContractLabel(row),
+    'Дата договора': model.contract.date ? formatDate(model.contract.date) : '',
+    'Предмет договора': model.contract.subject || '',
+    'Срок оказания услуг': legacyServiceRange(row),
+    'Сумма без НДС': contractAmount ?? '',
+    'Статус': row.readiness?.label || row.status || '',
+    'Бонус %': legacyMoney(row.finances?.bonusPercent),
+    'Итого бонусный пул': bonusPool,
+    'ГПХ / субподряд': legacyContractorNames(row),
+    'Сумма ГПХ': gphAmount,
+    'Предрасход': preExpense,
+    'Итого бонусы': plannedBonuses || bonusPool,
+    'Разница план/факт': (plannedBonuses || bonusPool) - paidBonuses,
+    'Итого расходы': totalCosts,
+    'База после расходов': legacyMoney(row.finances?.bonusBase) || baseAfterCosts,
+    'Грязный доход': legacyMoney(row.finances?.grossProfit) || baseAfterCosts,
+  } as LegacyExportRow;
+
+  for (const column of LEGACY_ROLE_EXPORT_COLUMNS) {
+    result[column.name as LegacyExportColumn] = legacyRoleNames(row, column.key);
+    result[column.amount as LegacyExportColumn] = legacyRoleBonus(row, column.key);
+  }
+
+  return result;
+}
+
+function legacyPartnerSheetName(name: string): string {
+  const cleaned = String(name || 'Без партнера')
+    .replace(/[\\/?*\[\]:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (cleaned || 'Без партнера').slice(0, 31);
+}
+
+function legacyUniqueSheetName(workbook: any, name: string): string {
+  const base = legacyPartnerSheetName(name);
+  const existing = new Set<string>(workbook.SheetNames || []);
+  if (!existing.has(base)) return base;
+  for (let index = 2; index < 100; index += 1) {
+    const suffix = ` ${index}`;
+    const candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+    if (!existing.has(candidate)) return candidate;
+  }
+  return `${base.slice(0, 25)} ${Date.now().toString().slice(-5)}`;
+}
+
+function legacyPartnerKeys(row: any): string[] {
+  const names = row.partnerNames?.length ? row.partnerNames : legacyRoleMembers(row, 'partner').map(teamName);
+  return names.length > 0 ? Array.from(new Set(names)) : ['Без партнера'];
+}
+
+function legacyTotalsRow(rows: LegacyExportRow[]): (string | number)[] {
+  const numericColumns = new Set<LegacyExportColumn>([
+    'Сумма без НДС',
+    'Итого бонусный пул',
+    ...LEGACY_ROLE_EXPORT_COLUMNS.map((column) => column.amount as LegacyExportColumn),
+    'Сумма ГПХ',
+    'Предрасход',
+    'Итого бонусы',
+    'Разница план/факт',
+    'Итого расходы',
+    'База после расходов',
+    'Грязный доход',
+  ]);
+  return LEGACY_CEO_EXPORT_HEADERS.map((header, index) => {
+    if (index === 1) return 'ИТОГО';
+    if (!numericColumns.has(header)) return '';
+    return rows.reduce((sum, row) => sum + legacyMoney(row[header]), 0);
+  });
+}
+
+function appendLegacyCeoSheet(XLSX: any, workbook: any, sheetName: string, sourceRows: any[]) {
+  const rows = sourceRows.map(legacyExportRow);
+  const aoa: (string | number)[][] = [
+    [`CEO ведомость · ${sheetName}`],
+    [`Проект → сумма → бонусный пул → роли → ГПХ/предрасход → доход`],
+    [],
+    [...LEGACY_CEO_EXPORT_HEADERS],
+    ...rows.map((row) => LEGACY_CEO_EXPORT_HEADERS.map((header) => row[header] ?? '')),
+    legacyTotalsRow(rows),
+  ];
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+  const totalColumnCount = LEGACY_CEO_EXPORT_HEADERS.length;
+  worksheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: totalColumnCount - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: totalColumnCount - 1 } },
+  ];
+  worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: Math.max(4, aoa.length - 2), c: totalColumnCount - 1 } }) };
+  autosizeLegacySheet(worksheet, aoa);
+  formatLegacySheetCells(XLSX, worksheet, aoa.length, totalColumnCount);
+  XLSX.utils.book_append_sheet(workbook, worksheet, legacyUniqueSheetName(workbook, sheetName));
+}
+
+function buildLegacyCeoWorkbook(XLSX: any, sourceRows: any[]) {
+  const workbook = XLSX.utils.book_new();
+  appendLegacyCeoSheet(XLSX, workbook, 'ИТОГО', sourceRows);
+  const byPartner = new Map<string, any[]>();
+  for (const row of sourceRows) {
+    for (const partner of legacyPartnerKeys(row)) {
+      if (!byPartner.has(partner)) byPartner.set(partner, []);
+      byPartner.get(partner)?.push(row);
+    }
+  }
+  [...byPartner.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'ru'))
+    .forEach(([partner, rows]) => appendLegacyCeoSheet(XLSX, workbook, partner, rows));
+  return workbook;
+}
+
 function autosizeExportSheet(sheet: any, rows: Record<string, string | number>[]) {
   const keys = Object.keys(rows[0] || {});
   sheet['!cols'] = keys.map((key) => {
@@ -537,6 +752,29 @@ function autosizeExportSheet(sheet: any, rows: Record<string, string | number>[]
     }, key.length);
     return { wch: Math.min(Math.max(contentWidth + 2, 12), 48) };
   });
+}
+
+function autosizeLegacySheet(sheet: any, aoa: (string | number)[][]) {
+  sheet['!cols'] = LEGACY_CEO_EXPORT_HEADERS.map((header, columnIndex) => {
+    const contentWidth = aoa.reduce((width, row) => {
+      const value = String(row[columnIndex] ?? '');
+      return Math.max(width, ...value.split('\n').map((line) => line.length));
+    }, String(header).length);
+    return { wch: Math.min(Math.max(contentWidth + 2, 10), 34) };
+  });
+}
+
+function formatLegacySheetCells(XLSX: any, sheet: any, rowCount: number, columnCount: number) {
+  const moneyHeaders = new Set<string>(LEGACY_CEO_EXPORT_HEADERS.filter((header) => /Сумма|Итого|Грязный|База|Разница|Предрасход|пул/i.test(header)));
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      const cell = sheet[address];
+      if (!cell) continue;
+      if (rowIndex === 0 || rowIndex === 3 || rowIndex === rowCount - 1) cell.s = { font: { bold: true } };
+      if (moneyHeaders.has(String(LEGACY_CEO_EXPORT_HEADERS[columnIndex])) && typeof cell.v === 'number') cell.z = '#,##0';
+    }
+  }
 }
 
 function normalizeProjectGroupText(value: string): string {
@@ -1757,6 +1995,16 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     try {
       const XLSX = await loadXlsx();
+      if (isExecutive && canSeeContractMoney) {
+        const workbook = buildLegacyCeoWorkbook(XLSX, filteredRows);
+        XLSX.writeFile(workbook, `ceo_legacy_partner_workbook_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        toast({
+          title: 'CEO Excel готов',
+          description: `Скачано листов: ИТОГО + партнёры. Проектов: ${filteredRows.length}`,
+        });
+        return;
+      }
+
       const exportRows = buildProjectExportRows(filteredRows, tableDetailLevel, {
         canSeeContractMoney,
         isExecutive,

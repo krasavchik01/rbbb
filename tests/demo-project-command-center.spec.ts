@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { createRequire } from 'node:module';
 import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
+
+const require = createRequire(import.meta.url);
+const XLSX = require('xlsx');
 
 test.describe('CEO command center completion', () => {
   test('column filters and saved views are usable in the project summary', async ({ page }) => {
@@ -27,6 +31,31 @@ test.describe('CEO command center completion', () => {
     await expect(page.getByText('Фильтры колонок:')).toBeVisible();
     await expect(page.getByRole('link', { name: demoProject.name })).toBeVisible();
     expect(network.productionMutations).toEqual([]);
+  });
+
+  test('CEO downloads the legacy partner workbook with ИТОГО and partner sheets', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'ceo');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Скачать' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^ceo_legacy_partner_workbook_.*\.xlsx$/);
+    const workbook = XLSX.readFile((await download.path()) || '');
+    expect(workbook.SheetNames).toContain('ИТОГО');
+    expect(workbook.SheetNames).toContain('Демо Партнёр');
+    const totalRows = XLSX.utils.sheet_to_json(workbook.Sheets['ИТОГО'], { header: 1 }) as unknown[][];
+    expect(totalRows[0][0]).toContain('CEO ведомость');
+    expect(totalRows[3]).toContain('Проект / клиент');
+    expect(totalRows[3]).toContain('Сумма без НДС');
+    expect(totalRows[3]).toContain('Партнер');
+    expect(totalRows[3]).toContain('Итого бонусы');
+    expect(totalRows[totalRows.length - 1]).toContain('ИТОГО');
+    expect(JSON.stringify(totalRows)).toContain('Демо Партнёр');
+    expect(JSON.stringify(totalRows)).toContain('48');
+    expect(network.productionMutations).toEqual([]);
+    expect(network.unhandledRequests).toEqual([]);
   });
 
   test('portfolio analytics, workload chart and integrity drawer are visible to CEO', async ({ page }) => {
