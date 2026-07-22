@@ -9,6 +9,8 @@ test('command center has Excel-like column filters attached to table headers', (
   assert.match(pageSource, /type ColumnFilterKey = 'company' \| 'project' \| 'service' \| 'period' \| 'status' \| 'money'/);
   assert.match(pageSource, /const \[columnFilters, setColumnFilters\] = useState<ColumnFilterState>/);
   assert.match(pageSource, /rowMatchesColumnFilters\(row, columnFilters, canSeeContractMoney\)/);
+  assert.match(pageSource, /readInitialColumnFilters\(\)/);
+  assert.match(pageSource, /syncCommandCenterUrl\(\{ search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy \}\)/);
   assert.match(pageSource, /<CommandCenterColumnFilter label="Проект \/ клиент"/);
   assert.match(pageSource, /<CommandCenterColumnFilter label="Вид услуги"/);
   assert.match(pageSource, /<CommandCenterColumnFilter label="Период \/ дедлайн"/);

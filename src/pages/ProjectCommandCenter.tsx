@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, ChevronDown, ChevronRight, Download, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -718,6 +718,46 @@ function hasActiveColumnFilters(filters: ColumnFilterState): boolean {
   return Object.values(filters).some((value) => String(value || '').trim().length > 0);
 }
 
+function readInitialColumnFilters(): ColumnFilterState {
+  if (typeof window === 'undefined') return EMPTY_COLUMN_FILTERS;
+  const params = new URLSearchParams(window.location.search);
+  return {
+    company: params.get('cf_company') || '',
+    project: params.get('cf_project') || '',
+    service: params.get('cf_service') || '',
+    period: params.get('cf_period') || '',
+    status: params.get('cf_status') || '',
+    money: params.get('cf_money') || '',
+  };
+}
+
+function syncCommandCenterUrl(state: {
+  search: string;
+  columnFilters: ColumnFilterState;
+  viewFilter: ProjectViewFilter;
+  deadlineFilter: ProjectDeadlineFilter;
+  periodFilter: ProjectPeriodFilter;
+  auditPeriodTypeFilter: AuditPeriodTypeFilter;
+  sortBy: ProjectSort;
+}) {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  const setOrDelete = (key: string, value: string, emptyValue = '') => {
+    const normalized = String(value || '').trim();
+    if (!normalized || normalized === emptyValue) params.delete(key);
+    else params.set(key, normalized);
+  };
+  setOrDelete('q', state.search);
+  setOrDelete('view', state.viewFilter, 'all');
+  setOrDelete('deadline', state.deadlineFilter, 'all');
+  setOrDelete('periods', state.periodFilter, 'all');
+  setOrDelete('periodType', state.auditPeriodTypeFilter, 'all');
+  setOrDelete('sort', state.sortBy, 'deadline_asc');
+  Object.entries(state.columnFilters).forEach(([key, value]) => setOrDelete(`cf_${key}`, value));
+  const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+  window.history.replaceState(null, '', next);
+}
+
 function bucketRange(value: string): DateRange | null {
   const yearMatch = value.match(/^year:(20\d{2})$/);
   if (yearMatch) {
@@ -1073,19 +1113,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const { toast } = useToast();
   const [hoursTotals, setHoursTotals] = useState<Map<string, ProjectHoursTotals>>(new Map());
   const [memberHours, setMemberHours] = useState<Map<string, ProjectHoursTotals>>(new Map());
-  const [search, setSearch] = useState('');
-  const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(EMPTY_COLUMN_FILTERS);
-  const [viewFilter, setViewFilter] = useState<ProjectViewFilter>('all');
+  const urlSyncReadyRef = useRef(false);
+  const [search, setSearch] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('q') || '');
+  const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(() => readInitialColumnFilters());
+  const [viewFilter, setViewFilter] = useState<ProjectViewFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('view') as ProjectViewFilter)) || 'all');
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all');
   const [partnerFilter, setPartnerFilter] = useState<PartnerFilter>('all');
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
   const [businessSeasonFilter, setBusinessSeasonFilter] = useState<BusinessSeasonFilter>('all');
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
-  const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>('all');
-  const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>('all');
-  const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>('all');
-  const [sortBy, setSortBy] = useState<ProjectSort>('deadline_asc');
+  const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('deadline') as ProjectDeadlineFilter)) || 'all');
+  const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('periods') as ProjectPeriodFilter)) || 'all');
+  const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('periodType') as AuditPeriodTypeFilter)) || 'all');
+  const [sortBy, setSortBy] = useState<ProjectSort>(() => (typeof window === 'undefined' ? 'deadline_asc' : (new URLSearchParams(window.location.search).get('sort') as ProjectSort)) || 'deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
   const [openingFileKey, setOpeningFileKey] = useState<string | null>(null);
@@ -1175,6 +1216,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     () => assignableEmployees.filter((employee) => String(employee?.role || '').toLowerCase() === 'partner'),
     [assignableEmployees],
   );
+
+  useEffect(() => {
+    if (!urlSyncReadyRef.current) {
+      urlSyncReadyRef.current = true;
+      return;
+    }
+    syncCommandCenterUrl({ search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy });
+  }, [search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
 
   useEffect(() => {
     let active = true;
