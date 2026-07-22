@@ -2043,6 +2043,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   };
 
   const filteredProjectIds = Array.from(new Set(filteredRows.flatMap(projectIdsForRow)));
+  const filteredDisplayRowCount = filteredRows.length;
+  const totalDisplayRowCount = rows.length;
+  const filteredDatabaseRecordCount = filteredProjectIds.length;
+  const totalDatabaseRecordCount = projects.length;
   const allFilteredProjectsSelected = filteredProjectIds.length > 0
     && filteredProjectIds.every((projectId) => selectedProjectIds.has(projectId));
 
@@ -3330,8 +3334,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 <Download className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Скачать</span>
               </Button>
-              <div className="text-sm text-muted-foreground">
-                Показано {filteredRows.length} из {rows.length}
+              <div className="min-w-[220px] text-sm text-muted-foreground">
+                <div>Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span> из <span className="tabular-nums">{totalDisplayRowCount}</span></div>
+                <div>Записей в базе: <span className="font-medium text-foreground tabular-nums">{filteredDatabaseRecordCount}</span> из <span className="tabular-nums">{totalDatabaseRecordCount}</span></div>
               </div>
             </div>
           </div>
@@ -3346,7 +3351,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               {periodFilter !== 'all' && <Badge variant="secondary">{periodFilter === 'has_periods' ? 'Есть периоды' : 'Без периодов'}</Badge>}
               {auditPeriodTypeFilter !== 'all' && <Badge variant="secondary">{auditPeriodTypeLabel(auditPeriodTypeFilter)}</Badge>}
               <span className="ml-auto text-muted-foreground">
-                Найдено: <span className="font-medium text-foreground tabular-nums">{filteredRows.length}</span>
+                Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span>; записей в базе: <span className="font-medium text-foreground tabular-nums">{filteredDatabaseRecordCount}</span>
               </span>
             </div>
           )}
@@ -3356,7 +3361,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           <Card className="p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={toggleAllFilteredProjects} disabled={filteredProjectIds.length === 0}>
-                {allFilteredProjectsSelected ? 'Снять выбор с найденных' : `Выбрать найденные (${filteredProjectIds.length})`}
+                {allFilteredProjectsSelected ? 'Снять выбор с записей базы' : `Выбрать записи в базе (${filteredDatabaseRecordCount})`}
               </Button>
               {selectedProjectIds.size > 0 ? (
                 <>

@@ -58,6 +58,18 @@ test('true saved views use localStorage rather than hardcoded pseudo-presets', (
   assert.doesNotMatch(pageSource, />\s*My portfolio\s*</);
 });
 
+test('count labels separate grouped summary rows from underlying database records', () => {
+  assert.match(pageSource, /const filteredDisplayRowCount = filteredRows\.length/);
+  assert.match(pageSource, /const totalDisplayRowCount = rows\.length/);
+  assert.match(pageSource, /const filteredDatabaseRecordCount = filteredProjectIds\.length/);
+  assert.match(pageSource, /const totalDatabaseRecordCount = projects\.length/);
+  assert.match(pageSource, /Строк свода:/);
+  assert.match(pageSource, /Записей в базе:/);
+  assert.match(pageSource, /Выбрать записи в базе/);
+  assert.doesNotMatch(pageSource, /Показано \{filteredRows\.length\} из \{rows\.length\}/);
+  assert.doesNotMatch(pageSource, /Выбрать найденные/);
+});
+
 test('column filter popover is a reusable table-header control', () => {
   assert.match(filterSource, /export function CommandCenterColumnFilter/);
   assert.match(filterSource, /aria-label=\{`Фильтр колонки: \$\{label\}`\}/);
