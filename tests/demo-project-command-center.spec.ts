@@ -58,7 +58,7 @@ test.describe('CEO command center completion', () => {
     expect(network.unhandledRequests).toEqual([]);
   });
 
-  test('admin has CEO command center and can edit project deadlines', async ({ page }) => {
+  test('admin has CEO command center and can edit project deadlines and contract amount', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'admin');
     await page.goto('/projects');
     await waitForDemoApp(page);
@@ -67,12 +67,18 @@ test.describe('CEO command center completion', () => {
     await expect(page.getByLabel('CEO portfolio pulse')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Скачать' })).toBeVisible();
     await page.getByTitle('Раскрыть').first().click();
+    await expect(page.getByRole('button', { name: /Скачать договор:/ }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Изменить сумму' }).click();
+    await page.getByLabel(`Сумма договора ${demoProject.name}`).fill('12345678');
+    await page.getByRole('button', { name: 'Сохранить сумму' }).click();
+    await expect.poll(() => network.mutationRequests.map((request) => request.body || '').join('\n')).toContain('12345678');
+
     await page.getByRole('button', { name: 'Изменить сроки' }).click();
     await page.getByLabel(`Начало проекта ${demoProject.name}`).fill('2026-02-01');
     await page.getByLabel(`Дедлайн проекта ${demoProject.name}`).fill('2026-11-30');
     await page.getByRole('button', { name: 'Сохранить сроки' }).click();
 
-    await expect.poll(() => network.mutationRequests.length).toBeGreaterThan(0);
+    await expect.poll(() => network.mutationRequests.length).toBeGreaterThan(1);
     const payload = network.mutationRequests.map((request) => request.body || '').join('\n');
     expect(payload).toContain('2026-02-01');
     expect(payload).toContain('2026-11-30');

@@ -38,6 +38,7 @@ import {
 import {
   contractFileUrl as readContractFileUrl,
   dedupeProjectFiles,
+  parseMoney,
   projectAmountWithoutVAT as readProjectAmountWithoutVAT,
   projectContract as readProjectContract,
   projectContractFiles as readProjectContractFiles,
@@ -582,8 +583,8 @@ function legacyRoleMembers(row: any, role: string): any[] {
   return legacyRowTeam(row).filter((member) => teamRole(member) === role);
 }
 
-function legacyRoleNames(row: any, role: string): string {
-  return legacyRoleMembers(row, role).map(teamName).filter(Boolean).join(', ');
+function legacyRoleMemberBonus(member: any, row: any): number {
+  return memberBonusAmount(member, row.finances || {});
 }
 
 function legacyRoleBonus(row: any, role: string): number {
@@ -620,7 +621,7 @@ function legacyServiceRange(row: any): string {
   return `${formatDate(start)} - ${formatDate(end)}`;
 }
 
-function legacyExportRow(row: any, index: number): LegacyExportRow {
+function legacyExportProjectRows(row: any, index: number): LegacyExportRow[] {
   const model = buildProjectCommandCenterModel(row.project || {});
   const gphAmount = legacyContractorAmount(row);
   const preExpense = legacyMoney(row.finances?.preExpenseAmount);
@@ -630,35 +631,46 @@ function legacyExportRow(row: any, index: number): LegacyExportRow {
   const paidBonuses = legacyMoney(row.finances?.totalPaidBonuses);
   const totalCosts = gphAmount + preExpense;
   const baseAfterCosts = Math.max(0, legacyMoney(contractAmount) - totalCosts);
-  const result: LegacyExportRow = {
-    '№': index + 1,
-    'Проект / клиент': `${row.name || ''}${row.client ? `\n${row.client}` : ''}`,
-    'Вид проекта': row.type || '',
-    'Наша компания': row.company || '',
-    'Договор': model.contract.number || exportContractLabel(row),
-    'Дата договора': model.contract.date ? formatDate(model.contract.date) : '',
-    'Предмет договора': model.contract.subject || '',
-    'Срок оказания услуг': legacyServiceRange(row),
-    'Сумма без НДС': contractAmount ?? '',
-    'Статус': row.readiness?.label || row.status || '',
-    'Бонус %': legacyMoney(row.finances?.bonusPercent),
-    'Итого бонусный пул': bonusPool,
-    'ГПХ / субподряд': legacyContractorNames(row),
-    'Сумма ГПХ': gphAmount,
-    'Предрасход': preExpense,
-    'Итого бонусы': plannedBonuses || bonusPool,
-    'Разница план/факт': (plannedBonuses || bonusPool) - paidBonuses,
-    'Итого расходы': totalCosts,
-    'База после расходов': legacyMoney(row.finances?.bonusBase) || baseAfterCosts,
-    'Грязный доход': legacyMoney(row.finances?.grossProfit) || baseAfterCosts,
-  } as LegacyExportRow;
+  const roleMembersByColumn = LEGACY_ROLE_EXPORT_COLUMNS.map((column) => ({
+    ...column,
+    members: legacyRoleMembers(row, column.key),
+  }));
+  const contractorNames = legacyContractorNames(row);
+  const maxLines = Math.max(1, ...roleMembersByColumn.map((column) => column.members.length));
 
-  for (const column of LEGACY_ROLE_EXPORT_COLUMNS) {
-    result[column.name as LegacyExportColumn] = legacyRoleNames(row, column.key);
-    result[column.amount as LegacyExportColumn] = legacyRoleBonus(row, column.key);
-  }
+  return Array.from({ length: maxLines }, (_, lineIndex) => {
+    const isFirstLine = lineIndex === 0;
+    const result: LegacyExportRow = {
+      '№': isFirstLine ? index + 1 : '',
+      'Проект / клиент': isFirstLine ? `${row.name || ''}${row.client ? `\n${row.client}` : ''}` : '',
+      'Вид проекта': isFirstLine ? row.type || '' : '',
+      'Наша компания': isFirstLine ? row.company || '' : '',
+      'Договор': isFirstLine ? model.contract.number || exportContractLabel(row) : '',
+      'Дата договора': isFirstLine && model.contract.date ? formatDate(model.contract.date) : '',
+      'Предмет договора': isFirstLine ? model.contract.subject || '' : '',
+      'Срок оказания услуг': isFirstLine ? legacyServiceRange(row) : '',
+      'Сумма без НДС': isFirstLine ? contractAmount ?? '' : '',
+      'Статус': isFirstLine ? row.readiness?.label || row.status || '' : '',
+      'Бонус %': isFirstLine ? legacyMoney(row.finances?.bonusPercent) : '',
+      'Итого бонусный пул': isFirstLine ? bonusPool : '',
+      'ГПХ / субподряд': isFirstLine ? contractorNames : '',
+      'Сумма ГПХ': isFirstLine ? gphAmount : '',
+      'Предрасход': isFirstLine ? preExpense : '',
+      'Итого бонусы': isFirstLine ? plannedBonuses || bonusPool : '',
+      'Разница план/факт': isFirstLine ? (plannedBonuses || bonusPool) - paidBonuses : '',
+      'Итого расходы': isFirstLine ? totalCosts : '',
+      'База после расходов': isFirstLine ? legacyMoney(row.finances?.bonusBase) || baseAfterCosts : '',
+      'Грязный доход': isFirstLine ? legacyMoney(row.finances?.grossProfit) || baseAfterCosts : '',
+    } as LegacyExportRow;
 
-  return result;
+    for (const column of roleMembersByColumn) {
+      const member = column.members[lineIndex];
+      result[column.name as LegacyExportColumn] = member ? teamName(member) : '';
+      result[column.amount as LegacyExportColumn] = member ? legacyRoleMemberBonus(member, row) : '';
+    }
+
+    return result;
+  });
 }
 
 function legacyPartnerSheetName(name: string): string {
@@ -707,7 +719,7 @@ function legacyTotalsRow(rows: LegacyExportRow[]): (string | number)[] {
 }
 
 function appendLegacyCeoSheet(XLSX: any, workbook: any, sheetName: string, sourceRows: any[]) {
-  const rows = sourceRows.map(legacyExportRow);
+  const rows = sourceRows.flatMap((row, index) => legacyExportProjectRows(row, index));
   const aoa: (string | number)[][] = [
     [`CEO ведомость · ${sheetName}`],
     [`Проект → сумма → бонусный пул → роли → ГПХ/предрасход → доход`],
@@ -1441,6 +1453,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [editingProjectDatesRowId, setEditingProjectDatesRowId] = useState<string | null>(null);
   const [projectDateDraft, setProjectDateDraft] = useState<ProjectDateDraft>({ startDate: '', deadline: '' });
+  const [editingContractAmountRowId, setEditingContractAmountRowId] = useState<string | null>(null);
+  const [contractAmountDraft, setContractAmountDraft] = useState('');
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [periodNameDraft, setPeriodNameDraft] = useState('');
   const [addingPeriodRowId, setAddingPeriodRowId] = useState<string | null>(null);
@@ -1469,23 +1483,86 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canManageContractors = capabilities.canManageContractors;
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = capabilities.canEditPeriods;
+  const canEditContractAmount = canSeeContractMoney;
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
 
   const openContractFile = async (file: any, label: string, key: string) => {
     const rawUrl = contractFileUrl(file);
-    const storagePath = String(file?.storagePath || file?.path || '');
+    const storagePath = String(file?.storagePath || file?.path || (rawUrl.startsWith('seafile://') ? rawUrl.replace(/^seafile:\/\//, '') : ''));
+    const directUrl = rawUrl && !rawUrl.startsWith('seafile://') ? rawUrl : '';
     const isSeafileFile = Boolean(file?.isSeafile) || rawUrl.startsWith('seafile://');
     setOpeningFileKey(key);
     try {
       const url = isSeafileFile && storagePath
         ? await supabaseDataStore.getSeafileDownloadUrl(storagePath)
-        : rawUrl;
-      if (!url || url.startsWith('seafile://')) throw new Error('Безопасная ссылка на файл недоступна');
-      window.open(url, '_blank', 'noopener,noreferrer');
+        : directUrl;
+      const safeUrl = url || directUrl;
+      if (!safeUrl || safeUrl.startsWith('seafile://')) {
+        throw new Error(`Нет рабочей ссылки. В карточке сохранён только источник: ${storagePath || rawUrl || label}`);
+      }
+      window.open(safeUrl, '_blank', 'noopener,noreferrer');
     } catch (error: any) {
-      toast({ title: 'Не удалось открыть договор', description: error?.message || `Файл «${label}» недоступен`, variant: 'destructive' });
+      toast({
+        title: 'Договор не привязан к рабочему хранилищу',
+        description: error?.message || `Файл «${label}» есть в карточке, но безопасная ссылка не получена`,
+        variant: 'destructive',
+      });
     } finally {
       setOpeningFileKey(null);
+    }
+  };
+
+  const cancelContractAmountEdit = () => {
+    setEditingContractAmountRowId(null);
+    setContractAmountDraft('');
+  };
+
+  const startContractAmountEdit = (row: (typeof rows)[number]) => {
+    const currentAmount = Number(row.contract?.amountWithoutVAT || row.amount || 0);
+    setEditingContractAmountRowId(row.id);
+    setContractAmountDraft(currentAmount > 0 ? String(currentAmount) : '');
+  };
+
+  const saveContractAmount = async (row: (typeof rows)[number]) => {
+    if (!canEditContractAmount || !updateProject) return;
+    const amount = parseMoney(contractAmountDraft);
+    if (amount <= 0) {
+      toast({ title: 'Укажите сумму договора', description: 'Сумма должна быть больше 0.', variant: 'destructive' });
+      return;
+    }
+
+    const sourceProject = row.project || row;
+    const sourceProjectId = sourceProject.id || row.id;
+    const notes = readProjectNotes(sourceProject);
+    const contract = {
+      ...(notes.contract || {}),
+      ...(sourceProject.contract || {}),
+      amountWithoutVAT: amount,
+    };
+    const existingFinances = {
+      ...(notes.finances || {}),
+      ...(sourceProject.finances || {}),
+      amountWithoutVAT: amount,
+    };
+    const finances = calculateProjectFinances({
+      ...sourceProject,
+      contract,
+      finances: existingFinances,
+    });
+
+    setSavingProjectId(`${row.id}:amount`);
+    try {
+      await updateProject(sourceProjectId, {
+        amountWithoutVAT: amount,
+        contract,
+        finances,
+      });
+      toast({ title: 'Сумма договора обновлена', description: `${money.format(amount)} ₸ без НДС` });
+      cancelContractAmountEdit();
+    } catch (error: any) {
+      toast({ title: 'Не удалось обновить сумму', description: error?.message || 'Попробуйте ещё раз', variant: 'destructive' });
+    } finally {
+      setSavingProjectId(null);
     }
   };
 
@@ -3983,11 +4060,51 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                     </div>
                                     <div>
                                       <div className="text-xs text-muted-foreground">Сумма без НДС</div>
-                                      <div className="font-medium tabular-nums">
-                                        {Number(row.contract?.amountWithoutVAT || row.amount || 0) > 0
-                                          ? `${money.format(Number(row.contract?.amountWithoutVAT || row.amount || 0))} ₸`
-                                          : 'не указана'}
-                                      </div>
+                                      {editingContractAmountRowId === row.id ? (
+                                        <div className="mt-1 space-y-2 rounded-md border bg-muted/20 p-2">
+                                          <Input
+                                            aria-label={`Сумма договора ${row.name}`}
+                                            inputMode="numeric"
+                                            className="h-8"
+                                            value={contractAmountDraft}
+                                            onChange={(event) => setContractAmountDraft(event.target.value)}
+                                            placeholder="Напр. 15000000"
+                                          />
+                                          <div className="flex flex-wrap gap-2">
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              className="h-8"
+                                              disabled={savingProjectId === `${row.id}:amount`}
+                                              onClick={() => saveContractAmount(row)}
+                                            >
+                                              Сохранить сумму
+                                            </Button>
+                                            <Button type="button" variant="outline" size="sm" className="h-8" onClick={cancelContractAmountEdit}>
+                                              Отмена
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <div className="font-medium tabular-nums">
+                                            {Number(row.contract?.amountWithoutVAT || row.amount || 0) > 0
+                                              ? `${money.format(Number(row.contract?.amountWithoutVAT || row.amount || 0))} ₸`
+                                              : 'не указана'}
+                                          </div>
+                                          {canEditContractAmount && (
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 px-2 text-xs"
+                                              onClick={() => startContractAmountEdit(row)}
+                                            >
+                                              Изменить сумму
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="space-y-2">
@@ -4002,20 +4119,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                         {row.contractFiles.map((file: any, index: number) => {
                                           const url = contractFileUrl(file);
                                           const label = file?.fileName || file?.name || `Файл ${index + 1}`;
+                                          const sourcePath = String(file?.storagePath || file?.path || url || '').replace(/^seafile:\/\//, '');
                                           const fileKey = `${row.id}:${file?.id || label}-${index}`;
                                           return url ? (
-                                            <Button
-                                              key={fileKey}
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              className="h-8"
-                                              disabled={openingFileKey === fileKey}
-                                              onClick={() => void openContractFile(file, label, fileKey)}
-                                            >
-                                              {openingFileKey === fileKey ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                                              {label}
-                                            </Button>
+                                            <div key={fileKey} className="flex max-w-full flex-col gap-1 rounded-md border bg-muted/20 p-2">
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-auto min-h-8 justify-start whitespace-normal text-left"
+                                                disabled={openingFileKey === fileKey}
+                                                onClick={() => void openContractFile(file, label, fileKey)}
+                                              >
+                                                {openingFileKey === fileKey ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1 h-3.5 w-3.5" />}
+                                                Скачать договор: {label}
+                                              </Button>
+                                              {sourcePath && <div className="max-w-[360px] truncate text-[11px] text-muted-foreground" title={sourcePath}>Источник: {sourcePath}</div>}
+                                            </div>
                                           ) : (
                                             <Badge key={`${label}-${index}`} variant="outline">
                                               {label}

@@ -41,6 +41,10 @@ test('admin gets CEO-level command center plus date editing persistence', () => 
   assert.match(permissionsSource, /const EXECUTIVE_ROLES = \['ceo', 'admin'\]/);
   assert.match(pageSource, /user\?\.role === 'ceo' \|\| user\?\.role === 'admin' \? 'executive' : 'operations'/);
   assert.match(pageSource, /Изменить сроки/);
+  assert.match(pageSource, /Изменить сумму/);
+  assert.match(pageSource, /Скачать договор:/);
+  assert.match(pageSource, /saveContractAmount/);
+  assert.match(pageSource, /amountWithoutVAT: amount/);
   assert.match(pageSource, /saveProjectDates/);
   assert.match(pageSource, /serviceStartDate: projectDateDraft\.startDate/);
   assert.match(pageSource, /serviceEndDate: projectDateDraft\.deadline/);

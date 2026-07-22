@@ -57,6 +57,14 @@ test('CEO download path uses the legacy workbook while non-executive export rema
   assert.match(pageSource, /buildProjectExportRows\(filteredRows, tableDetailLevel/);
 });
 
+test('CEO Excel export writes one employee per role cell instead of comma-crowding people', () => {
+  assert.match(pageSource, /function legacyExportProjectRows\(row: any, index: number\): LegacyExportRow\[\]/);
+  assert.match(pageSource, /const maxLines = Math\.max\(1, \.\.\.roleMembersByColumn\.map\(\(column\) => column\.members\.length\)\)/);
+  assert.match(pageSource, /sourceRows\.flatMap\(\(row, index\) => legacyExportProjectRows\(row, index\)\)/);
+  assert.match(pageSource, /result\[column\.name as LegacyExportColumn\] = member \? teamName\(member\) : ''/);
+  assert.doesNotMatch(pageSource, /result\[column\.name as LegacyExportColumn\] = legacyRoleNames\(row, column\.key\)/);
+});
+
 test('legacy blueprint remains the acceptance contract for the export', () => {
   assert.match(blueprint, /Each project row presents:/);
   assert.match(blueprint, /Partner \+ amount/);
