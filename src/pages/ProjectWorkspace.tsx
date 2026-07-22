@@ -78,6 +78,21 @@ const dateCell = (value: any): string => {
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString('ru-RU') : String(value);
 };
 
+const dateStamp = (value: any): number | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.getTime() : null;
+};
+
+const dateRangeCell = (leftValue: any, rightValue: any): string => {
+  const leftStamp = dateStamp(leftValue);
+  const rightStamp = dateStamp(rightValue);
+  if (leftStamp !== null && rightStamp !== null && leftStamp > rightStamp) {
+    return `${dateCell(rightValue)} — ${dateCell(leftValue)}`;
+  }
+  return `${dateCell(leftValue)} — ${dateCell(rightValue)}`;
+};
+
 const textCell = (value: any, fallback = 'Не указано'): string => {
   const text = String(value || '').trim();
   return text || fallback;
@@ -164,7 +179,7 @@ function ProjectFlatSummary({
     return `${teamRoleLabel(member.role)}: ${name}`;
   }).join('\n');
   const periodText = periods.length
-    ? periods.map((period: any) => `${textCell(period.name || period.title, 'Период')} · ${dateCell(period.startDate)} — ${dateCell(period.endDate || period.deadline)} · ${textCell(period.status, 'статус не указан')}`).join('\n')
+    ? periods.map((period: any) => `${textCell(period.name || period.title, 'Период')} · ${dateRangeCell(period.startDate, period.endDate || period.deadline)} · ${textCell(period.status, 'статус не указан')}`).join('\n')
     : 'Периоды не заведены';
   const fileText = normalizedFiles.length
     ? normalizedFiles.map((file: any) => file.name || file.fileName || file.path || 'Файл').join('\n')
@@ -205,7 +220,7 @@ function ProjectFlatSummary({
               </td>
             </tr>
             <tr className={rowClass}><th className={labelClass}>Договор</th><td className={valueClass}>№{textCell(normalizedContract?.number, 'не указан')} · {dateCell(normalizedContract?.date)}\n{textCell(normalizedContract?.subject)}</td></tr>
-            <tr className={rowClass}><th className={labelClass}>Сроки</th><td className={valueClass}>{dateCell(normalizedStartDate || normalizedContract?.serviceStartDate)} — {dateCell(normalizedDeadline || normalizedContract?.serviceEndDate)}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Сроки</th><td className={valueClass}>{dateRangeCell(normalizedStartDate || normalizedContract?.serviceStartDate, normalizedDeadline || normalizedContract?.serviceEndDate)}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Этапы / периоды</th><td className={valueClass}>{periodText}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Задачи</th><td className={valueClass}>{completedTasks} из {projectTasks.length} выполнено · в работе: {pendingTasks}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Часы</th><td className={valueClass}>{approvedHours}ч утверждено{pendingHours > 0 ? ` · +${pendingHours}ч ждут партнёра` : ''}</td></tr>

@@ -50,6 +50,8 @@ test.describe('executive demo: project to payment registry', () => {
     await expect(page).toHaveURL(new RegExp(`/project/${DEMO_PROJECT_ID}$`));
     await expect(page.getByRole('heading', { name: 'Свод проекта' })).toBeVisible();
     await expect(page.getByLabel('Свод проекта')).toContainText('Вся ключевая информация одной таблицей');
+    await expect(page.getByLabel('Свод проекта')).toContainText('15.01.2026 — 20.12.2026');
+    await expect(page.getByLabel('Свод проекта')).not.toContainText('20.12.2026 — 15.01.2026');
     await expect(page.getByRole('tab', { name: /Дашборд|Обзор/ })).toHaveCount(0);
     await expect(page.getByText('Общий прогресс')).toHaveCount(0);
     await expect(page.getByText('Статус выполнения')).toHaveCount(0);
