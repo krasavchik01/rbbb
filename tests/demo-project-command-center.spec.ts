@@ -7,10 +7,20 @@ test.describe('CEO command center completion', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    await expect(page.getByRole('button', { name: 'CEO daily' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Need contract data' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'At risk' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'My portfolio' })).toBeVisible();
+    page.once('dialog', async (dialog) => {
+      expect(dialog.message()).toContain('Название вида');
+      await dialog.accept('CEO daily demo');
+    });
+    await page.getByRole('button', { name: 'Сохранить вид' }).click();
+    await expect(page.getByRole('combobox', { name: 'Сохранённые виды свода' })).toBeVisible();
+    await expect.poll(async () => page.evaluate(() => window.localStorage.getItem('rbbb:project-command-center:saved-views:v1') || '')).toContain('CEO daily demo');
+
+    await expect(page.getByRole('button', { name: 'Фильтр колонки: Наша компания' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Фильтр колонки: Договор' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Фильтр колонки: Предмет договора' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Фильтр колонки: Этап' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Фильтр колонки: Бизнес-сезон' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Фильтр колонки: Часы' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Фильтр колонки: Проект / клиент' }).click();
     await page.getByLabel('Поиск по колонке Проект / клиент').fill(demoProject.name.slice(0, 12));

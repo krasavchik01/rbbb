@@ -97,8 +97,44 @@ type BusinessSeasonFilter = 'all' | string;
 type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
 type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
 type DateRange = { start: Date; end: Date };
-type ColumnFilterKey = 'company' | 'project' | 'service' | 'period' | 'status' | 'money';
+const COMMAND_CENTER_COLUMN_FILTER_KEYS = [
+  'company',
+  'project',
+  'season',
+  'contract',
+  'subject',
+  'service',
+  'stage',
+  'period',
+  'partner',
+  'leader',
+  'status',
+  'completeness',
+  'money',
+  'hours',
+  'bonus',
+] as const;
+type ColumnFilterKey = typeof COMMAND_CENTER_COLUMN_FILTER_KEYS[number];
 type ColumnFilterState = Record<ColumnFilterKey, string>;
+type SavedCommandCenterView = {
+  id: string;
+  name: string;
+  search: string;
+  viewFilter: ProjectViewFilter;
+  companyFilter: CompanyFilter;
+  partnerFilter: PartnerFilter;
+  yearFilter: YearFilter;
+  businessSeasonFilter: BusinessSeasonFilter;
+  dateFromFilter: string;
+  dateToFilter: string;
+  deadlineFilter: ProjectDeadlineFilter;
+  periodFilter: ProjectPeriodFilter;
+  auditPeriodTypeFilter: AuditPeriodTypeFilter;
+  sortBy: ProjectSort;
+  tableDetailLevel: TableDetailLevel;
+  columnFilters: ColumnFilterState;
+};
+const COMMAND_CENTER_VIEW_STORAGE_KEY = 'rbbb:project-command-center:saved-views:v1';
 
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
@@ -658,14 +694,10 @@ function rowMatchesAuditPeriodType(row: any, value: AuditPeriodTypeFilter): bool
   return value === 'all' || (row.periods || []).some((period: AuditPeriod) => period.type === value);
 }
 
-const EMPTY_COLUMN_FILTERS: ColumnFilterState = {
-  company: '',
-  project: '',
-  service: '',
-  period: '',
-  status: '',
-  money: '',
-};
+const EMPTY_COLUMN_FILTERS = COMMAND_CENTER_COLUMN_FILTER_KEYS.reduce((acc, key) => {
+  acc[key] = '';
+  return acc;
+}, {} as ColumnFilterState);
 
 function columnFilterTokens(value: string): string[] {
   return String(value || '')
@@ -682,7 +714,7 @@ function textColumnMatches(haystack: string, filter: string): boolean {
   return tokens.some((token) => normalized.includes(token));
 }
 
-function moneyColumnMatches(amount: number, filter: string): boolean {
+function numberColumnMatches(amount: number, filter: string): boolean {
   const raw = String(filter || '').trim();
   if (!raw) return true;
   const range = raw.match(/^\s*(\d[\d\s]*)?\s*-\s*(\d[\d\s]*)?\s*$/);
@@ -696,21 +728,37 @@ function moneyColumnMatches(amount: number, filter: string): boolean {
   return textColumnMatches(String(amount), raw);
 }
 
-function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean): boolean {
-  const partnerLeaderText = [
-    ...(row.partnerNames || []),
-    ...(row.coverageTeam || row.team || []).filter((member: any) => isLeaderRole(teamRole(member))).map(teamName),
-  ].join(' ');
-  const periodText = (row.periods || []).map((period: AuditPeriod) => `${period.name} ${periodLabel(period)} ${auditPeriodTypeLabel(period.type)}`).join(' ');
+function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean, isExecutive: boolean): boolean {
+  const notes = readProjectNotes(row.project);
+  const commandModel = buildProjectCommandCenterModel(row.project);
+  const team = row.coverageTeam || row.team || [];
+  const partnerText = [...(row.partnerNames || []), ...team.filter((member: any) => teamRole(member) === 'partner').map(teamName)].join(' ');
+  const leaderText = team.filter((member: any) => isLeaderRole(teamRole(member))).map(teamName).join(' ');
+  const periodText = (row.periods || []).map((period: AuditPeriod) => `${period.name} ${periodLabel(period)} ${auditPeriodTypeLabel(period.type)} ${period.startDate || ''} ${period.endDate || ''} ${period.deadline || ''}`).join(' ');
+  const stageText = (notes?.stages || []).map((stage: any) => `${stage.name || ''} ${stage.title || ''} ${stage.stageAmountWithoutVAT || ''}`).join(' ');
+  const seasonText = rowBusinessSeasonYears(row).map((year) => `${year} ${businessSeasonLabel(year)}`).join(' ');
+  const contractText = `${commandModel.contract.number || ''} ${commandModel.contract.date || ''} ${commandModel.contract.serviceStartDate || ''} ${commandModel.contract.serviceEndDate || ''}`;
   const statusText = `${row.status} ${row.readiness?.label || ''} ${(row.readiness?.issues || []).join(' ')} ${row.deadlineState?.label || ''}`;
+  const completenessText = `${statusText} ${commandModel.warnings.map((item) => `${item.code} ${item.label} ${item.severity}`).join(' ')}`;
+  const hourValue = Number(row.hours?.approved || 0) + Number(row.hours?.pending || 0);
+  const bonusValue = Number(row.finances?.totalBonusAmount || row.finances?.totalPaidBonuses || 0);
 
   return (
     textColumnMatches(row.company, filters.company) &&
     textColumnMatches(`${row.name} ${row.client}`, filters.project) &&
+    textColumnMatches(seasonText, filters.season) &&
+    textColumnMatches(contractText, filters.contract) &&
+    textColumnMatches(commandModel.contract.subject || '', filters.subject) &&
     textColumnMatches(row.type, filters.service) &&
+    textColumnMatches(stageText, filters.stage) &&
     textColumnMatches(periodText, filters.period) &&
-    textColumnMatches(`${statusText} ${partnerLeaderText}`, filters.status) &&
-    (!canSeeMoney || moneyColumnMatches(Number(row.amount || 0), filters.money))
+    textColumnMatches(partnerText, filters.partner) &&
+    textColumnMatches(leaderText, filters.leader) &&
+    textColumnMatches(statusText, filters.status) &&
+    textColumnMatches(completenessText, filters.completeness) &&
+    (!canSeeMoney || numberColumnMatches(Number(row.amount || 0), filters.money)) &&
+    numberColumnMatches(hourValue, filters.hours) &&
+    (!isExecutive || numberColumnMatches(bonusValue, filters.bonus))
   );
 }
 
@@ -721,14 +769,10 @@ function hasActiveColumnFilters(filters: ColumnFilterState): boolean {
 function readInitialColumnFilters(): ColumnFilterState {
   if (typeof window === 'undefined') return EMPTY_COLUMN_FILTERS;
   const params = new URLSearchParams(window.location.search);
-  return {
-    company: params.get('cf_company') || '',
-    project: params.get('cf_project') || '',
-    service: params.get('cf_service') || '',
-    period: params.get('cf_period') || '',
-    status: params.get('cf_status') || '',
-    money: params.get('cf_money') || '',
-  };
+  return COMMAND_CENTER_COLUMN_FILTER_KEYS.reduce((acc, key) => {
+    acc[key] = params.get(`cf_${key}`) || '';
+    return acc;
+  }, {} as ColumnFilterState);
 }
 
 function syncCommandCenterUrl(state: {
@@ -1128,6 +1172,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('periodType') as AuditPeriodTypeFilter)) || 'all');
   const [sortBy, setSortBy] = useState<ProjectSort>(() => (typeof window === 'undefined' ? 'deadline_asc' : (new URLSearchParams(window.location.search).get('sort') as ProjectSort)) || 'deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
+  const [savedViews, setSavedViews] = useState<SavedCommandCenterView[]>([]);
+  const [selectedSavedViewId, setSelectedSavedViewId] = useState('');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
   const [openingFileKey, setOpeningFileKey] = useState<string | null>(null);
   const [contractorNameDrafts, setContractorNameDrafts] = useState<Record<string, string>>({});
@@ -1216,6 +1262,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     () => assignableEmployees.filter((employee) => String(employee?.role || '').toLowerCase() === 'partner'),
     [assignableEmployees],
   );
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(COMMAND_CENTER_VIEW_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setSavedViews(parsed);
+    } catch {
+      setSavedViews([]);
+    }
+  }, []);
 
   useEffect(() => {
     if (!urlSyncReadyRef.current) {
@@ -1470,6 +1527,62 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setViewFilter(view);
   };
 
+  const currentSavedViewPayload = (): Omit<SavedCommandCenterView, 'id' | 'name'> => ({
+    search,
+    viewFilter,
+    companyFilter,
+    partnerFilter,
+    yearFilter,
+    businessSeasonFilter,
+    dateFromFilter,
+    dateToFilter,
+    deadlineFilter,
+    periodFilter,
+    auditPeriodTypeFilter,
+    sortBy,
+    tableDetailLevel,
+    columnFilters,
+  });
+
+  const persistSavedViews = (views: SavedCommandCenterView[]) => {
+    setSavedViews(views);
+    window.localStorage.setItem(COMMAND_CENTER_VIEW_STORAGE_KEY, JSON.stringify(views));
+  };
+
+  const saveCurrentView = () => {
+    const name = window.prompt('Название вида');
+    if (!name?.trim()) return;
+    const view: SavedCommandCenterView = { id: `view:${Date.now()}`, name: name.trim(), ...currentSavedViewPayload() };
+    persistSavedViews([...savedViews.filter((item) => item.name !== view.name), view]);
+    setSelectedSavedViewId(view.id);
+  };
+
+  const applySavedView = (viewId: string) => {
+    const view = savedViews.find((item) => item.id === viewId);
+    if (!view) return;
+    setSelectedSavedViewId(view.id);
+    setSearch(view.search);
+    setViewFilter(view.viewFilter);
+    setCompanyFilter(view.companyFilter);
+    setPartnerFilter(view.partnerFilter);
+    setYearFilter(view.yearFilter);
+    setBusinessSeasonFilter(view.businessSeasonFilter);
+    setDateFromFilter(view.dateFromFilter);
+    setDateToFilter(view.dateToFilter);
+    setDeadlineFilter(view.deadlineFilter);
+    setPeriodFilter(view.periodFilter);
+    setAuditPeriodTypeFilter(view.auditPeriodTypeFilter);
+    setSortBy(view.sortBy);
+    setTableDetailLevel(view.tableDetailLevel);
+    setColumnFilters({ ...EMPTY_COLUMN_FILTERS, ...view.columnFilters });
+  };
+
+  const deleteSelectedSavedView = () => {
+    if (!selectedSavedViewId) return;
+    persistSavedViews(savedViews.filter((item) => item.id !== selectedSavedViewId));
+    setSelectedSavedViewId('');
+  };
+
   const partnerOptions = useMemo(() => {
     const map = new Map<string, { key: string; name: string; count: number }>();
 
@@ -1583,7 +1696,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (periodFilter === 'has_periods' && row.periods.length === 0) return false;
       if (periodFilter === 'no_periods' && row.periods.length > 0) return false;
       if (!rowMatchesAuditPeriodType(row, auditPeriodTypeFilter)) return false;
-      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney)) return false;
+      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney, isExecutive)) return false;
       return true;
     });
 
@@ -2810,18 +2923,26 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </Select>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setViewFilter('all'); setDeadlineFilter('next_30'); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
-                CEO daily
+              <Select value={selectedSavedViewId} onValueChange={applySavedView}>
+                <SelectTrigger className="h-10 w-[220px]" aria-label="Сохранённые виды свода">
+                  <SelectValue placeholder="Сохранённые виды" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedViews.length === 0 ? (
+                    <SelectItem value="no-saved-views" disabled>Нет сохранённых видов</SelectItem>
+                  ) : savedViews.map((view) => (
+                    <SelectItem key={view.id} value={view.id}>{view.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={saveCurrentView}>
+                Сохранить вид
               </Button>
-              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setViewFilter('no_contract'); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
-                Need contract data
-              </Button>
-              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setViewFilter('attention'); setDeadlineFilter('overdue'); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
-                At risk
-              </Button>
-              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={() => { setSearch(user?.name || user?.email || ''); setColumnFilters(EMPTY_COLUMN_FILTERS); }}>
-                My portfolio
-              </Button>
+              {selectedSavedViewId && (
+                <Button type="button" variant="ghost" size="sm" className="h-10" onClick={deleteSelectedSavedView}>
+                  Удалить вид
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -3004,22 +3125,31 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </TableHead>
                 <TableHead>
                   Проект
+                  <CommandCenterColumnFilter label="Наша компания" value={columnFilters.company} active={!!columnFilters.company} onChange={(value) => setColumnFilter('company', value)} onClear={() => clearColumnFilter('company')} />
                   <CommandCenterColumnFilter label="Проект / клиент" value={columnFilters.project} active={!!columnFilters.project} onChange={(value) => setColumnFilter('project', value)} onClear={() => clearColumnFilter('project')} />
+                  <CommandCenterColumnFilter label="Договор" value={columnFilters.contract} active={!!columnFilters.contract} onChange={(value) => setColumnFilter('contract', value)} onClear={() => clearColumnFilter('contract')} />
+                  <CommandCenterColumnFilter label="Предмет договора" value={columnFilters.subject} active={!!columnFilters.subject} onChange={(value) => setColumnFilter('subject', value)} onClear={() => clearColumnFilter('subject')} />
                 </TableHead>
                 <TableHead className="hidden min-w-[180px] lg:table-cell">
                   Вид проекта
                   <CommandCenterColumnFilter label="Вид услуги" value={columnFilters.service} active={!!columnFilters.service} onChange={(value) => setColumnFilter('service', value)} onClear={() => clearColumnFilter('service')} />
+                  <CommandCenterColumnFilter label="Этап" value={columnFilters.stage} active={!!columnFilters.stage} onChange={(value) => setColumnFilter('stage', value)} onClear={() => clearColumnFilter('stage')} />
                 </TableHead>
                 <TableHead className="min-w-[190px]">
                   Срок / периоды
+                  <CommandCenterColumnFilter label="Бизнес-сезон" value={columnFilters.season} active={!!columnFilters.season} onChange={(value) => setColumnFilter('season', value)} onClear={() => clearColumnFilter('season')} />
                   <CommandCenterColumnFilter label="Период / дедлайн" value={columnFilters.period} active={!!columnFilters.period} onChange={(value) => setColumnFilter('period', value)} onClear={() => clearColumnFilter('period')} />
                 </TableHead>
                 <TableHead className="min-w-[130px]">
                   Статус
-                  <CommandCenterColumnFilter label="Статус / партнёр / руководитель" value={columnFilters.status} active={!!columnFilters.status} onChange={(value) => setColumnFilter('status', value)} onClear={() => clearColumnFilter('status')} />
+                  <CommandCenterColumnFilter label="Партнёр" value={columnFilters.partner} active={!!columnFilters.partner} onChange={(value) => setColumnFilter('partner', value)} onClear={() => clearColumnFilter('partner')} />
+                  <CommandCenterColumnFilter label="Руководитель" value={columnFilters.leader} active={!!columnFilters.leader} onChange={(value) => setColumnFilter('leader', value)} onClear={() => clearColumnFilter('leader')} />
+                  <CommandCenterColumnFilter label="Статус" value={columnFilters.status} active={!!columnFilters.status} onChange={(value) => setColumnFilter('status', value)} onClear={() => clearColumnFilter('status')} />
+                  <CommandCenterColumnFilter label="Полнота данных" value={columnFilters.completeness} active={!!columnFilters.completeness} onChange={(value) => setColumnFilter('completeness', value)} onClear={() => clearColumnFilter('completeness')} />
+                  <CommandCenterColumnFilter label="Часы" value={columnFilters.hours} placeholder="Напр. 10-80" active={!!columnFilters.hours} onChange={(value) => setColumnFilter('hours', value)} onClear={() => clearColumnFilter('hours')} />
                 </TableHead>
                 {canSeeContractMoney && <TableHead className="min-w-[140px] text-right">Сумма <CommandCenterColumnFilter label="Сумма договора" value={columnFilters.money} placeholder="Напр. 1000000-5000000" active={!!columnFilters.money} onChange={(value) => setColumnFilter('money', value)} onClear={() => clearColumnFilter('money')} /></TableHead>}
-                {isExecutive && <TableHead className="min-w-[180px] text-center">Бонусный пул</TableHead>}
+                {isExecutive && <TableHead className="min-w-[180px] text-center">Бонусный пул <CommandCenterColumnFilter label="Бонус" value={columnFilters.bonus} placeholder="Напр. 100000-" active={!!columnFilters.bonus} onChange={(value) => setColumnFilter('bonus', value)} onClear={() => clearColumnFilter('bonus')} /></TableHead>}
                 {isExecutive && <TableHead className="min-w-[150px] text-right">Бонусы</TableHead>}
                 {isExecutive && <TableHead className="min-w-[150px] text-right">Грязный доход</TableHead>}
                 <TableHead className="min-w-[150px] text-right">Закрытие</TableHead>
