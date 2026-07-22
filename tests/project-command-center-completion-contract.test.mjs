@@ -7,6 +7,7 @@ const pulseSource = fs.readFileSync(new URL('../src/components/projects/ProjectP
 const workloadSource = fs.readFileSync(new URL('../src/components/projects/ProjectWorkloadChart.tsx', import.meta.url), 'utf8');
 const integritySource = fs.readFileSync(new URL('../src/components/projects/ProjectDataIntegrityDrawer.tsx', import.meta.url), 'utf8');
 const permissionsSource = fs.readFileSync(new URL('../src/lib/projectCommandCenterPermissions.ts', import.meta.url), 'utf8');
+const storeSource = fs.readFileSync(new URL('../src/lib/supabaseDataStore.ts', import.meta.url), 'utf8');
 
 test('CEO portfolio analytics layer is mounted above the smart table', () => {
   assert.match(pageSource, /<ProjectPortfolioPulse summary=\{summary\} onApplyView=\{applyPulseView\} \/>/);
@@ -34,4 +35,15 @@ test('command center permissions are centralized for sensitive actions', () => {
   assert.match(permissionsSource, /canCloseProjects: isExecutive/);
   assert.match(permissionsSource, /canEditPeriods: canManageTeam \|\| userRole === 'partner'/);
   assert.match(permissionsSource, /Only procurement, delegated deputy directors, CEO and admin can edit contract value/);
+});
+
+test('admin gets CEO-level command center plus date editing persistence', () => {
+  assert.match(permissionsSource, /const EXECUTIVE_ROLES = \['ceo', 'admin'\]/);
+  assert.match(pageSource, /user\?\.role === 'ceo' \|\| user\?\.role === 'admin' \? 'executive' : 'operations'/);
+  assert.match(pageSource, /Изменить сроки/);
+  assert.match(pageSource, /saveProjectDates/);
+  assert.match(pageSource, /serviceStartDate: projectDateDraft\.startDate/);
+  assert.match(pageSource, /serviceEndDate: projectDateDraft\.deadline/);
+  assert.match(storeSource, /projectUpdatePayload\.start_date = nextStartDate/);
+  assert.match(storeSource, /projectUpdatePayload\.deadline = nextDeadline/);
 });

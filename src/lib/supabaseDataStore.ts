@@ -609,15 +609,27 @@ class SupabaseDataStore {
           || (typeof existingNotes.name === 'string' ? existingNotes.name : undefined)
           || currentProject.name
           || 'Без названия';
+        const normalizeProjectDateUpdate = (value: any): string | null | undefined => {
+          if (value === undefined) return undefined;
+          if (!value) return null;
+          if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+          const parsed = new Date(value);
+          return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+        };
+        const nextStartDate = normalizeProjectDateUpdate(updates.start_date ?? updates.startDate ?? notesPatch.startDate ?? notesPatch.start_date);
+        const nextDeadline = normalizeProjectDateUpdate(updates.deadline ?? updates.endDate ?? updates.end_date ?? notesPatch.deadline ?? notesPatch.endDate ?? notesPatch.end_date);
+        const projectUpdatePayload: Record<string, any> = {
+          notes: serializedNotes,
+          name: nextName,
+          status: supabaseStatus,
+          kpi_percentage: Number(nextCompletion),
+          updated_at: new Date().toISOString(),
+        };
+        if (nextStartDate !== undefined) projectUpdatePayload.start_date = nextStartDate;
+        if (nextDeadline !== undefined) projectUpdatePayload.deadline = nextDeadline;
         const { error: updateError } = await supabase
           .from('projects')
-          .update({
-            notes: serializedNotes,
-            name: nextName,
-            status: supabaseStatus,
-            kpi_percentage: Number(nextCompletion),
-            updated_at: new Date().toISOString()
-          })
+          .update(projectUpdatePayload)
           .eq('id', id);
 
         if (!updateError) {
@@ -627,6 +639,8 @@ class SupabaseDataStore {
             notes: serializedNotes,
             status: supabaseStatus,
             kpi_percentage: Number(nextCompletion),
+            ...(nextStartDate !== undefined ? { start_date: nextStartDate } : {}),
+            ...(nextDeadline !== undefined ? { deadline: nextDeadline } : {}),
             updated_at: new Date().toISOString()
           } as SupabaseProject);
         }

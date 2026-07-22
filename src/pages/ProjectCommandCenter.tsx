@@ -96,6 +96,7 @@ type YearFilter = 'all' | string;
 type BusinessSeasonFilter = 'all' | string;
 type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
 type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
+type ProjectDateDraft = { startDate: string; deadline: string };
 type DateRange = { start: Date; end: Date };
 const COMMAND_CENTER_COLUMN_FILTER_KEYS = [
   'company',
@@ -1438,6 +1439,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [bulkLeaderAssignOpen, setBulkLeaderAssignOpen] = useState(false);
   const [bulkAssigningLeader, setBulkAssigningLeader] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [editingProjectDatesRowId, setEditingProjectDatesRowId] = useState<string | null>(null);
+  const [projectDateDraft, setProjectDateDraft] = useState<ProjectDateDraft>({ startDate: '', deadline: '' });
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [periodNameDraft, setPeriodNameDraft] = useState('');
   const [addingPeriodRowId, setAddingPeriodRowId] = useState<string | null>(null);
@@ -2678,6 +2681,54 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return explicit.length > 0 ? explicit : [projectToAuditPeriod(project)];
   };
 
+  const cancelProjectDateEdit = () => {
+    setEditingProjectDatesRowId(null);
+    setProjectDateDraft({ startDate: '', deadline: '' });
+  };
+
+  const startProjectDateEdit = (row: (typeof rows)[number]) => {
+    setEditingProjectDatesRowId(row.id);
+    setProjectDateDraft({ startDate: row.startDate || '', deadline: row.deadline || '' });
+  };
+
+  const saveProjectDates = async (row: (typeof rows)[number]) => {
+    if (!canEditPeriods || !updateProject) return;
+    if (!projectDateDraft.startDate && !projectDateDraft.deadline) {
+      toast({ title: 'Укажите хотя бы одну дату', variant: 'destructive' });
+      return;
+    }
+
+    const sourceProject = row.project || row;
+    const sourceProjectId = sourceProject.id || row.id;
+    const notes = readProjectNotes(sourceProject);
+    const contract = {
+      ...(notes.contract || {}),
+      serviceStartDate: projectDateDraft.startDate || undefined,
+      serviceEndDate: projectDateDraft.deadline || undefined,
+    };
+
+    setSavingProjectId(`${row.id}:dates`);
+    try {
+      await updateProject(sourceProjectId, {
+        startDate: projectDateDraft.startDate || undefined,
+        start_date: projectDateDraft.startDate || undefined,
+        deadline: projectDateDraft.deadline || undefined,
+        endDate: projectDateDraft.deadline || undefined,
+        contract,
+      });
+      toast({ title: 'Сроки проекта обновлены', description: `${formatDate(projectDateDraft.startDate)} - ${formatDate(projectDateDraft.deadline)}` });
+      cancelProjectDateEdit();
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось обновить сроки',
+        description: error?.message || 'Попробуйте еще раз',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingProjectId(null);
+    }
+  };
+
   const startAddPeriod = (row: (typeof rows)[number]) => {
     const nextNumber = (row.periods?.length || 0) + 1;
     setAddingPeriodRowId(row.id);
@@ -3622,7 +3673,61 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                   <div className="space-y-2 text-sm">
                                     <div>
                                       <div className="text-xs text-muted-foreground">Срок проекта</div>
-                                      <div className="font-medium">{formatDate(row.startDate)} - {formatDate(row.deadline)}</div>
+                                      {editingProjectDatesRowId === row.id ? (
+                                        <div className="mt-1 space-y-2 rounded-md border bg-muted/20 p-2">
+                                          <div className="grid gap-2">
+                                            <label className="space-y-1">
+                                              <span className="text-xs text-muted-foreground">Начало</span>
+                                              <Input
+                                                aria-label={`Начало проекта ${row.name}`}
+                                                type="date"
+                                                className="h-8"
+                                                value={projectDateDraft.startDate}
+                                                onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, startDate: event.target.value }))}
+                                              />
+                                            </label>
+                                            <label className="space-y-1">
+                                              <span className="text-xs text-muted-foreground">Дедлайн</span>
+                                              <Input
+                                                aria-label={`Дедлайн проекта ${row.name}`}
+                                                type="date"
+                                                className="h-8"
+                                                value={projectDateDraft.deadline}
+                                                onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, deadline: event.target.value }))}
+                                              />
+                                            </label>
+                                          </div>
+                                          <div className="flex flex-wrap gap-2">
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              className="h-8"
+                                              disabled={savingProjectId === `${row.id}:dates`}
+                                              onClick={() => saveProjectDates(row)}
+                                            >
+                                              Сохранить сроки
+                                            </Button>
+                                            <Button type="button" variant="outline" size="sm" className="h-8" onClick={cancelProjectDateEdit}>
+                                              Отмена
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <div className="font-medium">{formatDate(row.startDate)} - {formatDate(row.deadline)}</div>
+                                          {canEditPeriods && (
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-7 px-2 text-xs"
+                                              onClick={() => startProjectDateEdit(row)}
+                                            >
+                                              Изменить сроки
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                     <div>
                                       <div className="text-xs text-muted-foreground">Дедлайн</div>
