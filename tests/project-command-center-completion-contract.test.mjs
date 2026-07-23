@@ -9,6 +9,19 @@ const integritySource = fs.readFileSync(new URL('../src/components/projects/Proj
 const permissionsSource = fs.readFileSync(new URL('../src/lib/projectCommandCenterPermissions.ts', import.meta.url), 'utf8');
 const storeSource = fs.readFileSync(new URL('../src/lib/supabaseDataStore.ts', import.meta.url), 'utf8');
 
+test('CEO sees one compact editable project register before optional detail', () => {
+  assert.match(pageSource, /aria-label="Общая CEO-таблица проектов"/);
+  assert.match(pageSource, /Проект и договор/);
+  assert.match(pageSource, /Партнёр \/ руководитель/);
+  assert.match(pageSource, /Часы \/ сложность/);
+  assert.match(pageSource, /workloadComplexity\(row\.hours\)/);
+  assert.match(pageSource, /onValueChange=\{\(employeeId\) => addTeamMember\(row, 'partner', employeeId\)\}/);
+  assert.match(pageSource, /onValueChange=\{\(employeeId\) => addTeamMember\(row, 'project_leader', employeeId\)\}/);
+  assert.match(pageSource, /Расширенное редактирование/);
+  assert.match(pageSource, /advancedRows\[row\.id\] &&/);
+  assert.match(pageSource, /Скачать Excel ИТОГО/);
+});
+
 test('CEO portfolio analytics layer is mounted above the smart table', () => {
   assert.match(pageSource, /<ProjectPortfolioPulse summary=\{summary\} onApplyView=\{applyPulseView\} \/>/);
   assert.match(pageSource, /<ProjectWorkloadChart items=\{workloadItems\} \/>/);

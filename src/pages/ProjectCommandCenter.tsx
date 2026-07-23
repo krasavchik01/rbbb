@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ChevronDown, ChevronRight, Download, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Download, ExternalLink, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -64,7 +64,6 @@ import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
 import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPermissions';
-import { ProjectCommandCard } from '@/components/projects/ProjectCommandCard';
 import { ProjectDataIntegrityDrawer } from '@/components/projects/ProjectDataIntegrityDrawer';
 import { ProjectPortfolioPulse } from '@/components/projects/ProjectPortfolioPulse';
 import { ProjectWorkloadChart, type WorkloadItem } from '@/components/projects/ProjectWorkloadChart';
@@ -1277,6 +1276,22 @@ function rowHasIssue(row: { readiness: { issues: string[] } }, issue: string) {
   return row.readiness.issues.includes(issue);
 }
 
+function workloadComplexity(hours: ProjectHoursTotals): { label: string; className: string; total: number } {
+  const total = Number(hours.approved || 0) + Number(hours.pending || 0);
+  if (total >= 160) return { label: 'Высокая', className: 'border-red-200 bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-200', total };
+  if (total >= 80) return { label: 'Средняя', className: 'border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-200', total };
+  return { label: 'Низкая', className: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-200', total };
+}
+
+function teamMemberForRole(team: any[], predicate: (role: string) => boolean): any | undefined {
+  return (team || []).find((member) => predicate(teamRole(member)));
+}
+
+function displayMoney(value: unknown): string {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? `${money.format(parsed)} ₸` : '—';
+}
+
 function SummaryItem({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warn' }) {
   return (
     <div className="flex items-baseline gap-2">
@@ -1451,6 +1466,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [bulkLeaderAssignOpen, setBulkLeaderAssignOpen] = useState(false);
   const [bulkAssigningLeader, setBulkAssigningLeader] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [advancedRows, setAdvancedRows] = useState<Record<string, boolean>>({});
   const [editingProjectDatesRowId, setEditingProjectDatesRowId] = useState<string | null>(null);
   const [projectDateDraft, setProjectDateDraft] = useState<ProjectDateDraft>({ startDate: '', deadline: '' });
   const [editingContractAmountRowId, setEditingContractAmountRowId] = useState<string | null>(null);
@@ -2027,7 +2043,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     });
   }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney]);
 
-  const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 3 : 0);
+  const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 2 : 0);
   const setColumnFilter = (key: ColumnFilterKey, value: string) => {
     setColumnFilters((current) => ({ ...current, [key]: value }));
   };
@@ -2036,6 +2052,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const toggleRow = (projectId: string) => {
     setExpandedRows((prev) => ({ ...prev, [projectId]: !prev[projectId] }));
+  };
+  const toggleAdvancedRow = (projectId: string) => {
+    setAdvancedRows((prev) => ({ ...prev, [projectId]: !prev[projectId] }));
   };
 
   const projectIdsForRow = (row: (typeof rows)[number]): string[] => {
@@ -2686,7 +2705,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const baseTeam = template && template.length > 0 ? template : row.team;
       const nextTeam = roleKey === 'partner'
         ? [nextMember, ...baseTeam.filter((member: any) => teamRole(member) !== 'partner')]
-        : [...baseTeam, nextMember];
+        : isLeaderRole(roleKey)
+          ? [...baseTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
+          : [...baseTeam, nextMember];
       const existingFinances = {
         ...(row.project?.notes?.finances || {}),
         ...(row.project?.finances || {}),
@@ -3332,7 +3353,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 onClick={exportFilteredRows}
               >
                 <Download className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Скачать</span>
+                <span className="hidden sm:inline">Скачать Excel ИТОГО</span>
               </Button>
               <div className="min-w-[220px] text-sm text-muted-foreground">
                 <div>Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span> из <span className="tabular-nums">{totalDisplayRowCount}</span></div>
@@ -3357,7 +3378,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           )}
         </Card>
 
-        {canSelectProjects && (
+        {canSelectProjects && selectedProjectIds.size > 0 && (
           <Card className="p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={toggleAllFilteredProjects} disabled={filteredProjectIds.length === 0}>
@@ -3478,6 +3499,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         )}
 
         <Card className="overflow-x-auto overflow-y-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-sky-50/60 px-3 py-2 text-xs dark:bg-sky-950/20">
+            <div><span className="font-semibold">Общая таблица CEO:</span> одна строка — один проект.</div>
+            <div className="text-muted-foreground"><span className="font-medium text-foreground">Меняется в строке:</span> партнёр, руководитель, сроки, сумма, статус и % бонуса. Часы, сложность и доход считаются автоматически.</div>
+          </div>
           {activeColumnFilters && (
             <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2 text-xs">
               <span className="font-medium">Фильтры колонок:</span>
@@ -3489,10 +3514,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </Button>
             </div>
           )}
-          <table className={`${isExecutive ? 'min-w-[1540px]' : 'min-w-[1100px]'} w-full caption-bottom text-sm`}>
+          <table className={`${isExecutive ? 'min-w-[1460px]' : 'min-w-[1040px]'} w-full caption-bottom text-sm`} aria-label="Общая CEO-таблица проектов">
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-[76px]">
+              <TableRow className="bg-muted/40">
+                <TableHead className="w-[72px]">
                   {canSelectProjects && (
                     <input
                       type="checkbox"
@@ -3504,36 +3529,33 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                     />
                   )}
                 </TableHead>
-                <TableHead>
-                  Проект
-                  <CommandCenterColumnFilter label="Наша компания" value={columnFilters.company} active={!!columnFilters.company} onChange={(value) => setColumnFilter('company', value)} onClear={() => clearColumnFilter('company')} />
+                <TableHead className="min-w-[260px]">
+                  Проект и договор
                   <CommandCenterColumnFilter label="Проект / клиент" value={columnFilters.project} active={!!columnFilters.project} onChange={(value) => setColumnFilter('project', value)} onClear={() => clearColumnFilter('project')} />
+                  <CommandCenterColumnFilter label="Наша компания" value={columnFilters.company} active={!!columnFilters.company} onChange={(value) => setColumnFilter('company', value)} onClear={() => clearColumnFilter('company')} />
                   <CommandCenterColumnFilter label="Договор" value={columnFilters.contract} active={!!columnFilters.contract} onChange={(value) => setColumnFilter('contract', value)} onClear={() => clearColumnFilter('contract')} />
                   <CommandCenterColumnFilter label="Предмет договора" value={columnFilters.subject} active={!!columnFilters.subject} onChange={(value) => setColumnFilter('subject', value)} onClear={() => clearColumnFilter('subject')} />
-                </TableHead>
-                <TableHead className="hidden min-w-[180px] lg:table-cell">
-                  Вид проекта
                   <CommandCenterColumnFilter label="Вид услуги" value={columnFilters.service} active={!!columnFilters.service} onChange={(value) => setColumnFilter('service', value)} onClear={() => clearColumnFilter('service')} />
                   <CommandCenterColumnFilter label="Этап" value={columnFilters.stage} active={!!columnFilters.stage} onChange={(value) => setColumnFilter('stage', value)} onClear={() => clearColumnFilter('stage')} />
                 </TableHead>
+                <TableHead className="min-w-[230px]">
+                  Партнёр / руководитель
+                  <CommandCenterColumnFilter label="Партнёр" value={columnFilters.partner} active={!!columnFilters.partner} onChange={(value) => setColumnFilter('partner', value)} onClear={() => clearColumnFilter('partner')} />
+                  <CommandCenterColumnFilter label="Руководитель" value={columnFilters.leader} active={!!columnFilters.leader} onChange={(value) => setColumnFilter('leader', value)} onClear={() => clearColumnFilter('leader')} />
+                </TableHead>
                 <TableHead className="min-w-[190px]">
-                  Срок / периоды
+                  Период / дедлайн
                   <CommandCenterColumnFilter label="Бизнес-сезон" value={columnFilters.season} active={!!columnFilters.season} onChange={(value) => setColumnFilter('season', value)} onClear={() => clearColumnFilter('season')} />
                   <CommandCenterColumnFilter label="Период / дедлайн" value={columnFilters.period} active={!!columnFilters.period} onChange={(value) => setColumnFilter('period', value)} onClear={() => clearColumnFilter('period')} />
                 </TableHead>
-                <TableHead className="min-w-[130px]">
-                  Статус
-                  <CommandCenterColumnFilter label="Партнёр" value={columnFilters.partner} active={!!columnFilters.partner} onChange={(value) => setColumnFilter('partner', value)} onClear={() => clearColumnFilter('partner')} />
-                  <CommandCenterColumnFilter label="Руководитель" value={columnFilters.leader} active={!!columnFilters.leader} onChange={(value) => setColumnFilter('leader', value)} onClear={() => clearColumnFilter('leader')} />
-                  <CommandCenterColumnFilter label="Статус" value={columnFilters.status} active={!!columnFilters.status} onChange={(value) => setColumnFilter('status', value)} onClear={() => clearColumnFilter('status')} />
-                  <CommandCenterColumnFilter label="Полнота данных" value={columnFilters.completeness} active={!!columnFilters.completeness} onChange={(value) => setColumnFilter('completeness', value)} onClear={() => clearColumnFilter('completeness')} />
+                <TableHead className="min-w-[150px]">
+                  Часы / сложность
                   <CommandCenterColumnFilter label="Часы" value={columnFilters.hours} placeholder="Напр. 10-80" active={!!columnFilters.hours} onChange={(value) => setColumnFilter('hours', value)} onClear={() => clearColumnFilter('hours')} />
                 </TableHead>
-                {canSeeContractMoney && <TableHead className="min-w-[140px] text-right">Сумма <CommandCenterColumnFilter label="Сумма договора" value={columnFilters.money} placeholder="Напр. 1000000-5000000" active={!!columnFilters.money} onChange={(value) => setColumnFilter('money', value)} onClear={() => clearColumnFilter('money')} /></TableHead>}
-                {isExecutive && <TableHead className="min-w-[180px] text-center">Бонусный пул <CommandCenterColumnFilter label="Бонус" value={columnFilters.bonus} placeholder="Напр. 100000-" active={!!columnFilters.bonus} onChange={(value) => setColumnFilter('bonus', value)} onClear={() => clearColumnFilter('bonus')} /></TableHead>}
-                {isExecutive && <TableHead className="min-w-[150px] text-right">Бонусы</TableHead>}
-                {isExecutive && <TableHead className="min-w-[150px] text-right">Грязный доход</TableHead>}
-                <TableHead className="min-w-[150px] text-right">Закрытие</TableHead>
+                {canSeeContractMoney && <TableHead className="min-w-[170px] text-right">Сумма без НДС <CommandCenterColumnFilter label="Сумма договора" value={columnFilters.money} placeholder="Напр. 1000000-5000000" active={!!columnFilters.money} onChange={(value) => setColumnFilter('money', value)} onClear={() => clearColumnFilter('money')} /></TableHead>}
+                {isExecutive && <TableHead className="min-w-[190px] text-right">Бонусы <CommandCenterColumnFilter label="Бонус" value={columnFilters.bonus} placeholder="Напр. 100000-" active={!!columnFilters.bonus} onChange={(value) => setColumnFilter('bonus', value)} onClear={() => clearColumnFilter('bonus')} /></TableHead>}
+                {isExecutive && <TableHead className="min-w-[170px] text-right">Грязный доход</TableHead>}
+                <TableHead className="min-w-[190px]">Статус / действия <CommandCenterColumnFilter label="Статус" value={columnFilters.status} active={!!columnFilters.status} onChange={(value) => setColumnFilter('status', value)} onClear={() => clearColumnFilter('status')} /><CommandCenterColumnFilter label="Полнота данных" value={columnFilters.completeness} active={!!columnFilters.completeness} onChange={(value) => setColumnFilter('completeness', value)} onClear={() => clearColumnFilter('completeness')} /></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -3555,6 +3577,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 filteredRows.map((row) => {
                   const expanded = tableDetailLevel === 'detailed' || !!expandedRows[row.id];
                   const totalBonusAmount = Number(row.finances.totalBonusAmount || row.finances.totalPaidBonuses) || 0;
+                  const paidBonuses = Number(row.finances.totalPaidBonuses) || 0;
+                  const workload = workloadComplexity(row.hours);
+                  const currentPartner = teamMemberForRole(row.coverageTeam || row.team, isPartnerRole);
+                  const currentLeader = teamMemberForRole(row.coverageTeam || row.team, isLeaderRole);
                   const commandModel = buildProjectCommandCenterModel(row.project);
                   const closureStatusLabel = row.status === 'pending_payment_approval'
                     ? 'Готов к бонусам'
@@ -3591,137 +3617,73 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                           </Button>
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <Link to={`/project/${row.id}`} className="font-medium leading-snug hover:underline">
-                            {row.name}
-                          </Link>
-                          {row.duplicateRows?.length > 1 && (
-                            <Badge variant="secondary" className="ml-2 align-middle text-[11px]">
-                              {row.duplicateRows.length} записей в базе
-                            </Badge>
-                          )}
+                        <TableCell className="py-3 align-top">
+                          <Link to={`/project/${row.id}`} className="font-semibold leading-snug hover:underline">{row.name}</Link>
                           <div className="mt-1 text-xs text-muted-foreground">{row.client}</div>
-                        </TableCell>
-                        <TableCell className="hidden py-3 text-muted-foreground lg:table-cell">{row.type}</TableCell>
-                        <TableCell className="py-3">
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">
-                              {formatDate(row.startDate)} - {formatDate(row.deadline)}
-                            </div>
-                            {rowBusinessSeasonYears(row).slice(0, 2).map((season) => (
-                              <Badge key={season} variant="secondary" className="mr-1 text-[11px]">
-                                {businessSeasonLabel(season)}
-                              </Badge>
-                            ))}
-                            <Badge variant="outline" className={deadlineBadgeClass(row.deadlineState.tone)}>
-                              {row.deadlineState.label}
-                            </Badge>
-                            {row.periods.length > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                {row.periods.length} период(а): {row.periods.slice(0, 2).map((period: AuditPeriod) => period.name).join(', ')}
-                              </div>
-                            )}
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <Badge variant="outline" className="text-[11px]">{row.type}</Badge>
+                            {row.contract?.number && <Badge variant="secondary" className="text-[11px]">№ {row.contract.number}</Badge>}
+                            {row.contractFiles.length > 0 && <Badge variant="outline" className="text-[11px]">договор ✓</Badge>}
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="space-y-1.5">
-                            {canManageProjectStatus && (
-                              <Select
-                                value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined}
-                                onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)}
-                                disabled={savingProjectId === `${row.id}:status`}
-                              >
-                                <SelectTrigger className="h-8 min-w-[170px] text-xs" aria-label={`Изменить статус проекта ${row.name}`}>
-                                  <SelectValue placeholder={MANAGED_PROJECT_STATUS_LABELS[row.status as ManagedProjectStatus] || row.status || 'Выберите статус'} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {statusOptions.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>
-                              {row.readiness.label}
-                            </Badge>
-                            {row.readiness.issues.length > 0 && row.readiness.level !== 'closed' && (
-                              <div className="max-w-[180px] text-xs leading-snug text-muted-foreground">
-                                {row.readiness.issues.join(', ')}
-                              </div>
-                            )}
+                        <TableCell className="py-3 align-top">
+                          <div className="space-y-2">
+                            <div>
+                              <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Партнёр</div>
+                              {canManageTeam ? (
+                                <Select value={teamMemberId(currentPartner) || undefined} onValueChange={(employeeId) => addTeamMember(row, 'partner', employeeId)} disabled={savingProjectId === `${row.id}:add:partner`}>
+                                  <SelectTrigger className="h-8 w-full text-xs" aria-label={`Партнёр проекта ${row.name}`}><SelectValue placeholder="Назначить партнёра" /></SelectTrigger>
+                                  <SelectContent>{partnerEmployees.map((partner) => <SelectItem key={partner.id} value={partner.id}>{employeeName(partner)}</SelectItem>)}</SelectContent>
+                                </Select>
+                              ) : <div className="font-medium">{currentPartner ? teamName(currentPartner) : '—'}</div>}
+                            </div>
+                            <div>
+                              <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Руководитель</div>
+                              {canManageTeam ? (
+                                <Select value={teamMemberId(currentLeader) || undefined} onValueChange={(employeeId) => addTeamMember(row, 'project_leader', employeeId)} disabled={savingProjectId === `${row.id}:add:project_leader`}>
+                                  <SelectTrigger className="h-8 w-full text-xs" aria-label={`Руководитель проекта ${row.name}`}><SelectValue placeholder="Назначить руководителя" /></SelectTrigger>
+                                  <SelectContent>{assignableEmployees.map((employee) => <SelectItem key={employee.id} value={employee.id}>{employeeName(employee)}</SelectItem>)}</SelectContent>
+                                </Select>
+                              ) : <div className="font-medium">{currentLeader ? teamName(currentLeader) : '—'}</div>}
+                            </div>
                           </div>
                         </TableCell>
-                        {canSeeContractMoney && <TableCell className="py-3 text-right font-medium tabular-nums">{money.format(row.amount)} ₸</TableCell>}
-                        {isExecutive && (
-                          <TableCell className="py-3">
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={savingProjectId === row.id}
-                                onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)}
-                                aria-label={`Уменьшить процент бонуса для ${row.name}`}
-                                title="Уменьшить бонус на 1%"
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </Button>
-                              <span className="w-12 text-center font-semibold tabular-nums">
-                                {Number(row.finances.bonusPercent || 0).toFixed(0)}%
-                              </span>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={savingProjectId === row.id}
-                                onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)}
-                                aria-label={`Увеличить процент бонуса для ${row.name}`}
-                                title="Увеличить бонус на 1%"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
+                        <TableCell className="py-3 align-top">
+                          <div className="font-medium tabular-nums">{formatDate(row.startDate)} — {formatDate(row.deadline)}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{row.periods.length > 0 ? row.periods.map((period: AuditPeriod) => period.name).slice(0, 2).join(', ') : 'Период не указан'}</div>
+                          <Badge variant="outline" className={`mt-2 ${deadlineBadgeClass(row.deadlineState.tone)}`}>{row.deadlineState.label}</Badge>
+                          {canEditPeriods && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => { startProjectDateEdit(row); setExpandedRows((current) => ({ ...current, [row.id]: true })); }}>Изменить сроки</Button>}
+                        </TableCell>
+                        <TableCell className="py-3 align-top">
+                          <div className="text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено</div>
+                          {row.hours.pending > 0 && <div className="text-xs font-medium text-amber-700">{row.hours.pending.toFixed(1)} ждут</div>}
+                          <Badge variant="outline" className={`mt-2 ${workload.className}`}>Сложность: {workload.label}</Badge>
+                        </TableCell>
+                        {canSeeContractMoney && (
+                          <TableCell className="py-3 text-right align-top">
+                            {editingContractAmountRowId === row.id ? (
+                              <div className="ml-auto w-[160px] space-y-1.5"><Input aria-label={`Сумма договора ${row.name}`} inputMode="numeric" className="h-8 text-right" value={contractAmountDraft} onChange={(event) => setContractAmountDraft(event.target.value)} autoFocus /><div className="flex justify-end gap-1"><Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={() => saveContractAmount(row)}>Сохранить</Button><Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={cancelContractAmountEdit}>Отмена</Button></div></div>
+                            ) : <><div className="text-base font-semibold tabular-nums">{displayMoney(row.amount)}</div>{canEditContractAmount && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => startContractAmountEdit(row)}>Изменить</Button>}</>}
                           </TableCell>
                         )}
-                        {isExecutive && <TableCell className="py-3 text-right font-medium tabular-nums">{money.format(totalBonusAmount)} ₸</TableCell>}
-                        {isExecutive && <TableCell className="py-3 text-right font-medium tabular-nums">{money.format(Number(row.finances.grossProfit) || 0)} ₸</TableCell>}
-                        <TableCell className="py-3">
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>
-                              {closureStatusLabel}
-                            </Badge>
-                            {(canCloseProjects || canDeleteProjects) && (
-                              <div className="flex flex-wrap justify-end gap-1.5">
-                                {canCloseProjects && row.readiness.level !== 'closed' && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 px-2 text-xs"
-                                    disabled={savingProjectId === `${row.id}:close` || savingProjectId === `${row.id}:delete`}
-                                    onClick={() => closeProjectRow(row)}
-                                  >
-                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                    Закрыть
-                                  </Button>
-                                )}
-                                {canDeleteProjects && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 border-red-200 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    disabled={savingProjectId === `${row.id}:close` || savingProjectId === `${row.id}:delete`}
-                                    onClick={() => deleteProjectRow(row)}
-                                  >
-                                    <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                    Удалить
-                                  </Button>
-                                )}
-                              </div>
-                            )}
+                        {isExecutive && (
+                          <TableCell className="py-3 text-right align-top">
+                            <div className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">выплачено {displayMoney(paidBonuses)}</div>
+                            <div className="mt-2 flex items-center justify-end gap-1"><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)} aria-label={`Уменьшить процент бонуса для ${row.name}`}><Minus className="h-3 w-3" /></Button><span className="w-10 text-center text-xs font-semibold tabular-nums">{Number(row.finances.bonusPercent || 0).toFixed(0)}%</span><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)} aria-label={`Увеличить процент бонуса для ${row.name}`}><Plus className="h-3 w-3" /></Button></div>
+                          </TableCell>
+                        )}
+                        {isExecutive && <TableCell className="py-3 text-right align-top"><div className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{displayMoney(row.finances.grossProfit)}</div><div className="mt-1 text-xs text-muted-foreground">после ГПХ и предрасхода</div></TableCell>}
+                        <TableCell className="py-3 align-top">
+                          <div className="space-y-2">
+                            {canManageProjectStatus ? (
+                              <Select value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined} onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)} disabled={savingProjectId === `${row.id}:status`}><SelectTrigger className="h-8 w-full text-xs" aria-label={`Изменить статус проекта ${row.name}`}><SelectValue placeholder={MANAGED_PROJECT_STATUS_LABELS[row.status as ManagedProjectStatus] || row.status || 'Статус'} /></SelectTrigger><SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
+                            ) : <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>{closureStatusLabel}</Badge>}
+                            {row.readiness.issues.length > 0 && row.readiness.level !== 'closed' && <div className="text-xs leading-snug text-amber-700">{row.readiness.issues.slice(0, 2).join(' · ')}</div>}
+                            <div className="flex flex-wrap gap-1"><Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => toggleRow(row.id)}>{expanded ? 'Свернуть' : 'Подробнее'}</Button><Button asChild type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs"><Link to={`/project/${row.id}`}>Открыть <ExternalLink className="ml-1 h-3 w-3" /></Link></Button></div>
+                            {canCloseProjects && row.readiness.level !== 'closed' && <Button type="button" variant="outline" size="sm" className="h-7 w-full px-2 text-xs" disabled={savingProjectId === `${row.id}:close`} onClick={() => closeProjectRow(row)}><CheckCircle2 className="mr-1 h-3 w-3" />Закрыть проект</Button>}
+                            {canDeleteProjects && <Button type="button" variant="ghost" size="sm" className="h-7 w-full px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700" disabled={savingProjectId === `${row.id}:delete`} onClick={() => deleteProjectRow(row)}><Trash2 className="mr-1 h-3 w-3" />Удалить</Button>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -3729,12 +3691,40 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         <TableRow key={`${row.id}-details`} className="bg-muted/20 hover:bg-muted/20">
                           <TableCell colSpan={tableColSpan} className="p-0">
                             <div className="space-y-4 border-t px-4 py-4">
-                              <ProjectCommandCard
-                                model={commandModel}
-                                projectHref={`/project/${row.id}`}
-                                canSeeContractMoney={canSeeContractMoney}
-                              />
-                              <ProjectDataIntegrityDrawer model={commandModel} canRepair={canManageTeam || canManageProjectStatus} />
+                              <section className="rounded-lg border bg-background shadow-sm" aria-label={`Краткая карточка проекта ${row.name}`}>
+                                <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h3 className="font-semibold">{row.name}</h3>
+                                      <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>{row.readiness.label}</Badge>
+                                    </div>
+                                    <div className="mt-1 text-xs text-muted-foreground">{row.company} · {row.client} · {row.type}</div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button asChild variant="outline" size="sm" className="h-8"><Link to={`/project/${row.id}`}>Открыть проект <ExternalLink className="ml-1 h-3.5 w-3.5" /></Link></Button>
+                                    <Button type="button" variant={advancedRows[row.id] ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => toggleAdvancedRow(row.id)}>{advancedRows[row.id] ? 'Скрыть расширенное' : 'Расширенное редактирование'}</Button>
+                                  </div>
+                                </div>
+                                <div className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-5">
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Команда</div><div className="mt-1 text-sm"><span className="font-medium">Партнёр:</span> {currentPartner ? teamName(currentPartner) : '—'}</div><div className="text-sm"><span className="font-medium">Руководитель:</span> {currentLeader ? teamName(currentLeader) : '—'}</div><div className="mt-1 text-xs text-muted-foreground">Команда: {(row.coverageTeam || row.team).length} чел.</div></div>
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Сроки</div><div className="mt-1 text-sm font-medium tabular-nums">{formatDate(row.startDate)} — {formatDate(row.deadline)}</div><div className="mt-1 text-xs text-muted-foreground">{row.periods.length ? row.periods.map((period: AuditPeriod) => period.name).join(', ') : 'Период не указан'}</div>{canEditPeriods && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => startProjectDateEdit(row)}>Изменить сроки</Button>}</div>
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Таймшиты</div><div className="mt-1 text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div><div className="text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено · {row.hours.pending.toFixed(1)} ждут</div><Badge variant="outline" className={`mt-2 ${workload.className}`}>{workload.label}</Badge></div>
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Договор</div><div className="mt-1 text-sm font-medium">{row.contract?.number ? `№ ${row.contract.number}` : 'Номер не указан'}</div><div className="mt-1 text-base font-semibold tabular-nums">{displayMoney(row.amount)}</div><div className="text-xs text-muted-foreground">{row.contractFiles.length ? `${row.contractFiles.length} файл(а)` : 'Файл не загружен'}</div></div>
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Финансы CEO</div><div className="mt-1 text-sm"><span className="text-muted-foreground">Пул:</span> <span className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</span></div><div className="text-sm"><span className="text-muted-foreground">Выплачено:</span> <span className="font-medium tabular-nums">{displayMoney(paidBonuses)}</span></div><div className="text-sm"><span className="text-muted-foreground">Доход:</span> <span className="font-semibold tabular-nums text-emerald-700">{displayMoney(row.finances.grossProfit)}</span></div></div>
+                                </div>
+                                {editingProjectDatesRowId === row.id && (
+                                  <div className="flex flex-wrap items-end gap-2 border-t bg-muted/20 px-4 py-3">
+                                    <label className="space-y-1"><span className="text-xs text-muted-foreground">Начало</span><Input aria-label={`Начало проекта ${row.name}`} type="date" className="h-8" value={projectDateDraft.startDate} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, startDate: event.target.value }))} /></label>
+                                    <label className="space-y-1"><span className="text-xs text-muted-foreground">Дедлайн</span><Input aria-label={`Дедлайн проекта ${row.name}`} type="date" className="h-8" value={projectDateDraft.deadline} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, deadline: event.target.value }))} /></label>
+                                    <Button type="button" size="sm" className="h-8" disabled={savingProjectId === `${row.id}:dates`} onClick={() => saveProjectDates(row)}>Сохранить сроки</Button>
+                                    <Button type="button" variant="ghost" size="sm" className="h-8" onClick={cancelProjectDateEdit}>Отмена</Button>
+                                  </div>
+                                )}
+                                {row.contractFiles.length > 0 && <div className="flex flex-wrap gap-2 border-t px-4 py-3">{row.contractFiles.slice(0, 2).map((file: any, index: number) => { const label = file?.fileName || file?.name || `Файл ${index + 1}`; const fileKey = `${row.id}:compact:${file?.id || label}-${index}`; return <Button key={fileKey} type="button" variant="outline" size="sm" className="h-8" disabled={openingFileKey === fileKey} onClick={() => void openContractFile(file, label, fileKey)}><Download className="mr-1.5 h-3.5 w-3.5" />Скачать договор</Button>; })}</div>}
+                              </section>
+                              {advancedRows[row.id] && (
+                                <div className="space-y-4">
+                                  <ProjectDataIntegrityDrawer model={commandModel} canRepair={canManageTeam || canManageProjectStatus} />
                               <div className="rounded-md border bg-background">
                                 <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
                                   <div className="text-sm font-semibold">Сроки и периоды</div>
@@ -4275,6 +4265,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                   })}
                                 </div>
                               </div>
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

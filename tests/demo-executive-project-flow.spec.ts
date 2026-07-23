@@ -24,15 +24,15 @@ test.describe('executive demo: project to payment registry', () => {
     await waitForDemoApp(page);
 
     await page.getByTitle('Раскрыть').first().click();
-    const passport = page.getByLabel(`Паспорт проекта ${demoProject.name}`);
-    await expect(passport).toBeVisible();
-    await expect(passport.getByText('RBI Audit Kazakhstan', { exact: true })).toBeVisible();
-    await expect(passport.getByText('Финансовый аудит')).toBeVisible();
-    await expect(passport.getByText('Аудит финансовой отчётности')).toBeVisible();
-    await expect(passport.getByText('Годовой аудит', { exact: true })).toBeVisible();
-    await expect(passport.getByText('Годовой аудит 2026', { exact: true })).toBeVisible();
-    await expect(passport.getByText('2025/26 · октябрь—сентябрь')).toBeVisible();
-    await expect(passport.getByText(/48\s*000\s*000\s*₸/)).toBeVisible();
+    const snapshot = page.getByLabel(`Краткая карточка проекта ${demoProject.name}`);
+    await expect(snapshot).toBeVisible();
+    await expect(snapshot).toContainText('RBI Audit Kazakhstan');
+    await expect(snapshot).toContainText('Годовой аудит 2026');
+    await expect(snapshot).toContainText(/48\s*000\s*000\s*₸/);
+    await expect(snapshot).toContainText('Демо Партнёр');
+    await expect(snapshot).toContainText('Демо Менеджер');
+    await page.getByRole('button', { name: 'Расширенное редактирование' }).click();
+    await expect(page.getByText('Аудит финансовой отчётности')).toBeVisible();
     expect(network.productionMutations).toEqual([]);
     expect(network.unhandledRequests).toEqual([]);
   });

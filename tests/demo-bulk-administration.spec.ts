@@ -8,6 +8,7 @@ test.describe('bulk administration and deputy project status', () => {
     await waitForDemoApp(page);
 
     await page.locator('tr').filter({ hasText: demoProject.name }).first().getByRole('button').first().click();
+    await page.getByRole('button', { name: 'Расширенное редактирование' }).click();
     await page.getByRole('button', { name: 'Добавить', exact: true }).first().click();
     await page.getByTestId('add-contractor').click();
     const contractorNameInput = page.getByTestId('contractor-name-input');
