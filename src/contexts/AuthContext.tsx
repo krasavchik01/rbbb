@@ -36,8 +36,13 @@ const ORIGINAL_USER_STORAGE_KEY = 'rb_original_user';
 
 // Обогащает пользователя данными о доступе к компаниям из Supabase
 async function enrichUserWithAccess(user: User): Promise<User> {
-  const allowedIds = await getUserAllowedCompanyIds(user.id);
-  return { ...user, allowedCompanyIds: allowedIds };
+  try {
+    const allowedIds = await getUserAllowedCompanyIds(user.id);
+    return { ...user, allowedCompanyIds: allowedIds };
+  } catch (error) {
+    console.error('Unable to enrich user company access:', error);
+    return { ...user, allowedCompanyIds: null };
+  }
 }
 
 function normalizeAuthUser(user: User): User {
@@ -69,10 +74,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const parsed = normalizeAuthUser(JSON.parse(savedUser));
         // Загружаем доступ к компаниям из Supabase
-        enrichUserWithAccess(parsed).then(enriched => {
-          setUser(enriched);
-          setIsLoading(false);
-        });
+        void enrichUserWithAccess(parsed)
+          .then((enriched) => setUser(enriched))
+          .catch((error) => {
+            console.error('Error restoring saved user access:', error);
+            setUser(parsed);
+          })
+          .finally(() => setIsLoading(false));
       } catch (error) {
         console.error('Error parsing saved user:', error);
         localStorage.removeItem(USER_STORAGE_KEY);
