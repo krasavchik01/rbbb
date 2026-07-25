@@ -407,9 +407,11 @@ function hoursPairKey(employeeId: string, projectId: string): string {
 
 function financeFor(project: any) {
   const normalizedFinances = readProjectFinances(project);
+  const team = coverageTeam(projectTeam(project), projectPeriods(project));
   try {
     return calculateProjectFinances({
       ...project,
+      team,
       finances: {
         ...normalizedFinances,
         amountWithoutVAT: projectAmount(project),
@@ -1689,7 +1691,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         coverageTeam: realTeam,
         partnerNames,
         teamColumns: teamByRole(team),
-        teamColumnMembers: teamMembersByRole(team),
+        teamColumnMembers: teamMembersByRole(realTeam),
         hasContract,
         contract,
         contractFiles,
@@ -1763,7 +1765,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         coverageTeam: realTeam,
         partnerNames,
         teamColumns: teamByRole(team),
-        teamColumnMembers: teamMembersByRole(team),
+        teamColumnMembers: teamMembersByRole(realTeam),
         contract: contractRow.contract,
         contractFiles,
         projectIds: groupRows.flatMap((row) => row.projectIds || [row.id]),
@@ -2647,10 +2649,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const bonusPercent = Math.max(0, Math.min(100, nextPercent));
     setSavingProjectId(`${row.id}:${memberId}`);
     try {
-      const nextTeam = row.team.map((item: CanonicalTeamMember) => {
-        if (teamMemberId(item) !== memberId || teamRole(item) !== teamRole(member)) return item;
-        return { ...item, bonusPercent };
-      });
+    const calculationTeam = (row.coverageTeam || row.team).map((item: CanonicalTeamMember) => {
+      if (teamMemberId(item) !== memberId || teamRole(item) !== teamRole(member)) return item;
+      return { ...item, bonusPercent };
+    });
+    const isProjectTeamMember = row.team.some((item: CanonicalTeamMember) => (
+      teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
+    ));
+    const nextProjectTeam = isProjectTeamMember
+      ? row.team.map((item: CanonicalTeamMember) => {
+          if (teamMemberId(item) !== memberId || teamRole(item) !== teamRole(member)) return item;
+          return { ...item, bonusPercent };
+        })
+      : row.team;
 
       const existingFinances = {
         ...(row.project?.notes?.finances || {}),
@@ -2658,7 +2669,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       };
       const projectWithMemberPercent = {
         ...row.project,
-        team: nextTeam,
+        team: calculationTeam,
         finances: {
           ...existingFinances,
           amountWithoutVAT: row.amount,
@@ -2672,11 +2683,84 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         },
       };
       const finances = calculateProjectFinances(projectWithMemberPercent);
-      await updateProject(row.id, { team: nextTeam, finances });
+      await updateProject(row.id, {
+        ...(isProjectTeamMember ? { team: nextProjectTeam } : {}),
+        finances,
+      });
     } catch (error: any) {
       toast({
         title: 'Не удалось обновить участника',
         description: error?.message || 'Попробуйте еще раз',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingProjectId(null);
+    }
+  };
+
+  const setMemberBonusAmount = async (row: (typeof rows)[number], member: any, nextAmount: number) => {
+    if (!isExecutive || !updateProject) return;
+    const memberId = teamMemberId(member);
+    if (!memberId || !Number.isFinite(nextAmount)) return;
+
+    const amount = Math.max(0, Math.round(nextAmount));
+    const existingFinances = {
+      ...(row.project?.notes?.finances || {}),
+      ...(row.project?.finances || {}),
+      ...row.finances,
+    };
+    const bonusPool = Number(existingFinances.totalBonusAmount || 0) || 0;
+    const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
+    const previousAmount = Number(previousBonus.amount || 0) || 0;
+    if (previousAmount === amount && previousBonus.manuallyAdjusted) return;
+
+    const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
+    const teamBonuses = {
+      ...(existingFinances.teamBonuses || {}),
+      [memberId]: {
+        ...previousBonus,
+        role: teamRole(member),
+        percent: bonusPool > 0
+          ? Number(((amount / bonusPool) * 100).toFixed(2))
+          : Number(member?.bonusPercent || 0),
+        amount,
+        manuallyAdjusted: true,
+        history: [
+          ...history,
+          {
+            type: 'amount_change',
+            by: user?.id,
+            byName: user?.name,
+            at: new Date().toISOString(),
+            from: previousAmount,
+            to: amount,
+          },
+        ].slice(-20),
+      },
+    };
+    const totalAssigned = Object.values(teamBonuses).reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
+    const totalContractorsAmount = Number(existingFinances.totalContractorsAmount || 0) || 0;
+    const preExpenseAmount = Number(existingFinances.preExpenseAmount || 0) || 0;
+    const grossProfit = row.amount - totalAssigned - totalContractorsAmount - preExpenseAmount;
+
+    setSavingProjectId(`${row.id}:${memberId}`);
+    try {
+      await updateProject(row.id, {
+        finances: {
+          ...existingFinances,
+          amountWithoutVAT: row.amount,
+          teamBonuses,
+          totalPaidBonuses: totalAssigned,
+          totalCosts: totalAssigned + totalContractorsAmount + preExpenseAmount,
+          grossProfit,
+          profitMargin: row.amount > 0 ? (grossProfit / row.amount) * 100 : 0,
+        },
+      });
+      toast({ title: 'Бонус сотрудника сохранён', description: `${teamName(member)}: ${money.format(amount)} ₸` });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось сохранить бонус сотрудника',
+        description: error?.message || 'Попробуйте ещё раз',
         variant: 'destructive',
       });
     } finally {
@@ -4161,10 +4245,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               )}
 
-                              <div className="hidden rounded-md border bg-background">
-                                <div className="border-b px-3 py-2 text-sm font-semibold">Команда и проценты</div>
+                              {isExecutive && (
+                              <div className="rounded-md border bg-background" aria-label={`Бонусы команды проекта ${row.name}`}>
+                                <div className="flex flex-wrap items-start justify-between gap-3 border-b px-3 py-3">
+                                  <div>
+                                    <div className="text-sm font-semibold">Бонусы команды</div>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">Укажите итоговую сумму для каждого участника. Изменения сразу пересчитывают финансовый итог проекта.</p>
+                                  </div>
+                                  <div className="text-right text-xs">
+                                    <div className="text-muted-foreground">Бонусный пул</div>
+                                    <div className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div>
+                                  </div>
+                                </div>
+                                {(row.coverageTeam || row.team).length === 0 && (
+                                  <div className="px-3 py-4 text-sm text-muted-foreground">Сначала назначьте команду проекта — здесь появятся персональные бонусы.</div>
+                                )}
                                 <div className="grid gap-px bg-border md:grid-cols-2 xl:grid-cols-5">
-                                  {TEAM_COLUMNS.map((column) => {
+                                  {TEAM_COLUMNS.filter((column) => (row.teamColumnMembers[column.key] || []).length > 0).map((column) => {
                                     const members = row.teamColumnMembers[column.key] || [];
                                     const isKeyColumn = isPartnerRole(column.key) || isLeaderRole(column.key);
                                     return (
@@ -4190,6 +4287,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                             const memberId = teamMemberId(member);
                                             const percent = memberBonusPercent(member, row.finances);
                                             const amount = memberBonusAmount(member, row.finances);
+                                            const canRemoveMember = canManageTeam && row.team.some((item: CanonicalTeamMember) => (
+                                              teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
+                                            ));
                                             const savingMember = savingProjectId === `${row.id}:${memberId}`;
                                             const memberProjectHours = memberId
                                               ? (row.projectIds || [row.id]).reduce(
@@ -4207,7 +4307,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                               <div key={`${memberId || teamName(member)}-${memberIndex}`} className="rounded-md border px-2 py-2">
                                                 <div className="flex items-start justify-between gap-2">
                                                   <div className="font-medium leading-snug">{teamName(member)}</div>
-                                                  {canManageTeam && (
+                                                  {canRemoveMember && (
                                                     <Button
                                                       type="button"
                                                       variant="outline"
@@ -4238,20 +4338,48 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                         size="icon"
                                                         className="h-6 w-6"
                                                         disabled={savingMember || !memberId}
-                                                        onClick={() => setMemberBonusPercent(row, member, percent - 1)}
+                                                        onClick={() => setMemberBonusAmount(row, member, amount - 10000)}
+                                                        aria-label={`Уменьшить бонус ${teamName(member)} на 10 000 тенге`}
                                                       >
                                                         <Minus className="h-3 w-3" />
                                                       </Button>
-                                                      <span className="w-10 text-center text-xs font-semibold tabular-nums">{percent.toFixed(0)}%</span>
+                                                      <Input
+                                                        key={`${memberId}-${amount}`}
+                                                        aria-label={`Бонус ${teamName(member)} в тенге`}
+                                                        className="h-7 min-w-0 flex-1 px-2 text-right text-xs tabular-nums"
+                                                        inputMode="numeric"
+                                                        defaultValue={String(Math.round(amount))}
+                                                        onBlur={(event) => {
+                                                          const nextAmount = Number(event.currentTarget.value.replace(/\s/g, '').replace(',', '.'));
+                                                          if (Number.isFinite(nextAmount) && nextAmount >= 0) void setMemberBonusAmount(row, member, nextAmount);
+                                                        }}
+                                                        onKeyDown={(event) => {
+                                                          if (event.key === 'Enter') event.currentTarget.blur();
+                                                        }}
+                                                      />
                                                       <Button
                                                         type="button"
                                                         variant="outline"
                                                         size="icon"
                                                         className="h-6 w-6"
                                                         disabled={savingMember || !memberId}
-                                                        onClick={() => setMemberBonusPercent(row, member, percent + 1)}
+                                                        onClick={() => setMemberBonusAmount(row, member, amount + 10000)}
+                                                        aria-label={`Увеличить бонус ${teamName(member)} на 10 000 тенге`}
                                                       >
                                                         <Plus className="h-3 w-3" />
+                                                      </Button>
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                                                      <span>{percent.toFixed(1)}% от пула</span>
+                                                      <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 px-1.5 text-[11px]"
+                                                        disabled={savingMember || !memberId}
+                                                        onClick={() => setMemberBonusPercent(row, member, Number(member.bonusPercent || 0))}
+                                                      >
+                                                        По формуле
                                                       </Button>
                                                     </div>
                                                   </div>
@@ -4265,6 +4393,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                   })}
                                 </div>
                               </div>
+                              )}
                                 </div>
                               )}
                             </div>
