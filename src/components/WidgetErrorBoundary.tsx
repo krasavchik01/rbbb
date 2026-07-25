@@ -31,15 +31,38 @@ function isStaleAssetError(err: Error | null) {
 function recoverFromStaleAssetError() {
   if (typeof window === 'undefined') return;
   const reloadKey = 'suiteA:lastAssetRecoveryReload';
-  const lastReload = Number(window.sessionStorage.getItem(reloadKey) || '0');
+  const windowNameKey = '__suite_asset_recovery__:';
+  let lastReload = 0;
+  try {
+    lastReload = Number(window.sessionStorage.getItem(reloadKey) || '0');
+  } catch {
+    // Some embedded/private iOS browsers can deny sessionStorage access.
+  }
+  if (!lastReload) {
+    try {
+      const match = String(window.name || '').match(/__suite_asset_recovery__:(\d+)/);
+      lastReload = match ? Number(match[1]) : 0;
+    } catch {
+      // Recovery can continue without persistent throttling.
+    }
+  }
   const now = Date.now();
   if (now - lastReload < 5 * 60 * 1000) return;
 
-  window.sessionStorage.setItem(reloadKey, String(now));
+  try {
+    window.sessionStorage.setItem(reloadKey, String(now));
+  } catch {
+    // Reload recovery must still work when browser storage is unavailable.
+  }
+  try {
+    const cleanName = String(window.name || '').replace(/\|?__suite_asset_recovery__:\d+/g, '');
+    window.name = `${cleanName}${cleanName ? '|' : ''}${windowNameKey}${now}`;
+  } catch {
+    // window.name can also be restricted by an embedded browser.
+  }
   // iOS can crash the in-app page when an error boundary changes the current
   // URL while React is unwinding a failed lazy import. A regular reload still
-  // revalidates index.html (it is served with must-revalidate), but keeps the
-  // current route and avoids the fragile __suite_refresh navigation.
+  // revalidates index.html (it is served with must-revalidate) and keeps the route.
   window.location.reload();
 }
 

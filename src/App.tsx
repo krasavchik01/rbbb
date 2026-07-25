@@ -8,8 +8,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AIErrorBoundary } from '@/components/AIErrorBoundary';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 import { ROLE_GROUPS } from '@/lib/roleAccess';
+import Projects from '@/pages/Projects';
 const Index = lazy(() => import('@/pages/Index'));
-const Projects = lazy(() => import('@/pages/Projects'));
 const HR = lazy(() => import('@/pages/HR'));
 const Analytics = lazy(() => import('@/pages/Analytics'));
 const Settings = lazy(() => import('@/pages/Settings'));
@@ -68,6 +68,7 @@ function App() {
       <BrowserRouter>
         <SidebarProvider>
           <Suspense fallback={<div style={{padding:16}}>Загрузка...</div>}>
+            <WidgetErrorBoundary fullPage label="приложение">
             <Routes>
             <Route path="/" element={<IndexRoute />} />
             <Route path="/register" element={<Register />} />
@@ -319,6 +320,7 @@ function App() {
             <Route path="/404" element={<NotFound />} />
             <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
+            </WidgetErrorBoundary>
             <Toaster />
           </Suspense>
         </SidebarProvider>

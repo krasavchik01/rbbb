@@ -2,33 +2,12 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="alternate icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#3b82f6" />
-    <meta name="description" content="SUITE-A - Система управления проектами и персоналом" />
-    <meta name="author" content="Aidos Tazhbenov" />
-    <meta name="copyright" content="© 2026 Aidos Tazhbenov. All rights reserved." />
-    <link rel="manifest" href="/manifest.json" />
-    <title>SUITE-A</title>
-    <!-- Premium Typography: Outfit (body) + Syne (headings) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <!-- PDFMake через CDN для поддержки кириллицы -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/pdfmake.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/vfs_fonts.min.js" defer></script>
-
     <script>
-      // Восстановление после stale frontend bundle: после деплоя старый HTML/route
-      // может попросить уже удалённый JS chunk и получить HTML вместо JavaScript.
-      // Один раз делаем hard refresh, чтобы браузер забрал свежий index.html.
+      // Register stale-bundle recovery before Vite's generated entry script.
+      // A previously opened tab can request a hashed chunk removed by a newer deploy.
       (function () {
         var reloadKey = 'suiteA:lastAssetRecoveryReload';
+        var windowNameKey = '__suite_asset_recovery__:';
         var staleAssetPatterns = [
           'valid javascript mime type',
           'failed to fetch dynamically imported module',
@@ -37,40 +16,94 @@
           'expected a javascript-or-wasm module script',
         ];
         function isStaleAssetError(value) {
-          var message = String(value && (value.message || value.reason?.message || value.error?.message) || value || '').toLowerCase();
+          var message = String(value && (value.message || (value.reason && value.reason.message) || (value.error && value.error.message)) || value || '').toLowerCase();
           return staleAssetPatterns.some(function (pattern) { return message.indexOf(pattern) !== -1; });
         }
-        function recover(value) {
-          if (!isStaleAssetError(value)) return;
-          var lastReload = Number(sessionStorage.getItem(reloadKey) || '0');
-          var now = Date.now();
-          if (now - lastReload < 5 * 60 * 1000) return;
-          sessionStorage.setItem(reloadKey, String(now));
-          var url = new URL(window.location.href);
-          url.searchParams.set('__suite_refresh', String(now));
-          window.location.replace(url.toString());
+        function isFailedAppAsset(value) {
+          var target = value && value.target;
+          var assetUrl = target && (target.src || target.href) || '';
+          return /\/assets\/.*\.(?:js|css)(?:\?|$)/i.test(String(assetUrl));
         }
-        window.addEventListener('error', function (event) { recover(event.error || event.message); }, true);
-        window.addEventListener('unhandledrejection', function (event) { recover(event.reason); }, true);
+        function readLastReload() {
+          try {
+            var stored = Number(sessionStorage.getItem(reloadKey) || '0');
+            if (stored) return stored;
+          } catch (_) {}
+          try {
+            var match = String(window.name || '').match(/__suite_asset_recovery__:(\d+)/);
+            return match ? Number(match[1]) : 0;
+          } catch (_) {
+            return 0;
+          }
+        }
+        function rememberReload(now) {
+          try { sessionStorage.setItem(reloadKey, String(now)); } catch (_) {}
+          try {
+            var cleanName = String(window.name || '').replace(/\|?__suite_asset_recovery__:\d+/g, '');
+            window.name = cleanName + (cleanName ? '|' : '') + windowNameKey + now;
+          } catch (_) {}
+        }
+        function showManualRecovery() {
+          function render() {
+            if (!document.body || document.getElementById('suite-asset-recovery')) return;
+            var overlay = document.createElement('div');
+            overlay.id = 'suite-asset-recovery';
+            overlay.setAttribute('role', 'alert');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#fff;color:#0f172a;font-family:system-ui,sans-serif;display:grid;place-items:center;padding:24px';
+            overlay.innerHTML = '<div style="max-width:560px;text-align:center"><h1 style="font-size:20px">Нужно обновить страницу</h1><p style="color:#64748b">Версия приложения обновилась. Нажмите кнопку, чтобы продолжить.</p><button type="button" onclick="window.location.reload()" style="border:0;border-radius:10px;padding:12px 18px;background:#0284c7;color:white;font-weight:600">Обновить</button></div>';
+            document.body.appendChild(overlay);
+          }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render, { once: true });
+          else render();
+        }
+        function recover(value, force) {
+          if (!force && !isStaleAssetError(value) && !isFailedAppAsset(value)) return;
+          var now = Date.now();
+          if (now - readLastReload() < 5 * 60 * 1000) {
+            showManualRecovery();
+            return;
+          }
+          rememberReload(now);
+          // Keep the route unchanged. Rewriting the URL while WebKit rejects a
+          // module can itself crash embedded iOS browsers.
+          window.location.reload();
+        }
+        window.addEventListener('vite:preloadError', function (event) {
+          recover(event.payload || event, true);
+          event.preventDefault();
+        });
+        window.addEventListener('error', function (event) { recover(event.error || event.message || event, false); }, true);
+        window.addEventListener('unhandledrejection', function (event) { recover(event.reason, false); }, true);
       })();
     </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="SUITE-A — система управления проектами и персоналом" />
+    <meta name="author" content="Aidos Tazhbenov" />
+    <meta name="copyright" content="© 2026 Aidos Tazhbenov. All rights reserved." />
+    <link rel="manifest" href="/manifest.json" />
+    <title>SUITE-A</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/pdfmake.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.20/vfs_fonts.min.js" defer></script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Минимальное отключение Service Worker
+      // Remove obsolete service workers so an old shell cannot pin a retired bundle.
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          regs.forEach(reg => reg.unregister().catch(() => {}));
-        });
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister().catch(function () {});
+          });
+        }).catch(function () {});
       }
-
-      // Минимальное подавление только критичных ошибок
-      window.addEventListener('error', (e) => {
-        const msg = (e.error?.message || e.message || '').toLowerCase();
-        if (msg.includes('insecure') && (msg.includes('history') || msg.includes('location'))) {
-          e.preventDefault();
-          return false;
-        }
-      }, true);
     </script>
   </body>
 </html>

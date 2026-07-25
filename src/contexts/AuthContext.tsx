@@ -33,11 +33,62 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const USER_STORAGE_KEY = 'user';
 const ORIGINAL_USER_STORAGE_KEY = 'rb_original_user';
+const ACCESS_LOOKUP_TIMEOUT_MS = 10_000;
+
+function safeStorageGet(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`Browser storage is unavailable while reading ${key}:`, error);
+    return null;
+  }
+}
+
+function safeStorageSet(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    // The in-memory session remains valid even when private/embedded browsers
+    // deny persistence or the storage quota is full.
+    console.warn(`Browser storage is unavailable while writing ${key}:`, error);
+  }
+}
+
+function safeStorageRemove(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    console.warn(`Browser storage is unavailable while removing ${key}:`, error);
+  }
+}
+
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error(`${label} timed out after ${timeoutMs} ms`)),
+      timeoutMs,
+    );
+    Promise.resolve(promise).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 // Обогащает пользователя данными о доступе к компаниям из Supabase
 async function enrichUserWithAccess(user: User): Promise<User> {
   try {
-    const allowedIds = await getUserAllowedCompanyIds(user.id);
+    const allowedIds = await withTimeout(
+      getUserAllowedCompanyIds(user.id),
+      ACCESS_LOOKUP_TIMEOUT_MS,
+      'Company access lookup',
+    );
     return { ...user, allowedCompanyIds: allowedIds };
   } catch (error) {
     console.error('Unable to enrich user company access:', error);
@@ -59,17 +110,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     // Проверка сохраненной сессии
-    const savedOriginalUser = localStorage.getItem(ORIGINAL_USER_STORAGE_KEY);
+    const savedOriginalUser = safeStorageGet(ORIGINAL_USER_STORAGE_KEY);
     if (savedOriginalUser) {
       try {
         setOriginalUser(normalizeAuthUser(JSON.parse(savedOriginalUser)));
       } catch (error) {
         console.error('Error parsing original user:', error);
-        localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
+        safeStorageRemove(ORIGINAL_USER_STORAGE_KEY);
       }
     }
 
-    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+    const savedUser = safeStorageGet(USER_STORAGE_KEY);
     if (savedUser) {
       try {
         const parsed = normalizeAuthUser(JSON.parse(savedUser));
@@ -83,7 +134,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .finally(() => setIsLoading(false));
       } catch (error) {
         console.error('Error parsing saved user:', error);
-        localStorage.removeItem(USER_STORAGE_KEY);
+        safeStorageRemove(USER_STORAGE_KEY);
         setIsLoading(false);
       }
     } else {
@@ -159,8 +210,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const enriched = await enrichUserWithAccess(user);
       setUser(enriched);
       setOriginalUser(null);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
+      safeStorageSet(USER_STORAGE_KEY, JSON.stringify(user));
+      safeStorageRemove(ORIGINAL_USER_STORAGE_KEY);
       return true;
     } catch (error) {
       console.error('❌ Database error:', error);
@@ -172,9 +223,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     setOriginalUser(null);
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
-    void supabase.auth.signOut();
+    safeStorageRemove(USER_STORAGE_KEY);
+    safeStorageRemove(ORIGINAL_USER_STORAGE_KEY);
+    void supabase.auth.signOut().catch((error) => {
+      console.warn('Unable to close remote auth session:', error);
+    });
   };
 
   const updateUser = async (updates: Partial<User>) => {
@@ -187,7 +240,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(updated);
     // Сохраняем базовые поля (без allowedCompanyIds — они берутся из Supabase)
     const { allowedCompanyIds: _, ...baseUser } = updated;
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(baseUser));
+    safeStorageSet(USER_STORAGE_KEY, JSON.stringify(baseUser));
   };
 
   const startImpersonation = async (targetUser: User): Promise<boolean> => {
@@ -204,8 +257,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setOriginalUser(baseAdmin);
     setUser(enrichedTarget);
-    localStorage.setItem(ORIGINAL_USER_STORAGE_KEY, JSON.stringify(adminBase));
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(targetBase));
+    safeStorageSet(ORIGINAL_USER_STORAGE_KEY, JSON.stringify(adminBase));
+    safeStorageSet(USER_STORAGE_KEY, JSON.stringify(targetBase));
     return true;
   };
 
@@ -215,8 +268,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { allowedCompanyIds: _, ...baseUser } = restored;
     setUser(restored);
     setOriginalUser(null);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(baseUser));
-    localStorage.removeItem(ORIGINAL_USER_STORAGE_KEY);
+    safeStorageSet(USER_STORAGE_KEY, JSON.stringify(baseUser));
+    safeStorageRemove(ORIGINAL_USER_STORAGE_KEY);
   };
 
   const checkPermission = (permission: string): boolean => {

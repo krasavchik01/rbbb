@@ -136,6 +136,7 @@ type SavedCommandCenterView = {
   columnFilters: ColumnFilterState;
 };
 const COMMAND_CENTER_VIEW_STORAGE_KEY = 'rbbb:project-command-center:saved-views:v1';
+const PROJECT_TABLE_PAGE_SIZES = [25, 50] as const;
 
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
@@ -405,9 +406,8 @@ function hoursPairKey(employeeId: string, projectId: string): string {
   return `${employeeId}__${projectId}`;
 }
 
-function financeFor(project: any) {
+function financeFor(project: any, team: CanonicalTeamMember[] = projectTeam(project)) {
   const normalizedFinances = readProjectFinances(project);
-  const team = coverageTeam(projectTeam(project), projectPeriods(project));
   try {
     return calculateProjectFinances({
       ...project,
@@ -676,7 +676,7 @@ function legacyExportProjectRows(row: any, index: number): LegacyExportRow[] {
 
 function legacyPartnerSheetName(name: string): string {
   const cleaned = String(name || 'Без партнера')
-    .replace(/[\\/?*\[\]:]/g, ' ')
+    .replace(/[\\/?*[\]:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return (cleaned || 'Без партнера').slice(0, 31);
@@ -981,6 +981,7 @@ function numberColumnMatches(amount: number, filter: string): boolean {
 }
 
 function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean, isExecutive: boolean): boolean {
+  if (!hasActiveColumnFilters(filters)) return true;
   const notes = readProjectNotes(row.project);
   const commandModel = buildProjectCommandCenterModel(row.project);
   const team = row.coverageTeam || row.team || [];
@@ -1314,6 +1315,53 @@ function MetricBox({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ProjectTablePagination({
+  page,
+  pageCount,
+  pageSize,
+  start,
+  end,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  start: number;
+  end: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  if (total === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/10 px-3 py-2 text-xs">
+      <div className="text-muted-foreground">
+        Показаны <span className="font-medium text-foreground tabular-nums">{start + 1}–{end}</span> из <span className="font-medium text-foreground tabular-nums">{total}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))}>
+          <SelectTrigger className="h-8 w-[116px]" aria-label="Количество проектов на странице">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PROJECT_TABLE_PAGE_SIZES.map((size) => <SelectItem key={size} value={String(size)}>{size} строк</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="outline" size="sm" className="h-8" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          Назад
+        </Button>
+        <span className="min-w-[72px] text-center tabular-nums">{page} из {pageCount}</span>
+        <Button type="button" variant="outline" size="sm" className="h-8" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>
+          Далее
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function EmployeeSearchAdd({
   employees,
   disabled,
@@ -1440,6 +1488,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('periodType') as AuditPeriodTypeFilter)) || 'all');
   const [sortBy, setSortBy] = useState<ProjectSort>(() => (typeof window === 'undefined' ? 'deadline_asc' : (new URLSearchParams(window.location.search).get('sort') as ProjectSort)) || 'deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState<number>(25);
   const [savedViews, setSavedViews] = useState<SavedCommandCenterView[]>([]);
   const [selectedSavedViewId, setSelectedSavedViewId] = useState('');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
@@ -1650,7 +1700,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const status = projectStatus(project);
       const team = projectTeam(project);
       const amount = projectAmount(project);
-      const finances = financeFor(project);
       const hours = hoursTotals.get(project.id) || { approved: 0, pending: 0 };
       const contract = projectContract(project);
       const contractFiles = projectContractFiles(project);
@@ -1659,6 +1708,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const deadline = rawProjectDeadline(project);
       const periods = keepExplicitPeriodTeams(projectPeriods(project), project.id);
       const realTeam = coverageTeam(team, periods);
+      const finances = financeFor(project, realTeam);
       const readiness = projectReadiness({
         status,
         team: realTeam,
@@ -1995,6 +2045,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const exactRange = makeDateRange(dateFromFilter, dateToFilter);
     const filtered = rows.filter((row) => {
       const periodText = row.periods.map(periodLabel).join(' ');
       const coverageTeamText = (row.coverageTeam || row.team || []).map(teamName).join(' ');
@@ -2016,7 +2067,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       }
       if (!rowMatchesDateFilter(row, yearFilter)) return false;
       if (!rowMatchesBusinessSeason(row, businessSeasonFilter)) return false;
-      const exactRange = makeDateRange(dateFromFilter, dateToFilter);
       if (exactRange && !rowDateRanges(row).some((range) => rangesIntersect(range, exactRange))) return false;
       if (viewFilter === 'working' && row.readiness.level !== 'ready') return false;
       if (viewFilter === 'attention' && row.readiness.level !== 'attention') return false;
@@ -2043,7 +2093,24 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, isExecutive]);
+
+  const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize));
+  const safeTablePage = Math.min(tablePage, tablePageCount);
+  const tablePageStart = (safeTablePage - 1) * tablePageSize;
+  const tablePageEnd = Math.min(tablePageStart + tablePageSize, filteredRows.length);
+  const visibleRows = useMemo(
+    () => filteredRows.slice(tablePageStart, tablePageEnd),
+    [filteredRows, tablePageStart, tablePageEnd],
+  );
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [search, companyFilter, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, tableDetailLevel]);
+
+  useEffect(() => {
+    setTablePage((current) => Math.min(current, tablePageCount));
+  }, [tablePageCount]);
 
   const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 2 : 0);
   const setColumnFilter = (key: ColumnFilterKey, value: string) => {
@@ -3598,6 +3665,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </Button>
             </div>
           )}
+          <ProjectTablePagination
+            page={safeTablePage}
+            pageCount={tablePageCount}
+            pageSize={tablePageSize}
+            start={tablePageStart}
+            end={tablePageEnd}
+            total={filteredRows.length}
+            onPageChange={setTablePage}
+            onPageSizeChange={(value) => {
+              setTablePageSize(value);
+              setTablePage(1);
+            }}
+          />
           <table className={`${isExecutive ? 'min-w-[1460px]' : 'min-w-[1040px]'} w-full caption-bottom text-sm`} aria-label="Общая CEO-таблица проектов">
             <TableHeader>
               <TableRow className="bg-muted/40">
@@ -3658,7 +3738,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </TableRow>
               )}
               {!projectsLoading &&
-                filteredRows.map((row) => {
+                visibleRows.map((row) => {
                   const expanded = tableDetailLevel === 'detailed' || !!expandedRows[row.id];
                   const totalBonusAmount = Number(row.finances.totalBonusAmount || row.finances.totalPaidBonuses) || 0;
                   const paidBonuses = Number(row.finances.totalPaidBonuses) || 0;
@@ -4405,6 +4485,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 })}
             </TableBody>
           </table>
+          <ProjectTablePagination
+            page={safeTablePage}
+            pageCount={tablePageCount}
+            pageSize={tablePageSize}
+            start={tablePageStart}
+            end={tablePageEnd}
+            total={filteredRows.length}
+            onPageChange={(page) => {
+              setTablePage(page);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onPageSizeChange={(value) => {
+              setTablePageSize(value);
+              setTablePage(1);
+            }}
+          />
         </Card>
 
         <AlertDialog open={Boolean(gphEditorRow)} onOpenChange={(open) => {

@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
-import { checkDeadlinesAndNotify, requestNotificationPermission } from '@/lib/notifications';
+import { checkDeadlinesAndNotify } from '@/lib/notifications';
 import { useToast } from '@/hooks/use-toast';
 
 export function useDeadlineNotifications() {
@@ -13,13 +13,6 @@ export function useDeadlineNotifications() {
   const { projects, loading } = useProjects();
   const { toast } = useToast();
   const hasCheckedRef = useRef(false);
-
-  useEffect(() => {
-    // Запрашиваем разрешение на браузерные уведомления при первом входе
-    if (user) {
-      requestNotificationPermission();
-    }
-  }, [user]);
 
   useEffect(() => {
     // Проверяем дедлайны только один раз при загрузке проектов
@@ -60,7 +53,11 @@ export function useDeadlineNotifications() {
 
     // Сбрасываем флаг последней проверки для принудительной проверки
     const lastCheckKey = `deadline_check_${user.id}`;
-    localStorage.removeItem(lastCheckKey);
+    try {
+      localStorage.removeItem(lastCheckKey);
+    } catch {
+      // Private/embedded browsers may deny storage; the manual check still works.
+    }
 
     return checkDeadlinesAndNotify(projects, user.id, user.role);
   };
