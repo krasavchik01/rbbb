@@ -47,13 +47,16 @@ import {
   projectNotes as readProjectNotes,
   projectStartDate as readProjectStartDate,
 } from '@/lib/contractData';
+import { loadTimesheetHoursSnapshot, type ProjectHoursTotals } from '@/lib/timesheets';
 import {
-  allProjectsHoursTotals,
-  approvedHoursIndex,
-  pendingHoursIndex,
-  type ProjectHoursTotals,
-} from '@/lib/timesheets';
+  bonusPaymentKey,
+  loadBonusPayments,
+  summarizeBonusPaymentRegistry,
+  type BonusPaymentLedgerState,
+  type BonusPaymentRow,
+} from '@/lib/bonusPayments';
 import { calculateProjectFinances } from '@/types/project-v3';
+import { isUserRole, ROLE_LABELS } from '@/types/roles';
 import {
   buildProjectStatusUpdate,
   MANAGED_PROJECT_STATUS_LABELS,
@@ -67,6 +70,10 @@ import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPerm
 import { ProjectDataIntegrityDrawer } from '@/components/projects/ProjectDataIntegrityDrawer';
 import { ProjectPortfolioPulse } from '@/components/projects/ProjectPortfolioPulse';
 import { ProjectWorkloadChart, type WorkloadItem } from '@/components/projects/ProjectWorkloadChart';
+import {
+  ExecutivePortfolioOverview,
+  type ExecutivePortfolioSummary,
+} from '@/components/projects/ExecutivePortfolioOverview';
 import { CommandCenterColumnFilter } from '@/components/projects/CommandCenterColumnFilter';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import type { CanonicalTeamMember } from '@/types/project-domain';
@@ -83,7 +90,9 @@ type ProjectViewFilter =
   | 'no_leader'
   | 'no_contract'
   | 'no_amount'
-  | 'waiting_hours';
+  | 'waiting_hours'
+  | 'ready_bonus'
+  | 'bonus_attention';
 type ProjectDeadlineFilter = 'all' | 'overdue' | 'next_30' | 'no_deadline';
 type ProjectPeriodFilter = 'all' | 'has_periods' | 'no_periods';
 type AuditPeriodTypeFilter = 'all' | AuditPeriod['type'];
@@ -143,6 +152,9 @@ const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 const TEAM_COLUMNS = [
   { key: 'partner', label: 'Партнер', percent: '29%' },
   { key: 'project_leader', label: 'Руководитель', percent: '24%' },
+  { key: 'manager_1', label: 'Менеджер 1', percent: '10%' },
+  { key: 'manager_2', label: 'Менеджер 2', percent: '8%' },
+  { key: 'manager_3', label: 'Менеджер 3', percent: '6%' },
   { key: 'supervisor_3', label: 'Супервайзер 3', percent: '15%' },
   { key: 'supervisor_2', label: 'Супервайзер 2', percent: '10%' },
   { key: 'supervisor_1', label: 'Супервайзер 1', percent: '6%' },
@@ -336,6 +348,26 @@ function isLeaderRole(role: string): boolean {
 function teamMemberId(member: any): string {
   const employee = member?.employee || member?.profile || member?.user || {};
   return member?.userId || member?.user_id || member?.employeeId || member?.employee_id || employee?.id || member?.id || '';
+}
+
+function bonusMemberIdentity(member: any): string {
+  return teamMemberId(member) || normalizeProjectGroupText(teamName(member));
+}
+
+function projectRoleLabel(role: string): string {
+  const fixed = TEAM_COLUMNS.find((column) => column.key === role)?.label;
+  if (fixed) return fixed;
+  if (isUserRole(role)) return ROLE_LABELS[role];
+  return role.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase()) || 'Другая роль';
+}
+
+function bonusRoleColumnsForTeam(team: any[]): Array<{ key: string; label: string; percent: string }> {
+  const known = new Set<string>(TEAM_COLUMNS.map((column) => column.key));
+  const extraRoles = Array.from(new Set(team.map(teamRole).filter((role) => !known.has(role))));
+  return [
+    ...TEAM_COLUMNS.map((column) => ({ ...column })),
+    ...extraRoles.map((role) => ({ key: role, label: projectRoleLabel(role), percent: 'индивидуально' })),
+  ];
 }
 
 function employeeName(employee: any): string {
@@ -534,6 +566,9 @@ function buildProjectExportRows(
 const LEGACY_ROLE_EXPORT_COLUMNS = [
   { key: 'partner', name: 'Партнер', amount: 'Сумма партнера' },
   { key: 'project_leader', name: 'Руководитель проекта', amount: 'Сумма руководителя' },
+  { key: 'manager_1', name: 'Менеджер 1', amount: 'Сумма менеджера 1' },
+  { key: 'manager_2', name: 'Менеджер 2', amount: 'Сумма менеджера 2' },
+  { key: 'manager_3', name: 'Менеджер 3', amount: 'Сумма менеджера 3' },
   { key: 'supervisor_3', name: 'Супервайзер 3', amount: 'Сумма СВ3' },
   { key: 'supervisor_2', name: 'Супервайзер 2', amount: 'Сумма СВ2' },
   { key: 'supervisor_1', name: 'Супервайзер 1', amount: 'Сумма СВ1' },
@@ -542,6 +577,7 @@ const LEGACY_ROLE_EXPORT_COLUMNS = [
   { key: 'assistant_3', name: 'Ассистент 3', amount: 'Сумма асс. 3' },
   { key: 'assistant_2', name: 'Ассистент 2', amount: 'Сумма асс. 2' },
   { key: 'assistant_1', name: 'Ассистент 1', amount: 'Сумма асс. 1' },
+  { key: '__other__', name: 'Другие участники', amount: 'Сумма других участников' },
 ] as const;
 
 const LEGACY_CEO_EXPORT_HEADERS = [
@@ -561,8 +597,10 @@ const LEGACY_CEO_EXPORT_HEADERS = [
   'ГПХ / субподряд',
   'Сумма ГПХ',
   'Предрасход',
-  'Итого бонусы',
-  'Разница план/факт',
+  'Распределено команде',
+  'Остаток бонусного пула',
+  'Утверждено к выплате',
+  'Фактически выплачено',
   'Итого расходы',
   'База после расходов',
   'Грязный доход',
@@ -576,20 +614,36 @@ function legacyMoney(value: unknown): number {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function legacyMoneyOrFallback(value: unknown, fallback: number): number {
+  if (value === undefined || value === null || value === '') return fallback;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : fallback;
+}
+
 function legacyRowTeam(row: any): any[] {
   return row.coverageTeam || row.team || [];
 }
 
 function legacyRoleMembers(row: any, role: string): any[] {
+  if (role === '__other__') {
+    const knownRoles = new Set(
+      LEGACY_ROLE_EXPORT_COLUMNS
+        .filter((column) => column.key !== '__other__')
+        .map((column) => column.key as string),
+    );
+    return legacyRowTeam(row).filter((member) => !knownRoles.has(teamRole(member)));
+  }
   return legacyRowTeam(row).filter((member) => teamRole(member) === role);
 }
 
-function legacyRoleMemberBonus(member: any, row: any): number {
-  return memberBonusAmount(member, row.finances || {});
-}
-
-function legacyRoleBonus(row: any, role: string): number {
-  return legacyRoleMembers(row, role).reduce((sum, member) => sum + memberBonusAmount(member, row.finances || {}), 0);
+function legacyRoleMemberBonus(member: any, row: any, role: string): number | '' {
+  const identity = teamMemberId(member) || normalizeProjectGroupText(teamName(member));
+  const firstRole = LEGACY_ROLE_EXPORT_COLUMNS.find((column) => (
+    legacyRoleMembers(row, column.key).some((candidate) => (
+      (teamMemberId(candidate) || normalizeProjectGroupText(teamName(candidate))) === identity
+    ))
+  ))?.key;
+  return firstRole === role ? memberBonusAmount(member, row.finances || {}) : '';
 }
 
 function legacyContractors(row: any): any[] {
@@ -622,16 +676,24 @@ function legacyServiceRange(row: any): string {
   return `${formatDate(start)} - ${formatDate(end)}`;
 }
 
-function legacyExportProjectRows(row: any, index: number): LegacyExportRow[] {
+function legacyExportProjectRows(
+  row: any,
+  index: number,
+  paymentByKey?: ReadonlyMap<string, BonusPaymentLedgerState>,
+): LegacyExportRow[] {
   const model = buildProjectCommandCenterModel(row.project || {});
   const gphAmount = legacyContractorAmount(row);
   const preExpense = legacyMoney(row.finances?.preExpenseAmount);
   const contractAmount = model.contract.amountWithoutVAT ?? legacyMoney(row.amount);
   const bonusPool = legacyMoney(row.finances?.totalBonusAmount);
-  const plannedBonuses = LEGACY_ROLE_EXPORT_COLUMNS.reduce((sum, column) => sum + legacyRoleBonus(row, column.key), 0);
-  const paidBonuses = legacyMoney(row.finances?.totalPaidBonuses);
-  const totalCosts = gphAmount + preExpense;
-  const baseAfterCosts = Math.max(0, legacyMoney(contractAmount) - totalCosts);
+  const allocatedBonuses = legacyMoney(row.finances?.totalPaidBonuses);
+  const distributedBonuses = allocatedBonuses;
+  const totalCosts = legacyMoneyOrFallback(row.finances?.totalCosts, gphAmount + preExpense + distributedBonuses);
+  const bonusBaseFallback = Math.max(0, legacyMoney(contractAmount) - gphAmount - preExpense);
+  const grossProfitFallback = legacyMoney(contractAmount) - totalCosts;
+  const paymentLedger = paymentByKey
+    ? projectPaymentLedger(row.projectIds?.length ? row.projectIds : [row.id], paymentByKey)
+    : null;
   const roleMembersByColumn = LEGACY_ROLE_EXPORT_COLUMNS.map((column) => ({
     ...column,
     members: legacyRoleMembers(row, column.key),
@@ -657,17 +719,19 @@ function legacyExportProjectRows(row: any, index: number): LegacyExportRow[] {
       'ГПХ / субподряд': isFirstLine ? contractorNames : '',
       'Сумма ГПХ': isFirstLine ? gphAmount : '',
       'Предрасход': isFirstLine ? preExpense : '',
-      'Итого бонусы': isFirstLine ? plannedBonuses || bonusPool : '',
-      'Разница план/факт': isFirstLine ? (plannedBonuses || bonusPool) - paidBonuses : '',
+      'Распределено команде': isFirstLine ? distributedBonuses : '',
+      'Остаток бонусного пула': isFirstLine ? bonusPool - distributedBonuses : '',
+      'Утверждено к выплате': isFirstLine && paymentLedger ? paymentLedger.approvedUnpaidAmount : '',
+      'Фактически выплачено': isFirstLine && paymentLedger ? paymentLedger.paidAmount : '',
       'Итого расходы': isFirstLine ? totalCosts : '',
-      'База после расходов': isFirstLine ? legacyMoney(row.finances?.bonusBase) || baseAfterCosts : '',
-      'Грязный доход': isFirstLine ? legacyMoney(row.finances?.grossProfit) || baseAfterCosts : '',
+      'База после расходов': isFirstLine ? legacyMoneyOrFallback(row.finances?.bonusBase, bonusBaseFallback) : '',
+      'Грязный доход': isFirstLine ? legacyMoneyOrFallback(row.finances?.grossProfit, grossProfitFallback) : '',
     } as LegacyExportRow;
 
     for (const column of roleMembersByColumn) {
       const member = column.members[lineIndex];
       result[column.name as LegacyExportColumn] = member ? teamName(member) : '';
-      result[column.amount as LegacyExportColumn] = member ? legacyRoleMemberBonus(member, row) : '';
+      result[column.amount as LegacyExportColumn] = member ? legacyRoleMemberBonus(member, row, column.key) : '';
     }
 
     return result;
@@ -706,8 +770,10 @@ function legacyTotalsRow(rows: LegacyExportRow[]): (string | number)[] {
     ...LEGACY_ROLE_EXPORT_COLUMNS.map((column) => column.amount as LegacyExportColumn),
     'Сумма ГПХ',
     'Предрасход',
-    'Итого бонусы',
-    'Разница план/факт',
+    'Распределено команде',
+    'Остаток бонусного пула',
+    'Утверждено к выплате',
+    'Фактически выплачено',
     'Итого расходы',
     'База после расходов',
     'Грязный доход',
@@ -719,8 +785,14 @@ function legacyTotalsRow(rows: LegacyExportRow[]): (string | number)[] {
   });
 }
 
-function appendLegacyCeoSheet(XLSX: any, workbook: any, sheetName: string, sourceRows: any[]) {
-  const rows = sourceRows.flatMap((row, index) => legacyExportProjectRows(row, index));
+function appendLegacyCeoSheet(
+  XLSX: any,
+  workbook: any,
+  sheetName: string,
+  sourceRows: any[],
+  paymentByKey?: ReadonlyMap<string, BonusPaymentLedgerState>,
+) {
+  const rows = sourceRows.flatMap((row, index) => legacyExportProjectRows(row, index, paymentByKey));
   const aoa: (string | number)[][] = [
     [`CEO ведомость · ${sheetName}`],
     [`Проект → сумма → бонусный пул → роли → ГПХ/предрасход → доход`],
@@ -741,9 +813,13 @@ function appendLegacyCeoSheet(XLSX: any, workbook: any, sheetName: string, sourc
   XLSX.utils.book_append_sheet(workbook, worksheet, legacyUniqueSheetName(workbook, sheetName));
 }
 
-function buildLegacyCeoWorkbook(XLSX: any, sourceRows: any[]) {
+function buildLegacyCeoWorkbook(
+  XLSX: any,
+  sourceRows: any[],
+  paymentByKey?: ReadonlyMap<string, BonusPaymentLedgerState>,
+) {
   const workbook = XLSX.utils.book_new();
-  appendLegacyCeoSheet(XLSX, workbook, 'ИТОГО', sourceRows);
+  appendLegacyCeoSheet(XLSX, workbook, 'ИТОГО', sourceRows, paymentByKey);
   const byPartner = new Map<string, any[]>();
   for (const row of sourceRows) {
     for (const partner of legacyPartnerKeys(row)) {
@@ -753,7 +829,7 @@ function buildLegacyCeoWorkbook(XLSX: any, sourceRows: any[]) {
   }
   [...byPartner.entries()]
     .sort(([left], [right]) => left.localeCompare(right, 'ru'))
-    .forEach(([partner, rows]) => appendLegacyCeoSheet(XLSX, workbook, partner, rows));
+    .forEach(([partner, rows]) => appendLegacyCeoSheet(XLSX, workbook, partner, rows, paymentByKey));
   return workbook;
 }
 
@@ -944,6 +1020,74 @@ function rowMatchesBusinessSeason(row: any, value: BusinessSeasonFilter): boolea
 
 function rowMatchesAuditPeriodType(row: any, value: AuditPeriodTypeFilter): boolean {
   return value === 'all' || (row.periods || []).some((period: AuditPeriod) => period.type === value);
+}
+
+function plannedBonusPool(row: any): number {
+  const value = Number(row?.finances?.totalBonusAmount);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function allocatedDraftBonuses(row: any): number {
+  const value = Number(row?.finances?.totalPaidBonuses);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function rowNeedsBonusReview(row: any, hoursVerified = true): boolean {
+  if (row?.status !== 'pending_payment_approval') return false;
+  if (!hoursVerified) return true;
+  if ((row?.projectIds || [row?.id]).filter(Boolean).length > 1) return true;
+  const pool = plannedBonusPool(row);
+  const allocated = allocatedDraftBonuses(row);
+  const team = row?.coverageTeam || row?.team || [];
+  return team.length === 0
+    || Number(row?.hours?.pending || 0) > 0
+    || pool <= 0
+    || allocated <= 0
+    || Math.abs(pool - allocated) > 1;
+}
+
+function memberPaymentLedger(
+  projectIds: readonly string[],
+  employeeId: string,
+  byKey: ReadonlyMap<string, BonusPaymentLedgerState>,
+): BonusPaymentLedgerState {
+  return projectIds.reduce<BonusPaymentLedgerState>((acc, projectId) => {
+    const value = byKey.get(bonusPaymentKey(projectId, employeeId));
+    if (!value) return acc;
+    acc.approvedUnpaidAmount += value.approvedUnpaidAmount;
+    acc.paidAmount += value.paidAmount;
+    acc.pendingAmount += value.pendingAmount;
+    acc.rowCount += value.rowCount;
+    if (value.latestPaymentDate && (!acc.latestPaymentDate || value.latestPaymentDate > acc.latestPaymentDate)) {
+      acc.latestPaymentDate = value.latestPaymentDate;
+    }
+    return acc;
+  }, { approvedUnpaidAmount: 0, paidAmount: 0, pendingAmount: 0, rowCount: 0, latestPaymentDate: null });
+}
+
+function projectPaymentLedger(
+  projectIds: readonly string[],
+  byKey: ReadonlyMap<string, BonusPaymentLedgerState>,
+): BonusPaymentLedgerState {
+  const prefixes = projectIds.map((projectId) => `${projectId}::`);
+  const total: BonusPaymentLedgerState = {
+    approvedUnpaidAmount: 0,
+    paidAmount: 0,
+    pendingAmount: 0,
+    rowCount: 0,
+    latestPaymentDate: null,
+  };
+  for (const [key, value] of byKey.entries()) {
+    if (!prefixes.some((prefix) => key.startsWith(prefix))) continue;
+    total.approvedUnpaidAmount += value.approvedUnpaidAmount;
+    total.paidAmount += value.paidAmount;
+    total.pendingAmount += value.pendingAmount;
+    total.rowCount += value.rowCount;
+    if (value.latestPaymentDate && (!total.latestPaymentDate || value.latestPaymentDate > total.latestPaymentDate)) {
+      total.latestPaymentDate = value.latestPaymentDate;
+    }
+  }
+  return total;
 }
 
 const EMPTY_COLUMN_FILTERS = COMMAND_CENTER_COLUMN_FILTER_KEYS.reduce((acc, key) => {
@@ -1269,6 +1413,20 @@ function projectReadiness(row: {
   return { level: 'attention' as const, label: 'Требует внимания', issues };
 }
 
+function readinessWithHoursState(
+  readiness: ReturnType<typeof projectReadiness>,
+  status: string,
+  hoursState: { loading: boolean; complete: boolean; error: string | null },
+): ReturnType<typeof projectReadiness> {
+  if (status === 'completed' || status === 'closed' || hoursState.complete) return readiness;
+  const issue = hoursState.loading ? 'часы загружаются' : 'часы не проверены';
+  return {
+    level: 'attention',
+    label: hoursState.loading ? 'Загрузка часов' : 'Проверить часы',
+    issues: Array.from(new Set([...readiness.issues, issue])),
+  };
+}
+
 function issueBadgeClass(level: 'ready' | 'attention' | 'closed') {
   if (level === 'ready') return 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50';
   if (level === 'closed') return 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100';
@@ -1292,7 +1450,7 @@ function teamMemberForRole(team: any[], predicate: (role: string) => boolean): a
 
 function displayMoney(value: unknown): string {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? `${money.format(parsed)} ₸` : '—';
+  return Number.isFinite(parsed) ? `${money.format(parsed)} ₸` : '—';
 }
 
 function SummaryItem({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warn' }) {
@@ -1467,12 +1625,19 @@ function EmployeeSearchAdd({
 
 export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommandScope }) {
   const { user } = useAuth();
-  const { projects = [], loading: projectsLoading, updateProject, deleteProject, deleteProjects } = useProjects();
+  const { projects = [], loading: projectsLoading, error: projectsError, updateProject, deleteProject, deleteProjects, refresh: refreshProjects } = useProjects();
   const { employees = [], createEmployee } = useEmployees();
   const [appSettings] = useAppSettings();
   const { toast } = useToast();
   const [hoursTotals, setHoursTotals] = useState<Map<string, ProjectHoursTotals>>(new Map());
   const [memberHours, setMemberHours] = useState<Map<string, ProjectHoursTotals>>(new Map());
+  const [hoursLoading, setHoursLoading] = useState(true);
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  const [hoursRowCount, setHoursRowCount] = useState(0);
+  const [hoursComplete, setHoursComplete] = useState(false);
+  const [paymentRows, setPaymentRows] = useState<BonusPaymentRow[]>([]);
+  const [paymentRegistryLoading, setPaymentRegistryLoading] = useState(false);
+  const [paymentRegistryError, setPaymentRegistryError] = useState<string | null>(null);
   const urlSyncReadyRef = useRef(false);
   const [search, setSearch] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('q') || '');
   const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(() => readInitialColumnFilters());
@@ -1648,6 +1813,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     () => assignableEmployees.filter((employee) => String(employee?.role || '').toLowerCase() === 'partner'),
     [assignableEmployees],
   );
+  const projectHoursScopeKey = useMemo(
+    () => Array.from(new Set((projects as any[]).map((project) => String(project.id)).filter(Boolean))).sort().join('|'),
+    [projects],
+  );
 
   useEffect(() => {
     try {
@@ -1669,31 +1838,93 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   }, [search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
 
   useEffect(() => {
+    if (projectsLoading && projects.length === 0) return;
+    if (projectsError) {
+      setHoursTotals(new Map());
+      setMemberHours(new Map());
+      setHoursRowCount(0);
+      setHoursComplete(false);
+      setHoursLoading(false);
+      setHoursError('Проекты не загрузились, поэтому часы нельзя сверить');
+      return;
+    }
     let active = true;
-    Promise.all([allProjectsHoursTotals(), approvedHoursIndex(), pendingHoursIndex()])
-      .then(([totals, approvedByMember, pendingByMember]) => {
+    const controller = new AbortController();
+    const projectIds = projectHoursScopeKey ? projectHoursScopeKey.split('|') : [];
+    setHoursLoading(true);
+    setHoursError(null);
+    loadTimesheetHoursSnapshot(projectIds, controller.signal)
+      .then((snapshot) => {
         if (!active) return;
         const nextMemberHours = new Map<string, ProjectHoursTotals>();
-        for (const [key, approved] of approvedByMember.entries()) {
+        for (const [key, approved] of snapshot.approvedByEmployeeProject.entries()) {
           const current = nextMemberHours.get(key) || { approved: 0, pending: 0 };
           current.approved = approved;
           nextMemberHours.set(key, current);
         }
-        for (const [key, pending] of pendingByMember.entries()) {
+        for (const [key, pending] of snapshot.pendingByEmployeeProject.entries()) {
           const current = nextMemberHours.get(key) || { approved: 0, pending: 0 };
           current.pending = pending;
           nextMemberHours.set(key, current);
         }
-        setHoursTotals(totals);
+        setHoursTotals(snapshot.byProject);
         setMemberHours(nextMemberHours);
+        setHoursRowCount(snapshot.rowCount);
+        setHoursComplete(snapshot.complete);
+        setHoursError(snapshot.error);
       })
       .catch((error) => {
         console.error('[ProjectCommandCenter] failed to load hours totals', error);
+        if (!active) return;
+        setHoursComplete(false);
+        setHoursError(error instanceof Error ? error.message : 'Не удалось загрузить таймшиты');
+      })
+      .finally(() => {
+        if (active) setHoursLoading(false);
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, []);
+  }, [projectHoursScopeKey, projectsLoading, projectsError]);
+
+  useEffect(() => {
+    if (!isExecutive) {
+      setPaymentRows([]);
+      setPaymentRegistryLoading(false);
+      setPaymentRegistryError(null);
+      return;
+    }
+    if (projectsLoading && projects.length === 0) return;
+    if (projectsError) {
+      setPaymentRows([]);
+      setPaymentRegistryLoading(false);
+      setPaymentRegistryError('Проекты не загрузились, поэтому реестр нельзя сопоставить');
+      return;
+    }
+    let active = true;
+    const controller = new AbortController();
+    const projectIds = projectHoursScopeKey ? projectHoursScopeKey.split('|') : [];
+    setPaymentRegistryLoading(true);
+    setPaymentRegistryError(null);
+    loadBonusPayments(projectIds, controller.signal)
+      .then((rows) => {
+        if (active) setPaymentRows(rows);
+      })
+      .catch((error) => {
+        console.error('[ProjectCommandCenter] failed to load bonus payment registry', error);
+        if (!active) return;
+        setPaymentRows([]);
+        setPaymentRegistryError(error instanceof Error ? error.message : 'Не удалось загрузить реестр выплат');
+      })
+      .finally(() => {
+        if (active) setPaymentRegistryLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [isExecutive, projectHoursScopeKey, projectsLoading, projectsError]);
 
   const rows = useMemo(() => {
     const rawRows = projects.map((project: any) => {
@@ -1709,7 +1940,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const periods = keepExplicitPeriodTeams(projectPeriods(project), project.id);
       const realTeam = coverageTeam(team, periods);
       const finances = financeFor(project, realTeam);
-      const readiness = projectReadiness({
+      const readiness = readinessWithHoursState(projectReadiness({
         status,
         team: realTeam,
         amount,
@@ -1717,7 +1948,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         hours,
         includeContractIssues: canSeeContractMoney,
         includeFinancialIssues: canSeeContractMoney,
-      });
+      }), status, { loading: hoursLoading, complete: hoursComplete && !hoursError, error: hoursError });
       const partnerNames = coveragePartnerNames(realTeam);
       const deadlineState = deadlineInfo(deadline, status);
 
@@ -1784,7 +2015,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         amountWithoutVAT: amount,
       };
       const hasContract = groupRows.some(rowHasContractEvidence);
-      const readiness = projectReadiness({
+      const readiness = readinessWithHoursState(projectReadiness({
         status,
         team: realTeam,
         amount,
@@ -1792,7 +2023,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         hours,
         includeContractIssues: canSeeContractMoney,
         includeFinancialIssues: canSeeContractMoney,
-      });
+      }), status, { loading: hoursLoading, complete: hoursComplete && !hoursError, error: hoursError });
       const partnerNames = coveragePartnerNames(realTeam);
       const company = groupRows.find((row) => row.company && row.company !== 'Не указана')?.company || primary.company;
       const contractRow = groupRows.find(hasContractEvidence) || primary;
@@ -1822,7 +2053,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         duplicateRows: groupRows,
       };
     });
-  }, [projects, hoursTotals, canSeeContractMoney]);
+  }, [projects, hoursTotals, canSeeContractMoney, hoursLoading, hoursComplete, hoursError]);
 
   const gphEditorRow = gphEditorRowId ? rows.find((row) => row.id === gphEditorRowId) : undefined;
 
@@ -1849,13 +2080,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return template ? template.team.map((member) => ({ ...member })) : null;
   };
 
+  const portfolioProjectIds = useMemo(
+    () => new Set<string>(rows.flatMap((row) => row.projectIds?.length ? row.projectIds : [row.id]).filter(Boolean)),
+    [rows],
+  );
+  const paymentRegistrySummary = useMemo(
+    () => summarizeBonusPaymentRegistry(paymentRows, portfolioProjectIds),
+    [paymentRows, portfolioProjectIds],
+  );
+
   const summary = useMemo(() => {
     return rows.reduce(
       (acc, row) => {
         acc.total += 1;
         acc.amount += row.amount;
         acc.grossProfit += Number(row.finances.grossProfit) || 0;
-        acc.bonuses += Number(row.finances.totalPaidBonuses) || 0;
+        acc.plannedBonusPool += plannedBonusPool(row);
+        acc.allocatedBonuses += allocatedDraftBonuses(row);
         acc.approvedHours += row.hours.approved;
         acc.pendingHours += row.hours.pending;
         if (row.readiness.level === 'attention') acc.attention += 1;
@@ -1874,12 +2115,57 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         noDeadline: 0,
         amount: 0,
         grossProfit: 0,
-        bonuses: 0,
+        plannedBonusPool: 0,
+        allocatedBonuses: 0,
         approvedHours: 0,
         pendingHours: 0,
       },
     );
   }, [rows]);
+
+  const executiveSummary = useMemo<ExecutivePortfolioSummary>(() => {
+    const readyForBonuses = rows.filter((row) => row.status === 'pending_payment_approval').length;
+    const hoursVerified = hoursComplete && !hoursLoading && !hoursError;
+    const bonusReviewProjects = rows.filter((row) => rowNeedsBonusReview(row, hoursVerified)).length;
+    return {
+      totalProjects: summary.total,
+      activeProjects: summary.total - summary.closed,
+      closedProjects: summary.closed,
+      attentionProjects: summary.attention,
+      overdueProjects: summary.overdue,
+      dueNext30Projects: summary.soon,
+      noDeadlineProjects: summary.noDeadline,
+      readyForBonuses,
+      bonusReviewProjects,
+      bonusConfiguredProjects: Math.max(0, readyForBonuses - bonusReviewProjects),
+      contractAmount: summary.amount,
+      grossProfit: summary.grossProfit,
+      profitMargin: summary.amount > 0 ? (summary.grossProfit / summary.amount) * 100 : 0,
+      plannedBonusPool: summary.plannedBonusPool,
+      allocatedBonuses: summary.allocatedBonuses,
+      unallocatedBonuses: rows.reduce(
+        (total, row) => total + Math.max(0, plannedBonusPool(row) - allocatedDraftBonuses(row)),
+        0,
+      ),
+      overallocatedBonuses: rows.reduce(
+        (total, row) => total + Math.max(0, allocatedDraftBonuses(row) - plannedBonusPool(row)),
+        0,
+      ),
+      approvedForPayment: paymentRegistrySummary.approvedUnpaidAmount,
+      paidFromRegistry: paymentRegistrySummary.paidAmount,
+      pendingRegistryAmount: paymentRegistrySummary.pendingAmount,
+      pendingHours: summary.pendingHours,
+      approvedHours: summary.approvedHours,
+      registryRows: paymentRegistrySummary.totalRows,
+      registryUnmatchedRows: paymentRegistrySummary.unmatchedRows,
+      registryOutOfScopeRows: paymentRegistrySummary.outOfScopeRows,
+      hoursRowCount,
+      hoursComplete: hoursComplete && !hoursLoading && !hoursError,
+      hoursLoading,
+      hoursError: Boolean(hoursError),
+      groupedFinancialRows: rows.filter((row) => (row.projectIds || [row.id]).length > 1).length,
+    };
+  }, [rows, summary, paymentRegistrySummary, hoursRowCount, hoursComplete, hoursLoading, hoursError]);
 
   const workloadItems = useMemo<WorkloadItem[]>(() => {
     const map = new Map<string, WorkloadItem>();
@@ -1903,7 +2189,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       .slice(0, 8);
   }, [rows, memberHours]);
 
-  const applyPulseView = (view: 'all' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours') => {
+  const applyPulseView = (view: 'all' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours' | 'ready_bonus' | 'bonus_attention') => {
+    // The counters describe the whole accessible portfolio. Clear every
+    // unrelated filter so the rows after a click reconcile with the counter.
+    setSearch('');
+    setColumnFilters({ ...EMPTY_COLUMN_FILTERS });
+    setCompanyFilter('all');
+    setPartnerFilter('all');
+    setYearFilter('all');
+    setBusinessSeasonFilter('all');
+    setDateFromFilter('');
+    setDateToFilter('');
+    setPeriodFilter('all');
+    setAuditPeriodTypeFilter('all');
+    setSelectedSavedViewId('');
     if (view === 'overdue' || view === 'next_30' || view === 'no_deadline') {
       setDeadlineFilter(view);
       setViewFilter('all');
@@ -2076,6 +2375,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (viewFilter === 'no_contract' && !rowHasIssue(row, 'нет договора')) return false;
       if (viewFilter === 'no_amount' && !rowHasIssue(row, 'нет суммы')) return false;
       if (viewFilter === 'waiting_hours' && !rowHasIssue(row, 'ждут часы')) return false;
+      if (viewFilter === 'ready_bonus' && row.status !== 'pending_payment_approval') return false;
+      if (viewFilter === 'bonus_attention' && !rowNeedsBonusReview(row, hoursComplete && !hoursLoading && !hoursError)) return false;
       if (deadlineFilter === 'overdue' && row.deadlineState.tone !== 'overdue') return false;
       if (deadlineFilter === 'next_30' && row.deadlineState.tone !== 'soon') return false;
       if (deadlineFilter === 'no_deadline' && row.deadline) return false;
@@ -2093,7 +2394,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, isExecutive]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, isExecutive, hoursComplete, hoursLoading, hoursError]);
 
   const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize));
   const safeTablePage = Math.min(tablePage, tablePageCount);
@@ -2120,10 +2421,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const activeColumnFilters = hasActiveColumnFilters(columnFilters);
 
   const toggleRow = (projectId: string) => {
-    setExpandedRows((prev) => ({ ...prev, [projectId]: !prev[projectId] }));
+    const opening = !expandedRows[projectId];
+    setExpandedRows((prev) => ({ ...prev, [projectId]: opening }));
   };
   const toggleAdvancedRow = (projectId: string) => {
     setAdvancedRows((prev) => ({ ...prev, [projectId]: !prev[projectId] }));
+  };
+  const openBonusWorkspace = (projectId: string) => {
+    setExpandedRows((prev) => ({ ...prev, [projectId]: true }));
+    setAdvancedRows((prev) => ({ ...prev, [projectId]: true }));
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`bonus-workspace-${projectId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
   };
 
   const projectIdsForRow = (row: (typeof rows)[number]): string[] => {
@@ -2168,7 +2479,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     try {
       const XLSX = await loadXlsx();
       if (isExecutive && canSeeContractMoney) {
-        const workbook = buildLegacyCeoWorkbook(XLSX, filteredRows);
+        if (paymentRegistryLoading) {
+          toast({
+            title: 'Реестр выплат ещё загружается',
+            description: 'Дождитесь окончания сверки, чтобы Excel не содержал неполные суммы выплат.',
+          });
+          return;
+        }
+        if (paymentRegistryError) {
+          toast({
+            title: 'Excel не выгружен',
+            description: 'Платёжный реестр недоступен. Обновите страницу и повторите выгрузку после успешной сверки.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        const workbook = buildLegacyCeoWorkbook(XLSX, filteredRows, paymentRegistrySummary.byKey);
         XLSX.writeFile(workbook, `ceo_legacy_partner_workbook_${new Date().toISOString().slice(0, 10)}.xlsx`);
         toast({
           title: 'CEO Excel готов',
@@ -2203,6 +2529,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const closeProjectRow = async (row: (typeof rows)[number]) => {
     if (!canCloseProjects || !updateProject) return;
+    if (hoursLoading || hoursError || !hoursComplete) {
+      toast({ title: 'Закрытие заблокировано', description: 'Сначала дождитесь полной сверки таймшитов.', variant: 'destructive' });
+      return;
+    }
+    if (row.hours.pending > 0) {
+      toast({ title: 'Закрытие заблокировано', description: `${row.hours.pending.toFixed(1)} ч ещё ждут утверждения.`, variant: 'destructive' });
+      return;
+    }
     const ids = projectIdsForRow(row);
     if (ids.length === 0) return;
 
@@ -2505,6 +2839,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const setProjectStatus = async (row: (typeof rows)[number], nextStatus: ManagedProjectStatus) => {
     if (!canManageProjectStatus || !user || !updateProject) return;
     if (!statusOptions.some((option) => option.value === nextStatus)) return;
+    const requiresVerifiedHours = nextStatus === 'pending_payment_approval' || nextStatus === 'completed';
+    if (requiresVerifiedHours && (hoursLoading || hoursError || !hoursComplete)) {
+      toast({ title: 'Статус не изменён', description: 'Нельзя передать проект к бонусам или закрыть его, пока таймшиты не сверены полностью.', variant: 'destructive' });
+      return;
+    }
+    if (requiresVerifiedHours && row.hours.pending > 0) {
+      toast({ title: 'Статус не изменён', description: `${row.hours.pending.toFixed(1)} ч ещё ждут утверждения.`, variant: 'destructive' });
+      return;
+    }
     const ids = projectIdsForRow(row);
     setSavingProjectId(`${row.id}:status`);
     try {
@@ -2560,8 +2903,25 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
+  const ensureBonusDraftEditable = (row: (typeof rows)[number]): boolean => {
+    const ids = projectIdsForRow(row);
+    const ledger = projectPaymentLedger(ids, paymentRegistrySummary.byKey);
+    const reason = ids.length > 1
+      ? 'Свод объединяет несколько записей. Сначала выберите каноническую запись проекта.'
+      : paymentRegistryLoading
+        ? 'Платёжный реестр ещё загружается. Дождитесь завершения сверки.'
+        : paymentRegistryError
+          ? 'Платёжный реестр недоступен. Менять расчёт без проверки выплат небезопасно.'
+          : ledger.approvedUnpaidAmount > 0 || ledger.paidAmount > 0
+            ? 'Расчёт уже утверждён или выплачен. Для изменения нужна отдельная корректировка.'
+            : '';
+    if (!reason) return true;
+    toast({ title: 'Редактирование бонуса заблокировано', description: reason, variant: 'destructive' });
+    return false;
+  };
+
   const setBonusPercent = async (row: (typeof rows)[number], nextPercent: number) => {
-    if (!isExecutive || !updateProject) return;
+    if (!isExecutive || !updateProject || !ensureBonusDraftEditable(row)) return;
     const bonusPercent = Math.max(0, Math.min(40, nextPercent));
     setSavingProjectId(row.id);
     try {
@@ -2709,7 +3069,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   };
 
   const setMemberBonusPercent = async (row: (typeof rows)[number], member: any, nextPercent: number) => {
-    if (!isExecutive || !updateProject) return;
+    if (!isExecutive || !updateProject || !ensureBonusDraftEditable(row)) return;
     const memberId = teamMemberId(member);
     if (!memberId) return;
 
@@ -2766,7 +3126,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   };
 
   const setMemberBonusAmount = async (row: (typeof rows)[number], member: any, nextAmount: number) => {
-    if (!isExecutive || !updateProject) return;
+    if (!isExecutive || !updateProject || !ensureBonusDraftEditable(row)) return;
     const memberId = teamMemberId(member);
     if (!memberId || !Number.isFinite(nextAmount)) return;
 
@@ -3286,22 +3646,44 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       </div>
 
       <div className="min-w-0 max-w-full space-y-4 px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border bg-background px-4 py-3 text-sm">
-          <SummaryItem label="Всего" value={summary.total.toString()} />
-          <SummaryItem label="В работе" value={(summary.total - summary.closed).toString()} />
-          <SummaryItem label="Требуют действия" value={summary.attention.toString()} tone={summary.attention > 0 ? 'warn' : 'default'} />
-          <SummaryItem label="Закрыты" value={summary.closed.toString()} />
-          <SummaryItem label="Просрочены" value={summary.overdue.toString()} tone={summary.overdue > 0 ? 'warn' : 'default'} />
-          <SummaryItem label="30 дней" value={summary.soon.toString()} tone={summary.soon > 0 ? 'warn' : 'default'} />
-          <SummaryItem label="Без срока" value={summary.noDeadline.toString()} tone={summary.noDeadline > 0 ? 'warn' : 'default'} />
-          <SummaryItem label="Часы" value={`${summary.approvedHours.toFixed(1)} ч`} />
-          {summary.pendingHours > 0 && <SummaryItem label="Ждут" value={`${summary.pendingHours.toFixed(1)} ч`} tone="warn" />}
-          {isExecutive && <SummaryItem label="Доход" value={`${money.format(summary.grossProfit)} ₸`} />}
-          {isExecutive && <SummaryItem label="Бонусы" value={`${money.format(summary.bonuses)} ₸`} />}
-        </div>
-
-        <ProjectPortfolioPulse summary={summary} onApplyView={applyPulseView} />
-        <ProjectWorkloadChart items={workloadItems} />
+        {projectsError ? (
+          <Card role="alert" className="border-red-200 bg-red-50/60 p-5 dark:bg-red-950/20">
+            <div className="font-semibold text-red-800 dark:text-red-200">Свод проектов не загрузился</div>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">Финансовые показатели и бонусы не показываются нулями, потому что исходные данные сейчас недоступны: {projectsError}</p>
+            <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refreshProjects()}>Повторить загрузку</Button>
+          </Card>
+        ) : isExecutive ? (
+          <>
+            <ExecutivePortfolioOverview
+              summary={executiveSummary}
+              registryLoading={paymentRegistryLoading}
+              registryError={paymentRegistryError}
+              onApplyView={applyPulseView}
+            />
+            <details className="rounded-md border bg-background">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Нагрузка команды и таймшиты</summary>
+              <div className="border-t p-3">
+                {hoursLoading ? <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загружаем часы команды…</div> : hoursError ? <div className="py-4 text-sm font-medium text-red-700">Нагрузка недоступна: часы не загрузились.</div> : <ProjectWorkloadChart items={workloadItems} />}
+              </div>
+            </details>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border bg-background px-4 py-3 text-sm">
+              <SummaryItem label="Всего" value={summary.total.toString()} />
+              <SummaryItem label="В работе" value={(summary.total - summary.closed).toString()} />
+              <SummaryItem label="Требуют действия" value={summary.attention.toString()} tone={summary.attention > 0 ? 'warn' : 'default'} />
+              <SummaryItem label="Закрыты" value={summary.closed.toString()} />
+              <SummaryItem label="Просрочены" value={summary.overdue.toString()} tone={summary.overdue > 0 ? 'warn' : 'default'} />
+              <SummaryItem label="30 дней" value={summary.soon.toString()} tone={summary.soon > 0 ? 'warn' : 'default'} />
+              <SummaryItem label="Без срока" value={summary.noDeadline.toString()} tone={summary.noDeadline > 0 ? 'warn' : 'default'} />
+              <SummaryItem label="Часы" value={hoursLoading ? 'Загрузка…' : hoursError ? 'Нет данных' : `${summary.approvedHours.toFixed(1)} ч`} tone={hoursError ? 'warn' : 'default'} />
+              {!hoursLoading && !hoursError && summary.pendingHours > 0 && <SummaryItem label="Ждут" value={`${summary.pendingHours.toFixed(1)} ч`} tone="warn" />}
+            </div>
+            <ProjectPortfolioPulse summary={{ ...summary, hoursLoading, hoursError: Boolean(hoursError) }} onApplyView={applyPulseView} />
+            {hoursLoading ? <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загружаем нагрузку команды…</Card> : hoursError ? <Card className="border-red-200 p-4 text-sm font-medium text-red-700">Нагрузка команды недоступна: часы не загрузились.</Card> : <ProjectWorkloadChart items={workloadItems} />}
+          </>
+        )}
 
         <Card className="p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -3412,6 +3794,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="working">В работе без проблем</SelectItem>
                   <SelectItem value="attention">Требуют действия</SelectItem>
                   <SelectItem value="closed">Закрытые</SelectItem>
+                  {isExecutive && <SelectItem value="ready_bonus">Готовы к бонусам</SelectItem>}
+                  {isExecutive && <SelectItem value="bonus_attention">Проверить расчёт бонусов</SelectItem>}
                   <SelectItem value="no_partner">Без партнера</SelectItem>
                   <SelectItem value="no_leader">Без руководителя</SelectItem>
                   {canSeeContractMoney && <SelectItem value="no_contract">Без договора</SelectItem>}
@@ -3733,15 +4117,33 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               {!projectsLoading && filteredRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={tableColSpan} className="py-10 text-center text-muted-foreground">
-                    По текущим фильтрам проектов нет.
+                    {projectsError ? 'Проекты недоступны. Повторите загрузку в сообщении выше.' : 'По текущим фильтрам проектов нет.'}
                   </TableCell>
                 </TableRow>
               )}
               {!projectsLoading &&
                 visibleRows.map((row) => {
                   const expanded = tableDetailLevel === 'detailed' || !!expandedRows[row.id];
-                  const totalBonusAmount = Number(row.finances.totalBonusAmount || row.finances.totalPaidBonuses) || 0;
-                  const paidBonuses = Number(row.finances.totalPaidBonuses) || 0;
+                  const totalBonusAmount = plannedBonusPool(row);
+                  const allocatedBonuses = allocatedDraftBonuses(row);
+                  const bonusRemaining = totalBonusAmount - allocatedBonuses;
+                  const rowProjectIds = row.projectIds?.length ? row.projectIds : [row.id];
+                  const paymentLedger = projectPaymentLedger(rowProjectIds, paymentRegistrySummary.byKey);
+                  const groupedBonusRow = rowProjectIds.length > 1;
+                  const bonusTeamMembers = row.coverageTeam || row.team || [];
+                  const bonusRoleColumns = bonusRoleColumnsForTeam(bonusTeamMembers);
+                  const firstBonusRoleByMember = new Map<string, string>();
+                  for (const column of bonusRoleColumns) {
+                    for (const member of bonusTeamMembers.filter((candidate: CanonicalTeamMember) => teamRole(candidate) === column.key)) {
+                      const identity = bonusMemberIdentity(member);
+                      if (!firstBonusRoleByMember.has(identity)) firstBonusRoleByMember.set(identity, column.key);
+                    }
+                  }
+                  const bonusEditingLocked = groupedBonusRow
+                    || paymentRegistryLoading
+                    || Boolean(paymentRegistryError)
+                    || paymentLedger.approvedUnpaidAmount > 0
+                    || paymentLedger.paidAmount > 0;
                   const workload = workloadComplexity(row.hours);
                   const currentPartner = teamMemberForRole(row.coverageTeam || row.team, isPartnerRole);
                   const currentLeader = teamMemberForRole(row.coverageTeam || row.team, isLeaderRole);
@@ -3819,10 +4221,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                           {canEditPeriods && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => { startProjectDateEdit(row); setExpandedRows((current) => ({ ...current, [row.id]: true })); }}>Изменить сроки</Button>}
                         </TableCell>
                         <TableCell className="py-3 align-top">
-                          <div className="text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div>
-                          <div className="mt-0.5 text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено</div>
-                          {row.hours.pending > 0 && <div className="text-xs font-medium text-amber-700">{row.hours.pending.toFixed(1)} ждут</div>}
-                          <Badge variant="outline" className={`mt-2 ${workload.className}`}>Сложность: {workload.label}</Badge>
+                          {hoursLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загрузка часов</div>
+                          ) : hoursError ? (
+                            <div className="text-sm font-medium text-red-700">Часы недоступны</div>
+                          ) : (
+                            <>
+                              <div className="text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено</div>
+                              {row.hours.pending > 0 && <div className="text-xs font-medium text-amber-700">{row.hours.pending.toFixed(1)} ждут</div>}
+                              <Badge variant="outline" className={`mt-2 ${workload.className}`}>Сложность: {workload.label}</Badge>
+                            </>
+                          )}
                         </TableCell>
                         {canSeeContractMoney && (
                           <TableCell className="py-3 text-right align-top">
@@ -3833,20 +4243,34 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         )}
                         {isExecutive && (
                           <TableCell className="py-3 text-right align-top">
+                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Плановый пул</div>
                             <div className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">выплачено {displayMoney(paidBonuses)}</div>
-                            <div className="mt-2 flex items-center justify-end gap-1"><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)} aria-label={`Уменьшить процент бонуса для ${row.name}`}><Minus className="h-3 w-3" /></Button><span className="w-10 text-center text-xs font-semibold tabular-nums">{Number(row.finances.bonusPercent || 0).toFixed(0)}%</span><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)} aria-label={`Увеличить процент бонуса для ${row.name}`}><Plus className="h-3 w-3" /></Button></div>
+                            {groupedBonusRow && <div className="text-[10px] font-medium text-amber-700">основная из {rowProjectIds.length} записей</div>}
+                            <div className="mt-1 text-xs text-muted-foreground">Распределено: <span className="font-medium text-foreground">{displayMoney(allocatedBonuses)}</span></div>
+                            <div className={`text-xs ${bonusRemaining < -1 ? 'font-medium text-red-700' : 'text-muted-foreground'}`}>Остаток: {displayMoney(bonusRemaining)}</div>
+                            {paymentRegistryLoading ? (
+                              <div className="mt-1 text-xs text-muted-foreground">Сверяем реестр выплат…</div>
+                            ) : paymentRegistryError ? (
+                              <div className="mt-1 text-xs font-medium text-red-700">Реестр выплат недоступен</div>
+                            ) : (
+                              <>
+                                {paymentLedger.approvedUnpaidAmount > 0 && <div className="mt-1 text-xs font-medium text-amber-700">К выплате: {displayMoney(paymentLedger.approvedUnpaidAmount)}</div>}
+                                {paymentLedger.paidAmount > 0 && <div className="text-xs font-medium text-emerald-700">Выплачено: {displayMoney(paymentLedger.paidAmount)}</div>}
+                              </>
+                            )}
+                            <div className="mt-2 flex items-center justify-end gap-1" title={bonusEditingLocked ? 'Редактирование заблокировано: сначала завершите сверку записей и платёжного реестра' : undefined}><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id || bonusEditingLocked} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)} aria-label={`Уменьшить процент бонуса для ${row.name}`}><Minus className="h-3 w-3" /></Button><span className="w-10 text-center text-xs font-semibold tabular-nums">{Number(row.finances.bonusPercent || 0).toFixed(0)}%</span><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id || bonusEditingLocked} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)} aria-label={`Увеличить процент бонуса для ${row.name}`}><Plus className="h-3 w-3" /></Button></div>
+                            <Button type="button" variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => openBonusWorkspace(row.id)}>По сотрудникам</Button>
                           </TableCell>
                         )}
-                        {isExecutive && <TableCell className="py-3 text-right align-top"><div className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{displayMoney(row.finances.grossProfit)}</div><div className="mt-1 text-xs text-muted-foreground">после ГПХ и предрасхода</div></TableCell>}
+                        {isExecutive && <TableCell className="py-3 text-right align-top"><div className={`text-base font-semibold tabular-nums ${Number(row.finances.grossProfit) < 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{displayMoney(row.finances.grossProfit)}</div><div className="mt-1 text-xs text-muted-foreground">после ГПХ, предрасхода и распределённых бонусов</div></TableCell>}
                         <TableCell className="py-3 align-top">
                           <div className="space-y-2">
                             {canManageProjectStatus ? (
-                              <Select value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined} onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)} disabled={savingProjectId === `${row.id}:status`}><SelectTrigger className="h-8 w-full text-xs" aria-label={`Изменить статус проекта ${row.name}`}><SelectValue placeholder={MANAGED_PROJECT_STATUS_LABELS[row.status as ManagedProjectStatus] || row.status || 'Статус'} /></SelectTrigger><SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
+                              <Select value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined} onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)} disabled={savingProjectId === `${row.id}:status`}><SelectTrigger className="h-8 w-full text-xs" aria-label={`Изменить статус проекта ${row.name}`}><SelectValue placeholder={MANAGED_PROJECT_STATUS_LABELS[row.status as ManagedProjectStatus] || row.status || 'Статус'} /></SelectTrigger><SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value} disabled={(option.value === 'pending_payment_approval' || option.value === 'completed') && (hoursLoading || Boolean(hoursError) || !hoursComplete || row.hours.pending > 0)}>{option.label}</SelectItem>)}</SelectContent></Select>
                             ) : <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>{closureStatusLabel}</Badge>}
                             {row.readiness.issues.length > 0 && row.readiness.level !== 'closed' && <div className="text-xs leading-snug text-amber-700">{row.readiness.issues.slice(0, 2).join(' · ')}</div>}
                             <div className="flex flex-wrap gap-1"><Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => toggleRow(row.id)}>{expanded ? 'Свернуть' : 'Подробнее'}</Button><Button asChild type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs"><Link to={`/project/${row.id}`}>Открыть <ExternalLink className="ml-1 h-3 w-3" /></Link></Button></div>
-                            {canCloseProjects && row.readiness.level !== 'closed' && <Button type="button" variant="outline" size="sm" className="h-7 w-full px-2 text-xs" disabled={savingProjectId === `${row.id}:close`} onClick={() => closeProjectRow(row)}><CheckCircle2 className="mr-1 h-3 w-3" />Закрыть проект</Button>}
+                            {canCloseProjects && row.readiness.level !== 'closed' && <Button type="button" variant="outline" size="sm" className="h-7 w-full px-2 text-xs" disabled={savingProjectId === `${row.id}:close` || hoursLoading || Boolean(hoursError) || !hoursComplete || row.hours.pending > 0} title={hoursLoading || hoursError || !hoursComplete ? 'Сначала завершите сверку таймшитов' : row.hours.pending > 0 ? 'Есть часы на утверждении' : undefined} onClick={() => closeProjectRow(row)}><CheckCircle2 className="mr-1 h-3 w-3" />Закрыть проект</Button>}
                             {canDeleteProjects && <Button type="button" variant="ghost" size="sm" className="h-7 w-full px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700" disabled={savingProjectId === `${row.id}:delete`} onClick={() => deleteProjectRow(row)}><Trash2 className="mr-1 h-3 w-3" />Удалить</Button>}
                           </div>
                         </TableCell>
@@ -3872,9 +4296,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 <div className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-5">
                                   <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Команда</div><div className="mt-1 text-sm"><span className="font-medium">Партнёр:</span> {currentPartner ? teamName(currentPartner) : '—'}</div><div className="text-sm"><span className="font-medium">Руководитель:</span> {currentLeader ? teamName(currentLeader) : '—'}</div><div className="mt-1 text-xs text-muted-foreground">Команда: {(row.coverageTeam || row.team).length} чел.</div></div>
                                   <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Сроки</div><div className="mt-1 text-sm font-medium tabular-nums">{formatDate(row.startDate)} — {formatDate(row.deadline)}</div><div className="mt-1 text-xs text-muted-foreground">{row.periods.length ? row.periods.map((period: AuditPeriod) => period.name).join(', ') : 'Период не указан'}</div>{canEditPeriods && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => startProjectDateEdit(row)}>Изменить сроки</Button>}</div>
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Таймшиты</div><div className="mt-1 text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div><div className="text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено · {row.hours.pending.toFixed(1)} ждут</div><Badge variant="outline" className={`mt-2 ${workload.className}`}>{workload.label}</Badge></div>
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Таймшиты</div>{hoursLoading ? <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загрузка…</div> : hoursError ? <div className="mt-2 text-sm font-medium text-red-700">Данные недоступны</div> : <><div className="mt-1 text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div><div className="text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено · {row.hours.pending.toFixed(1)} ждут</div><Badge variant="outline" className={`mt-2 ${workload.className}`}>{workload.label}</Badge></>}</div>
                                   <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Договор</div><div className="mt-1 text-sm font-medium">{row.contract?.number ? `№ ${row.contract.number}` : 'Номер не указан'}</div><div className="mt-1 text-base font-semibold tabular-nums">{displayMoney(row.amount)}</div><div className="text-xs text-muted-foreground">{row.contractFiles.length ? `${row.contractFiles.length} файл(а)` : 'Файл не загружен'}</div></div>
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Финансы CEO</div><div className="mt-1 text-sm"><span className="text-muted-foreground">Пул:</span> <span className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</span></div><div className="text-sm"><span className="text-muted-foreground">Выплачено:</span> <span className="font-medium tabular-nums">{displayMoney(paidBonuses)}</span></div><div className="text-sm"><span className="text-muted-foreground">Доход:</span> <span className="font-semibold tabular-nums text-emerald-700">{displayMoney(row.finances.grossProfit)}</span></div></div>
+                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Финансы CEO</div><div className="mt-1 text-sm"><span className="text-muted-foreground">Пул:</span> <span className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</span></div><div className="text-sm"><span className="text-muted-foreground">Распределено:</span> <span className="font-medium tabular-nums">{displayMoney(allocatedBonuses)}</span></div>{paymentRegistryLoading ? <div className="text-xs text-muted-foreground">Реестр сверяется…</div> : paymentRegistryError ? <div className="text-xs font-medium text-red-700">Реестр выплат недоступен</div> : <><div className="text-sm"><span className="text-muted-foreground">К выплате:</span> <span className="font-medium tabular-nums text-amber-700">{displayMoney(paymentLedger.approvedUnpaidAmount)}</span></div><div className="text-sm"><span className="text-muted-foreground">Выплачено:</span> <span className="font-medium tabular-nums text-emerald-700">{displayMoney(paymentLedger.paidAmount)}</span></div></>}<div className="text-sm"><span className="text-muted-foreground">Доход:</span> <span className={`font-semibold tabular-nums ${Number(row.finances.grossProfit) < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{displayMoney(row.finances.grossProfit)}</span></div></div>
                                 </div>
                                 {editingProjectDatesRowId === row.id && (
                                   <div className="flex flex-wrap items-end gap-2 border-t bg-muted/20 px-4 py-3">
@@ -3887,7 +4311,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 {row.contractFiles.length > 0 && <div className="flex flex-wrap gap-2 border-t px-4 py-3">{row.contractFiles.slice(0, 2).map((file: any, index: number) => { const label = file?.fileName || file?.name || `Файл ${index + 1}`; const fileKey = `${row.id}:compact:${file?.id || label}-${index}`; return <Button key={fileKey} type="button" variant="outline" size="sm" className="h-8" disabled={openingFileKey === fileKey} onClick={() => void openContractFile(file, label, fileKey)}><Download className="mr-1.5 h-3.5 w-3.5" />Скачать договор</Button>; })}</div>}
                               </section>
                               {advancedRows[row.id] && (
-                                <div className="space-y-4">
+                                <div className="flex flex-col gap-4">
                                   <ProjectDataIntegrityDrawer model={commandModel} canRepair={canManageTeam || canManageProjectStatus} />
                               <div className="rounded-md border bg-background">
                                 <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
@@ -4313,11 +4737,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                               </div>
 
                               {isExecutive && (
-                                <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
+                                <div className="order-first grid gap-3 md:grid-cols-4 xl:grid-cols-10">
                                   <MetricBox label="Сумма без НДС" value={`${money.format(row.amount)} ₸`} />
-                                  <MetricBox label="Общая сумма бонуса" value={`${money.format(totalBonusAmount)} ₸`} />
-                                  <MetricBox label="Итого бонусов" value={`${money.format(Number(row.finances.totalPaidBonuses) || 0)} ₸`} />
-                                  <MetricBox label="Разница" value={`${money.format(totalBonusAmount - (Number(row.finances.totalPaidBonuses) || 0))} ₸`} />
+                                  <MetricBox label="Плановый бонусный пул" value={`${money.format(totalBonusAmount)} ₸`} />
+                                  <MetricBox label="Распределено команде" value={`${money.format(allocatedBonuses)} ₸`} />
+                                  <MetricBox label="Остаток пула" value={`${money.format(bonusRemaining)} ₸`} />
+                                  <MetricBox label="Утверждено к выплате" value={paymentRegistryLoading ? 'Загрузка…' : paymentRegistryError ? 'Нет данных' : `${money.format(paymentLedger.approvedUnpaidAmount)} ₸`} />
+                                  <MetricBox label="Фактически выплачено" value={paymentRegistryLoading ? 'Загрузка…' : paymentRegistryError ? 'Нет данных' : `${money.format(paymentLedger.paidAmount)} ₸`} />
                                   <MetricBox label="ГПХ" value={`${money.format(Number(row.finances.totalContractorsAmount) || 0)} ₸`} />
                                   <MetricBox label="Предрасход" value={`${money.format(Number(row.finances.preExpenseAmount) || 0)} ₸`} />
                                   <MetricBox label="База" value={`${money.format(Number(row.finances.bonusBase) || 0)} ₸`} />
@@ -4326,23 +4752,52 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                               )}
 
                               {isExecutive && (
-                              <div className="rounded-md border bg-background" aria-label={`Бонусы команды проекта ${row.name}`}>
+                              <div id={`bonus-workspace-${row.id}`} className="order-first scroll-mt-4 rounded-md border bg-background" aria-label={`Бонусы команды проекта ${row.name}`}>
                                 <div className="flex flex-wrap items-start justify-between gap-3 border-b px-3 py-3">
                                   <div>
-                                    <div className="text-sm font-semibold">Бонусы команды</div>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">Укажите итоговую сумму для каждого участника. Изменения сразу пересчитывают финансовый итог проекта.</p>
+                                    <div className="text-sm font-semibold">Расчёт бонусов по сотрудникам</div>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">Укажите итоговую сумму для каждого участника. Это распределение проекта; выплата считается фактом только после записи в платёжном реестре.</p>
                                   </div>
-                                  <div className="text-right text-xs">
-                                    <div className="text-muted-foreground">Бонусный пул</div>
-                                    <div className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-right text-xs sm:grid-cols-3">
+                                    <div><div className="text-muted-foreground">Пул</div><div className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div></div>
+                                    <div><div className="text-muted-foreground">Распределено</div><div className="font-semibold tabular-nums">{displayMoney(allocatedBonuses)}</div></div>
+                                    <div><div className="text-muted-foreground">Остаток</div><div className={`font-semibold tabular-nums ${bonusRemaining < -1 ? 'text-red-700' : ''}`}>{displayMoney(bonusRemaining)}</div></div>
+                                    {paymentRegistryLoading ? (
+                                      <div className="col-span-2 text-muted-foreground">Сверяем платёжный реестр…</div>
+                                    ) : paymentRegistryError ? (
+                                      <div className="col-span-2 font-medium text-red-700">Реестр выплат недоступен</div>
+                                    ) : (
+                                      <>
+                                        <div><div className="text-muted-foreground">К выплате</div><div className="font-semibold tabular-nums text-amber-700">{displayMoney(paymentLedger.approvedUnpaidAmount)}</div></div>
+                                        <div><div className="text-muted-foreground">Выплачено</div><div className="font-semibold tabular-nums text-emerald-700">{displayMoney(paymentLedger.paidAmount)}</div></div>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
+                                {groupedBonusRow && (
+                                  <div className="border-b border-amber-200 bg-amber-50/70 px-3 py-3 text-xs text-amber-900 dark:bg-amber-950/20">
+                                    <div className="font-semibold">Объединено записей: {rowProjectIds.length}. Редактирование бонусов заблокировано до выбора канонической записи.</div>
+                                    <div className="mt-1">Платёжный реестр ниже собран по всем записям, а плановый пул относится к основной записи. Откройте нужную запись отдельно:</div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {(row.duplicateRows || []).map((duplicate: any, index: number) => (
+                                        <Button key={duplicate.id} asChild variant="outline" size="sm" className="h-7 bg-background text-xs">
+                                          <Link to={`/project/${duplicate.id}`}>Запись {index + 1} · {String(duplicate.id).slice(0, 8)}</Link>
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {!groupedBonusRow && !paymentRegistryLoading && !paymentRegistryError && (paymentLedger.approvedUnpaidAmount > 0 || paymentLedger.paidAmount > 0) && (
+                                  <div className="border-b border-amber-200 bg-amber-50/70 px-3 py-2 text-xs font-medium text-amber-900 dark:bg-amber-950/20">
+                                    Расчёт зафиксирован в платёжном реестре. Для изменения нужна отдельная ревизия или корректировка; текущий черновик заблокирован.
+                                  </div>
+                                )}
                                 {(row.coverageTeam || row.team).length === 0 && (
                                   <div className="px-3 py-4 text-sm text-muted-foreground">Сначала назначьте команду проекта — здесь появятся персональные бонусы.</div>
                                 )}
                                 <div className="grid gap-px bg-border md:grid-cols-2 xl:grid-cols-5">
-                                  {TEAM_COLUMNS.filter((column) => (row.teamColumnMembers[column.key] || []).length > 0).map((column) => {
-                                    const members = row.teamColumnMembers[column.key] || [];
+                                  {bonusRoleColumns.filter((column) => bonusTeamMembers.some((member: CanonicalTeamMember) => teamRole(member) === column.key)).map((column) => {
+                                    const members = bonusTeamMembers.filter((member: CanonicalTeamMember) => teamRole(member) === column.key);
                                     const isKeyColumn = isPartnerRole(column.key) || isLeaderRole(column.key);
                                     return (
                                       <div
@@ -4365,12 +4820,24 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                         <div className="space-y-2">
                                           {members.map((member: CanonicalTeamMember, memberIndex: number) => {
                                             const memberId = teamMemberId(member);
+                                            const memberIdentity = bonusMemberIdentity(member);
+                                            const primaryBonusRole = firstBonusRoleByMember.get(memberIdentity) || column.key;
+                                            const isPrimaryBonusEditor = primaryBonusRole === column.key;
+                                            const memberRoleLabels = Array.from(new Set(
+                                              bonusTeamMembers
+                                                .filter((candidate: CanonicalTeamMember) => bonusMemberIdentity(candidate) === memberIdentity)
+                                                .map((candidate: CanonicalTeamMember) => projectRoleLabel(teamRole(candidate))),
+                                            ));
                                             const percent = memberBonusPercent(member, row.finances);
                                             const amount = memberBonusAmount(member, row.finances);
                                             const canRemoveMember = canManageTeam && row.team.some((item: CanonicalTeamMember) => (
                                               teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
                                             ));
                                             const savingMember = savingProjectId === `${row.id}:${memberId}`;
+                                            const manuallyAdjusted = Boolean(memberId && row.finances.teamBonuses?.[memberId]?.manuallyAdjusted);
+                                            const memberLedger = memberId
+                                              ? memberPaymentLedger(rowProjectIds, memberId, paymentRegistrySummary.byKey)
+                                              : { approvedUnpaidAmount: 0, paidAmount: 0, pendingAmount: 0, rowCount: 0, latestPaymentDate: null };
                                             const memberProjectHours = memberId
                                               ? (row.projectIds || [row.id]).reduce(
                                                 (acc: ProjectHoursTotals, projectId: string) => {
@@ -4393,22 +4860,51 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                       variant="outline"
                                                       size="sm"
                                                       className="h-7 shrink-0 border-red-200 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                                                      disabled={savingProjectId === `${row.id}:remove:${memberId || memberIndex}`}
+                                                      disabled={savingProjectId === `${row.id}:remove:${memberId || memberIndex}` || bonusEditingLocked}
                                                       onClick={() => removeTeamMember(row, member, memberIndex)}
                                                     >
                                                       Убрать
                                                     </Button>
                                                   )}
                                                 </div>
-                                                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                                  <span className="tabular-nums">{memberProjectHours.approved.toFixed(1)} ч утверждено</span>
-                                                  {memberProjectHours.pending > 0 && (
-                                                    <span className="font-medium text-amber-700 tabular-nums">
-                                                      {memberProjectHours.pending.toFixed(1)} ч ждут
-                                                    </span>
+                                                {memberRoleLabels.length > 1 && (
+                                                  <div className="mt-1 text-[11px] text-muted-foreground">Роли: {memberRoleLabels.join(', ')}</div>
+                                                )}
+                                                {hoursLoading ? (
+                                                  <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Часы загружаются</div>
+                                                ) : hoursError ? (
+                                                  <div className="mt-1 text-xs font-medium text-red-700">Часы недоступны</div>
+                                                ) : (
+                                                  <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                                    <span className="tabular-nums">{memberProjectHours.approved.toFixed(1)} ч утверждено</span>
+                                                    {memberProjectHours.pending > 0 && (
+                                                      <span className="font-medium text-amber-700 tabular-nums">
+                                                        {memberProjectHours.pending.toFixed(1)} ч ждут
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                )}
+                                                <div className="mt-1 flex flex-wrap gap-1">
+                                                  {!isPrimaryBonusEditor ? (
+                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">Единая выплата редактируется в роли «{projectRoleLabel(primaryBonusRole)}»</Badge>
+                                                  ) : (
+                                                    <>
+                                                      <Badge variant="outline" className="text-[10px]">{manuallyAdjusted ? 'Сумма задана вручную' : 'По формуле'}</Badge>
+                                                      {paymentRegistryLoading ? (
+                                                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Реестр загружается</Badge>
+                                                      ) : paymentRegistryError ? (
+                                                        <Badge variant="outline" className="border-red-200 text-[10px] text-red-700">Статус выплаты недоступен</Badge>
+                                                      ) : (
+                                                        <>
+                                                          {memberLedger.approvedUnpaidAmount > 0 && <Badge variant="outline" className="border-amber-200 text-[10px] text-amber-700">К выплате {displayMoney(memberLedger.approvedUnpaidAmount)}</Badge>}
+                                                          {memberLedger.paidAmount > 0 && <Badge variant="outline" className="border-emerald-200 text-[10px] text-emerald-700">Выплачено {displayMoney(memberLedger.paidAmount)}</Badge>}
+                                                          {memberLedger.rowCount === 0 && <Badge variant="outline" className="text-[10px] text-muted-foreground">Не в реестре</Badge>}
+                                                        </>
+                                                      )}
+                                                    </>
                                                   )}
                                                 </div>
-                                                {isExecutive && (
+                                                {isExecutive && isPrimaryBonusEditor && (
                                                   <div className="mt-2 flex items-center justify-between gap-2">
                                                     <div className="text-xs text-muted-foreground tabular-nums">{money.format(amount)} ₸</div>
                                                     <div className="flex items-center gap-1">
@@ -4417,7 +4913,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                         variant="outline"
                                                         size="icon"
                                                         className="h-6 w-6"
-                                                        disabled={savingMember || !memberId}
+                                                        disabled={savingMember || !memberId || bonusEditingLocked}
                                                         onClick={() => setMemberBonusAmount(row, member, amount - 10000)}
                                                         aria-label={`Уменьшить бонус ${teamName(member)} на 10 000 тенге`}
                                                       >
@@ -4428,6 +4924,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                         aria-label={`Бонус ${teamName(member)} в тенге`}
                                                         className="h-7 min-w-0 flex-1 px-2 text-right text-xs tabular-nums"
                                                         inputMode="numeric"
+                                                        disabled={savingMember || !memberId || bonusEditingLocked}
                                                         defaultValue={String(Math.round(amount))}
                                                         onBlur={(event) => {
                                                           const nextAmount = Number(event.currentTarget.value.replace(/\s/g, '').replace(',', '.'));
@@ -4442,7 +4939,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                         variant="outline"
                                                         size="icon"
                                                         className="h-6 w-6"
-                                                        disabled={savingMember || !memberId}
+                                                        disabled={savingMember || !memberId || bonusEditingLocked}
                                                         onClick={() => setMemberBonusAmount(row, member, amount + 10000)}
                                                         aria-label={`Увеличить бонус ${teamName(member)} на 10 000 тенге`}
                                                       >
@@ -4456,7 +4953,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                         variant="ghost"
                                                         size="sm"
                                                         className="h-6 px-1.5 text-[11px]"
-                                                        disabled={savingMember || !memberId}
+                                                        disabled={savingMember || !memberId || bonusEditingLocked}
                                                         onClick={() => setMemberBonusPercent(row, member, Number(member.bonusPercent || 0))}
                                                       >
                                                         По формуле

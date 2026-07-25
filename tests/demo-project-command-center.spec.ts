@@ -50,7 +50,7 @@ test.describe('CEO command center completion', () => {
     expect(totalRows[3]).toContain('Проект / клиент');
     expect(totalRows[3]).toContain('Сумма без НДС');
     expect(totalRows[3]).toContain('Партнер');
-    expect(totalRows[3]).toContain('Итого бонусы');
+    expect(totalRows[3]).toContain('Распределено команде');
     expect(totalRows[totalRows.length - 1]).toContain('ИТОГО');
     expect(JSON.stringify(totalRows)).toContain('Демо Партнёр');
     expect(JSON.stringify(totalRows)).toContain('48');

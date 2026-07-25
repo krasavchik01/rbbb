@@ -409,19 +409,20 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
     notes?.amountWithoutVAT,
     notes?.amount,
   );
-  const preExpensePercent = financesSource.preExpensePercent ?? 30;
+  const preExpensePercent = Math.max(0, parseProjectMoney(financesSource.preExpensePercent ?? 30));
   const preExpenseAmount = amountWithoutVAT * (preExpensePercent / 100);
 
   const contractors: Contractor[] = Array.isArray(financesSource.contractors)
     ? financesSource.contractors
     : [];
   const totalContractorsAmount = contractors.reduce(
-    (sum: number, contractor: Contractor) => sum + contractor.amount,
+    (sum: number, contractor: Contractor) => sum + Math.max(0, parseProjectMoney(contractor.amount)),
     0,
   );
 
-  const bonusBase = amountWithoutVAT - totalContractorsAmount - preExpenseAmount;
-  const bonusPercent = financesSource.bonusPercent || 10;
+  const bonusBase = Math.max(0, amountWithoutVAT - totalContractorsAmount - preExpenseAmount);
+  // 0% is a valid CEO decision and must not silently jump back to the 10% default.
+  const bonusPercent = Math.max(0, parseProjectMoney(financesSource.bonusPercent ?? 10));
   const totalBonusAmount = bonusBase * (bonusPercent / 100);
   const existingTeamBonuses = financesSource.teamBonuses || {};
 
@@ -434,22 +435,29 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
     const userId = member.userId || (member as any).id || (member as any).employeeId;
     if (!userId) return;
     const existingBonus = existingTeamBonuses[userId];
-    const calculatedAmount = totalBonusAmount * (member.bonusPercent / 100);
-    const amount = existingBonus?.manuallyAdjusted ? existingBonus.amount : calculatedAmount;
-    const percent = existingBonus?.manuallyAdjusted
-      ? (totalBonusAmount > 0 ? Number(((amount / totalBonusAmount) * 100).toFixed(2)) : existingBonus.percent || member.bonusPercent)
-      : member.bonusPercent;
+    const manuallyAdjusted = Boolean(existingBonus?.manuallyAdjusted);
+    const memberPercent = Math.max(0, parseProjectMoney(member.bonusPercent));
+    const previousCalculated = teamBonuses[userId];
+    const combinedPercent = manuallyAdjusted
+      ? Math.max(0, parseProjectMoney(existingBonus?.percent ?? memberPercent))
+      : Math.max(0, parseProjectMoney(previousCalculated?.percent)) + memberPercent;
+    const amount = manuallyAdjusted
+      ? Math.max(0, parseProjectMoney(existingBonus?.amount))
+      : totalBonusAmount * (combinedPercent / 100);
+    const percent = manuallyAdjusted && totalBonusAmount > 0
+      ? Number(((amount / totalBonusAmount) * 100).toFixed(2))
+      : combinedPercent;
 
     teamBonuses[userId] = {
       ...existingBonus,
       role: member.role,
       percent,
       amount,
-      manuallyAdjusted: existingBonus?.manuallyAdjusted || false,
+      manuallyAdjusted,
     };
   });
 
-  const totalPaidBonuses = Object.values(teamBonuses).reduce((sum, b) => sum + b.amount, 0);
+  const totalPaidBonuses = Object.values(teamBonuses).reduce((sum, b) => sum + Math.max(0, parseProjectMoney(b.amount)), 0);
   const totalCosts = totalPaidBonuses + totalContractorsAmount + preExpenseAmount;
   const grossProfit = amountWithoutVAT - totalCosts;
   const profitMargin = amountWithoutVAT > 0 ? (grossProfit / amountWithoutVAT) * 100 : 0;

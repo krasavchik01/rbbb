@@ -446,10 +446,20 @@ export interface HoursByPair {
 }
 
 export interface HoursSourceRow {
+  id?: string;
   employee_id?: string | null;
   project_id: string | null;
   hours: number | null;
   status: string | null;
+}
+
+export interface TimesheetHoursSnapshot {
+  approvedByEmployeeProject: Map<string, number>;
+  pendingByEmployeeProject: Map<string, number>;
+  byProject: Map<string, ProjectHoursTotals>;
+  rowCount: number;
+  complete: boolean;
+  error: string | null;
 }
 
 export function aggregateHoursByPair(
@@ -466,15 +476,10 @@ export function aggregateHoursByPair(
 }
 
 async function hoursIndexByStatus(status: TimesheetStatus): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('timesheet_entries')
-    .select('employee_id, project_id, hours, status')
-    .eq('status', status);
-  if (error) {
-    console.error(`[timesheets] hoursIndexByStatus(${status}) failed`, error);
-    return new Map();
-  }
-  return aggregateHoursByPair(data || [], status);
+  const snapshot = await loadTimesheetHoursSnapshot();
+  if (status === 'approved') return snapshot.approvedByEmployeeProject;
+  if (status === 'submitted') return snapshot.pendingByEmployeeProject;
+  return new Map();
 }
 
 /**
@@ -513,21 +518,93 @@ export function aggregateProjectHours(
   return result;
 }
 
+export function buildTimesheetHoursSnapshot(
+  rows: readonly HoursSourceRow[],
+): TimesheetHoursSnapshot {
+  return {
+    approvedByEmployeeProject: aggregateHoursByPair(rows, 'approved'),
+    pendingByEmployeeProject: aggregateHoursByPair(rows, 'submitted'),
+    byProject: aggregateProjectHours(rows),
+    rowCount: rows.length,
+    complete: true,
+    error: null,
+  };
+}
+
+const HOURS_QUERY_PAGE_SIZE = 1000;
+
+function emptyTimesheetHoursSnapshot(error: unknown): TimesheetHoursSnapshot {
+  return {
+    approvedByEmployeeProject: new Map(),
+    pendingByEmployeeProject: new Map(),
+    byProject: new Map(),
+    rowCount: 0,
+    complete: false,
+    error: error instanceof Error ? error.message : String(error || 'Не удалось загрузить таймшиты'),
+  };
+}
+
+async function fetchTimesheetHoursSnapshot(
+  projectIds?: readonly string[],
+  signal?: AbortSignal,
+): Promise<TimesheetHoursSnapshot> {
+  const rows: HoursSourceRow[] = [];
+  const uniqueProjectIds = projectIds
+    ? Array.from(new Set(projectIds.map(String).filter(Boolean)))
+    : null;
+  if (uniqueProjectIds && uniqueProjectIds.length === 0) return buildTimesheetHoursSnapshot([]);
+
+  const scopes: Array<string[] | null> = uniqueProjectIds
+    ? Array.from({ length: Math.ceil(uniqueProjectIds.length / 100) }, (_, index) => uniqueProjectIds.slice(index * 100, (index + 1) * 100))
+    : [null];
+
+  for (const scope of scopes) {
+    let from = 0;
+    for (;;) {
+      let query = supabase
+        .from('timesheet_entries')
+        .select('id, employee_id, project_id, hours, status')
+        .in('status', ['approved', 'submitted'])
+        .order('id', { ascending: true });
+      if (scope) query = query.in('project_id', scope);
+      if (signal) query = query.abortSignal(signal);
+      const { data, error } = await query.range(from, from + HOURS_QUERY_PAGE_SIZE - 1);
+
+      if (error) {
+        console.error('[timesheets] hours snapshot failed', error);
+        return emptyTimesheetHoursSnapshot(error);
+      }
+
+      const page = (data || []) as HoursSourceRow[];
+      rows.push(...page);
+      if (page.length < HOURS_QUERY_PAGE_SIZE) break;
+      from += page.length;
+    }
+  }
+
+  return buildTimesheetHoursSnapshot(rows);
+}
+
+/**
+ * One complete, paginated read for every CEO/bonus hours view. The command
+ * center calls it once and derives all aggregates from that snapshot, so it no
+ * longer downloads the same 15k+ rows three times and never silently stops at
+ * PostgREST's 1000-row cap. No module cache is kept across authentication changes.
+ */
+export async function loadTimesheetHoursSnapshot(
+  projectIds?: readonly string[],
+  signal?: AbortSignal,
+): Promise<TimesheetHoursSnapshot> {
+  return fetchTimesheetHoursSnapshot(projectIds, signal);
+}
+
 /**
  * Сразу по всем проектам — Map<projectId, {approved, pending}>.
  * Используется в карточках списка проектов и на дашборде, чтобы не делать
  * N запросов «часы по этому проекту» для каждого ряда.
  */
 export async function allProjectsHoursTotals(): Promise<Map<string, ProjectHoursTotals>> {
-  const { data, error } = await supabase
-    .from('timesheet_entries')
-    .select('project_id, hours, status')
-    .in('status', ['approved', 'submitted']);
-  if (error) {
-    console.error('[timesheets] allProjectsHoursTotals failed', error);
-    return new Map();
-  }
-  return aggregateProjectHours(data || []);
+  return (await loadTimesheetHoursSnapshot()).byProject;
 }
 
 // ─── Утилиты для импорта ────────────────────────────────────────────────────

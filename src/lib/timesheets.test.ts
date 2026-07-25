@@ -3,6 +3,7 @@ import {
   BULK_REVIEW_CHUNK_SIZE,
   aggregateHoursByPair,
   aggregateProjectHours,
+  buildTimesheetHoursSnapshot,
   chunkReviewIds,
 } from './timesheets';
 
@@ -32,5 +33,23 @@ describe('timesheet review helpers', () => {
 
     expect(aggregateHoursByPair(rows, 'approved').get('u1__p1')).toBe(4);
     expect(aggregateProjectHours(rows).get('p1')).toEqual({ approved: 4, pending: 8 });
+  });
+
+  it('builds one consistent CEO snapshot for projects and employees', () => {
+    const rows = [
+      { employee_id: 'u1', project_id: 'p1', hours: 4, status: 'approved' as const },
+      { employee_id: 'u1', project_id: 'p1', hours: 3, status: 'approved' as const },
+      { employee_id: 'u2', project_id: 'p1', hours: 2, status: 'submitted' as const },
+      { employee_id: 'u2', project_id: 'p2', hours: 5, status: 'rejected' as const },
+    ];
+
+    const snapshot = buildTimesheetHoursSnapshot(rows);
+
+    expect(snapshot.complete).toBe(true);
+    expect(snapshot.rowCount).toBe(4);
+    expect(snapshot.approvedByEmployeeProject.get('u1__p1')).toBe(7);
+    expect(snapshot.pendingByEmployeeProject.get('u2__p1')).toBe(2);
+    expect(snapshot.byProject.get('p1')).toEqual({ approved: 7, pending: 2 });
+    expect(snapshot.byProject.has('p2')).toBe(false);
   });
 });

@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { approvedHoursIndex, pendingHoursIndex } from '@/lib/timesheets';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,7 +43,7 @@ import { ru } from 'date-fns/locale';
 
 export default function Bonuses() {
   const { user } = useAuth();
-  const { projects = [], updateProject: updateProjectRecord, refresh: refreshProjects } = useProjects();
+  const { projects = [], loading: projectsLoading, error: projectsError, updateProject: updateProjectRecord, refresh: refreshProjects } = useProjects();
   const { employees = [] } = useEmployees();
   const { tasks = [] } = useTasks();
   const { toast } = useToast();
@@ -56,11 +55,23 @@ export default function Bonuses() {
   const [paymentRegistryLoading, setPaymentRegistryLoading] = useState(true);
   const [paymentRegistryError, setPaymentRegistryError] = useState<string | null>(null);
   const paymentIndex = useMemo(() => buildBonusPaymentIndex(paymentRows), [paymentRows]);
+  const paymentProjectScope = useMemo(
+    () => Array.from(new Set((projects as any[]).map((project) => String(project.id)).filter(Boolean))).sort().join('|'),
+    [projects],
+  );
 
   useEffect(() => {
+    if (projectsLoading && projects.length === 0) return;
+    if (projectsError) {
+      setPaymentRows([]);
+      setPaymentRegistryLoading(false);
+      setPaymentRegistryError('Проекты не загрузились, поэтому платёжный реестр нельзя сопоставить');
+      return;
+    }
     let active = true;
+    const controller = new AbortController();
     setPaymentRegistryLoading(true);
-    loadBonusPayments()
+    loadBonusPayments(paymentProjectScope ? paymentProjectScope.split('|') : [], controller.signal)
       .then((rows) => {
         if (!active) return;
         setPaymentRows(rows);
@@ -74,38 +85,9 @@ export default function Bonuses() {
       .finally(() => {
         if (active) setPaymentRegistryLoading(false);
       });
-    return () => { active = false; };
-  }, []);
+    return () => { active = false; controller.abort(); };
+  }, [paymentProjectScope, projectsLoading, projectsError]);
 
-  // Часы по таймщитам — нужны CEO чтобы видеть факт перед утверждением бонуса.
-  // Источник истины с PR 3: timesheet_entries.
-  //  - approvedIdx — часы, которые партнёр уже подтвердил (идут в бонус по факту);
-  //  - pendingIdx — часы, ждущие подтверждения (CEO видит «+N ч. на утверждение»
-  //    и не закрывает проект, пока партнёр не разберётся).
-  // Старый источник (project_survey_responses + answers.totalHours) выпилен —
-  // он не различал утверждённые/неутверждённые часы.
-  const [, setApprovedIdx] = useState<Map<string, number>>(new Map());
-  const [, setPendingIdx] = useState<Map<string, number>>(new Map());
-  useEffect(() => {
-    let active = true;
-    Promise.all([approvedHoursIndex(), pendingHoursIndex()])
-      .then(([a, p]) => {
-        if (!active) return;
-        setApprovedIdx(a);
-        setPendingIdx(p);
-      })
-      .catch((error) => {
-        console.error('[Bonuses] failed to load timesheet hours indexes', error);
-        if (active) {
-          toast({
-            title: 'Часы не загрузились',
-            description: 'Бонусы могут показывать неполные часы. Обновите страницу или проверьте соединение.',
-            variant: 'destructive',
-          });
-        }
-      });
-    return () => { active = false; };
-  }, [toast]);
   // CEO может менять «общий процент бонуса от базы» на лету (по умолчанию 10).
   const [draftBonusPercent] = useState<Record<string, string>>({});
   // CEO может «скрыть» бонус сотрудника от него самого (personal view не покажет).

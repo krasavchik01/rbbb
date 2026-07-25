@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const pageSource = fs.readFileSync(new URL('../src/pages/ProjectCommandCenter.tsx', import.meta.url), 'utf8');
 const pulseSource = fs.readFileSync(new URL('../src/components/projects/ProjectPortfolioPulse.tsx', import.meta.url), 'utf8');
+const executiveOverviewSource = fs.readFileSync(new URL('../src/components/projects/ExecutivePortfolioOverview.tsx', import.meta.url), 'utf8');
 const workloadSource = fs.readFileSync(new URL('../src/components/projects/ProjectWorkloadChart.tsx', import.meta.url), 'utf8');
 const integritySource = fs.readFileSync(new URL('../src/components/projects/ProjectDataIntegrityDrawer.tsx', import.meta.url), 'utf8');
 const permissionsSource = fs.readFileSync(new URL('../src/lib/projectCommandCenterPermissions.ts', import.meta.url), 'utf8');
@@ -23,11 +24,12 @@ test('CEO sees one compact editable project register before optional detail', ()
 });
 
 test('CEO portfolio analytics layer is mounted above the smart table', () => {
-  assert.match(pageSource, /<ProjectPortfolioPulse summary=\{summary\} onApplyView=\{applyPulseView\} \/>/);
+  assert.match(pageSource, /<ExecutivePortfolioOverview[\s\S]*summary=\{executiveSummary\}[\s\S]*onApplyView=\{applyPulseView\}/);
   assert.match(pageSource, /<ProjectWorkloadChart items=\{workloadItems\} \/>/);
-  assert.match(pulseSource, /CEO portfolio pulse/);
-  assert.match(pulseSource, /Риски портфеля/);
-  assert.match(pulseSource, /Таймшиты/);
+  assert.match(executiveOverviewSource, /Картина бизнеса/);
+  assert.match(executiveOverviewSource, /Что требует решения/);
+  assert.match(executiveOverviewSource, /Фактически выплачено/);
+  assert.match(pulseSource, /hoursLoading/);
   assert.match(workloadSource, /Загрузка команды по таймшитам/);
   assert.match(workloadSource, /approvedHours/);
   assert.match(workloadSource, /pendingHours/);

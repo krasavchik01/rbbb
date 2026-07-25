@@ -54,7 +54,7 @@ import {
   type BonusSettings,
   type BonusComputeResult,
 } from '@/lib/bonusCalculation';
-import { allProjectsHoursTotals, type ProjectHoursTotals } from '@/lib/timesheets';
+import { loadTimesheetHoursSnapshot, type ProjectHoursTotals } from '@/lib/timesheets';
 
 // ─── Display config ─────────────────────────────────────────────────────────
 
@@ -327,13 +327,33 @@ export function CEOSummaryTable({
 
   // ─── Часы по проектам ────────────────────────────────────────────────────
   const [hoursMap, setHoursMap] = useState<Map<string, ProjectHoursTotals>>(new Map());
+  const [hoursLoading, setHoursLoading] = useState(true);
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  const hoursProjectScope = useMemo(
+    () => Array.from(new Set((projects || []).map((project: any) => String(project?.id || '')).filter(Boolean))).sort().join('|'),
+    [projects],
+  );
   useEffect(() => {
     let active = true;
-    allProjectsHoursTotals().then((m) => {
-      if (active) setHoursMap(m);
-    });
-    return () => { active = false; };
-  }, []);
+    const controller = new AbortController();
+    setHoursLoading(true);
+    setHoursError(null);
+    loadTimesheetHoursSnapshot(hoursProjectScope ? hoursProjectScope.split('|') : [], controller.signal)
+      .then((snapshot) => {
+        if (!active) return;
+        setHoursMap(snapshot.byProject);
+        setHoursError(snapshot.complete ? null : snapshot.error || 'Часы загрузились не полностью');
+      })
+      .catch((error) => {
+        if (!active) return;
+        setHoursMap(new Map());
+        setHoursError(error instanceof Error ? error.message : 'Часы не загрузились');
+      })
+      .finally(() => {
+        if (active) setHoursLoading(false);
+      });
+    return () => { active = false; controller.abort(); };
+  }, [hoursProjectScope]);
 
   // ─── Employee lookup ──────────────────────────────────────────────────────
   const employeeMap = useMemo(() => {
@@ -789,9 +809,17 @@ export function CEOSummaryTable({
                             <div className="text-[9px] text-muted-foreground">{row.effectiveSettings.bonusPercent}% от остатка</div>
                           </td>
                           <td className="px-2 py-2.5 text-right">
-                            <div className="text-xs font-medium text-cyan-600 dark:text-cyan-400 tabular-nums">{fmt(row.hours.approved)}</div>
-                            {row.hours.pending > 0 && (
-                              <div className="text-[9px] text-amber-500 tabular-nums">+{fmt(row.hours.pending)} ждёт</div>
+                            {hoursLoading ? (
+                              <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground"><Clock className="h-3 w-3 animate-pulse" />загрузка</div>
+                            ) : hoursError ? (
+                              <div className="text-[10px] font-medium text-red-600">нет данных</div>
+                            ) : (
+                              <>
+                                <div className="text-xs font-medium text-cyan-600 dark:text-cyan-400 tabular-nums">{fmt(row.hours.approved)}</div>
+                                {row.hours.pending > 0 && (
+                                  <div className="text-[9px] text-amber-500 tabular-nums">+{fmt(row.hours.pending)} ждёт</div>
+                                )}
+                              </>
                             )}
                           </td>
                           <td className="px-2 py-1.5 align-top min-w-[260px]">

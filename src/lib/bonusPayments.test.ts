@@ -3,6 +3,7 @@ import {
   bonusPaymentKey,
   buildBonusPaymentIndex,
   getBonusPaymentState,
+  summarizeBonusPaymentRegistry,
   type BonusPaymentRow,
 } from './bonusPayments';
 
@@ -96,5 +97,38 @@ describe('bonus payment registry', () => {
       paid: false,
       rowCount: 1,
     });
+  });
+
+  it('separates draft registry rows, approved-to-pay rows and actual payments', () => {
+    const summary = summarizeBonusPaymentRegistry([
+      row({ id: 'pending', status: 'pending', bonus_amount: 25 }),
+      row({ id: 'approved', status: 'approved', bonus_amount: 40 }),
+      row({ id: 'paid', status: 'approved', bonus_amount: 60, payment_date: '2026-07-15' }),
+    ]);
+
+    expect(summary.pendingAmount).toBe(25);
+    expect(summary.approvedUnpaidAmount).toBe(40);
+    expect(summary.paidAmount).toBe(60);
+    expect(summary.byKey.get(bonusPaymentKey('project-1', 'employee-1'))).toMatchObject({
+      pendingAmount: 25,
+      approvedUnpaidAmount: 40,
+      paidAmount: 60,
+      latestPaymentDate: '2026-07-15',
+    });
+  });
+
+  it('can scope CEO totals to projects visible in the command center', () => {
+    const summary = summarizeBonusPaymentRegistry(
+      [
+        row({ id: 'visible', project_id: 'project-1', bonus_amount: 100 }),
+        row({ id: 'hidden', project_id: 'project-2', bonus_amount: 900 }),
+      ],
+      new Set(['project-1']),
+    );
+
+    expect(summary.approvedUnpaidAmount).toBe(100);
+    expect(summary.totalRows).toBe(2);
+    expect(summary.unmatchedRows).toBe(0);
+    expect(summary.outOfScopeRows).toBe(1);
   });
 });

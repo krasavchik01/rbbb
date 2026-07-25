@@ -13,6 +13,8 @@ interface ProjectPortfolioPulseProps {
     noDeadline: number;
     approvedHours: number;
     pendingHours: number;
+    hoursLoading?: boolean;
+    hoursError?: boolean;
   };
   onApplyView: (view: 'all' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours') => void;
 }
@@ -41,11 +43,11 @@ export function ProjectPortfolioPulse({ summary, onApplyView }: ProjectPortfolio
       <PulseCard
         icon={<Timer className="h-4 w-4" />}
         title="Таймшиты"
-        value={`${summary.approvedHours.toFixed(1)} ч`}
-        detail={`Ждут подтверждения: ${summary.pendingHours.toFixed(1)} ч`}
-        tone={summary.pendingHours > 0 ? 'warn' : 'default'}
-        action="Ждущие часы"
-        onClick={() => onApplyView('waiting_hours')}
+        value={summary.hoursLoading ? 'Загрузка…' : summary.hoursError ? 'Нет данных' : `${summary.approvedHours.toFixed(1)} ч`}
+        detail={summary.hoursLoading ? 'Собираем утверждённые часы' : summary.hoursError ? 'Часы не загрузились — нули не используются' : `Ждут подтверждения: ${summary.pendingHours.toFixed(1)} ч`}
+        tone={summary.hoursError || summary.pendingHours > 0 ? 'warn' : 'default'}
+        action={summary.hoursLoading || summary.hoursError ? 'Показать портфель' : 'Ждущие часы'}
+        onClick={() => onApplyView(summary.hoursLoading || summary.hoursError ? 'all' : 'waiting_hours')}
       />
     </div>
   );
