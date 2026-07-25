@@ -36,9 +36,11 @@ function recoverFromStaleAssetError() {
   if (now - lastReload < 5 * 60 * 1000) return;
 
   window.sessionStorage.setItem(reloadKey, String(now));
-  const url = new URL(window.location.href);
-  url.searchParams.set('__suite_refresh', String(now));
-  window.location.replace(url.toString());
+  // iOS can crash the in-app page when an error boundary changes the current
+  // URL while React is unwinding a failed lazy import. A regular reload still
+  // revalidates index.html (it is served with must-revalidate), but keeps the
+  // current route and avoids the fragile __suite_refresh navigation.
+  window.location.reload();
 }
 
 // ErrorBoundary: ловит runtime-ошибку внутри блока (виджета или целой страницы)
