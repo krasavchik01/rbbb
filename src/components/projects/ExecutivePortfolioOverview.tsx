@@ -10,8 +10,11 @@ export interface ExecutivePortfolioSummary {
   activeProjects: number;
   closedProjects: number;
   attentionProjects: number;
+  portfolioInWorkProjects: number;
+  portfolioAttentionProjects: number;
   overdueProjects: number;
   dueNext30Projects: number;
+  laterThan30Projects: number;
   noDeadlineProjects: number;
   readyForBonuses: number;
   bonusReviewProjects: number;
@@ -77,7 +80,20 @@ export function ExecutivePortfolioOverview({
         </div>
       </div>
 
-      <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-6">
+      <div className="border-b p-4 sm:p-5">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold">Сначала посмотрите сюда</h3>
+          <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => onApplyView('all')}>Показать всё</Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+          <DecisionCard label="Просрочены" value={summary.overdueProjects} detail="срок уже прошёл" tone="danger" onClick={() => onApplyView('overdue')} />
+          <DecisionCard label="Требуют действия" value={summary.attentionProjects} detail="данные, команда или часы" tone="warn" onClick={() => onApplyView('attention')} />
+          <DecisionCard label="Готовы к бонусам" value={summary.readyForBonuses} detail="можно считать выплаты" onClick={() => onApplyView('ready_bonus')} />
+          <DecisionCard label="Проверить бонусы" value={summary.bonusReviewProjects} detail={`${summary.bonusConfiguredProjects} расчётов заполнено`} tone={summary.bonusReviewProjects > 0 ? 'warn' : 'positive'} onClick={() => onApplyView('bonus_attention')} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-px bg-border xl:grid-cols-6">
         <ExecutiveMetric
           icon={<Banknote className="h-4 w-4" />}
           label="Договоры без НДС"
@@ -111,14 +127,14 @@ export function ExecutivePortfolioOverview({
           label="Утверждено к выплате"
           value={registryLoading ? 'Загрузка…' : registryError ? 'Нет данных' : money(summary.approvedForPayment)}
           detail={registryLoading ? 'Сверяем платёжный реестр' : registryError ? 'Не считать черновик выплатой' : 'Только утверждённые строки bonuses'}
-          tone={summary.approvedForPayment > 0 ? 'warn' : 'default'}
+          tone={registryError ? 'danger' : !registryLoading && summary.approvedForPayment > 0 ? 'warn' : 'default'}
         />
         <ExecutiveMetric
           icon={<CheckCircle2 className="h-4 w-4" />}
           label="Фактически выплачено"
           value={registryLoading ? 'Загрузка…' : registryError ? 'Нет данных' : money(summary.paidFromRegistry)}
           detail={registryLoading ? 'Сверяем платёжный реестр' : registryError ? 'Факт выплаты сейчас не подтверждён' : `Подтверждено датой выплаты · ${summary.registryRows} строк реестра`}
-          tone="positive"
+          tone={registryError ? 'danger' : !registryLoading && summary.paidFromRegistry > 0 ? 'positive' : 'default'}
         />
       </div>
 
@@ -139,22 +155,11 @@ export function ExecutivePortfolioOverview({
         />
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)] sm:p-5">
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">Что требует решения</h3>
-            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onApplyView('all')}>Показать весь портфель</Button>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <DecisionCard label="Требуют действия" value={summary.attentionProjects} detail="неполные данные или команда" tone="warn" onClick={() => onApplyView('attention')} />
-            <DecisionCard label="Просрочены" value={summary.overdueProjects} detail="срок уже прошёл" tone="danger" onClick={() => onApplyView('overdue')} />
-            <DecisionCard label="Готовы к бонусам" value={summary.readyForBonuses} detail="переданы генеральному директору" onClick={() => onApplyView('ready_bonus')} />
-            <DecisionCard label="Проверить расчёт" value={summary.bonusReviewProjects} detail={`${summary.bonusConfiguredProjects} расчётов заполнено`} tone={summary.bonusReviewProjects > 0 ? 'warn' : 'positive'} onClick={() => onApplyView('bonus_attention')} />
-          </div>
-        </div>
-
-        <div className="rounded-lg border bg-muted/20 p-3.5">
-          <div className="text-sm font-semibold">Как читать бонусы</div>
+      <details className="group px-4 py-3 sm:px-5">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">Как считаются бонусы и откуда взяты цифры</summary>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border bg-muted/20 p-3.5">
+            <div className="text-sm font-semibold">Формула</div>
           <div className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
             <p><span className="font-medium text-foreground">1.</span> Сумма без НДС − ГПХ − предрасход = база расчёта.</p>
             <p><span className="font-medium text-foreground">2.</span> База × процент = плановый бонусный пул.</p>
@@ -175,8 +180,16 @@ export function ExecutivePortfolioOverview({
             {summary.registryOutOfScopeRows > 0 && ` · ${summary.registryOutOfScopeRows} строк вне доступного портфеля`}
             {summary.groupedFinancialRows > 0 && ` · ${summary.groupedFinancialRows} объединённых строк требуют выбора канонической записи`}
           </div>
+          </div>
+          <div className="rounded-lg border bg-muted/20 p-3.5 text-xs leading-5 text-muted-foreground">
+            <div className="text-sm font-semibold text-foreground">Источники истины</div>
+            <p className="mt-2"><span className="font-medium text-foreground">Проекты и команды:</span> projects + projects.notes.</p>
+            <p><span className="font-medium text-foreground">Часы:</span> только timesheet_entries со статусом approved; submitted показаны отдельно.</p>
+            <p><span className="font-medium text-foreground">Расчёт:</span> notes.finances.teamBonuses.</p>
+            <p><span className="font-medium text-foreground">Факт выплаты:</span> только таблица bonuses и дата выплаты.</p>
+          </div>
         </div>
-      </div>
+      </details>
     </Card>
   );
 }
@@ -204,7 +217,7 @@ function ExecutiveMetric({
   return (
     <div className="min-w-0 bg-background p-4">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">{icon}{label}</div>
-      <div className={`mt-2 truncate text-xl font-semibold tabular-nums ${valueTone}`} title={value}>{value}</div>
+      <div className={`mt-2 whitespace-normal text-base font-semibold tabular-nums sm:text-xl ${valueTone}`}>{value}</div>
       <div className="mt-1 text-[11px] leading-4 text-muted-foreground">{detail}</div>
     </div>
   );
@@ -240,7 +253,7 @@ function DecisionCard({
         ? 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20'
         : 'hover:bg-muted/40';
   return (
-    <button type="button" className={`rounded-lg border p-3 text-left transition-colors ${toneClass}`} onClick={onClick}>
+    <button type="button" className={`min-h-24 rounded-lg border p-2.5 text-left transition-colors sm:p-3 ${toneClass}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         {(tone === 'warn' || tone === 'danger') && <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}

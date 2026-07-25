@@ -74,6 +74,7 @@ import {
   ExecutivePortfolioOverview,
   type ExecutivePortfolioSummary,
 } from '@/components/projects/ExecutivePortfolioOverview';
+import { ExecutivePortfolioVisuals } from '@/components/projects/ExecutivePortfolioVisuals';
 import { CommandCenterColumnFilter } from '@/components/projects/CommandCenterColumnFilter';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import type { CanonicalTeamMember } from '@/types/project-domain';
@@ -92,7 +93,8 @@ type ProjectViewFilter =
   | 'no_amount'
   | 'waiting_hours'
   | 'ready_bonus'
-  | 'bonus_attention';
+  | 'bonus_attention'
+  | 'portfolio_attention';
 type ProjectDeadlineFilter = 'all' | 'overdue' | 'next_30' | 'no_deadline';
 type ProjectPeriodFilter = 'all' | 'has_periods' | 'no_periods';
 type AuditPeriodTypeFilter = 'all' | AuditPeriod['type'];
@@ -1940,7 +1942,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const periods = keepExplicitPeriodTeams(projectPeriods(project), project.id);
       const realTeam = coverageTeam(team, periods);
       const finances = financeFor(project, realTeam);
-      const readiness = readinessWithHoursState(projectReadiness({
+      const baseReadiness = projectReadiness({
         status,
         team: realTeam,
         amount,
@@ -1948,7 +1950,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         hours,
         includeContractIssues: canSeeContractMoney,
         includeFinancialIssues: canSeeContractMoney,
-      }), status, { loading: hoursLoading, complete: hoursComplete && !hoursError, error: hoursError });
+      });
+      const readiness = readinessWithHoursState(baseReadiness, status, { loading: hoursLoading, complete: hoursComplete && !hoursError, error: hoursError });
       const partnerNames = coveragePartnerNames(realTeam);
       const deadlineState = deadlineInfo(deadline, status);
 
@@ -1964,6 +1967,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         amount,
         finances,
         hours,
+        baseReadiness,
         readiness,
         startDate,
         deadline,
@@ -2015,7 +2019,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         amountWithoutVAT: amount,
       };
       const hasContract = groupRows.some(rowHasContractEvidence);
-      const readiness = readinessWithHoursState(projectReadiness({
+      const baseReadiness = projectReadiness({
         status,
         team: realTeam,
         amount,
@@ -2023,7 +2027,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         hours,
         includeContractIssues: canSeeContractMoney,
         includeFinancialIssues: canSeeContractMoney,
-      }), status, { loading: hoursLoading, complete: hoursComplete && !hoursError, error: hoursError });
+      });
+      const readiness = readinessWithHoursState(baseReadiness, status, { loading: hoursLoading, complete: hoursComplete && !hoursError, error: hoursError });
       const partnerNames = coveragePartnerNames(realTeam);
       const company = groupRows.find((row) => row.company && row.company !== 'Не указана')?.company || primary.company;
       const contractRow = groupRows.find(hasContractEvidence) || primary;
@@ -2037,6 +2042,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         amount,
         finances,
         hours,
+        baseReadiness,
         readiness,
         hasContract,
         startDate,
@@ -2099,11 +2105,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         acc.allocatedBonuses += allocatedDraftBonuses(row);
         acc.approvedHours += row.hours.approved;
         acc.pendingHours += row.hours.pending;
-        if (row.readiness.level === 'attention') acc.attention += 1;
-        if (row.readiness.level === 'closed') acc.closed += 1;
+        if (row.baseReadiness.level === 'attention') acc.attention += 1;
+        if (row.baseReadiness.level === 'closed') acc.closed += 1;
         if (row.deadlineState.tone === 'overdue') acc.overdue += 1;
         if (row.deadlineState.tone === 'soon') acc.soon += 1;
-        if (!row.deadline) acc.noDeadline += 1;
+        if (row.baseReadiness.level !== 'closed' && !row.deadline) acc.noDeadline += 1;
         return acc;
       },
       {
@@ -2124,7 +2130,27 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   }, [rows]);
 
   const executiveSummary = useMemo<ExecutivePortfolioSummary>(() => {
-    const readyForBonuses = rows.filter((row) => row.status === 'pending_payment_approval').length;
+    const portfolioBreakdown = rows.reduce(
+      (acc, row) => {
+        const closed = row.baseReadiness.level === 'closed';
+        if (closed) {
+          acc.closed += 1;
+          return acc;
+        }
+
+        if (row.deadlineState.tone === 'overdue') acc.overdue += 1;
+        else if (row.deadlineState.tone === 'soon') acc.soon += 1;
+        else if (row.deadlineState.tone === 'normal') acc.later += 1;
+        else acc.noDeadline += 1;
+
+        if (row.status === 'pending_payment_approval') acc.readyBonus += 1;
+        else if (row.baseReadiness.level === 'attention') acc.attention += 1;
+        else acc.inWork += 1;
+        return acc;
+      },
+      { inWork: 0, attention: 0, readyBonus: 0, closed: 0, overdue: 0, soon: 0, later: 0, noDeadline: 0 },
+    );
+    const readyForBonuses = portfolioBreakdown.readyBonus;
     const hoursVerified = hoursComplete && !hoursLoading && !hoursError;
     const bonusReviewProjects = rows.filter((row) => rowNeedsBonusReview(row, hoursVerified)).length;
     return {
@@ -2132,9 +2158,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       activeProjects: summary.total - summary.closed,
       closedProjects: summary.closed,
       attentionProjects: summary.attention,
-      overdueProjects: summary.overdue,
-      dueNext30Projects: summary.soon,
-      noDeadlineProjects: summary.noDeadline,
+      portfolioInWorkProjects: portfolioBreakdown.inWork,
+      portfolioAttentionProjects: portfolioBreakdown.attention,
+      overdueProjects: portfolioBreakdown.overdue,
+      dueNext30Projects: portfolioBreakdown.soon,
+      laterThan30Projects: portfolioBreakdown.later,
+      noDeadlineProjects: portfolioBreakdown.noDeadline,
       readyForBonuses,
       bonusReviewProjects,
       bonusConfiguredProjects: Math.max(0, readyForBonuses - bonusReviewProjects),
@@ -2170,15 +2199,28 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const workloadItems = useMemo<WorkloadItem[]>(() => {
     const map = new Map<string, WorkloadItem>();
     for (const row of rows) {
-      const activeProject = row.readiness?.level !== 'closed' ? 1 : 0;
+      const activeProject = row.baseReadiness?.level !== 'closed' ? 1 : 0;
+      const seenMembers = new Set<string>();
       for (const member of row.coverageTeam || row.team || []) {
         const name = teamName(member);
         const id = teamMemberId(member) || name;
+        if (!id || seenMembers.has(id)) continue;
+        seenMembers.add(id);
         const current = map.get(id) || { name, approvedHours: 0, pendingHours: 0, activeProjects: 0 };
         const memberKey = teamMemberId(member);
-        const hours = memberKey ? memberHours.get(hoursPairKey(memberKey, row.id)) : undefined;
-        current.approvedHours += Number(hours?.approved || 0);
-        current.pendingHours += Number(hours?.pending || 0);
+        const hours = memberKey
+          ? (row.projectIds || [row.id]).reduce(
+            (total: ProjectHoursTotals, projectId: string) => {
+              const projectHours = memberHours.get(hoursPairKey(memberKey, projectId));
+              total.approved += Number(projectHours?.approved || 0);
+              total.pending += Number(projectHours?.pending || 0);
+              return total;
+            },
+            { approved: 0, pending: 0 },
+          )
+          : { approved: 0, pending: 0 };
+        current.approvedHours += hours.approved;
+        current.pendingHours += hours.pending;
         current.activeProjects += activeProject;
         map.set(id, current);
       }
@@ -2189,7 +2231,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       .slice(0, 8);
   }, [rows, memberHours]);
 
-  const applyPulseView = (view: 'all' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours' | 'ready_bonus' | 'bonus_attention') => {
+  const applyPulseView = (view: 'all' | 'working' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours' | 'ready_bonus' | 'bonus_attention' | 'portfolio_attention') => {
     // The counters describe the whole accessible portfolio. Clear every
     // unrelated filter so the rows after a click reconcile with the counter.
     setSearch('');
@@ -2367,8 +2409,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (!rowMatchesDateFilter(row, yearFilter)) return false;
       if (!rowMatchesBusinessSeason(row, businessSeasonFilter)) return false;
       if (exactRange && !rowDateRanges(row).some((range) => rangesIntersect(range, exactRange))) return false;
-      if (viewFilter === 'working' && row.readiness.level !== 'ready') return false;
-      if (viewFilter === 'attention' && row.readiness.level !== 'attention') return false;
+      if (viewFilter === 'working' && (row.baseReadiness.level !== 'ready' || row.status === 'pending_payment_approval')) return false;
+      if (viewFilter === 'attention' && row.baseReadiness.level !== 'attention') return false;
+      if (viewFilter === 'portfolio_attention' && (row.baseReadiness.level !== 'attention' || row.status === 'pending_payment_approval')) return false;
       if (viewFilter === 'closed' && row.readiness.level !== 'closed') return false;
       if (viewFilter === 'no_partner' && !rowHasIssue(row, 'нет партнера')) return false;
       if (viewFilter === 'no_leader' && !rowHasIssue(row, 'нет руководителя')) return false;
@@ -2379,7 +2422,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (viewFilter === 'bonus_attention' && !rowNeedsBonusReview(row, hoursComplete && !hoursLoading && !hoursError)) return false;
       if (deadlineFilter === 'overdue' && row.deadlineState.tone !== 'overdue') return false;
       if (deadlineFilter === 'next_30' && row.deadlineState.tone !== 'soon') return false;
-      if (deadlineFilter === 'no_deadline' && row.deadline) return false;
+      if (deadlineFilter === 'no_deadline' && row.deadlineState.tone !== 'none') return false;
       if (periodFilter === 'has_periods' && row.periods.length === 0) return false;
       if (periodFilter === 'no_periods' && row.periods.length > 0) return false;
       if (!rowMatchesAuditPeriodType(row, auditPeriodTypeFilter)) return false;
@@ -3660,12 +3703,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               registryError={paymentRegistryError}
               onApplyView={applyPulseView}
             />
-            <details className="rounded-md border bg-background">
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Нагрузка команды и таймшиты</summary>
-              <div className="border-t p-3">
-                {hoursLoading ? <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загружаем часы команды…</div> : hoursError ? <div className="py-4 text-sm font-medium text-red-700">Нагрузка недоступна: часы не загрузились.</div> : <ProjectWorkloadChart items={workloadItems} />}
-              </div>
-            </details>
+            <ExecutivePortfolioVisuals
+              summary={executiveSummary}
+              registryLoading={paymentRegistryLoading}
+              registryError={paymentRegistryError}
+              onApplyView={applyPulseView}
+            />
+            <ProjectWorkloadChart
+              items={workloadItems}
+              loading={hoursLoading}
+              error={hoursError || (!hoursLoading && !hoursComplete ? 'Таймшиты загрузились не полностью' : null)}
+            />
           </>
         ) : (
           <>
@@ -3681,7 +3729,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               {!hoursLoading && !hoursError && summary.pendingHours > 0 && <SummaryItem label="Ждут" value={`${summary.pendingHours.toFixed(1)} ч`} tone="warn" />}
             </div>
             <ProjectPortfolioPulse summary={{ ...summary, hoursLoading, hoursError: Boolean(hoursError) }} onApplyView={applyPulseView} />
-            {hoursLoading ? <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загружаем нагрузку команды…</Card> : hoursError ? <Card className="border-red-200 p-4 text-sm font-medium text-red-700">Нагрузка команды недоступна: часы не загрузились.</Card> : <ProjectWorkloadChart items={workloadItems} />}
+            <ProjectWorkloadChart items={workloadItems} loading={hoursLoading} error={hoursError || (!hoursLoading && !hoursComplete ? 'Таймшиты загрузились не полностью' : null)} />
           </>
         )}
 

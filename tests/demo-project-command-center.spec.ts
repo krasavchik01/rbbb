@@ -64,7 +64,8 @@ test.describe('CEO command center completion', () => {
     await waitForDemoApp(page);
 
     await expect(page.getByText('CEO-ведомость')).toBeVisible();
-    await expect(page.getByLabel('CEO portfolio pulse')).toBeVisible();
+    await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeVisible();
+    await expect(page.getByLabel('Визуальная картина портфеля генерального директора')).toBeVisible();
     await expect(page.getByLabel('Общая CEO-таблица проектов')).toBeVisible();
     await expect(page.getByLabel(`Партнёр проекта ${demoProject.name}`)).toBeVisible();
     await expect(page.getByLabel(`Руководитель проекта ${demoProject.name}`)).toBeVisible();
@@ -96,7 +97,8 @@ test.describe('CEO command center completion', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    await expect(page.getByLabel('CEO portfolio pulse')).toBeVisible();
+    await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeVisible();
+    await expect(page.getByLabel('Визуальная картина портфеля генерального директора')).toBeVisible();
     await expect(page.getByLabel('Загрузка команды по таймшитам')).toBeVisible();
     await page.getByTitle('Раскрыть').first().click();
     await expect(page.getByLabel(`Краткая карточка проекта ${demoProject.name}`)).toBeVisible();
@@ -113,7 +115,13 @@ test.describe('CEO command center completion', () => {
       await page.goto('/projects');
       await waitForDemoApp(page);
       await expect(page.getByText('CEO-ведомость')).toBeVisible();
-      await expect(page.getByLabel('CEO portfolio pulse')).toBeVisible();
+      await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeVisible();
+      await expect(page.getByLabel('Визуальная картина портфеля генерального директора')).toBeVisible();
+      await expect(page.getByText('Путь бонусов', { exact: true })).toBeVisible();
+      await expect(page.getByText('Где сейчас проекты', { exact: true })).toBeVisible();
+      await expect(page.getByText('Сроки активных проектов', { exact: true })).toBeVisible();
+      const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(horizontalOverflow).toBeLessThanOrEqual(1);
       await page.getByTitle('Раскрыть').first().click();
       await expect(page.getByLabel(`Краткая карточка проекта ${demoProject.name}`)).toBeVisible();
       await expect(page.getByText('Таймшиты', { exact: true }).last()).toBeAttached();

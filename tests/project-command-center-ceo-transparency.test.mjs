@@ -10,6 +10,10 @@ const overviewSource = fs.readFileSync(
   new URL('../src/components/projects/ExecutivePortfolioOverview.tsx', import.meta.url),
   'utf8',
 );
+const visualsSource = fs.readFileSync(
+  new URL('../src/components/projects/ExecutivePortfolioVisuals.tsx', import.meta.url),
+  'utf8',
+);
 
 test('executive portfolio overview is imported and rendered only for executives', () => {
   assert.match(
@@ -97,4 +101,26 @@ test('financial status transitions and bonus drafts fail closed when source data
   assert.match(pageSource, /requiresVerifiedHours && \(hoursLoading \|\| hoursError \|\| !hoursComplete\)/);
   assert.match(pageSource, /paymentRegistryLoading[\s\S]{0,500}Excel не выгружен/);
   assert.match(pageSource, /const bonusEditingLocked = groupedBonusRow[\s\S]{0,300}paymentLedger\.paidAmount > 0/);
+});
+
+test('CEO projects page exposes simple visual charts without extra database reads', () => {
+  assert.match(pageSource, /import \{ ExecutivePortfolioVisuals \} from '@\/components\/projects\/ExecutivePortfolioVisuals'/);
+  assert.equal((pageSource.match(/<ExecutivePortfolioVisuals\b/g) || []).length, 1);
+  assert.match(pageSource, /<ExecutivePortfolioVisuals[\s\S]{0,300}summary=\{executiveSummary\}/);
+  assert.match(visualsSource, /Всё главное на графиках/);
+  assert.match(visualsSource, /Путь бонусов/);
+  assert.match(visualsSource, /Где сейчас проекты/);
+  assert.match(visualsSource, /Таймшиты/);
+  assert.match(visualsSource, /Сроки активных проектов/);
+  assert.match(visualsSource, /Нули не показываем/);
+  assert.match(visualsSource, /safeChartPercent\(approvedHours, totalHours\)/);
+  assert.doesNotMatch(visualsSource, /from ['"]recharts['"]/);
+});
+
+test('portfolio chart uses exclusive business states and workload sums grouped project hours', () => {
+  assert.match(pageSource, /if \(row\.status === 'pending_payment_approval'\) acc\.readyBonus \+= 1/);
+  assert.match(pageSource, /else if \(row\.baseReadiness\.level === 'attention'\) acc\.attention \+= 1/);
+  assert.match(pageSource, /else acc\.inWork \+= 1/);
+  assert.match(pageSource, /row\.projectIds \|\| \[row\.id\]\)\.reduce/);
+  assert.match(pageSource, /const seenMembers = new Set<string>\(\)/);
 });
