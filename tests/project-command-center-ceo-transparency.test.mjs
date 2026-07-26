@@ -26,11 +26,20 @@ test('the unified ledger replaces the separate executive dashboard', () => {
   assert.match(pageSource, /Единый свод · один проект = одна строка/);
 });
 
-test('CEO status filters keep real ready-for-bonus and bonus-attention views', () => {
-  for (const view of ['ready_bonus', 'bonus_attention']) {
-    assert.match(pageSource, new RegExp(`\\| '${view}'`));
-    assert.match(pageSource, new RegExp(`viewFilter === '${view}'`));
-  }
+test('project states are exactly all, working, ready for bonuses and closed', () => {
+  const typeBlock = pageSource.match(/type ProjectViewFilter\s*=([\s\S]*?);/)?.[1] || '';
+  const typeValues = [...typeBlock.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  assert.deepEqual(typeValues, ['all', 'working', 'ready_bonus', 'closed']);
+
+  const stateFilterBlock = pageSource.match(/<ProjectFilterField label="Состояние проекта">([\s\S]*?)<\/ProjectFilterField>/)?.[1] || '';
+  const stateOptions = [...stateFilterBlock.matchAll(/<SelectItem value="([^"]+)">\s*([^<]+?)\s*<\/SelectItem>/g)]
+    .map((match) => ({ value: match[1], label: match[2].trim() }));
+  assert.deepEqual(stateOptions, [
+    { value: 'all', label: 'Все' },
+    { value: 'working', label: 'В работе' },
+    { value: 'ready_bonus', label: 'Готовы к бонусам' },
+    { value: 'closed', label: 'Закрытые' },
+  ]);
 });
 
 test('a project exposes a direct route to its bonus workspace', () => {

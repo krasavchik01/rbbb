@@ -8,15 +8,11 @@ import type { ExecutivePortfolioSummary } from '@/components/projects/ExecutiveP
 export type ExecutiveVisualAction =
   | 'all'
   | 'working'
-  | 'attention'
   | 'closed'
   | 'overdue'
   | 'next_30'
   | 'no_deadline'
-  | 'waiting_hours'
-  | 'ready_bonus'
-  | 'bonus_attention'
-  | 'portfolio_attention';
+  | 'ready_bonus';
 
 type VisualTone = 'sky' | 'amber' | 'emerald' | 'slate' | 'red' | 'violet';
 
@@ -63,7 +59,7 @@ export function ExecutivePortfolioVisuals({
 }) {
   const portfolioSlices: VisualSlice[] = [
     { key: 'working', label: 'В работе — всё нормально', value: summary.portfolioInWorkProjects, tone: 'sky', action: 'working' },
-    { key: 'attention', label: 'Требуют действия', value: summary.portfolioAttentionProjects, tone: 'amber', action: 'portfolio_attention' },
+    { key: 'attention', label: 'Требуют действия', value: summary.portfolioAttentionProjects, tone: 'amber', action: 'working' },
     { key: 'ready', label: 'Готовы к бонусам', value: summary.readyForBonuses, tone: 'emerald', action: 'ready_bonus' },
     { key: 'closed', label: 'Закрыты', value: summary.closedProjects, tone: 'slate', action: 'closed' },
   ];
@@ -74,7 +70,7 @@ export function ExecutivePortfolioVisuals({
   const totalHours = approvedHours + pendingHours;
   const timesheetSlices: VisualSlice[] = [
     { key: 'approved', label: 'Утверждено', value: approvedHours, tone: 'emerald' },
-    { key: 'pending', label: 'Ждут утверждения', value: pendingHours, tone: 'amber', action: 'waiting_hours' },
+    { key: 'pending', label: 'Ждут утверждения', value: pendingHours, tone: 'amber', action: 'working' },
   ];
 
   return (

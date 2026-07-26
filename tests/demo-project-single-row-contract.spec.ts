@@ -81,6 +81,17 @@ type ProjectNotesRecord = {
 function addSecondProjectWithSameBusinessFields(network: DemoNetworkJournal) {
   const duplicateBusinessProject = JSON.parse(JSON.stringify(demoProject)) as typeof demoProject;
   duplicateBusinessProject.id = SECOND_PROJECT_ID;
+  duplicateBusinessProject.start_date = '2024-01-15';
+  duplicateBusinessProject.deadline = '2024-09-15';
+  const notes = JSON.parse(String(duplicateBusinessProject.notes));
+  notes.start_date = '2024-01-15';
+  notes.deadline = '2024-09-15';
+  notes.contract = {
+    ...notes.contract,
+    serviceStartDate: '2024-01-15',
+    serviceEndDate: '2024-09-15',
+  };
+  duplicateBusinessProject.notes = JSON.stringify(notes);
   duplicateBusinessProject.created_at = '2026-01-15T09:00:00.000Z';
   duplicateBusinessProject.updated_at = '2026-07-12T01:00:00.000Z';
   network.tableRows.projects.push(duplicateBusinessProject);
@@ -193,7 +204,7 @@ async function expectEditableTeamLedger(detail: Locator) {
 }
 
 test.describe('single-row project command center contract', () => {
-  test('CEO sees exactly one visible row per project id and no period or business-season UI', async ({ page }) => {
+  test('CEO sees one row per project id, a business-season filter and no audit-period UI', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     addSecondProjectWithSameBusinessFields(network);
     addArchivedPeriodOutsideProjectDates(network);
@@ -209,9 +220,18 @@ test.describe('single-row project command center contract', () => {
     await expect(shell.locator(`tr[data-project-id="${SECOND_PROJECT_ID}"]`)).toHaveCount(1);
 
     const filters = page.getByTestId('project-primary-filters');
-    await expect(filters).not.toContainText(/бизнес-сезон|календарный период|наличие периодов|тип периода|audit period/i);
-    await expect(shell).not.toContainText(/бизнес-сезон|audit period|\bпериод(?:ы|ов|а|е|ом)?\b/i);
-    await expect(filters.getByRole('combobox', { name: /период|бизнес-сезон/i })).toHaveCount(0);
+    await expect(filters.getByText('Бизнес-сезон', { exact: true })).toBeVisible();
+    await expect(filters).not.toContainText(/календарный период|наличие периодов|тип периода|audit period/i);
+    await expect(shell).not.toContainText(/audit period|\bпериод(?:ы|ов|а|е|ом)?\b/i);
+
+    const seasonFilter = filters.getByRole('combobox', { name: 'Бизнес-сезон', exact: true });
+    await seasonFilter.click();
+    await page.getByRole('option', { name: /Сезон 2024/ }).click();
+    await expect(shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`)).toHaveCount(0);
+    await expect(shell.locator(`tr[data-project-id="${SECOND_PROJECT_ID}"]`)).toHaveCount(1);
+    await expect(page).toHaveURL(/season=season%3A2024/);
+    await seasonFilter.click();
+    await page.getByRole('option', { name: 'Все бизнес-сезоны', exact: true }).click();
 
     await page.getByRole('textbox', { name: 'Дата начала диапазона', exact: true }).fill('2017-01-01');
     await page.getByRole('textbox', { name: 'Дата окончания диапазона', exact: true }).fill('2017-12-31');

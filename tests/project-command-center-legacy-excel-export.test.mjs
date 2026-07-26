@@ -52,13 +52,16 @@ test('CEO Excel export creates one total sheet and partner sheets', () => {
   assert.match(pageSource, /legacyUniqueSheetName\(workbook, sheetName\)/);
 });
 
-test('authorized bonus download uses the legacy workbook while restricted export remains available', () => {
+test('authorized bonus download uses the legacy workbook while restricted export is always detailed', () => {
   assert.match(pageSource, /if \(canSeeBonusSummary && canSeeContractMoney\) \{/);
   assert.match(pageSource, /buildLegacyCeoWorkbook\(XLSX, filteredRows, paymentRegistrySummary\.byProject\)/);
   assert.match(pageSource, /Реестр выплат ещё загружается/);
   assert.match(pageSource, /Платёжный реестр недоступен/);
   assert.match(pageSource, /ceo_legacy_partner_workbook_/);
-  assert.match(pageSource, /buildProjectExportRows\(filteredRows, tableDetailLevel/);
+  assert.match(pageSource, /buildProjectExportRows\(filteredRows,\s*\{/);
+  assert.match(pageSource, /book_append_sheet\(workbook, worksheet, 'Подробно'\)/);
+  assert.match(pageSource, /svod_filtered_detailed_/);
+  assert.doesNotMatch(pageSource, /tableDetailLevel/);
 });
 
 test('CEO Excel export writes one employee per role cell instead of comma-crowding people', () => {

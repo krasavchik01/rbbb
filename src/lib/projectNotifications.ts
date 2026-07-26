@@ -40,7 +40,7 @@ export const notifyProjectCreated = async (params: {
       title: '📋 Новый проект требует утверждения',
       message: `${params.creatorName} создал проект "${params.projectName}" для ${params.clientName}. Сумма: ${params.currency}${params.amount}. Требуется ваше утверждение.`,
       type: 'info',
-      action_url: '/projects?view=attention',
+      action_url: '/projects?view=working',
     });
   } catch (error) {
     console.error('❌ Ошибка создания уведомления для зам. директора:', error);

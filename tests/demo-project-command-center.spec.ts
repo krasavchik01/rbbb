@@ -6,19 +6,24 @@ const require = createRequire(import.meta.url);
 const XLSX = require('xlsx');
 
 test.describe('CEO command center completion', () => {
-  test('saved views and the simple project search are usable in the unified summary', async ({ page }) => {
+  test('business season, canonical project states and search are usable in the unified summary', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    page.once('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('Название вида');
-      await dialog.accept('CEO daily demo');
-    });
-    await page.getByRole('button', { name: 'Сохранить вид' }).click();
-    await expect(page.getByRole('combobox', { name: 'Сохранённые виды свода' })).toBeVisible();
-    await expect.poll(async () => page.evaluate(() => window.localStorage.getItem('rbbb:project-command-center:saved-views:v1') || '')).toContain('CEO daily demo');
+    const filters = page.getByTestId('project-primary-filters');
+    await expect(filters.getByText('Бизнес-сезон', { exact: true })).toBeVisible();
+    await expect(filters.getByText('Вид Excel', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Сохранить вид', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Сохранённые виды свода' })).toHaveCount(0);
+
+    const stateFilter = filters.locator(':scope > div').filter({ hasText: /^Состояние проекта/ });
+    await stateFilter.getByRole('combobox').click();
+    const stateOptions = page.getByRole('option');
+    await expect(stateOptions).toHaveCount(4);
+    await expect(stateOptions).toHaveText(['Все', 'В работе', 'Готовы к бонусам', 'Закрытые']);
+    await page.keyboard.press('Escape');
 
     await expect(page.getByLabel('Единый свод проектов')).toBeVisible();
     await page.getByPlaceholder(/Клиент, проект, партнёр или руководитель/i).fill(demoProject.name.slice(0, 12));

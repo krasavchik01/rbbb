@@ -90,7 +90,7 @@ export function buildProjectStageMetrics(projects: any[] = []): ProjectStageMetr
       shortTitle: 'Закупки',
       count: counts.procurement_added,
       hint: 'ждёт решения CEO/замдира',
-      route: '/projects?view=attention',
+      route: '/projects?view=working',
       tone: 'amber',
     },
     {
@@ -99,7 +99,7 @@ export function buildProjectStageMetrics(projects: any[] = []): ProjectStageMetr
       shortTitle: 'Без команды',
       count: counts.awaiting_team,
       hint: 'нужно назначить партнёра/PM/команду',
-      route: '/projects?view=no_partner',
+      route: '/projects?view=working',
       tone: 'orange',
     },
     {

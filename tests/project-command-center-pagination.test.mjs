@@ -19,5 +19,5 @@ test('pagination resets after filters change and clamps after data changes', () 
 test('bulk actions and exports keep using all filtered rows', () => {
   assert.match(source, /filteredRows\.flatMap\(projectIdsForRow\)/);
   assert.match(source, /buildLegacyCeoWorkbook\(XLSX, filteredRows, paymentRegistrySummary\.byProject\)/);
-  assert.match(source, /buildProjectExportRows\(filteredRows, tableDetailLevel/);
+  assert.match(source, /buildProjectExportRows\(filteredRows,\s*\{/);
 });

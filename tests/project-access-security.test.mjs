@@ -28,7 +28,10 @@ test('admin access writes use a verified server endpoint and RLS removes the bro
 });
 
 test('restricted roles cannot infer bonus differences from filters or finance totals', () => {
-  assert.match(commandCenterSource, /viewFilter === 'bonus_attention'[\s\S]{0,100}&& canSeeBonusSummary/);
+  assert.doesNotMatch(commandCenterSource, /<SelectItem value="bonus_attention"/);
+  assert.doesNotMatch(commandCenterSource, /viewFilter === 'bonus_attention'/);
+  assert.match(commandCenterSource, /!canSeeBonuses \|\| numberColumnMatches\(bonusValue, filters\.bonus\)/);
+  assert.match(commandCenterSource, /canSeeBonuses: canSeeBonusSummary/);
   assert.match(workspaceSource, /canSeeBonuses \? `Итого расходы:[\s\S]{0,250}` : `Операционные расходы:/);
 });
 

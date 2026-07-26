@@ -16,7 +16,7 @@ interface ProjectPortfolioPulseProps {
     hoursLoading?: boolean;
     hoursError?: boolean;
   };
-  onApplyView: (view: 'all' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours') => void;
+  onApplyView: (view: 'all' | 'working' | 'closed' | 'overdue' | 'next_30' | 'no_deadline') => void;
 }
 
 export function ProjectPortfolioPulse({ summary, onApplyView }: ProjectPortfolioPulseProps) {
@@ -30,7 +30,7 @@ export function ProjectPortfolioPulse({ summary, onApplyView }: ProjectPortfolio
         detail={`Просрочены: ${summary.overdue}; 30 дней: ${summary.soon}; без срока: ${summary.noDeadline}`}
         tone={summary.attention > 0 ? 'warn' : 'default'}
         action="Показать риски"
-        onClick={() => onApplyView(summary.overdue > 0 ? 'overdue' : 'attention')}
+        onClick={() => onApplyView(summary.overdue > 0 ? 'overdue' : 'working')}
       />
       <PulseCard
         icon={<CheckCircle2 className="h-4 w-4" />}
@@ -47,7 +47,7 @@ export function ProjectPortfolioPulse({ summary, onApplyView }: ProjectPortfolio
         detail={summary.hoursLoading ? 'Собираем утверждённые часы' : summary.hoursError ? 'Часы не загрузились — нули не используются' : `Ждут подтверждения: ${summary.pendingHours.toFixed(1)} ч`}
         tone={summary.hoursError || summary.pendingHours > 0 ? 'warn' : 'default'}
         action={summary.hoursLoading || summary.hoursError ? 'Показать портфель' : 'Ждущие часы'}
-        onClick={() => onApplyView(summary.hoursLoading || summary.hoursError ? 'all' : 'waiting_hours')}
+        onClick={() => onApplyView(summary.hoursLoading || summary.hoursError ? 'all' : 'working')}
       />
     </div>
   );

@@ -154,27 +154,27 @@ test.describe('project filters and explicit team assignment', () => {
       'Поиск',
       'Наша компания',
       'Партнёр',
+      'Бизнес-сезон',
       'Дата с',
       'Дата по',
       'Состояние проекта',
       'Срок проекта',
       'Сортировка',
-      'Вид Excel',
     ]) {
       await expect(filters.getByText(label, { exact: true })).toBeVisible();
     }
     for (const forbiddenLabel of [
       'Календарный период',
-      'Бизнес-сезон',
       'Наличие периодов',
       'Тип периода',
+      'Вид Excel',
     ]) {
       await expect(filters.getByText(forbiddenLabel, { exact: true })).toHaveCount(0);
     }
     await expect(filters).not.toContainText(/audit period/i);
 
     const controls = filters.locator('input, button[role="combobox"]');
-    expect(await controls.count()).toBeGreaterThanOrEqual(8);
+    expect(await controls.count()).toBeGreaterThanOrEqual(9);
     const boxes = await controls.evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
       return { left: box.left, right: box.right, width: box.width, height: box.height };

@@ -31,7 +31,7 @@ test('command center column filter key list covers requested Excel-like fields',
   }
   assert.match(pageSource, /const EMPTY_COLUMN_FILTERS = COMMAND_CENTER_COLUMN_FILTER_KEYS\.reduce/);
   assert.match(pageSource, /readInitialColumnFilters\(\)/);
-  assert.match(pageSource, /syncCommandCenterUrl\(\{ search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy \}\)/);
+  assert.match(pageSource, /syncCommandCenterUrl\(\{ search, columnFilters, viewFilter, businessSeasonFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy \}\)/);
 });
 
 test('column filters compose as OR inside one column and AND across columns', () => {
@@ -44,18 +44,13 @@ test('column filters compose as OR inside one column and AND across columns', ()
   assert.match(pageSource, /rowMatchesColumnFilters\(row, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours\)/);
 });
 
-test('true saved views use localStorage rather than hardcoded pseudo-presets', () => {
-  assert.match(pageSource, /COMMAND_CENTER_VIEW_STORAGE_KEY/);
-  assert.match(pageSource, /type SavedCommandCenterView/);
-  assert.match(pageSource, /window\.localStorage\.setItem\(COMMAND_CENTER_VIEW_STORAGE_KEY, JSON\.stringify\(views\)\)/);
-  assert.match(pageSource, /const saveCurrentView = \(\) =>/);
-  assert.match(pageSource, /const applySavedView = \(viewId: string\) =>/);
-  assert.match(pageSource, /Сохранённые виды свода/);
-  assert.match(pageSource, /Сохранить вид/);
-  assert.doesNotMatch(pageSource, />\s*CEO daily\s*</);
-  assert.doesNotMatch(pageSource, />\s*Need contract data\s*</);
-  assert.doesNotMatch(pageSource, />\s*At risk\s*</);
-  assert.doesNotMatch(pageSource, />\s*My portfolio\s*</);
+test('business season is a primary filter without saved views or an Excel-view selector', () => {
+  assert.match(pageSource, /<ProjectFilterField label="Бизнес-сезон">[\s\S]*?businessSeasonFilter/);
+  assert.doesNotMatch(pageSource, /type SavedCommandCenterView/);
+  assert.doesNotMatch(pageSource, /COMMAND_CENTER_VIEW_STORAGE_KEY/);
+  assert.doesNotMatch(pageSource, /Сохранённые виды свода/);
+  assert.doesNotMatch(pageSource, /Сохранить вид/);
+  assert.doesNotMatch(pageSource, /<ProjectFilterField label="Вид Excel">/);
 });
 
 test('count labels separate grouped summary rows from underlying database records', () => {

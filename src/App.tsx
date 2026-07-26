@@ -127,7 +127,7 @@ function App() {
             {/* Team, approval and bonus work now lives in one canonical project ledger.
                 Preserve old bookmarks as safe redirects so legacy pages cannot overwrite
                 notes.team or create a second finance source. */}
-            <Route path="/assign-partners" element={<Navigate to="/projects?view=no_partner" replace />} />
+            <Route path="/assign-partners" element={<Navigate to="/projects?view=working" replace />} />
             <Route path="/bonuses" element={<Navigate to="/projects?view=ready_bonus" replace />} />
             <Route
               path="/settings"
@@ -182,7 +182,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/project-approval" element={<Navigate to="/projects?view=attention" replace />} />
+            <Route path="/project-approval" element={<Navigate to="/projects?view=working" replace />} />
             <Route
               path="/tenders"
               element={

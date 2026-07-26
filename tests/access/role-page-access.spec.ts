@@ -5,13 +5,22 @@ import { USER_ROLES, type UserRole } from '../../src/types/roles';
 type Role = UserRole;
 
 const roles: Role[] = USER_ROLES;
+const unifiedProjectRoutes: Record<string, string> = {
+  '/assign-partners': '/projects',
+  '/bonuses': '/projects',
+  '/project-approval': '/projects',
+};
 
 const routeMatrix: Array<{ path: string; allowed: readonly Role[]; expectedPath?: string }> = [
   { path: '/dashboard', allowed: roles, expectedPath: '/projects' },
   { path: '/timesheet-approval', allowed: roles, expectedPath: '/projects' },
   { path: '/calendar', allowed: roles, expectedPath: '/projects' },
   { path: '/tasks', allowed: roles, expectedPath: '/projects' },
-  ...Object.entries(ROUTE_ACCESS).map(([path, allowed]) => ({ path, allowed })),
+  ...Object.entries(ROUTE_ACCESS).map(([path, allowed]) => ({
+    path,
+    allowed,
+    expectedPath: unifiedProjectRoutes[path],
+  })),
 ];
 
 async function blockProductionNetwork(page: Page) {

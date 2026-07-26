@@ -40,7 +40,7 @@ export interface ExecutivePortfolioSummary {
   groupedFinancialRows: number;
 }
 
-type ExecutiveAction = 'all' | 'attention' | 'overdue' | 'ready_bonus' | 'bonus_attention';
+type ExecutiveAction = 'all' | 'working' | 'overdue' | 'ready_bonus';
 
 export function ExecutivePortfolioOverview({
   summary,
@@ -82,9 +82,9 @@ export function ExecutivePortfolioOverview({
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Требуют решения</h3>
           <div className="grid grid-cols-2 gap-2">
             <DecisionCard label="Просрочены" value={summary.overdueProjects} detail="срок прошёл" tone="danger" onClick={() => onApplyView('overdue')} />
-            <DecisionCard label="Требуют действия" value={summary.attentionProjects} detail="есть проблема" tone="warn" onClick={() => onApplyView('attention')} />
+            <DecisionCard label="Требуют действия" value={summary.attentionProjects} detail="есть проблема" tone="warn" onClick={() => onApplyView('working')} />
             <DecisionCard label="Готовы к бонусам" value={summary.readyForBonuses} detail="можно считать" onClick={() => onApplyView('ready_bonus')} />
-            <DecisionCard label="Проверить бонусы" value={summary.bonusReviewProjects} detail={`${summary.bonusConfiguredProjects} заполнено`} tone={summary.bonusReviewProjects > 0 ? 'warn' : 'positive'} onClick={() => onApplyView('bonus_attention')} />
+            <DecisionCard label="Проверить бонусы" value={summary.bonusReviewProjects} detail={`${summary.bonusConfiguredProjects} заполнено`} tone={summary.bonusReviewProjects > 0 ? 'warn' : 'positive'} onClick={() => onApplyView('ready_bonus')} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-px bg-border">

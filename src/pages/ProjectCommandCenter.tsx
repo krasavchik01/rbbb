@@ -91,16 +91,8 @@ const loadXlsx = (): Promise<typeof XLSXNs> => import('xlsx');
 type ProjectViewFilter =
   | 'all'
   | 'working'
-  | 'attention'
-  | 'closed'
-  | 'no_partner'
-  | 'no_leader'
-  | 'no_contract'
-  | 'no_amount'
-  | 'waiting_hours'
   | 'ready_bonus'
-  | 'bonus_attention'
-  | 'portfolio_attention';
+  | 'closed';
 
 // Historical layouts stay compile-checked during the migration, but are
 // unreachable: /projects is the only mounted management screen.
@@ -111,7 +103,6 @@ type ProjectPeriodFilter = 'all' | 'has_periods' | 'no_periods';
 type AuditPeriodTypeFilter = 'all' | AuditPeriod['type'];
 type ProjectSort = 'default' | 'deadline_asc' | 'deadline_desc' | 'amount_desc' | 'hours_desc';
 type ProjectCommandScope = 'executive' | 'operations';
-type TableDetailLevel = 'compact' | 'detailed';
 type PartnerFilter = 'all' | 'unassigned' | string;
 type CompanyFilter = 'all' | 'missing' | string;
 type YearFilter = 'all' | string;
@@ -153,25 +144,6 @@ const COMMAND_CENTER_COLUMN_FILTER_KEYS = [
 ] as const;
 type ColumnFilterKey = typeof COMMAND_CENTER_COLUMN_FILTER_KEYS[number];
 type ColumnFilterState = Record<ColumnFilterKey, string>;
-type SavedCommandCenterView = {
-  id: string;
-  name: string;
-  search: string;
-  viewFilter: ProjectViewFilter;
-  companyFilter: CompanyFilter;
-  partnerFilter: PartnerFilter;
-  yearFilter: YearFilter;
-  businessSeasonFilter: BusinessSeasonFilter;
-  dateFromFilter: string;
-  dateToFilter: string;
-  deadlineFilter: ProjectDeadlineFilter;
-  periodFilter: ProjectPeriodFilter;
-  auditPeriodTypeFilter: AuditPeriodTypeFilter;
-  sortBy: ProjectSort;
-  tableDetailLevel: TableDetailLevel;
-  columnFilters: ColumnFilterState;
-};
-const COMMAND_CENTER_VIEW_STORAGE_KEY = 'rbbb:project-command-center:saved-views:v1';
 const PROJECT_TABLE_PAGE_SIZES = [25, 50] as const;
 const SHOW_LEGACY_BONUS_WORKSPACE = false;
 const SHOW_LEGACY_GROUPED_PROJECT_ROWS = false;
@@ -588,7 +560,6 @@ function exportContractLabel(row: any): string {
 
 function buildProjectExportRows(
   sourceRows: any[],
-  detailLevel: TableDetailLevel,
   access: { canSeeContractMoney: boolean; canSeeBonuses: boolean; canSeeTeam: boolean; canSeeHours: boolean },
 ): Record<string, string | number>[] {
   return sourceRows.map((row, index) => {
@@ -617,8 +588,6 @@ function buildProjectExportRows(
     if (access.canSeeContractMoney && access.canSeeBonuses) {
       base['Грязный доход'] = Number(row.finances?.grossProfit || 0);
     }
-
-    if (detailLevel === 'compact') return base;
 
     const realTeam = row.coverageTeam || row.team || [];
     if (access.canSeeTeam) {
@@ -1069,6 +1038,12 @@ function rowMatchesBusinessSeason(row: any, value: BusinessSeasonFilter): boolea
   return rowDateRanges(row).some((range) => rangesIntersect(range, season));
 }
 
+function projectOperationalState(row: any): Exclude<ProjectViewFilter, 'all'> {
+  if (row?.readiness?.level === 'closed') return 'closed';
+  if (row?.status === 'pending_payment_approval') return 'ready_bonus';
+  return 'working';
+}
+
 function rowMatchesAuditPeriodType(row: any, value: AuditPeriodTypeFilter): boolean {
   return value === 'all' || (row.periods || []).some((period: AuditPeriod) => period.type === value);
 }
@@ -1230,10 +1205,30 @@ function readInitialColumnFilters(): ColumnFilterState {
   }, {} as ColumnFilterState);
 }
 
+function normalizeProjectViewFilter(value: string | null | undefined): ProjectViewFilter {
+  if (value === 'working' || value === 'ready_bonus' || value === 'closed') return value;
+  if (value === 'bonus_attention') return 'ready_bonus';
+  if (
+    value === 'attention'
+    || value === 'portfolio_attention'
+    || value === 'no_partner'
+    || value === 'no_leader'
+    || value === 'no_contract'
+    || value === 'no_amount'
+    || value === 'waiting_hours'
+  ) return 'working';
+  return 'all';
+}
+
+function normalizeBusinessSeasonFilter(value: string | null | undefined): BusinessSeasonFilter {
+  return value && /^season:20\d{2}$/.test(value) ? value : 'all';
+}
+
 function syncCommandCenterUrl(state: {
   search: string;
   columnFilters: ColumnFilterState;
   viewFilter: ProjectViewFilter;
+  businessSeasonFilter: BusinessSeasonFilter;
   deadlineFilter: ProjectDeadlineFilter;
   periodFilter: ProjectPeriodFilter;
   auditPeriodTypeFilter: AuditPeriodTypeFilter;
@@ -1248,6 +1243,7 @@ function syncCommandCenterUrl(state: {
   };
   setOrDelete('q', state.search);
   setOrDelete('view', state.viewFilter, 'all');
+  setOrDelete('season', state.businessSeasonFilter, 'all');
   setOrDelete('deadline', state.deadlineFilter, 'all');
   setOrDelete('periods', state.periodFilter, 'all');
   setOrDelete('periodType', state.auditPeriodTypeFilter, 'all');
@@ -1456,10 +1452,6 @@ function issueBadgeClass(level: 'ready' | 'attention' | 'closed') {
   if (level === 'ready') return 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50';
   if (level === 'closed') return 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100';
   return 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-50';
-}
-
-function rowHasIssue(row: { readiness: { issues: string[] } }, issue: string) {
-  return row.readiness.issues.includes(issue);
 }
 
 function workloadComplexity(hours: ProjectHoursTotals): { label: string; className: string; total: number } {
@@ -1694,22 +1686,27 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     season: '',
     period: '',
   }));
-  const [viewFilter, setViewFilter] = useState<ProjectViewFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('view') as ProjectViewFilter)) || 'all');
+  const [viewFilter, setViewFilter] = useState<ProjectViewFilter>(() => (
+    typeof window === 'undefined'
+      ? 'all'
+      : normalizeProjectViewFilter(new URLSearchParams(window.location.search).get('view'))
+  ));
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all');
   const [partnerFilter, setPartnerFilter] = useState<PartnerFilter>('all');
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
-  const [businessSeasonFilter, setBusinessSeasonFilter] = useState<BusinessSeasonFilter>('all');
+  const [businessSeasonFilter, setBusinessSeasonFilter] = useState<BusinessSeasonFilter>(() => (
+    typeof window === 'undefined'
+      ? 'all'
+      : normalizeBusinessSeasonFilter(new URLSearchParams(window.location.search).get('season'))
+  ));
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
   const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('deadline') as ProjectDeadlineFilter)) || 'all');
   const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>('all');
   const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>('all');
   const [sortBy, setSortBy] = useState<ProjectSort>(() => (typeof window === 'undefined' ? 'deadline_asc' : (new URLSearchParams(window.location.search).get('sort') as ProjectSort)) || 'deadline_asc');
-  const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState<number>(25);
-  const [savedViews, setSavedViews] = useState<SavedCommandCenterView[]>([]);
-  const [selectedSavedViewId, setSelectedSavedViewId] = useState('');
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
   const [openingFileKey, setOpeningFileKey] = useState<string | null>(null);
   const [contractorNameDrafts, setContractorNameDrafts] = useState<Record<string, string>>({});
@@ -1912,23 +1909,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(COMMAND_CENTER_VIEW_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) setSavedViews(parsed);
-    } catch {
-      setSavedViews([]);
-    }
-  }, []);
-
-  useEffect(() => {
     if (!urlSyncReadyRef.current) {
       urlSyncReadyRef.current = true;
       return;
     }
-    syncCommandCenterUrl({ search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy });
-  }, [search, columnFilters, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
+    syncCommandCenterUrl({ search, columnFilters, viewFilter, businessSeasonFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy });
+  }, [search, columnFilters, viewFilter, businessSeasonFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
 
   useEffect(() => {
     if (projectsLoading && projects.length === 0) return;
@@ -2318,67 +2304,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     };
   }, [rows, summary, paymentRegistrySummary, hoursRowCount, hoursComplete, hoursLoading, hoursError]);
 
-  const currentSavedViewPayload = (): Omit<SavedCommandCenterView, 'id' | 'name'> => ({
-    search,
-    viewFilter,
-    companyFilter,
-    partnerFilter,
-    yearFilter,
-    businessSeasonFilter,
-    dateFromFilter,
-    dateToFilter,
-    deadlineFilter,
-    periodFilter,
-    auditPeriodTypeFilter,
-    sortBy,
-    tableDetailLevel,
-    columnFilters,
-  });
-
-  const persistSavedViews = (views: SavedCommandCenterView[]) => {
-    setSavedViews(views);
-    window.localStorage.setItem(COMMAND_CENTER_VIEW_STORAGE_KEY, JSON.stringify(views));
-  };
-
-  const saveCurrentView = () => {
-    const name = window.prompt('Название вида');
-    if (!name?.trim()) return;
-    const view: SavedCommandCenterView = { id: `view:${Date.now()}`, name: name.trim(), ...currentSavedViewPayload() };
-    persistSavedViews([...savedViews.filter((item) => item.name !== view.name), view]);
-    setSelectedSavedViewId(view.id);
-  };
-
-  const applySavedView = (viewId: string) => {
-    const view = savedViews.find((item) => item.id === viewId);
-    if (!view) return;
-    setSelectedSavedViewId(view.id);
-    setSearch(view.search);
-    setViewFilter(view.viewFilter);
-    setCompanyFilter(view.companyFilter);
-    setPartnerFilter(view.partnerFilter);
-    setYearFilter('all');
-    setBusinessSeasonFilter('all');
-    setDateFromFilter(view.dateFromFilter);
-    setDateToFilter(view.dateToFilter);
-    setDeadlineFilter(view.deadlineFilter);
-    setPeriodFilter('all');
-    setAuditPeriodTypeFilter('all');
-    setSortBy(view.sortBy);
-    setTableDetailLevel(view.tableDetailLevel);
-    setColumnFilters({
-      ...EMPTY_COLUMN_FILTERS,
-      ...view.columnFilters,
-      season: '',
-      period: '',
-    });
-  };
-
-  const deleteSelectedSavedView = () => {
-    if (!selectedSavedViewId) return;
-    persistSavedViews(savedViews.filter((item) => item.id !== selectedSavedViewId));
-    setSelectedSavedViewId('');
-  };
-
   const partnerOptions = useMemo(() => {
     const map = new Map<string, { key: string; name: string; count: number }>();
 
@@ -2407,6 +2332,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   }, [rows, appSettings.companies]);
 
+  const businessSeasonOptions = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const row of rows) {
+      for (const year of rowBusinessSeasonYears(row)) {
+        counts.set(year, (counts.get(year) || 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort(([left], [right]) => right - left)
+      .map(([year, count]) => ({
+        value: `season:${year}`,
+        label: businessSeasonLabel(year),
+        count,
+      }));
+  }, [rows]);
+
   const selectedPartnerLabel = useMemo(() => {
     if (partnerFilter === 'all') return '';
     if (partnerFilter === 'unassigned') return 'Без партнера';
@@ -2419,10 +2360,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return companyOptions.find((item) => item.key === companyFilter)?.name || '';
   }, [companyFilter, companyOptions]);
 
+  const selectedBusinessSeasonLabel = useMemo(() => {
+    if (businessSeasonFilter === 'all') return '';
+    const option = businessSeasonOptions.find((item) => item.value === businessSeasonFilter);
+    if (option) return option.label;
+    const match = businessSeasonFilter.match(/^season:(20\d{2})$/);
+    return match ? businessSeasonLabel(Number(match[1])) : '';
+  }, [businessSeasonFilter, businessSeasonOptions]);
+
   useEffect(() => {
     if (!canSeeTeam) {
       if (partnerFilter !== 'all') setPartnerFilter('all');
-      if (viewFilter === 'no_partner' || viewFilter === 'no_leader') setViewFilter('all');
       setColumnFilters((current) => (
         current.partner || current.leader
           ? { ...current, partner: '', leader: '' }
@@ -2430,7 +2378,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       ));
     }
     if (!canSeeHours) {
-      if (viewFilter === 'waiting_hours') setViewFilter('all');
       if (sortBy === 'hours_desc') setSortBy('deadline_asc');
       setColumnFilters((current) => (current.hours ? { ...current, hours: '' } : current));
     }
@@ -2439,10 +2386,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       setColumnFilters((current) => (current.money ? { ...current, money: '' } : current));
     }
     if (!canSeeBonusSummary) {
-      if (viewFilter === 'bonus_attention') setViewFilter('all');
       setColumnFilters((current) => (current.bonus ? { ...current, bonus: '' } : current));
     }
-  }, [canSeeTeam, canSeeHours, canSeeContractMoney, canSeeBonusSummary, partnerFilter, viewFilter, sortBy]);
+  }, [canSeeTeam, canSeeHours, canSeeContractMoney, canSeeBonusSummary, partnerFilter, sortBy]);
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -2472,21 +2418,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (!rowMatchesDateFilter(row, yearFilter)) return false;
       if (!rowMatchesBusinessSeason(row, businessSeasonFilter)) return false;
       if (exactRange && !rowDateRanges(row).some((range) => rangesIntersect(range, exactRange))) return false;
-      if (viewFilter === 'working' && (row.baseReadiness.level !== 'ready' || row.status === 'pending_payment_approval')) return false;
-      if (viewFilter === 'attention' && row.baseReadiness.level !== 'attention') return false;
-      if (viewFilter === 'portfolio_attention' && (row.baseReadiness.level !== 'attention' || row.status === 'pending_payment_approval')) return false;
-      if (viewFilter === 'closed' && row.readiness.level !== 'closed') return false;
-      if (canSeeTeam && viewFilter === 'no_partner' && !rowHasIssue(row, 'нет партнера')) return false;
-      if (canSeeTeam && viewFilter === 'no_leader' && !rowHasIssue(row, 'нет руководителя')) return false;
-      if (viewFilter === 'no_contract' && !rowHasIssue(row, 'нет договора')) return false;
-      if (viewFilter === 'no_amount' && !rowHasIssue(row, 'нет суммы')) return false;
-      if (canSeeHours && viewFilter === 'waiting_hours' && !rowHasIssue(row, 'ждут часы')) return false;
-      if (viewFilter === 'ready_bonus' && row.status !== 'pending_payment_approval') return false;
-      if (
-        viewFilter === 'bonus_attention'
-        && canSeeBonusSummary
-        && !rowNeedsBonusReview(row, hoursComplete && !hoursLoading && !hoursError)
-      ) return false;
+      if (viewFilter !== 'all' && projectOperationalState(row) !== viewFilter) return false;
       if (deadlineFilter === 'overdue' && row.deadlineState.tone !== 'overdue') return false;
       if (deadlineFilter === 'next_30' && row.deadlineState.tone !== 'soon') return false;
       if (deadlineFilter === 'no_deadline' && row.deadlineState.tone !== 'none') return false;
@@ -2504,7 +2436,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (canSeeHours && sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours, hoursComplete, hoursLoading, hoursError]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours]);
 
   const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize));
   const safeTablePage = Math.min(tablePage, tablePageCount);
@@ -2517,7 +2449,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   useEffect(() => {
     setTablePage(1);
-  }, [search, companyFilter, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, tableDetailLevel]);
+  }, [search, companyFilter, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters]);
 
   useEffect(() => {
     setTablePage((current) => Math.min(current, tablePageCount));
@@ -2650,7 +2582,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         return;
       }
 
-      const exportRows = buildProjectExportRows(filteredRows, tableDetailLevel, {
+      const exportRows = buildProjectExportRows(filteredRows, {
         canSeeContractMoney,
         canSeeBonuses: canSeeBonusSummary,
         canSeeTeam,
@@ -2660,8 +2592,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       autosizeExportSheet(worksheet, exportRows);
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, tableDetailLevel === 'detailed' ? 'Подробно' : 'Кратко');
-      XLSX.writeFile(workbook, `svod_filtered_${tableDetailLevel}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Подробно');
+      XLSX.writeFile(workbook, `svod_filtered_detailed_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
       toast({
         title: 'Выгрузка готова',
@@ -4453,6 +4385,21 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </SelectContent>
               </Select>
               </ProjectFilterField>}
+              <ProjectFilterField label="Бизнес-сезон">
+              <Select value={businessSeasonFilter} onValueChange={(value) => setBusinessSeasonFilter(value as BusinessSeasonFilter)}>
+                <SelectTrigger className="w-full" aria-label="Бизнес-сезон">
+                  <SelectValue placeholder="Бизнес-сезон" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все бизнес-сезоны</SelectItem>
+                  {businessSeasonOptions.map((season) => (
+                    <SelectItem key={season.value} value={season.value}>
+                      {season.label} · {season.count}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              </ProjectFilterField>
               <ProjectFilterField label="Дата с">
               <Input
                 type="date"
@@ -4473,22 +4420,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </ProjectFilterField>
               <ProjectFilterField label="Состояние проекта">
               <Select value={viewFilter} onValueChange={(value) => setViewFilter(value as ProjectViewFilter)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label="Состояние проекта">
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Все проекты</SelectItem>
-                  <SelectItem value="working">В работе без проблем</SelectItem>
-                  <SelectItem value="attention">Требуют действия</SelectItem>
-                  <SelectItem value="closed">Закрытые</SelectItem>
+                  <SelectItem value="all">Все</SelectItem>
+                  <SelectItem value="working">В работе</SelectItem>
                   <SelectItem value="ready_bonus">Готовы к бонусам</SelectItem>
-                  {canSeeBonusSummary && <SelectItem value="bonus_attention">Проверить расчёт бонусов</SelectItem>}
-                  {canSeeTeam && <SelectItem value="no_partner">Без партнера</SelectItem>}
-                  {canSeeTeam && <SelectItem value="no_leader">Без руководителя</SelectItem>}
-                  {canSeeContractMoney && <SelectItem value="no_contract">Без договора</SelectItem>}
-                  {canSeeContractMoney && <SelectItem value="no_amount">Без суммы</SelectItem>}
-                  {canSeeHours && <SelectItem value="waiting_hours">Ждут часы</SelectItem>}
+                  <SelectItem value="closed">Закрытые</SelectItem>
                 </SelectContent>
               </Select>
               </ProjectFilterField>
@@ -4545,42 +4485,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </SelectContent>
               </Select>
               </ProjectFilterField>
-              <ProjectFilterField label="Вид Excel">
-              <Select value={tableDetailLevel} onValueChange={(value) => setTableDetailLevel(value as TableDetailLevel)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="compact">Кратко</SelectItem>
-                  <SelectItem value="detailed">Подробно</SelectItem>
-                </SelectContent>
-              </Select>
-              </ProjectFilterField>
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-2 border-t pt-3" data-testid="project-filter-actions">
               <Button type="button" variant="outline" size="sm" className="h-10" disabled={!primaryFiltersActive} onClick={clearAllProjectFilters}>
                 Сбросить все фильтры
               </Button>
-              <Select value={selectedSavedViewId} onValueChange={applySavedView}>
-                <SelectTrigger className="h-10 w-[220px]" aria-label="Сохранённые виды свода">
-                  <SelectValue placeholder="Сохранённые виды" />
-                </SelectTrigger>
-                <SelectContent>
-                  {savedViews.length === 0 ? (
-                    <SelectItem value="no-saved-views" disabled>Нет сохранённых видов</SelectItem>
-                  ) : savedViews.map((view) => (
-                    <SelectItem key={view.id} value={view.id}>{view.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button type="button" variant="secondary" size="sm" className="h-10" onClick={saveCurrentView}>
-                Сохранить вид
-              </Button>
-              {selectedSavedViewId && (
-                <Button type="button" variant="ghost" size="sm" className="h-10" onClick={deleteSelectedSavedView}>
-                  Удалить вид
-                </Button>
-              )}
               <Button
                 type="button"
                 variant="outline"
@@ -4598,11 +4507,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
             </div>
           </div>
-          {(companyFilter !== 'all' || (canSeeTeam && partnerFilter !== 'all') || dateFromFilter || dateToFilter) && (
+          {(companyFilter !== 'all' || (canSeeTeam && partnerFilter !== 'all') || businessSeasonFilter !== 'all' || dateFromFilter || dateToFilter) && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Сверка:</span>
               {companyFilter !== 'all' && <Badge variant="secondary">Наша компания: {selectedCompanyLabel}</Badge>}
               {canSeeTeam && partnerFilter !== 'all' && <Badge variant="secondary">Партнер: {selectedPartnerLabel}</Badge>}
+              {businessSeasonFilter !== 'all' && <Badge variant="secondary">Бизнес-сезон: {selectedBusinessSeasonLabel}</Badge>}
               {(dateFromFilter || dateToFilter) && <Badge variant="secondary">Даты: {dateFromFilter || '…'} — {dateToFilter || '…'}</Badge>}
               <span className="ml-auto text-muted-foreground">
                 Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span>; записей в базе: <span className="font-medium text-foreground tabular-nums">{filteredDatabaseRecordCount}</span>
@@ -4844,7 +4754,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             {projectsLoading && <div className="py-10 text-center text-sm text-muted-foreground">Загружаю проекты…</div>}
             {!projectsLoading && filteredRows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{projectsError ? 'Проекты недоступны. Повторите загрузку в сообщении выше.' : 'По текущим фильтрам проектов нет.'}</div>}
             {!projectsLoading && visibleRows.map((row) => {
-              const expanded = tableDetailLevel === 'detailed' || Boolean(expandedRows[row.id]);
+              const expanded = Boolean(expandedRows[row.id]);
               const workload = workloadComplexity(row.hours);
               const currentPartner = teamMemberForRole(row.team, isPartnerRole);
               const currentLeader = teamMemberForRole(row.team, isLeaderRole);
@@ -5066,7 +4976,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               )}
               {!projectsLoading &&
                 visibleRows.map((row) => {
-                  const expanded = tableDetailLevel === 'detailed' || !!expandedRows[row.id];
+                  const expanded = !!expandedRows[row.id];
                   const totalBonusAmount = plannedBonusPool(row);
                   const allocatedBonuses = allocatedDraftBonuses(row);
                   const bonusRemaining = totalBonusAmount - allocatedBonuses;
@@ -5123,9 +5033,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            disabled={tableDetailLevel === 'detailed'}
                             onClick={() => toggleRow(row.id)}
-                            title={tableDetailLevel === 'detailed' ? 'Подробный вид включен' : expanded ? 'Свернуть' : 'Раскрыть'}
+                            title={expanded ? 'Свернуть' : 'Раскрыть'}
                           >
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </Button>
