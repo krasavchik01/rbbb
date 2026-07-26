@@ -4,12 +4,16 @@ import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fix
 test.describe('bulk administration and deputy project status', () => {
   test('deputy director can add a GPH amount from the project summary', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    await page.locator('tr').filter({ hasText: demoProject.name }).first().getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Расширенное редактирование' }).click();
-    await page.getByRole('button', { name: 'Добавить', exact: true }).first().click();
+    const table = page.getByLabel('Общая CEO-таблица проектов');
+    await table.getByTitle('Раскрыть').first().click();
+    await table.getByTestId(`project-details-${demoProject.id}`).getByRole('button', { name: 'Ещё детали' }).click();
+    const supervisorHeading = table.getByText('Супервайзер 3', { exact: true }).first();
+    const supervisorCard = supervisorHeading.locator('..').locator('..');
+    await supervisorCard.getByRole('button', { name: 'Добавить', exact: true }).click();
     await page.getByTestId('add-contractor').click();
     const contractorNameInput = page.getByTestId('contractor-name-input');
     const gphInput = page.getByTestId('contractor-amount-input');
@@ -25,7 +29,7 @@ test.describe('bulk administration and deputy project status', () => {
     expect(employeeCreate?.body).toContain('Тестовый Исполнитель');
     expect(projectUpdate?.body).toContain('Тестовый Исполнитель');
     expect(projectUpdate?.body).toContain('250000');
-    expect(projectUpdate?.body).toContain('project_leader');
+    expect(projectUpdate?.body).toContain('supervisor_3');
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -167,7 +171,8 @@ test.describe('bulk administration and deputy project status', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    await page.locator('tbody input[type="checkbox"]').check();
+    const projectCheckbox = page.getByRole('checkbox', { name: `Выбрать проект ${demoProject.name}`, exact: true });
+    await projectCheckbox.check();
 
     await expect(page.getByTestId('bulk-team-template-select')).toBeVisible();
     await expect(page.getByTestId('bulk-assign-team')).toBeVisible();
@@ -180,7 +185,7 @@ test.describe('bulk administration and deputy project status', () => {
     await page.getByTestId('confirm-bulk-team').click();
     await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
 
-    await page.locator('tbody input[type="checkbox"]').check();
+    await projectCheckbox.check();
     await page.getByTestId('bulk-leader-select').click();
     await page.getByRole('option').first().click();
     await page.getByTestId('bulk-assign-leader').click();

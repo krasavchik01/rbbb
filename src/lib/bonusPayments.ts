@@ -32,6 +32,7 @@ export type BonusPaymentRegistrySummary = {
   totalRows: number;
   unmatchedRows: number;
   outOfScopeRows: number;
+  byProject: Map<string, BonusPaymentLedgerState>;
   byKey: Map<string, BonusPaymentLedgerState>;
 };
 
@@ -99,6 +100,7 @@ export function summarizeBonusPaymentRegistry(
   rows: readonly BonusPaymentRow[],
   includedProjectIds?: ReadonlySet<string>,
 ): BonusPaymentRegistrySummary {
+  const byProject = new Map<string, BonusPaymentLedgerState>();
   const byKey = new Map<string, BonusPaymentLedgerState>();
   let approvedUnpaidAmount = 0;
   let paidAmount = 0;
@@ -113,7 +115,7 @@ export function summarizeBonusPaymentRegistry(
       outOfScopeRows += 1;
       continue;
     }
-    if (!row.project_id || !row.employee_id) {
+    if (!row.project_id) {
       unmatchedRows += 1;
       continue;
     }
@@ -122,8 +124,7 @@ export function summarizeBonusPaymentRegistry(
     const safeAmount = Number.isFinite(amount) ? amount : 0;
     const paid = Boolean(row.payment_date);
     const approved = !paid && row.status === 'approved';
-    const key = bonusPaymentKey(row.project_id, row.employee_id);
-    const current = byKey.get(key) || {
+    const projectLedger = byProject.get(row.project_id) || {
       approvedUnpaidAmount: 0,
       paidAmount: 0,
       pendingAmount: 0,
@@ -133,17 +134,44 @@ export function summarizeBonusPaymentRegistry(
 
     if (paid) {
       paidAmount += safeAmount;
-      current.paidAmount += safeAmount;
-      current.latestPaymentDate = latestDate(current.latestPaymentDate, row.payment_date);
+      projectLedger.paidAmount += safeAmount;
+      projectLedger.latestPaymentDate = latestDate(projectLedger.latestPaymentDate, row.payment_date);
     } else if (approved) {
       approvedUnpaidAmount += safeAmount;
-      current.approvedUnpaidAmount += safeAmount;
+      projectLedger.approvedUnpaidAmount += safeAmount;
     } else {
       pendingAmount += safeAmount;
-      current.pendingAmount += safeAmount;
+      projectLedger.pendingAmount += safeAmount;
     }
-    current.rowCount += 1;
-    byKey.set(key, current);
+    projectLedger.rowCount += 1;
+    byProject.set(row.project_id, projectLedger);
+
+    // A legacy/manual registry row can belong to a project before it is linked
+    // to a system employee. It must remain in project and CEO totals, while the
+    // missing employee link is still reported for reconciliation diagnostics.
+    if (!row.employee_id) {
+      unmatchedRows += 1;
+      continue;
+    }
+
+    const key = bonusPaymentKey(row.project_id, row.employee_id);
+    const employeeLedger = byKey.get(key) || {
+      approvedUnpaidAmount: 0,
+      paidAmount: 0,
+      pendingAmount: 0,
+      rowCount: 0,
+      latestPaymentDate: null,
+    };
+    if (paid) {
+      employeeLedger.paidAmount += safeAmount;
+      employeeLedger.latestPaymentDate = latestDate(employeeLedger.latestPaymentDate, row.payment_date);
+    } else if (approved) {
+      employeeLedger.approvedUnpaidAmount += safeAmount;
+    } else {
+      employeeLedger.pendingAmount += safeAmount;
+    }
+    employeeLedger.rowCount += 1;
+    byKey.set(key, employeeLedger);
   }
 
   return {
@@ -153,6 +181,7 @@ export function summarizeBonusPaymentRegistry(
     totalRows,
     unmatchedRows,
     outOfScopeRows,
+    byProject,
     byKey,
   };
 }

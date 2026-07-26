@@ -45,8 +45,8 @@ test('CEO Excel export follows the legacy horizontal workbook matrix', () => {
 });
 
 test('CEO Excel export creates one total sheet and partner sheets', () => {
-  assert.match(pageSource, /function buildLegacyCeoWorkbook\([\s\S]*paymentByKey\?: ReadonlyMap<string, BonusPaymentLedgerState>/);
-  assert.match(pageSource, /appendLegacyCeoSheet\(XLSX, workbook, 'ИТОГО', sourceRows, paymentByKey\)/);
+  assert.match(pageSource, /function buildLegacyCeoWorkbook\([\s\S]*paymentByProject\?: ReadonlyMap<string, BonusPaymentLedgerState>/);
+  assert.match(pageSource, /appendLegacyCeoSheet\(XLSX, workbook, 'ИТОГО', sourceRows, paymentByProject\)/);
   assert.match(pageSource, /const byPartner = new Map<string, any\[\]>\(\)/);
   assert.match(pageSource, /legacyPartnerKeys\(row\)/);
   assert.match(pageSource, /legacyUniqueSheetName\(workbook, sheetName\)/);
@@ -54,7 +54,7 @@ test('CEO Excel export creates one total sheet and partner sheets', () => {
 
 test('CEO download path uses the legacy workbook while non-executive export remains available', () => {
   assert.match(pageSource, /if \(isExecutive && canSeeContractMoney\) \{/);
-  assert.match(pageSource, /buildLegacyCeoWorkbook\(XLSX, filteredRows, paymentRegistrySummary\.byKey\)/);
+  assert.match(pageSource, /buildLegacyCeoWorkbook\(XLSX, filteredRows, paymentRegistrySummary\.byProject\)/);
   assert.match(pageSource, /Реестр выплат ещё загружается/);
   assert.match(pageSource, /Платёжный реестр недоступен/);
   assert.match(pageSource, /ceo_legacy_partner_workbook_/);
@@ -62,9 +62,9 @@ test('CEO download path uses the legacy workbook while non-executive export rema
 });
 
 test('CEO Excel export writes one employee per role cell instead of comma-crowding people', () => {
-  assert.match(pageSource, /function legacyExportProjectRows\([\s\S]*paymentByKey\?: ReadonlyMap<string, BonusPaymentLedgerState>/);
+  assert.match(pageSource, /function legacyExportProjectRows\([\s\S]*paymentByProject\?: ReadonlyMap<string, BonusPaymentLedgerState>/);
   assert.match(pageSource, /const maxLines = Math\.max\(1, \.\.\.roleMembersByColumn\.map\(\(column\) => column\.members\.length\)\)/);
-  assert.match(pageSource, /sourceRows\.flatMap\(\(row, index\) => legacyExportProjectRows\(row, index, paymentByKey\)\)/);
+  assert.match(pageSource, /sourceRows\.flatMap\(\(row, index\) => legacyExportProjectRows\(row, index, paymentByProject\)\)/);
   assert.match(pageSource, /result\[column\.name as LegacyExportColumn\] = member \? teamName\(member\) : ''/);
   assert.doesNotMatch(pageSource, /result\[column\.name as LegacyExportColumn\] = legacyRoleNames\(row, column\.key\)/);
 });

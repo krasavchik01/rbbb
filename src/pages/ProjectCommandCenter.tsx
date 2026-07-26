@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, ChevronDown, ChevronRight, Download, ExternalLink, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +56,7 @@ import {
   type BonusPaymentRow,
 } from '@/lib/bonusPayments';
 import { calculateProjectFinances } from '@/types/project-v3';
-import { isUserRole, ROLE_LABELS } from '@/types/roles';
+import { hasPermission, isUserRole, ROLE_LABELS } from '@/types/roles';
 import {
   buildProjectStatusUpdate,
   MANAGED_PROJECT_STATUS_LABELS,
@@ -75,6 +75,11 @@ import {
   type ExecutivePortfolioSummary,
 } from '@/components/projects/ExecutivePortfolioOverview';
 import { ExecutivePortfolioVisuals } from '@/components/projects/ExecutivePortfolioVisuals';
+import {
+  ProjectInlineDetail,
+  type ProjectInlineBonusEmployee,
+  type ProjectInlineTone,
+} from '@/components/projects/ProjectInlineDetail';
 import { CommandCenterColumnFilter } from '@/components/projects/CommandCenterColumnFilter';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import type { CanonicalTeamMember } from '@/types/project-domain';
@@ -109,6 +114,20 @@ type CompanyOption = { id: string; name: string; fullName?: string; isActive?: b
 type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
 type ProjectDateDraft = { startDate: string; deadline: string };
 type DateRange = { start: Date; end: Date };
+type TeamTemplateCandidate = {
+  partnerId: string;
+  ownerName: string;
+  sourceProjectId: string;
+  signature: string;
+  team: CanonicalTeamMember[];
+};
+type TeamTemplateDefinition = {
+  id: string;
+  label: string;
+  sourceProjectId: string;
+  occurrenceCount: number;
+  team: CanonicalTeamMember[];
+};
 const COMMAND_CENTER_COLUMN_FILTER_KEYS = [
   'company',
   'project',
@@ -148,6 +167,7 @@ type SavedCommandCenterView = {
 };
 const COMMAND_CENTER_VIEW_STORAGE_KEY = 'rbbb:project-command-center:saved-views:v1';
 const PROJECT_TABLE_PAGE_SIZES = [25, 50] as const;
+const SHOW_LEGACY_BONUS_WORKSPACE = false;
 
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
@@ -331,6 +351,20 @@ function deadlineBadgeClass(tone: 'none' | 'done' | 'overdue' | 'soon' | 'normal
   return 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50';
 }
 
+function inlineDeadlineTone(tone: 'none' | 'done' | 'overdue' | 'soon' | 'normal'): ProjectInlineTone {
+  if (tone === 'overdue') return 'danger';
+  if (tone === 'soon') return 'warning';
+  if (tone === 'done') return 'positive';
+  if (tone === 'normal') return 'info';
+  return 'neutral';
+}
+
+function inlineReadinessTone(level: 'ready' | 'attention' | 'closed'): ProjectInlineTone {
+  if (level === 'ready') return 'positive';
+  if (level === 'attention') return 'warning';
+  return 'neutral';
+}
+
 function teamName(member: any): string {
   return member?.userName || member?.name || member?.employeeName || 'Без имени';
 }
@@ -350,6 +384,54 @@ function isLeaderRole(role: string): boolean {
 function teamMemberId(member: any): string {
   const employee = member?.employee || member?.profile || member?.user || {};
   return member?.userId || member?.user_id || member?.employeeId || member?.employee_id || employee?.id || member?.id || '';
+}
+
+function teamTemplateSignature(team: CanonicalTeamMember[]): string {
+  return team
+    .map((member) => {
+      const identity = teamMemberId(member)
+        || String((member as any)?.userEmail || (member as any)?.email || teamName(member)).trim().toLowerCase();
+      return `${teamRole(member)}:${identity}`;
+    })
+    .sort((left, right) => left.localeCompare(right, 'ru'))
+    .join('|');
+}
+
+function selectPartnerTeamTemplate(
+  candidates: TeamTemplateCandidate[],
+  partnerId: string,
+  excludedSourceProjectId?: string,
+): TeamTemplateDefinition | null {
+  const eligible = candidates.filter((candidate) => (
+    candidate.partnerId === partnerId
+    && candidate.sourceProjectId !== excludedSourceProjectId
+  ));
+  if (eligible.length === 0) return null;
+
+  const groups = new Map<string, TeamTemplateCandidate[]>();
+  for (const candidate of eligible) {
+    const group = groups.get(candidate.signature) || [];
+    group.push(candidate);
+    groups.set(candidate.signature, group);
+  }
+
+  const rankedGroups = [...groups.values()].sort((left, right) => {
+    if (right.length !== left.length) return right.length - left.length;
+    if (right[0].team.length !== left[0].team.length) return right[0].team.length - left[0].team.length;
+    return left[0].sourceProjectId.localeCompare(right[0].sourceProjectId, 'ru');
+  });
+  const winningGroup = rankedGroups[0];
+  const source = [...winningGroup].sort((left, right) => (
+    left.sourceProjectId.localeCompare(right.sourceProjectId, 'ru')
+  ))[0];
+
+  return {
+    id: `partner:${partnerId}`,
+    label: `Команда партнёра: ${source.ownerName} · ${source.team.length} чел.${winningGroup.length > 1 ? ` · ${winningGroup.length} проекта` : ''}`,
+    sourceProjectId: source.sourceProjectId,
+    occurrenceCount: winningGroup.length,
+    team: source.team.map((member) => ({ ...member })),
+  };
 }
 
 function bonusMemberIdentity(member: any): string {
@@ -681,7 +763,7 @@ function legacyServiceRange(row: any): string {
 function legacyExportProjectRows(
   row: any,
   index: number,
-  paymentByKey?: ReadonlyMap<string, BonusPaymentLedgerState>,
+  paymentByProject?: ReadonlyMap<string, BonusPaymentLedgerState>,
 ): LegacyExportRow[] {
   const model = buildProjectCommandCenterModel(row.project || {});
   const gphAmount = legacyContractorAmount(row);
@@ -693,8 +775,8 @@ function legacyExportProjectRows(
   const totalCosts = legacyMoneyOrFallback(row.finances?.totalCosts, gphAmount + preExpense + distributedBonuses);
   const bonusBaseFallback = Math.max(0, legacyMoney(contractAmount) - gphAmount - preExpense);
   const grossProfitFallback = legacyMoney(contractAmount) - totalCosts;
-  const paymentLedger = paymentByKey
-    ? projectPaymentLedger(row.projectIds?.length ? row.projectIds : [row.id], paymentByKey)
+  const paymentLedger = paymentByProject
+    ? projectPaymentLedger(row.projectIds?.length ? row.projectIds : [row.id], paymentByProject)
     : null;
   const roleMembersByColumn = LEGACY_ROLE_EXPORT_COLUMNS.map((column) => ({
     ...column,
@@ -792,9 +874,9 @@ function appendLegacyCeoSheet(
   workbook: any,
   sheetName: string,
   sourceRows: any[],
-  paymentByKey?: ReadonlyMap<string, BonusPaymentLedgerState>,
+  paymentByProject?: ReadonlyMap<string, BonusPaymentLedgerState>,
 ) {
-  const rows = sourceRows.flatMap((row, index) => legacyExportProjectRows(row, index, paymentByKey));
+  const rows = sourceRows.flatMap((row, index) => legacyExportProjectRows(row, index, paymentByProject));
   const aoa: (string | number)[][] = [
     [`CEO ведомость · ${sheetName}`],
     [`Проект → сумма → бонусный пул → роли → ГПХ/предрасход → доход`],
@@ -818,10 +900,10 @@ function appendLegacyCeoSheet(
 function buildLegacyCeoWorkbook(
   XLSX: any,
   sourceRows: any[],
-  paymentByKey?: ReadonlyMap<string, BonusPaymentLedgerState>,
+  paymentByProject?: ReadonlyMap<string, BonusPaymentLedgerState>,
 ) {
   const workbook = XLSX.utils.book_new();
-  appendLegacyCeoSheet(XLSX, workbook, 'ИТОГО', sourceRows, paymentByKey);
+  appendLegacyCeoSheet(XLSX, workbook, 'ИТОГО', sourceRows, paymentByProject);
   const byPartner = new Map<string, any[]>();
   for (const row of sourceRows) {
     for (const partner of legacyPartnerKeys(row)) {
@@ -831,7 +913,7 @@ function buildLegacyCeoWorkbook(
   }
   [...byPartner.entries()]
     .sort(([left], [right]) => left.localeCompare(right, 'ru'))
-    .forEach(([partner, rows]) => appendLegacyCeoSheet(XLSX, workbook, partner, rows, paymentByKey));
+    .forEach(([partner, rows]) => appendLegacyCeoSheet(XLSX, workbook, partner, rows, paymentByProject));
   return workbook;
 }
 
@@ -1069,9 +1151,8 @@ function memberPaymentLedger(
 
 function projectPaymentLedger(
   projectIds: readonly string[],
-  byKey: ReadonlyMap<string, BonusPaymentLedgerState>,
+  byProject: ReadonlyMap<string, BonusPaymentLedgerState>,
 ): BonusPaymentLedgerState {
-  const prefixes = projectIds.map((projectId) => `${projectId}::`);
   const total: BonusPaymentLedgerState = {
     approvedUnpaidAmount: 0,
     paidAmount: 0,
@@ -1079,8 +1160,9 @@ function projectPaymentLedger(
     rowCount: 0,
     latestPaymentDate: null,
   };
-  for (const [key, value] of byKey.entries()) {
-    if (!prefixes.some((prefix) => key.startsWith(prefix))) continue;
+  for (const projectId of projectIds) {
+    const value = byProject.get(projectId);
+    if (!value) continue;
     total.approvedUnpaidAmount += value.approvedUnpaidAmount;
     total.paidAmount += value.paidAmount;
     total.pendingAmount += value.pendingAmount;
@@ -1466,6 +1548,15 @@ function SummaryItem({ label, value, tone = 'default' }: { label: string; value:
   );
 }
 
+function ProjectFilterField({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      {children}
+    </div>
+  );
+}
+
 function MetricBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border bg-background px-3 py-2">
@@ -1527,11 +1618,21 @@ function EmployeeSearchAdd({
   disabled,
   onPick,
   onAddContractor,
+  triggerLabel = 'Добавить',
+  triggerAriaLabel,
+  triggerTestId,
+  triggerClassName = '',
+  selectedEmployeeId,
 }: {
   employees: any[];
   disabled?: boolean;
   onPick: (employeeId: string) => void;
   onAddContractor?: () => void;
+  triggerLabel?: string;
+  triggerAriaLabel?: string;
+  triggerTestId?: string;
+  triggerClassName?: string;
+  selectedEmployeeId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -1540,7 +1641,9 @@ function EmployeeSearchAdd({
     return employees
       .filter((employee) => {
         if (!q) return true;
-        const haystack = `${employeeName(employee)} ${employee?.email || ''} ${employee?.role || ''}`.toLowerCase();
+        const role = String(employee?.role || '');
+        const roleLabel = ROLE_LABELS[role as keyof typeof ROLE_LABELS] || '';
+        const haystack = `${employeeName(employee)} ${employee?.email || ''} ${role} ${roleLabel} ${employee?.position || ''} ${employee?.department || ''}`.toLowerCase();
         return haystack.includes(q);
       });
   }, [employees, q]);
@@ -1560,25 +1663,34 @@ function EmployeeSearchAdd({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="h-9 w-full justify-start" disabled={disabled}>
-          <Plus className="mr-2 h-4 w-4" />
-          Добавить
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={`h-9 min-w-0 justify-start ${triggerClassName || 'w-full'}`}
+          disabled={disabled}
+          aria-label={triggerAriaLabel || triggerLabel}
+          data-testid={triggerTestId}
+        >
+          {triggerLabel === 'Добавить' ? <Plus className="mr-2 h-4 w-4 shrink-0" /> : <Search className="mr-2 h-4 w-4 shrink-0" />}
+          <span className="truncate">{triggerLabel}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[320px] p-0">
+      <PopoverContent align="start" className="w-[calc(100vw-1rem)] max-w-[320px] p-0">
         <div className="border-b p-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Поиск по имени, почте, роли"
+              placeholder="Поиск по ФИО, email или роли"
+              aria-label="Поиск по ФИО, email или роли"
               className="h-9 pl-8"
               autoFocus
             />
           </div>
         </div>
-        <div className="max-h-[280px] overflow-y-auto p-1">
+        <div className="max-h-[280px] overflow-y-auto p-1" role="listbox" aria-label="Сотрудники">
           {onAddContractor && (
             <>
               <button
@@ -1610,12 +1722,16 @@ function EmployeeSearchAdd({
             <button
               type="button"
               key={employee.id}
+              role="option"
+              aria-selected={employee.id === selectedEmployeeId}
               className="flex w-full flex-col rounded px-2 py-2 text-left text-sm hover:bg-accent"
               onClick={() => pick(employee.id)}
             >
               <span className="font-medium">{employeeName(employee)}</span>
               {(employee?.role || employee?.email) && (
-                <span className="text-xs text-muted-foreground">{employee?.role || employee?.email}</span>
+                <span className="text-xs text-muted-foreground">
+                  {[employee?.role ? (ROLE_LABELS[employee.role as keyof typeof ROLE_LABELS] || employee.role) : '', employee?.email || ''].filter(Boolean).join(' · ')}
+                </span>
               )}
             </button>
           ))}
@@ -1626,7 +1742,7 @@ function EmployeeSearchAdd({
 }
 
 export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommandScope }) {
-  const { user } = useAuth();
+  const { user, isImpersonating } = useAuth();
   const { projects = [], loading: projectsLoading, error: projectsError, updateProject, deleteProject, deleteProjects, refresh: refreshProjects } = useProjects();
   const { employees = [], createEmployee } = useEmployees();
   const [appSettings] = useAppSettings();
@@ -1638,9 +1754,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [hoursRowCount, setHoursRowCount] = useState(0);
   const [hoursComplete, setHoursComplete] = useState(false);
   const [paymentRows, setPaymentRows] = useState<BonusPaymentRow[]>([]);
-  const [paymentRegistryLoading, setPaymentRegistryLoading] = useState(false);
+  const [paymentRegistryLoading, setPaymentRegistryLoading] = useState(true);
   const [paymentRegistryError, setPaymentRegistryError] = useState<string | null>(null);
   const urlSyncReadyRef = useRef(false);
+  const bonusMutationLocksRef = useRef<Set<string>>(new Set());
   const [search, setSearch] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('q') || '');
   const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(() => readInitialColumnFilters());
   const [viewFilter, setViewFilter] = useState<ProjectViewFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('view') as ProjectViewFilter)) || 'all');
@@ -1681,11 +1798,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [bulkTeamTemplateId, setBulkTeamTemplateId] = useState('');
   const [bulkTeamAssignOpen, setBulkTeamAssignOpen] = useState(false);
   const [bulkAssigningTeam, setBulkAssigningTeam] = useState(false);
+  const [projectTeamTemplateTarget, setProjectTeamTemplateTarget] = useState<{
+    rowId: string;
+    partnerId: string;
+  } | null>(null);
   const [bulkLeaderId, setBulkLeaderId] = useState('');
   const [bulkLeaderAssignOpen, setBulkLeaderAssignOpen] = useState(false);
   const [bulkAssigningLeader, setBulkAssigningLeader] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [advancedRows, setAdvancedRows] = useState<Record<string, boolean>>({});
+  const [wideProjectTable, setWideProjectTable] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1800px)').matches
+  ));
   const [editingProjectDatesRowId, setEditingProjectDatesRowId] = useState<string | null>(null);
   const [projectDateDraft, setProjectDateDraft] = useState<ProjectDateDraft>({ startDate: '', deadline: '' });
   const [editingContractAmountRowId, setEditingContractAmountRowId] = useState<string | null>(null);
@@ -1705,6 +1829,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     scope || (user?.role === 'ceo' || user?.role === 'admin' ? 'executive' : 'operations');
   const isExecutive = effectiveScope === 'executive';
   const capabilities = projectCommandCenterCapabilities(user?.role);
+  const canEditBonusDraft = Boolean(
+    user && hasPermission(user.role, 'CHANGE_BONUS_MANUALLY') && !isImpersonating,
+  );
   const canSeeContractMoney = capabilities.canSeeContractMoney || isExecutive;
   const canManageTeam = capabilities.canManageTeam;
   const canCloseProjects = capabilities.canCloseProjects;
@@ -1768,29 +1895,32 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     const sourceProject = row.project || row;
     const sourceProjectId = sourceProject.id || row.id;
-    const notes = readProjectNotes(sourceProject);
-    const contract = {
-      ...(notes.contract || {}),
-      ...(sourceProject.contract || {}),
-      amountWithoutVAT: amount,
-    };
-    const existingFinances = {
-      ...(notes.finances || {}),
-      ...(sourceProject.finances || {}),
-      amountWithoutVAT: amount,
-    };
-    const finances = calculateProjectFinances({
-      ...sourceProject,
-      contract,
-      finances: existingFinances,
-    });
 
     setSavingProjectId(`${row.id}:amount`);
     try {
-      await updateProject(sourceProjectId, {
-        amountWithoutVAT: amount,
-        contract,
-        finances,
+      await updateProject(sourceProjectId, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const contract = {
+          ...(currentNotes.contract || {}),
+          ...(currentProject.contract || {}),
+          amountWithoutVAT: amount,
+        };
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject.finances || {}),
+          amountWithoutVAT: amount,
+        };
+        const finances = calculateProjectFinances({
+          ...currentProject,
+          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
+          contract,
+          finances: existingFinances,
+        });
+        return {
+          amountWithoutVAT: amount,
+          contract,
+          finances,
+        };
       });
       toast({ title: 'Сумма договора обновлена', description: `${money.format(amount)} ₸ без НДС` });
       cancelContractAmountEdit();
@@ -1812,13 +1942,26 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   );
 
   const partnerEmployees = useMemo(
-    () => assignableEmployees.filter((employee) => String(employee?.role || '').toLowerCase() === 'partner'),
+    () => [...assignableEmployees].sort((left, right) => {
+      const leftIsPartner = String(left?.role || '').toLowerCase() === 'partner';
+      const rightIsPartner = String(right?.role || '').toLowerCase() === 'partner';
+      if (leftIsPartner !== rightIsPartner) return leftIsPartner ? -1 : 1;
+      return employeeName(left).localeCompare(employeeName(right), 'ru');
+    }),
     [assignableEmployees],
   );
   const projectHoursScopeKey = useMemo(
     () => Array.from(new Set((projects as any[]).map((project) => String(project.id)).filter(Boolean))).sort().join('|'),
     [projects],
   );
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1800px)');
+    const syncLayout = () => setWideProjectTable(media.matches);
+    syncLayout();
+    media.addEventListener('change', syncLayout);
+    return () => media.removeEventListener('change', syncLayout);
+  }, []);
 
   useEffect(() => {
     try {
@@ -2063,28 +2206,54 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const gphEditorRow = gphEditorRowId ? rows.find((row) => row.id === gphEditorRowId) : undefined;
 
-  const teamTemplates = useMemo(() => {
-    const templates = new Map<string, { id: string; label: string; team: CanonicalTeamMember[] }>();
-    for (const row of rows) {
-      if (!row.team?.length) continue;
-      const partner = row.team.find((member: any) => isPartnerRole(teamRole(member)));
-      const partnerId = partner ? teamMemberId(partner) : '';
-      const id = partnerId ? `partner:${partnerId}` : `project:${row.id}`;
-      if (templates.has(id)) continue;
-      const owner = partner ? teamName(partner) : row.name;
-      templates.set(id, {
-        id,
-        label: `${partner ? 'Команда партнёра' : 'Команда проекта'}: ${owner} · ${row.team.length} чел.`,
-        team: row.team.map((member: CanonicalTeamMember) => ({ ...member })),
-      });
-    }
-    return [...templates.values()].sort((left, right) => left.label.localeCompare(right.label, 'ru'));
-  }, [rows]);
+  const teamTemplateCandidates = useMemo<TeamTemplateCandidate[]>(() => rows.flatMap((row) => {
+    if (!row.team?.length) return [];
+    const partner = row.team.find((member: any) => isPartnerRole(teamRole(member)));
+    const partnerId = partner ? teamMemberId(partner) : '';
+    return [{
+      partnerId,
+      ownerName: partner ? teamName(partner) : row.name,
+      sourceProjectId: row.id,
+      signature: teamTemplateSignature(row.team),
+      team: row.team.map((member: CanonicalTeamMember) => ({ ...member })),
+    }];
+  }), [rows]);
 
-  const partnerTeamTemplate = (partnerId: string): CanonicalTeamMember[] | null => {
-    const template = teamTemplates.find((item) => item.id === `partner:${partnerId}`);
+  const teamTemplates = useMemo<TeamTemplateDefinition[]>(() => {
+    const partnerIds = Array.from(new Set(
+      teamTemplateCandidates.map((candidate) => candidate.partnerId).filter(Boolean),
+    ));
+    const partnerTemplates = partnerIds
+      .map((partnerId) => selectPartnerTeamTemplate(teamTemplateCandidates, partnerId))
+      .filter((template): template is TeamTemplateDefinition => Boolean(template));
+    const projectTemplates = teamTemplateCandidates
+      .filter((candidate) => !candidate.partnerId)
+      .map((candidate) => ({
+        id: `project:${candidate.sourceProjectId}`,
+        label: `Команда проекта: ${candidate.ownerName} · ${candidate.team.length} чел.`,
+        sourceProjectId: candidate.sourceProjectId,
+        occurrenceCount: 1,
+        team: candidate.team.map((member) => ({ ...member })),
+      }));
+    return [...partnerTemplates, ...projectTemplates]
+      .sort((left, right) => left.label.localeCompare(right.label, 'ru'));
+  }, [teamTemplateCandidates]);
+
+  const partnerTeamTemplateDefinition = (partnerId: string, excludedSourceProjectId?: string) => (
+    selectPartnerTeamTemplate(teamTemplateCandidates, partnerId, excludedSourceProjectId)
+  );
+
+  const partnerTeamTemplate = (partnerId: string, excludedSourceProjectId?: string): CanonicalTeamMember[] | null => {
+    const template = partnerTeamTemplateDefinition(partnerId, excludedSourceProjectId);
     return template ? template.team.map((member) => ({ ...member })) : null;
   };
+
+  const projectTeamTemplateTargetRow = projectTeamTemplateTarget
+    ? rows.find((row) => row.id === projectTeamTemplateTarget.rowId)
+    : undefined;
+  const projectTeamTemplateTargetDefinition = projectTeamTemplateTarget
+    ? partnerTeamTemplateDefinition(projectTeamTemplateTarget.partnerId, projectTeamTemplateTarget.rowId)
+    : undefined;
 
   const portfolioProjectIds = useMemo(
     () => new Set<string>(rows.flatMap((row) => row.projectIds?.length ? row.projectIds : [row.id]).filter(Boolean)),
@@ -2462,20 +2631,51 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   };
   const clearColumnFilter = (key: ColumnFilterKey) => setColumnFilter(key, '');
   const activeColumnFilters = hasActiveColumnFilters(columnFilters);
+  const primaryFiltersActive = Boolean(
+    search.trim()
+      || companyFilter !== 'all'
+      || partnerFilter !== 'all'
+      || yearFilter !== 'all'
+      || businessSeasonFilter !== 'all'
+      || dateFromFilter
+      || dateToFilter
+      || viewFilter !== 'all'
+      || deadlineFilter !== 'all'
+      || periodFilter !== 'all'
+      || auditPeriodTypeFilter !== 'all'
+      || sortBy !== 'deadline_asc'
+      || activeColumnFilters,
+  );
+  const clearAllProjectFilters = () => {
+    setSearch('');
+    setCompanyFilter('all');
+    setPartnerFilter('all');
+    setYearFilter('all');
+    setBusinessSeasonFilter('all');
+    setDateFromFilter('');
+    setDateToFilter('');
+    setViewFilter('all');
+    setDeadlineFilter('all');
+    setPeriodFilter('all');
+    setAuditPeriodTypeFilter('all');
+    setSortBy('deadline_asc');
+    setColumnFilters(EMPTY_COLUMN_FILTERS);
+    setTablePage(1);
+  };
 
   const toggleRow = (projectId: string) => {
     const opening = !expandedRows[projectId];
-    setExpandedRows((prev) => ({ ...prev, [projectId]: opening }));
+    setExpandedRows(opening ? { [projectId]: true } : {});
+    if (!opening) setAdvancedRows((prev) => ({ ...prev, [projectId]: false }));
   };
   const toggleAdvancedRow = (projectId: string) => {
     setAdvancedRows((prev) => ({ ...prev, [projectId]: !prev[projectId] }));
   };
   const openBonusWorkspace = (projectId: string) => {
     setExpandedRows((prev) => ({ ...prev, [projectId]: true }));
-    setAdvancedRows((prev) => ({ ...prev, [projectId]: true }));
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        document.getElementById(`bonus-workspace-${projectId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById(`project-details-${projectId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
   };
@@ -2537,7 +2737,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           });
           return;
         }
-        const workbook = buildLegacyCeoWorkbook(XLSX, filteredRows, paymentRegistrySummary.byKey);
+        const workbook = buildLegacyCeoWorkbook(XLSX, filteredRows, paymentRegistrySummary.byProject);
         XLSX.writeFile(workbook, `ceo_legacy_partner_workbook_${new Date().toISOString().slice(0, 10)}.xlsx`);
         toast({
           title: 'CEO Excel готов',
@@ -2721,15 +2921,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setBulkAssigningPartner(true);
     const ids = Array.from(selectedProjectIds);
     const failedIds: string[] = [];
-    const template = partnerTeamTemplate(partner.id);
     try {
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
-        const results = await Promise.allSettled(batch.map(async (projectId) => {
-          const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId));
-          if (!sourceProject) throw new Error('Проект не найден');
-          const currentTeam = projectTeam(sourceProject);
-          const partnerMember: CanonicalTeamMember = {
+        const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
+          const nextTeam = projectTeam(currentProject)
+            .filter((member: any) => teamRole(member) !== 'partner')
+            .map((member: CanonicalTeamMember) => ({ ...member }));
+          nextTeam.unshift({
             userId: partner.id,
             userName: employeeName(partner),
             userEmail: partner.email,
@@ -2738,23 +2937,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             bonusPercent: roleDefaultPercent('partner'),
             assignedAt: new Date().toISOString(),
             assignedBy: user?.id || 'bulk-partner',
-          };
-          const sourceTeam = template && template.length > 0 ? template : currentTeam;
-          const nextTeam = sourceTeam
-            .filter((member: any) => teamRole(member) !== 'partner')
-            .map((member: CanonicalTeamMember) => ({ ...member }));
-          nextTeam.unshift(partnerMember);
+          });
+          const currentNotes = readProjectNotes(currentProject);
           const existingFinances = {
-            ...(sourceProject?.notes?.finances || {}),
-            ...(sourceProject?.finances || {}),
+            ...(currentNotes.finances || {}),
+            ...(currentProject?.finances || {}),
           };
           const finances = calculateProjectFinances({
-            ...sourceProject,
-            team: nextTeam,
-            finances: { ...existingFinances, amountWithoutVAT: projectAmount(sourceProject) },
+            ...currentProject,
+            team: coverageTeam(nextTeam, getAuditPeriods(currentProject)),
+            finances: { ...existingFinances, amountWithoutVAT: projectAmount(currentProject) },
           });
-          await updateProject(projectId, { team: nextTeam, finances });
-        }));
+          return { team: nextTeam, finances };
+        })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
@@ -2762,8 +2957,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       setSelectedProjectIds(new Set(failedIds));
       setBulkPartnerAssignOpen(false);
       toast({
-        title: failedIds.length > 0 ? 'Партнёр назначен частично' : 'Партнёр и его команда назначены',
-        description: `${employeeName(partner)}: ${ids.length - failedIds.length} проектов.${template ? ' Использован готовый шаблон команды.' : ' У партнёра пока нет шаблона — сохранена команда каждого проекта.'}`,
+        title: failedIds.length > 0 ? 'Партнёр назначен частично' : 'Партнёр назначен',
+        description: `${employeeName(partner)}: ${ids.length - failedIds.length} проектов. Существующие команды проектов и команды периодов сохранены.`,
         variant: failedIds.length > 0 ? 'destructive' : 'default',
       });
     } catch (error: any) {
@@ -2787,21 +2982,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     try {
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
-        const results = await Promise.allSettled(batch.map(async (projectId) => {
-          const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId));
-          if (!sourceProject) throw new Error('Проект не найден');
+        const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
           const team = template.team.map((member) => ({ ...member }));
+          const currentNotes = readProjectNotes(currentProject);
           const existingFinances = {
-            ...(sourceProject?.notes?.finances || {}),
-            ...(sourceProject?.finances || {}),
+            ...(currentNotes.finances || {}),
+            ...(currentProject?.finances || {}),
           };
           const finances = calculateProjectFinances({
-            ...sourceProject,
-            team,
-            finances: { ...existingFinances, amountWithoutVAT: projectAmount(sourceProject) },
+            ...currentProject,
+            team: coverageTeam(team, getAuditPeriods(currentProject)),
+            finances: { ...existingFinances, amountWithoutVAT: projectAmount(currentProject) },
           });
-          await updateProject(projectId, { team, finances });
-        }));
+          return { team, finances };
+        })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
@@ -2834,10 +3028,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     try {
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
-        const results = await Promise.allSettled(batch.map(async (projectId) => {
-          const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId));
-          if (!sourceProject) throw new Error('Проект не найден');
-          const team = projectTeam(sourceProject)
+        const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
+          const team = projectTeam(currentProject)
             .filter((member: any) => !isLeaderRole(teamRole(member)))
             .map((member: CanonicalTeamMember) => ({ ...member }));
           team.push({
@@ -2850,17 +3042,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             assignedAt: new Date().toISOString(),
             assignedBy: user?.id || 'bulk-leader',
           });
+          const currentNotes = readProjectNotes(currentProject);
           const existingFinances = {
-            ...(sourceProject?.notes?.finances || {}),
-            ...(sourceProject?.finances || {}),
+            ...(currentNotes.finances || {}),
+            ...(currentProject?.finances || {}),
           };
           const finances = calculateProjectFinances({
-            ...sourceProject,
-            team,
-            finances: { ...existingFinances, amountWithoutVAT: projectAmount(sourceProject) },
+            ...currentProject,
+            team: coverageTeam(team, getAuditPeriods(currentProject)),
+            finances: { ...existingFinances, amountWithoutVAT: projectAmount(currentProject) },
           });
-          await updateProject(projectId, { team, finances });
-        }));
+          return { team, finances };
+        })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
@@ -2879,6 +3072,28 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
+  const calculateFinancesFromCurrentProject = (
+    currentProject: any,
+    commonTeam = projectTeam(currentProject),
+    periods = getAuditPeriods(currentProject),
+    financesPatch: Record<string, unknown> = {},
+  ) => {
+    const currentNotes = readProjectNotes(currentProject);
+    const existingFinances = {
+      ...(currentNotes.finances || {}),
+      ...(currentProject?.finances || {}),
+      ...financesPatch,
+    };
+    return calculateProjectFinances({
+      ...currentProject,
+      team: coverageTeam(commonTeam, periods),
+      finances: {
+        ...existingFinances,
+        amountWithoutVAT: projectAmount(currentProject),
+      },
+    });
+  };
+
   const setProjectStatus = async (row: (typeof rows)[number], nextStatus: ManagedProjectStatus) => {
     if (!canManageProjectStatus || !user || !updateProject) return;
     if (!statusOptions.some((option) => option.value === nextStatus)) return;
@@ -2895,26 +3110,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setSavingProjectId(`${row.id}:status`);
     try {
       await Promise.all(ids.map(async (projectId) => {
-        const sourceProject = (projects as any[]).find((project) => String(project.id) === String(projectId)) || row.project;
-        const statusUpdate = buildProjectStatusUpdate({
-          project: sourceProject,
-          nextStatus,
-          actor: user,
-        });
-        let notes: Record<string, any> = statusUpdate.notes;
-        if (nextStatus === 'pending_payment_approval') {
-          const projectWithStatus = { ...sourceProject, ...statusUpdate, notes };
-          const finances = calculateProjectFinances(projectWithStatus as any);
-          notes = {
-            ...notes,
-            finances: {
-              ...(sourceProject?.notes?.finances || {}),
-              ...(sourceProject?.finances || {}),
-              ...finances,
+        await updateProject(projectId, (currentProject: any) => {
+          const statusUpdate = buildProjectStatusUpdate({
+            project: currentProject,
+            nextStatus,
+            actor: user,
+          });
+          if (nextStatus !== 'pending_payment_approval') return statusUpdate;
+
+          const finances = calculateFinancesFromCurrentProject(currentProject);
+          return {
+            ...statusUpdate,
+            notes: {
+              ...statusUpdate.notes,
+              finances,
             },
           };
-        }
-        await updateProject(projectId, { ...statusUpdate, notes });
+        });
       }));
 
       if (nextStatus === 'pending_payment_approval') {
@@ -2948,51 +3160,202 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const ensureBonusDraftEditable = (row: (typeof rows)[number]): boolean => {
     const ids = projectIdsForRow(row);
-    const ledger = projectPaymentLedger(ids, paymentRegistrySummary.byKey);
-    const reason = ids.length > 1
+    const ledger = projectPaymentLedger(ids, paymentRegistrySummary.byProject);
+    const reason = !canEditBonusDraft
+      ? isImpersonating
+        ? 'В режиме проверки роли денежные изменения отключены. Вернитесь в свою учётную запись CEO.'
+        : 'Изменять бонусный расчёт может только генеральный директор.'
+      : ids.length > 1
       ? 'Свод объединяет несколько записей. Сначала выберите каноническую запись проекта.'
       : paymentRegistryLoading
         ? 'Платёжный реестр ещё загружается. Дождитесь завершения сверки.'
         : paymentRegistryError
           ? 'Платёжный реестр недоступен. Менять расчёт без проверки выплат небезопасно.'
-          : ledger.approvedUnpaidAmount > 0 || ledger.paidAmount > 0
-            ? 'Расчёт уже утверждён или выплачен. Для изменения нужна отдельная корректировка.'
+        : ledger.rowCount > 0
+            ? 'Расчёт уже передан в платёжный реестр. Для изменения нужна отдельная корректировка.'
             : '';
     if (!reason) return true;
     toast({ title: 'Редактирование бонуса заблокировано', description: reason, variant: 'destructive' });
     return false;
   };
 
-  const setBonusPercent = async (row: (typeof rows)[number], nextPercent: number) => {
-    if (!isExecutive || !updateProject || !ensureBonusDraftEditable(row)) return;
+  const beginBonusMutation = (row: (typeof rows)[number]): boolean => {
+    if (!updateProject || !ensureBonusDraftEditable(row)) return false;
+    if (bonusMutationLocksRef.current.has(row.id)) {
+      toast({
+        title: 'Изменение уже сохраняется',
+        description: 'Дождитесь сохранения текущей суммы и повторите действие.',
+      });
+      return false;
+    }
+    bonusMutationLocksRef.current.add(row.id);
+    return true;
+  };
+
+  const endBonusMutation = (projectId: string) => {
+    bonusMutationLocksRef.current.delete(projectId);
+  };
+
+  const setBonusPercent = async (row: (typeof rows)[number], nextPercent: number): Promise<boolean> => {
+    if (!beginBonusMutation(row)) return false;
     const bonusPercent = Math.max(0, Math.min(40, nextPercent));
     setSavingProjectId(row.id);
     try {
-      const projectWithPercent = {
-        ...row.project,
-        finances: {
-          ...(row.project?.notes?.finances || {}),
-          ...(row.project?.finances || {}),
-          amountWithoutVAT: row.amount,
-          bonusPercent,
-        },
-      };
-      const finances = calculateProjectFinances(projectWithPercent);
-      await updateProject(row.id, {
-        finances: {
-          ...(row.project?.notes?.finances || {}),
-          ...(row.project?.finances || {}),
+      await updateProject(row.id, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const history = Array.isArray(existingFinances.bonusPoolHistory) ? existingFinances.bonusPoolHistory : [];
+        const nextHistory = [
+          ...history,
+          {
+            type: 'pool_percent_change',
+            by: user?.id,
+            byName: user?.name,
+            at: new Date().toISOString(),
+            from: Number(existingFinances.bonusPercent || 0) || 0,
+            to: bonusPercent,
+            clearedManualPool: existingFinances.bonusPoolManuallyAdjusted === true,
+          },
+        ].slice(-20);
+        const projectWithPercent = {
+          ...currentProject,
+          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
+          finances: {
+            ...existingFinances,
+            amountWithoutVAT: projectAmount(currentProject),
+            bonusPercent,
+            bonusPoolOverrideAmount: null,
+            bonusPoolManuallyAdjusted: false,
+            bonusPoolHistory: nextHistory,
+          },
+        };
+        const finances = calculateProjectFinances(projectWithPercent);
+        return { finances: {
+          ...existingFinances,
           ...finances,
           bonusPercent,
-        },
+          bonusPoolOverrideAmount: null,
+          bonusPoolManuallyAdjusted: false,
+          bonusPoolHistory: nextHistory,
+        } };
       });
+      return true;
     } catch (error: any) {
       toast({
         title: 'Не удалось обновить бонусы',
         description: error?.message || 'Попробуйте еще раз',
         variant: 'destructive',
       });
+      return false;
     } finally {
+      endBonusMutation(row.id);
+      setSavingProjectId(null);
+    }
+  };
+
+  const setBonusPoolAmount = async (row: (typeof rows)[number], nextAmount: number): Promise<boolean> => {
+    if (!Number.isFinite(nextAmount) || !beginBonusMutation(row)) return false;
+    const amount = Math.max(0, Math.round(nextAmount));
+    setSavingProjectId(`${row.id}:bonus-pool`);
+    try {
+      await updateProject(row.id, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const previousAmount = Number(existingFinances.totalBonusAmount || 0) || 0;
+        const history = Array.isArray(existingFinances.bonusPoolHistory) ? existingFinances.bonusPoolHistory : [];
+        const nextFinancesSource = {
+          ...existingFinances,
+          amountWithoutVAT: projectAmount(currentProject),
+          bonusPoolOverrideAmount: amount,
+          bonusPoolManuallyAdjusted: true,
+          bonusPoolHistory: [
+            ...history,
+            {
+              type: 'pool_amount_change',
+              by: user?.id,
+              byName: user?.name,
+              at: new Date().toISOString(),
+              from: previousAmount,
+              to: amount,
+            },
+          ].slice(-20),
+        };
+        const finances = calculateProjectFinances({
+          ...currentProject,
+          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
+          finances: nextFinancesSource,
+        });
+        return { finances };
+      });
+      toast({ title: 'Бонусный пул проекта сохранён', description: `${row.name}: ${money.format(amount)} ₸` });
+      return true;
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось сохранить бонусный пул',
+        description: error?.message || 'Попробуйте ещё раз',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      endBonusMutation(row.id);
+      setSavingProjectId(null);
+    }
+  };
+
+  const resetBonusPoolToFormula = async (row: (typeof rows)[number]): Promise<boolean> => {
+    if (!beginBonusMutation(row)) return false;
+    setSavingProjectId(`${row.id}:bonus-pool`);
+    try {
+      let savedFormulaPercent = 0;
+      await updateProject(row.id, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const history = Array.isArray(existingFinances.bonusPoolHistory) ? existingFinances.bonusPoolHistory : [];
+        const nextFinancesSource = {
+          ...existingFinances,
+          amountWithoutVAT: projectAmount(currentProject),
+          bonusPoolOverrideAmount: null,
+          bonusPoolManuallyAdjusted: false,
+          bonusPoolHistory: [
+            ...history,
+            {
+              type: 'pool_formula_reset',
+              by: user?.id,
+              byName: user?.name,
+              at: new Date().toISOString(),
+              from: Number(existingFinances.totalBonusAmount || 0) || 0,
+              to: null,
+            },
+          ].slice(-20),
+        };
+        const finances = calculateProjectFinances({
+          ...currentProject,
+          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
+          finances: nextFinancesSource,
+        });
+        savedFormulaPercent = Number(finances.bonusPercent || 0) || 0;
+        return { finances };
+      });
+      toast({ title: 'Бонусный пул снова считается по проценту', description: `${savedFormulaPercent.toFixed(1)}% от базы` });
+      return true;
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось вернуть расчёт по проценту',
+        description: error?.message || 'Попробуйте ещё раз',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      endBonusMutation(row.id);
       setSavingProjectId(null);
     }
   };
@@ -3011,6 +3374,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       return;
     }
 
+    const assignment = gphAssignmentContext?.rowId === row.id ? gphAssignmentContext : null;
+    const assignmentPeriod = assignment?.periodId
+      ? row.periods.find((item: AuditPeriod) => item.id === assignment.periodId)
+      : undefined;
+    if (assignment?.periodId && !assignmentPeriod) {
+      toast({ title: 'Период уже изменён или удалён', description: 'Обновите свод и повторите назначение.', variant: 'destructive' });
+      return;
+    }
+    const assignmentSourceRow = assignmentPeriod ? periodSourceRow(row, assignmentPeriod) : row;
+    const targetProjectId = assignmentPeriod?.sourceProjectId
+      || assignmentSourceRow?.project?.id
+      || assignmentSourceRow?.id
+      || row.id;
+
     setSavingProjectId(`${row.id}:contractors`);
     try {
       const sameName = (employees as any[]).find((employee) => (
@@ -3024,12 +3401,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         department: 'ГПХ / внешние исполнители',
         position: 'Исполнитель ГПХ',
       } as any);
-      const existingFinances = {
-        ...(row.project?.notes?.finances || {}),
-        ...(row.project?.finances || {}),
-      };
-      const contractors = Array.isArray(existingFinances.contractors) ? [...existingFinances.contractors] : [];
-      contractors.push({
+      const contractorEntry = {
         id: `command-center-gph-${Date.now()}`,
         name,
         amount,
@@ -3039,62 +3411,73 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         source: 'project-command-center',
         addedAt: new Date().toISOString(),
         addedBy: user?.id,
-      });
-      const totalContractorsAmount = contractors.reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
-      const projectWithContractors = {
-        ...row.project,
-        finances: {
-          ...existingFinances,
-          amountWithoutVAT: row.amount,
-          contractors,
-          totalContractorsAmount,
-        },
       };
-      const recalculated = calculateProjectFinances(projectWithContractors);
-      const assignment = gphAssignmentContext?.rowId === row.id ? gphAssignmentContext : null;
-      const assignmentMember = assignment ? {
+      const assignmentRoleKey = assignment?.roleKey || '';
+      const assignmentPeriodId = assignment?.periodId;
+      const assignmentMember = assignmentRoleKey ? {
         userId: employee.id,
         userName: employeeName(employee),
         userEmail: employee.email,
         name: employeeName(employee),
-        role: assignment.roleKey,
-        bonusPercent: roleDefaultPercent(assignment.roleKey),
+        role: assignmentRoleKey,
+        bonusPercent: roleDefaultPercent(assignmentRoleKey),
         assignedAt: new Date().toISOString(),
         assignedBy: user?.id || 'gph-dialog',
       } : null;
-      let targetProjectId = row.id;
-      let teamPatch: Record<string, unknown> = {};
-      if (assignmentMember && assignment?.periodId) {
-        const period = row.periods.find((item: AuditPeriod) => item.id === assignment.periodId);
-        if (period) {
-          const sourceRow = periodSourceRow(row, period);
-          const sourceProject = sourceRow.project || sourceRow;
-          targetProjectId = sourceProject.id || sourceRow.id || row.id;
-          const basePeriods = persistedPeriodsForProject(sourceProject);
-          const nextPeriods = basePeriods.map((item) => item.id === period.id
-            ? {
-                ...item,
-                team: [
-                  ...periodTeam(item).filter((member: any) => teamRole(member) !== assignment.roleKey),
-                  assignmentMember,
-                ],
-                teamSource: 'period',
-                updatedAt: new Date().toISOString(),
-              }
-            : item);
-          teamPatch = { auditPeriods: nextPeriods };
+      await updateProject(targetProjectId, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const contractors = Array.isArray(existingFinances.contractors)
+          ? [...existingFinances.contractors, contractorEntry]
+          : [contractorEntry];
+        const totalContractorsAmount = contractors.reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
+        let nextTeam = projectTeam(currentProject);
+        let nextPeriods = getAuditPeriods(currentProject);
+        const teamPatch: Record<string, unknown> = {};
+
+        if (assignmentMember && assignmentPeriodId) {
+          const basePeriods = persistedPeriodsForProject(currentProject);
+          let matched = false;
+          nextPeriods = basePeriods.map((item) => {
+            if (item.id !== assignmentPeriodId) return item;
+            matched = true;
+            const currentPeriodTeam = periodTeam(item);
+            const nextPeriodTeam = isPartnerRole(assignmentRoleKey)
+              ? [assignmentMember, ...currentPeriodTeam.filter((member: any) => !isPartnerRole(teamRole(member)))]
+              : isLeaderRole(assignmentRoleKey)
+                ? [...currentPeriodTeam.filter((member: any) => !isLeaderRole(teamRole(member))), assignmentMember]
+                : [...currentPeriodTeam.filter((member: any) => teamRole(member) !== assignmentRoleKey), assignmentMember];
+            return {
+              ...item,
+              team: nextPeriodTeam,
+              teamSource: 'period',
+              updatedAt: new Date().toISOString(),
+            } as AuditPeriod;
+          });
+          if (!matched) throw new Error('Период уже изменён или удалён. Обновите свод и повторите назначение.');
+          teamPatch.auditPeriods = nextPeriods;
+        } else if (assignmentMember) {
+          nextTeam = isPartnerRole(assignmentRoleKey)
+            ? [assignmentMember, ...nextTeam.filter((member: any) => !isPartnerRole(teamRole(member)))]
+            : isLeaderRole(assignmentRoleKey)
+              ? [...nextTeam.filter((member: any) => !isLeaderRole(teamRole(member))), assignmentMember]
+              : [...nextTeam.filter((member: any) => teamRole(member) !== assignmentRoleKey), assignmentMember];
+          teamPatch.team = nextTeam;
         }
-      } else if (assignmentMember) {
-        teamPatch = { team: [...row.team, assignmentMember] };
-      }
-      await updateProject(targetProjectId, {
-        finances: {
-          ...existingFinances,
-          ...recalculated,
-          contractors,
-          totalContractorsAmount,
-        },
-        ...teamPatch,
+
+        const recalculated = calculateFinancesFromCurrentProject(
+          currentProject,
+          nextTeam,
+          nextPeriods,
+          { contractors, totalContractorsAmount },
+        );
+        return {
+          finances: recalculated,
+          ...teamPatch,
+        };
       });
       setContractorNameDrafts((current) => ({ ...current, [row.id]: '' }));
       setContractorAmountDrafts((current) => ({ ...current, [row.id]: '' }));
@@ -3111,129 +3494,141 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
-  const setMemberBonusPercent = async (row: (typeof rows)[number], member: any, nextPercent: number) => {
-    if (!isExecutive || !updateProject || !ensureBonusDraftEditable(row)) return;
+  const setMemberBonusPercent = async (row: (typeof rows)[number], member: any, nextPercent: number): Promise<boolean> => {
     const memberId = teamMemberId(member);
-    if (!memberId) return;
+    if (!memberId || !beginBonusMutation(row)) return false;
 
     const bonusPercent = Math.max(0, Math.min(100, nextPercent));
     setSavingProjectId(`${row.id}:${memberId}`);
     try {
-    const calculationTeam = (row.coverageTeam || row.team).map((item: CanonicalTeamMember) => {
-      if (teamMemberId(item) !== memberId || teamRole(item) !== teamRole(member)) return item;
-      return { ...item, bonusPercent };
-    });
-    const isProjectTeamMember = row.team.some((item: CanonicalTeamMember) => (
-      teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
-    ));
-    const nextProjectTeam = isProjectTeamMember
-      ? row.team.map((item: CanonicalTeamMember) => {
-          if (teamMemberId(item) !== memberId || teamRole(item) !== teamRole(member)) return item;
-          return { ...item, bonusPercent };
-        })
-      : row.team;
-
-      const existingFinances = {
-        ...(row.project?.notes?.finances || {}),
-        ...(row.project?.finances || {}),
-      };
-      const projectWithMemberPercent = {
-        ...row.project,
-        team: calculationTeam,
-        finances: {
-          ...existingFinances,
-          amountWithoutVAT: row.amount,
-          teamBonuses: {
-            ...(existingFinances.teamBonuses || {}),
-            [memberId]: {
-              ...(existingFinances.teamBonuses?.[memberId] || {}),
-              manuallyAdjusted: false,
+      await updateProject(row.id, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const calculationTeam = coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject));
+        const currentMember = calculationTeam.find((item: CanonicalTeamMember) => (
+          teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
+        ));
+        const currentFormulaPercent = Math.max(0, Math.min(100, Number(currentMember?.bonusPercent ?? bonusPercent) || 0));
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
+        const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
+        const projectWithMemberPercent = {
+          ...currentProject,
+          team: calculationTeam,
+          finances: {
+            ...existingFinances,
+            amountWithoutVAT: projectAmount(currentProject),
+            teamBonuses: {
+              ...(existingFinances.teamBonuses || {}),
+              [memberId]: {
+                ...previousBonus,
+                manuallyAdjusted: false,
+              },
             },
           },
-        },
-      };
-      const finances = calculateProjectFinances(projectWithMemberPercent);
-      await updateProject(row.id, {
-        ...(isProjectTeamMember ? { team: nextProjectTeam } : {}),
-        finances,
+        };
+        const finances = calculateProjectFinances(projectWithMemberPercent);
+        if (finances.teamBonuses[memberId]) {
+          finances.teamBonuses[memberId] = {
+            ...finances.teamBonuses[memberId],
+            percent: currentFormulaPercent,
+            history: [
+              ...history,
+              {
+                type: 'formula_reset',
+                by: user?.id,
+                byName: user?.name,
+                at: new Date().toISOString(),
+                from: Number(previousBonus.amount || 0) || 0,
+                to: Number(finances.teamBonuses[memberId].amount || 0) || 0,
+              },
+            ].slice(-20),
+          };
+        }
+        return { finances };
       });
+      return true;
     } catch (error: any) {
       toast({
         title: 'Не удалось обновить участника',
         description: error?.message || 'Попробуйте еще раз',
         variant: 'destructive',
       });
+      return false;
     } finally {
+      endBonusMutation(row.id);
       setSavingProjectId(null);
     }
   };
 
-  const setMemberBonusAmount = async (row: (typeof rows)[number], member: any, nextAmount: number) => {
-    if (!isExecutive || !updateProject || !ensureBonusDraftEditable(row)) return;
+  const setMemberBonusAmount = async (row: (typeof rows)[number], member: any, nextAmount: number): Promise<boolean> => {
     const memberId = teamMemberId(member);
-    if (!memberId || !Number.isFinite(nextAmount)) return;
+    if (!memberId || !Number.isFinite(nextAmount) || !beginBonusMutation(row)) return false;
 
     const amount = Math.max(0, Math.round(nextAmount));
-    const existingFinances = {
-      ...(row.project?.notes?.finances || {}),
-      ...(row.project?.finances || {}),
-      ...row.finances,
-    };
-    const bonusPool = Number(existingFinances.totalBonusAmount || 0) || 0;
-    const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
-    const previousAmount = Number(previousBonus.amount || 0) || 0;
-    if (previousAmount === amount && previousBonus.manuallyAdjusted) return;
-
-    const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
-    const teamBonuses = {
-      ...(existingFinances.teamBonuses || {}),
-      [memberId]: {
-        ...previousBonus,
-        role: teamRole(member),
-        percent: bonusPool > 0
-          ? Number(((amount / bonusPool) * 100).toFixed(2))
-          : Number(member?.bonusPercent || 0),
-        amount,
-        manuallyAdjusted: true,
-        history: [
-          ...history,
-          {
-            type: 'amount_change',
-            by: user?.id,
-            byName: user?.name,
-            at: new Date().toISOString(),
-            from: previousAmount,
-            to: amount,
-          },
-        ].slice(-20),
-      },
-    };
-    const totalAssigned = Object.values(teamBonuses).reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
-    const totalContractorsAmount = Number(existingFinances.totalContractorsAmount || 0) || 0;
-    const preExpenseAmount = Number(existingFinances.preExpenseAmount || 0) || 0;
-    const grossProfit = row.amount - totalAssigned - totalContractorsAmount - preExpenseAmount;
-
     setSavingProjectId(`${row.id}:${memberId}`);
     try {
-      await updateProject(row.id, {
-        finances: {
+      await updateProject(row.id, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const bonusPool = Number(existingFinances.totalBonusAmount || 0) || 0;
+        const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
+        const previousAmount = Number(previousBonus.amount || 0) || 0;
+        const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
+        const teamBonuses = {
+          ...(existingFinances.teamBonuses || {}),
+          [memberId]: {
+            ...previousBonus,
+            role: teamRole(member),
+            percent: bonusPool > 0
+              ? Number(((amount / bonusPool) * 100).toFixed(2))
+              : Number(member?.bonusPercent || 0),
+            amount,
+            manuallyAdjusted: true,
+            history: [
+              ...history,
+              {
+                type: 'amount_change',
+                by: user?.id,
+                byName: user?.name,
+                at: new Date().toISOString(),
+                from: previousAmount,
+                to: amount,
+              },
+            ].slice(-20),
+          },
+        };
+        const totalAssigned = Object.values(teamBonuses).reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
+        const totalContractorsAmount = Number(existingFinances.totalContractorsAmount || 0) || 0;
+        const preExpenseAmount = Number(existingFinances.preExpenseAmount || 0) || 0;
+        const currentAmount = projectAmount(currentProject);
+        const grossProfit = currentAmount - totalAssigned - totalContractorsAmount - preExpenseAmount;
+        return { finances: {
           ...existingFinances,
-          amountWithoutVAT: row.amount,
+          amountWithoutVAT: currentAmount,
           teamBonuses,
           totalPaidBonuses: totalAssigned,
           totalCosts: totalAssigned + totalContractorsAmount + preExpenseAmount,
           grossProfit,
-          profitMargin: row.amount > 0 ? (grossProfit / row.amount) * 100 : 0,
-        },
+          profitMargin: currentAmount > 0 ? (grossProfit / currentAmount) * 100 : 0,
+        } };
       });
       toast({ title: 'Бонус сотрудника сохранён', description: `${teamName(member)}: ${money.format(amount)} ₸` });
+      return true;
     } catch (error: any) {
       toast({
         title: 'Не удалось сохранить бонус сотрудника',
         description: error?.message || 'Попробуйте ещё раз',
         variant: 'destructive',
       });
+      return false;
     } finally {
+      endBonusMutation(row.id);
       setSavingProjectId(null);
     }
   };
@@ -3255,34 +3650,89 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         assignedAt: new Date().toISOString(),
         assignedBy: user?.id || 'inline-table',
       };
-      const template = roleKey === 'partner' ? partnerTeamTemplate(employee.id) : null;
-      const baseTeam = template && template.length > 0 ? template : row.team;
-      const nextTeam = roleKey === 'partner'
-        ? [nextMember, ...baseTeam.filter((member: any) => teamRole(member) !== 'partner')]
-        : isLeaderRole(roleKey)
-          ? [...baseTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
-          : [...baseTeam, nextMember];
-      const existingFinances = {
-        ...(row.project?.notes?.finances || {}),
-        ...(row.project?.finances || {}),
-      };
-      const projectWithTeam = {
-        ...row.project,
-        team: nextTeam,
-        finances: {
-          ...existingFinances,
-          amountWithoutVAT: row.amount,
-        },
-      };
-      const finances = calculateProjectFinances(projectWithTeam);
-      await updateProject(row.id, { team: nextTeam, finances });
-      if (template && template.length > 0) {
-        toast({ title: 'Партнёр и его команда подставлены', description: employeeName(employee) });
-      }
+      await updateProject(row.id, (currentProject: any) => {
+        const currentTeam = projectTeam(currentProject);
+        const nextTeam = roleKey === 'partner'
+          ? [nextMember, ...currentTeam.filter((member: any) => teamRole(member) !== 'partner')]
+          : isLeaderRole(roleKey)
+            ? [...currentTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
+            : [...currentTeam, nextMember];
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const amount = projectAmount(currentProject);
+        const finances = calculateProjectFinances({
+          ...currentProject,
+          team: coverageTeam(nextTeam, getAuditPeriods(currentProject)),
+          finances: {
+            ...existingFinances,
+            amountWithoutVAT: amount,
+          },
+        });
+        return { team: nextTeam, finances };
+      });
+      toast({
+        title: isPartnerRole(roleKey) ? 'Партнёр назначен' : 'Участник добавлен',
+        description: isPartnerRole(roleKey)
+          ? `${employeeName(employee)}. Остальная команда проекта и команды периодов сохранены.`
+          : employeeName(employee),
+      });
     } catch (error: any) {
       toast({
         title: 'Не удалось добавить участника',
         description: error?.message || 'Попробуйте еще раз',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingProjectId(null);
+    }
+  };
+
+  const applyPartnerTeamTemplateToProject = async () => {
+    if (!canManageTeam || !updateProject || !projectTeamTemplateTarget || !projectTeamTemplateTargetRow) return;
+    const template = partnerTeamTemplate(projectTeamTemplateTarget.partnerId, projectTeamTemplateTarget.rowId);
+    if (!template?.length) {
+      toast({
+        title: 'Шаблон команды не найден',
+        description: 'Сначала сохраните полную команду хотя бы в одном проекте этого партнёра.',
+        variant: 'destructive',
+      });
+      setProjectTeamTemplateTarget(null);
+      return;
+    }
+
+    const row = projectTeamTemplateTargetRow;
+    setSavingProjectId(`${row.id}:team-template`);
+    try {
+      await updateProject(row.id, (currentProject: any) => {
+        const nextTeam = template.map((member) => ({ ...member }));
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const amount = projectAmount(currentProject);
+        const finances = calculateProjectFinances({
+          ...currentProject,
+          team: coverageTeam(nextTeam, getAuditPeriods(currentProject)),
+          finances: {
+            ...existingFinances,
+            amountWithoutVAT: amount,
+          },
+        });
+        return { team: nextTeam, finances };
+      });
+      toast({
+        title: 'Шаблон команды применён',
+        description: `${projectTeamTemplateTargetDefinition?.label || 'Команда партнёра'}. Команды периодов сохранены.`,
+      });
+      setProjectTeamTemplateTarget(null);
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось применить шаблон команды',
+        description: error?.message || 'Попробуйте ещё раз',
         variant: 'destructive',
       });
     } finally {
@@ -3296,24 +3746,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const role = teamRole(member);
     setSavingProjectId(`${row.id}:remove:${id || memberIndex}`);
     try {
-      const nextTeam = row.team.filter((item: CanonicalTeamMember, index: number) => {
-        if (id && teamMemberId(item)) return !(teamMemberId(item) === id && teamRole(item) === role);
-        return index !== memberIndex;
+      await updateProject(row.id, (currentProject: any) => {
+        let roleIndex = -1;
+        const nextTeam = projectTeam(currentProject).filter((item: CanonicalTeamMember) => {
+          if (teamRole(item) !== role) return true;
+          roleIndex += 1;
+          if (id && teamMemberId(item)) return teamMemberId(item) !== id;
+          return roleIndex !== memberIndex;
+        });
+        const periods = getAuditPeriods(currentProject);
+        const finances = calculateFinancesFromCurrentProject(currentProject, nextTeam, periods);
+        return { team: nextTeam, finances };
       });
-      const existingFinances = {
-        ...(row.project?.notes?.finances || {}),
-        ...(row.project?.finances || {}),
-      };
-      const projectWithTeam = {
-        ...row.project,
-        team: nextTeam,
-        finances: {
-          ...existingFinances,
-          amountWithoutVAT: row.amount,
-        },
-      };
-      const finances = calculateProjectFinances(projectWithTeam);
-      await updateProject(row.id, { team: nextTeam, finances });
     } catch (error: any) {
       toast({
         title: 'Не удалось убрать участника',
@@ -3356,21 +3800,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     const sourceProject = row.project || row;
     const sourceProjectId = sourceProject.id || row.id;
-    const notes = readProjectNotes(sourceProject);
-    const contract = {
-      ...(notes.contract || {}),
-      serviceStartDate: projectDateDraft.startDate || undefined,
-      serviceEndDate: projectDateDraft.deadline || undefined,
-    };
-
     setSavingProjectId(`${row.id}:dates`);
     try {
-      await updateProject(sourceProjectId, {
-        startDate: projectDateDraft.startDate || undefined,
-        start_date: projectDateDraft.startDate || undefined,
-        deadline: projectDateDraft.deadline || undefined,
-        endDate: projectDateDraft.deadline || undefined,
-        contract,
+      await updateProject(sourceProjectId, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const contract = {
+          ...(currentNotes.contract || {}),
+          serviceStartDate: projectDateDraft.startDate || undefined,
+          serviceEndDate: projectDateDraft.deadline || undefined,
+        };
+        return {
+          startDate: projectDateDraft.startDate || undefined,
+          start_date: projectDateDraft.startDate || undefined,
+          deadline: projectDateDraft.deadline || undefined,
+          endDate: projectDateDraft.deadline || undefined,
+          contract,
+        };
       });
       toast({ title: 'Сроки проекта обновлены', description: `${formatDate(projectDateDraft.startDate)} - ${formatDate(projectDateDraft.deadline)}` });
       cancelProjectDateEdit();
@@ -3430,11 +3875,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       createdAt: now,
       updatedAt: now,
     };
-    const nextPeriods = [...persistedPeriodsForProject(sourceProject), nextPeriod];
-
     setSavingProjectId(`${row.id}:period:add`);
     try {
-      await updateProject(sourceProjectId, { auditPeriods: nextPeriods });
+      await updateProject(sourceProjectId, (currentProject: any) => {
+        const nextPeriods = [...persistedPeriodsForProject(currentProject), nextPeriod];
+        const currentTeam = projectTeam(currentProject);
+        const finances = calculateFinancesFromCurrentProject(currentProject, currentTeam, nextPeriods);
+        return { auditPeriods: nextPeriods, finances };
+      });
       toast({ title: 'Период добавлен', description: name });
       cancelAddPeriod();
     } catch (error: any) {
@@ -3453,28 +3901,29 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const sourceRow = periodSourceRow(row, period);
     const sourceProject = sourceRow.project || sourceRow;
     const sourceProjectId = sourceProject.id || sourceRow.id || row.id;
-    const basePeriods = persistedPeriodsForProject(sourceProject);
-    let removed = false;
-    const nextPeriods = basePeriods.filter((item) => {
-      const samePeriod =
-        item.id === period.id ||
-        (
-          !removed &&
-          item.name === period.name &&
-          item.startDate === period.startDate &&
-          item.endDate === period.endDate &&
-          item.deadline === period.deadline
-        );
-      if (samePeriod) {
-        removed = true;
-        return false;
-      }
-      return true;
-    });
 
     setSavingProjectId(`${row.id}:${period.id}:delete`);
     try {
-      await updateProject(sourceProjectId, { auditPeriods: nextPeriods });
+      await updateProject(sourceProjectId, (currentProject: any) => {
+        let removed = false;
+        const nextPeriods = persistedPeriodsForProject(currentProject).filter((item) => {
+          const samePeriod = item.id === period.id || (
+            !removed
+            && !period.id
+            && item.name === period.name
+            && item.startDate === period.startDate
+            && item.endDate === period.endDate
+            && item.deadline === period.deadline
+          );
+          if (!samePeriod) return true;
+          removed = true;
+          return false;
+        });
+        if (!removed) throw new Error('Период уже изменён или удалён. Обновите свод и повторите действие.');
+        const currentTeam = projectTeam(currentProject);
+        const finances = calculateFinancesFromCurrentProject(currentProject, currentTeam, nextPeriods);
+        return { auditPeriods: nextPeriods, finances };
+      });
       toast({ title: 'Период удален', description: period.name });
     } catch (error: any) {
       toast({
@@ -3500,41 +3949,34 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const sourceProject = sourceRow.project || sourceRow;
     const sourceProjectId = sourceProject.id || sourceRow.id || row.id;
     const now = new Date().toISOString();
-    const basePeriods = persistedPeriodsForProject(sourceProject);
-    let matched = false;
-
-    const nextPeriods = basePeriods.map((item) => {
-      const samePeriod =
-        item.id === period.id ||
-        (
-          !matched &&
-          item.name === period.name &&
-          item.startDate === period.startDate &&
-          item.endDate === period.endDate &&
-          item.deadline === period.deadline
-        );
-      if (!samePeriod) return item;
-      matched = true;
-      return {
-        ...item,
-        sourceProjectId,
-        name,
-        updatedAt: now,
-      } as AuditPeriod;
-    });
-
-    if (!matched) {
-      nextPeriods.push({
-        ...period,
-        sourceProjectId,
-        name,
-        updatedAt: now,
-      } as AuditPeriod);
-    }
 
     setSavingProjectId(`${row.id}:${period.id}:name`);
     try {
-      await updateProject(sourceProjectId, { auditPeriods: nextPeriods });
+      await updateProject(sourceProjectId, (currentProject: any) => {
+        let matched = false;
+        const nextPeriods = persistedPeriodsForProject(currentProject).map((item) => {
+          const samePeriod = item.id === period.id || (
+            !matched
+            && !period.id
+            && item.name === period.name
+            && item.startDate === period.startDate
+            && item.endDate === period.endDate
+            && item.deadline === period.deadline
+          );
+          if (!samePeriod) return item;
+          matched = true;
+          return {
+            ...item,
+            sourceProjectId,
+            name,
+            updatedAt: now,
+          } as AuditPeriod;
+        });
+        if (!matched) throw new Error('Период уже изменён или удалён. Обновите свод и повторите действие.');
+        const currentTeam = projectTeam(currentProject);
+        const finances = calculateFinancesFromCurrentProject(currentProject, currentTeam, nextPeriods);
+        return { auditPeriods: nextPeriods, finances };
+      });
       toast({ title: 'Название периода обновлено', description: name });
       setEditingPeriodId(null);
       setPeriodNameDraft('');
@@ -3549,47 +3991,43 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
-  const savePeriodTeam = async (row: (typeof rows)[number], period: AuditPeriod, nextTeam: any[]) => {
+  const savePeriodTeam = async (
+    row: (typeof rows)[number],
+    period: AuditPeriod,
+    updateTeam: (currentTeam: CanonicalTeamMember[]) => CanonicalTeamMember[],
+  ) => {
     if (!canManageTeam || !updateProject) return;
     const sourceRow = periodSourceRow(row, period);
     const sourceProject = sourceRow.project || sourceRow;
     const sourceProjectId = sourceProject.id || sourceRow.id || row.id;
     const now = new Date().toISOString();
-    const basePeriods = persistedPeriodsForProject(sourceProject);
-    let matched = false;
 
-    const nextPeriods = basePeriods.map((item) => {
-      const samePeriod =
-        item.id === period.id ||
-        (
-          !matched &&
-          item.name === period.name &&
-          item.startDate === period.startDate &&
-          item.endDate === period.endDate &&
-          item.deadline === period.deadline
+    await updateProject(sourceProjectId, (currentProject: any) => {
+      let matched = false;
+      const nextPeriods = persistedPeriodsForProject(currentProject).map((item) => {
+        const samePeriod = item.id === period.id || (
+          !matched
+          && !period.id
+          && item.name === period.name
+          && item.startDate === period.startDate
+          && item.endDate === period.endDate
+          && item.deadline === period.deadline
         );
-      if (!samePeriod) return item;
-      matched = true;
-      return {
-        ...item,
-        sourceProjectId,
-        team: nextTeam,
-        teamSource: 'period',
-        updatedAt: now,
-      } as AuditPeriod;
+        if (!samePeriod) return item;
+        matched = true;
+        return {
+          ...item,
+          sourceProjectId,
+          team: updateTeam(periodTeam(item)),
+          teamSource: 'period',
+          updatedAt: now,
+        } as AuditPeriod;
+      });
+      if (!matched) throw new Error('Период уже изменён или удалён. Обновите свод и повторите действие.');
+      const currentTeam = projectTeam(currentProject);
+      const finances = calculateFinancesFromCurrentProject(currentProject, currentTeam, nextPeriods);
+      return { auditPeriods: nextPeriods, finances };
     });
-
-    if (!matched) {
-      nextPeriods.push({
-        ...period,
-        sourceProjectId,
-        team: nextTeam,
-        teamSource: 'period',
-        updatedAt: now,
-      } as AuditPeriod);
-    }
-
-    await updateProject(sourceProjectId, { auditPeriods: nextPeriods });
   };
 
   const addPeriodTeamMember = async (row: (typeof rows)[number], period: AuditPeriod, roleKey: string, employeeId: string) => {
@@ -3599,20 +4037,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     setSavingProjectId(`${row.id}:${period.id}:add:${roleKey}`);
     try {
-      const nextTeam = [
-        ...periodTeam(period).filter((member: any) => teamRole(member) !== roleKey),
-        {
-          userId: employee.id,
-          userName: employeeName(employee),
-          name: employeeName(employee),
-          userEmail: employee.email,
-          role: roleKey,
-          bonusPercent: roleDefaultPercent(roleKey),
-          assignedAt: new Date().toISOString(),
-          assignedBy: user?.id || 'period-table',
-        },
-      ];
-      await savePeriodTeam(row, period, nextTeam);
+      const nextMember: CanonicalTeamMember = {
+        userId: employee.id,
+        userName: employeeName(employee),
+        name: employeeName(employee),
+        userEmail: employee.email,
+        role: roleKey,
+        bonusPercent: roleDefaultPercent(roleKey),
+        assignedAt: new Date().toISOString(),
+        assignedBy: user?.id || 'period-table',
+      };
+      await savePeriodTeam(row, period, (currentTeam) => (
+        isPartnerRole(roleKey)
+          ? [nextMember, ...currentTeam.filter((member: any) => !isPartnerRole(teamRole(member)))]
+          : isLeaderRole(roleKey)
+            ? [...currentTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
+            : [...currentTeam.filter((member: any) => teamRole(member) !== roleKey), nextMember]
+      ));
       toast({ title: 'Участник добавлен в период', description: `${period.name}: ${employeeName(employee)}` });
     } catch (error: any) {
       toast({
@@ -3631,12 +4072,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const role = teamRole(member);
     setSavingProjectId(`${row.id}:${period.id}:remove:${id || memberIndex}`);
     try {
-      const nextTeam = periodTeam(period).filter((item: any, index: number) => {
-        if (teamRole(item) !== role) return true;
-        if (id && teamMemberId(item)) return teamMemberId(item) !== id;
-        return index !== memberIndex;
+      await savePeriodTeam(row, period, (currentTeam) => {
+        let roleIndex = -1;
+        return currentTeam.filter((item: any) => {
+          if (teamRole(item) !== role) return true;
+          roleIndex += 1;
+          if (id && teamMemberId(item)) return teamMemberId(item) !== id;
+          return roleIndex !== memberIndex;
+        });
       });
-      await savePeriodTeam(row, period, nextTeam);
       toast({ title: 'Участник убран из периода', description: period.name });
     } catch (error: any) {
       toast({
@@ -3647,6 +4091,160 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     } finally {
       setSavingProjectId(null);
     }
+  };
+
+  const renderProjectInlineDetail = (row: (typeof rows)[number], showAdvancedToggle = true) => {
+    const rowProjectIds = row.projectIds?.length ? row.projectIds : [row.id];
+    const paymentLedger = projectPaymentLedger(rowProjectIds, paymentRegistrySummary.byProject);
+    const groupedBonusRow = rowProjectIds.length > 1;
+    const bonusTeamMembers: CanonicalTeamMember[] = row.coverageTeam || row.team || [];
+    const memberGroups = new Map<string, { id: string; source: CanonicalTeamMember; roles: Set<string> }>();
+
+    for (const member of bonusTeamMembers) {
+      const identity = bonusMemberIdentity(member);
+      const existing = memberGroups.get(identity);
+      if (existing) {
+        existing.roles.add(projectRoleLabel(teamRole(member)));
+        continue;
+      }
+      memberGroups.set(identity, {
+        id: teamMemberId(member),
+        source: member,
+        roles: new Set([projectRoleLabel(teamRole(member))]),
+      });
+    }
+
+    const bonusLockedReason = !canEditBonusDraft
+      ? isImpersonating
+        ? 'Режим проверки роли: денежные изменения отключены.'
+        : 'Изменение бонусов доступно только генеральному директору.'
+      : groupedBonusRow
+      ? `Объединено записей: ${rowProjectIds.length}. Сначала выберите каноническую запись.`
+      : paymentRegistryLoading
+        ? 'Сверяем платёжный реестр. Редактирование временно недоступно.'
+        : paymentRegistryError
+          ? 'Платёжный реестр недоступен. Непроверенные выплаты менять небезопасно.'
+          : paymentLedger.rowCount > 0
+            ? 'Расчёт уже передан в платёжный реестр. Изменения возможны только отдельной корректировкой.'
+            : savingProjectId
+              ? 'Сохраняем изменения…'
+              : null;
+    const bonusEditable = canEditBonusDraft && !bonusLockedReason;
+    const memberSourceById = new Map<string, CanonicalTeamMember>();
+    const bonusEmployees: ProjectInlineBonusEmployee[] = Array.from(memberGroups.entries()).map(([identity, group]) => {
+      const memberId = group.id;
+      if (memberId) memberSourceById.set(memberId, group.source);
+      const memberLedger = memberId
+        ? memberPaymentLedger(rowProjectIds, memberId, paymentRegistrySummary.byKey)
+        : { approvedUnpaidAmount: 0, paidAmount: 0, pendingAmount: 0, rowCount: 0, latestPaymentDate: null };
+      const memberProjectHours = memberId
+        ? rowProjectIds.reduce(
+            (acc: ProjectHoursTotals, projectId: string) => {
+              const value = memberHours.get(hoursPairKey(memberId, projectId)) || { approved: 0, pending: 0 };
+              return {
+                approved: acc.approved + Number(value.approved || 0),
+                pending: acc.pending + Number(value.pending || 0),
+              };
+            },
+            { approved: 0, pending: 0 },
+          )
+        : { approved: 0, pending: 0 };
+      return {
+        id: memberId || identity,
+        name: teamName(group.source),
+        roles: Array.from(group.roles),
+        approvedHours: memberProjectHours.approved,
+        pendingHours: memberProjectHours.pending,
+        amount: memberBonusAmount(group.source, row.finances),
+        percent: memberBonusPercent(group.source, row.finances),
+        manuallyAdjusted: Boolean(memberId && row.finances.teamBonuses?.[memberId]?.manuallyAdjusted),
+        approvedForPayment: memberLedger.approvedUnpaidAmount,
+        paidAmount: memberLedger.paidAmount,
+        pendingAmount: memberLedger.pendingAmount,
+        editable: bonusEditable && Boolean(memberId),
+        lockedReason: memberId ? bonusLockedReason : 'У сотрудника нет идентификатора — сначала исправьте карточку команды.',
+      };
+    });
+    const currentPartner = teamMemberForRole(bonusTeamMembers, isPartnerRole);
+    const currentLeader = teamMemberForRole(bonusTeamMembers, isLeaderRole);
+    const totalBonusAmount = plannedBonusPool(row);
+    const allocatedBonuses = allocatedDraftBonuses(row);
+    const bonusBase = Number(row.finances.bonusBase || 0) || 0;
+    const formulaPercent = Number(row.finances.bonusPercent || 0) || 0;
+    const closureStatusLabel = row.status === 'pending_payment_approval'
+      ? 'Готов к бонусам'
+      : row.status === 'ready_to_complete'
+        ? 'Готов к закрытию'
+        : row.readiness.level === 'closed'
+          ? 'Закрыт'
+          : row.readiness.label;
+
+    return (
+      <ProjectInlineDetail
+        projectId={row.id}
+        name={row.name}
+        company={row.company}
+        client={row.client}
+        serviceType={[row.type, ...(row.periods || []).slice(0, 2).map((period: AuditPeriod) => period.name)].filter(Boolean).join(' · ')}
+        statusLabel={closureStatusLabel}
+        statusTone={inlineReadinessTone(row.readiness.level)}
+        issues={row.readiness.issues}
+        team={{
+          count: bonusTeamMembers.length,
+          partnerName: currentPartner ? teamName(currentPartner) : null,
+          leaderName: currentLeader ? teamName(currentLeader) : null,
+        }}
+        deadline={{
+          rangeLabel: `${formatDate(row.startDate)} — ${formatDate(row.deadline)}`,
+          stateLabel: row.deadlineState.label,
+          tone: inlineDeadlineTone(row.deadlineState.tone),
+        }}
+        hours={{
+          approved: row.hours.approved,
+          pending: row.hours.pending,
+          state: hoursLoading ? 'loading' : hoursError || !hoursComplete ? 'error' : 'ready',
+        }}
+        contract={{ number: row.contract?.number || null, filesCount: row.contractFiles.length }}
+        finances={{
+          contractAmount: row.amount,
+          gphAmount: Number(row.finances.totalContractorsAmount || 0),
+          preExpenseAmount: Number(row.finances.preExpenseAmount || 0),
+          allocatedBonusAmount: allocatedBonuses,
+          grossIncome: Number(row.finances.grossProfit || 0),
+        }}
+        showFinances={canSeeContractMoney}
+        showBonuses={isExecutive}
+        bonuses={isExecutive ? {
+          poolAmount: totalBonusAmount,
+          poolPercent: formulaPercent,
+          formulaPoolAmount: Math.max(0, bonusBase * (formulaPercent / 100)),
+          manuallyAdjusted: row.finances.bonusPoolManuallyAdjusted === true,
+          approvedForPayment: paymentLedger.approvedUnpaidAmount,
+          paidAmount: paymentLedger.paidAmount,
+          pendingAmount: paymentLedger.pendingAmount,
+          registryState: paymentRegistryLoading ? 'loading' : paymentRegistryError ? 'error' : 'ready',
+          editable: bonusEditable,
+          lockedReason: bonusLockedReason,
+          employees: bonusEmployees,
+        } : undefined}
+        showAdvancedToggle={showAdvancedToggle}
+        advancedOpen={Boolean(advancedRows[row.id])}
+        onToggleAdvanced={() => toggleAdvancedRow(row.id)}
+        onPoolAmountCommit={(amount) => setBonusPoolAmount(row, amount)}
+        onPoolPercentCommit={(percent) => setBonusPercent(row, percent)}
+        onResetPoolFormula={() => resetBonusPoolToFormula(row)}
+        onEmployeeAmountCommit={(employeeId, amount) => {
+          const source = memberSourceById.get(employeeId);
+          return source ? setMemberBonusAmount(row, source, amount) : Promise.resolve(false);
+        }}
+        onResetEmployeeFormula={(employeeId) => {
+          const source = memberSourceById.get(employeeId);
+          if (!source) return Promise.resolve(false);
+          const formulaPercent = Number(source.bonusPercent ?? roleDefaultPercent(teamRole(source))) || 0;
+          return setMemberBonusPercent(row, source, formulaPercent);
+        }}
+      />
+    );
   };
 
   return (
@@ -3679,11 +4277,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
               <h1 className="mt-1 text-2xl font-semibold tracking-normal text-foreground">Свод</h1>
             </div>
-            {isExecutive && (
-              <Button asChild variant="outline">
-                <Link to="/bonuses">Бонусы</Link>
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -3703,17 +4296,26 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               registryError={paymentRegistryError}
               onApplyView={applyPulseView}
             />
-            <ExecutivePortfolioVisuals
-              summary={executiveSummary}
-              registryLoading={paymentRegistryLoading}
-              registryError={paymentRegistryError}
-              onApplyView={applyPulseView}
-            />
-            <ProjectWorkloadChart
-              items={workloadItems}
-              loading={hoursLoading}
-              error={hoursError || (!hoursLoading && !hoursComplete ? 'Таймшиты загрузились не полностью' : null)}
-            />
+            <details className="group min-w-0 rounded-lg border bg-background" data-testid="executive-analytics-details">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold marker:content-none">
+                <span>Общая аналитика портфеля</span>
+                <span className="text-xs font-normal text-muted-foreground group-open:hidden">Графики проектов, сроков, бонусов и загрузки</span>
+                <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Скрыть графики</span>
+              </summary>
+              <div className="space-y-4 border-t p-3 sm:p-4">
+                <ExecutivePortfolioVisuals
+                  summary={executiveSummary}
+                  registryLoading={paymentRegistryLoading}
+                  registryError={paymentRegistryError}
+                  onApplyView={applyPulseView}
+                />
+                <ProjectWorkloadChart
+                  items={workloadItems}
+                  loading={hoursLoading}
+                  error={hoursError || (!hoursLoading && !hoursComplete ? 'Таймшиты загрузились не полностью' : null)}
+                />
+              </div>
+            </details>
           </>
         ) : (
           <>
@@ -3734,17 +4336,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         )}
 
         <Card className="p-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-10">
-              <div className="relative flex-1 md:col-span-2 xl:col-span-2 2xl:col-span-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Клиент, проект, партнер, руководитель"
-                  className="pl-9"
-                />
-              </div>
+          <div className="space-y-4">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5" data-testid="project-primary-filters">
+              <ProjectFilterField label="Поиск" className="sm:col-span-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Клиент, проект, партнёр или руководитель"
+                    className="pl-9"
+                  />
+                </div>
+              </ProjectFilterField>
+              <ProjectFilterField label="Наша компания">
               <Select value={companyFilter} onValueChange={(value) => setCompanyFilter(value as CompanyFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Наша компания" />
@@ -3759,6 +4364,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   ))}
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Партнёр">
               <Select value={partnerFilter} onValueChange={(value) => setPartnerFilter(value as PartnerFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Партнер" />
@@ -3773,6 +4380,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   ))}
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Календарный период">
               <Select value={yearFilter} onValueChange={(value) => setYearFilter(value as YearFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Период" />
@@ -3805,6 +4414,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Бизнес-сезон">
               <Select value={businessSeasonFilter} onValueChange={(value) => setBusinessSeasonFilter(value as BusinessSeasonFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Бизнес-сезон" />
@@ -3818,6 +4429,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   ))}
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Дата с">
               <Input
                 type="date"
                 aria-label="Начало периода фильтра"
@@ -3825,6 +4438,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 onChange={(event) => setDateFromFilter(event.target.value)}
                 title="Показать проекты, пересекающиеся с датой начала"
               />
+              </ProjectFilterField>
+              <ProjectFilterField label="Дата по">
               <Input
                 type="date"
                 aria-label="Конец периода фильтра"
@@ -3832,6 +4447,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 onChange={(event) => setDateToFilter(event.target.value)}
                 title="Показать проекты, пересекающиеся с датой окончания"
               />
+              </ProjectFilterField>
+              <ProjectFilterField label="Состояние проекта">
               <Select value={viewFilter} onValueChange={(value) => setViewFilter(value as ProjectViewFilter)}>
                 <SelectTrigger className="w-full">
                   <Filter className="mr-2 h-4 w-4" />
@@ -3851,6 +4468,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="waiting_hours">Ждут часы</SelectItem>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Срок проекта">
               <Select value={deadlineFilter} onValueChange={(value) => setDeadlineFilter(value as ProjectDeadlineFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -3862,6 +4481,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="no_deadline">Без срока</SelectItem>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Наличие периодов">
               <Select value={periodFilter} onValueChange={(value) => setPeriodFilter(value as ProjectPeriodFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -3872,6 +4493,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="no_periods">Нет периодов</SelectItem>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Тип периода">
               <Select value={auditPeriodTypeFilter} onValueChange={(value) => setAuditPeriodTypeFilter(value as AuditPeriodTypeFilter)}>
                 <SelectTrigger className="w-full" aria-label="Тип аудиторского периода">
                   <SelectValue placeholder="Тип периода" />
@@ -3884,6 +4507,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="custom">Особый период</SelectItem>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Сортировка">
               <Select value={sortBy} onValueChange={(value) => setSortBy(value as ProjectSort)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -3896,6 +4521,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="default">Без сортировки</SelectItem>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              <ProjectFilterField label="Вид Excel">
               <Select value={tableDetailLevel} onValueChange={(value) => setTableDetailLevel(value as TableDetailLevel)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -3905,8 +4532,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="detailed">Подробно</SelectItem>
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 border-t pt-3" data-testid="project-filter-actions">
+              <Button type="button" variant="outline" size="sm" className="h-10" disabled={!primaryFiltersActive} onClick={clearAllProjectFilters}>
+                Сбросить все фильтры
+              </Button>
               <Select value={selectedSavedViewId} onValueChange={applySavedView}>
                 <SelectTrigger className="h-10 w-[220px]" aria-label="Сохранённые виды свода">
                   <SelectValue placeholder="Сохранённые виды" />
@@ -3938,7 +4569,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 <Download className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Скачать Excel ИТОГО</span>
               </Button>
-              <div className="min-w-[220px] text-sm text-muted-foreground">
+              <div className="min-w-[220px] text-sm text-muted-foreground sm:ml-auto">
                 <div>Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span> из <span className="tabular-nums">{totalDisplayRowCount}</span></div>
                 <div>Записей в базе: <span className="font-medium text-foreground tabular-nums">{filteredDatabaseRecordCount}</span> из <span className="tabular-nums">{totalDatabaseRecordCount}</span></div>
               </div>
@@ -3962,8 +4593,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         </Card>
 
         {canSelectProjects && selectedProjectIds.size > 0 && (
-          <Card className="p-3">
-            <div className="flex flex-wrap items-center gap-2">
+          <Card className="min-w-0 p-3" data-testid="project-bulk-actions">
+            <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <Button type="button" variant="outline" size="sm" onClick={toggleAllFilteredProjects} disabled={filteredProjectIds.length === 0}>
                 {allFilteredProjectsSelected ? 'Снять выбор с записей базы' : `Выбрать записи в базе (${filteredDatabaseRecordCount})`}
               </Button>
@@ -3976,7 +4607,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   {canBulkAssignCompany && (
                     <>
                       <Select value={bulkCompanyId} onValueChange={setBulkCompanyId} disabled={bulkAssigningCompany}>
-                        <SelectTrigger className="w-[250px]" aria-label="Выбрать компанию для выбранных проектов">
+                        <SelectTrigger className="min-w-0 w-full sm:w-[250px]" aria-label="Выбрать компанию для выбранных проектов">
                           <SelectValue placeholder="Назначить компанию" />
                         </SelectTrigger>
                         <SelectContent>
@@ -3997,30 +4628,32 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   )}
                   {canBulkAssignPartner && (
                     <>
-                      <Select value={bulkPartnerId} onValueChange={setBulkPartnerId} disabled={bulkAssigningPartner}>
-                        <SelectTrigger className="w-[250px]" aria-label="Выбрать партнёра для выбранных проектов">
-                          <SelectValue placeholder="Назначить партнёра" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {partnerEmployees.map((partner) => (
-                            <SelectItem key={partner.id} value={partner.id}>{employeeName(partner)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <EmployeeSearchAdd
+                        employees={partnerEmployees}
+                        disabled={bulkAssigningPartner}
+                        selectedEmployeeId={bulkPartnerId}
+                        triggerLabel={bulkPartnerId
+                          ? employeeName(partnerEmployees.find((partner) => partner.id === bulkPartnerId))
+                          : 'Выбрать партнёра'}
+                        triggerAriaLabel="Выбрать партнёра для выбранных проектов"
+                        triggerTestId="bulk-partner-select"
+                        triggerClassName="min-w-0 w-full sm:w-[250px]"
+                        onPick={setBulkPartnerId}
+                      />
                       <Button
                         type="button"
                         size="sm"
                         onClick={() => setBulkPartnerAssignOpen(true)}
                         disabled={!bulkPartnerId || bulkAssigningPartner}
                       >
-                        Назначить партнёра и команду
+                        Назначить только партнёра
                       </Button>
                     </>
                   )}
                   {canBulkAssignTeam && (
                     <>
                       <Select value={bulkTeamTemplateId} onValueChange={setBulkTeamTemplateId} disabled={bulkAssigningTeam}>
-                        <SelectTrigger className="w-[290px]" aria-label="Выбрать шаблон команды" data-testid="bulk-team-template-select">
+                        <SelectTrigger className="min-w-0 w-full sm:w-[290px]" aria-label="Выбрать шаблон команды" data-testid="bulk-team-template-select">
                           <SelectValue placeholder="Применить готовую команду" />
                         </SelectTrigger>
                         <SelectContent>
@@ -4044,16 +4677,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   )}
                   {canBulkAssignLeader && (
                     <>
-                      <Select value={bulkLeaderId} onValueChange={setBulkLeaderId} disabled={bulkAssigningLeader}>
-                        <SelectTrigger className="w-[270px]" aria-label="Выбрать руководителя для выбранных проектов" data-testid="bulk-leader-select">
-                          <SelectValue placeholder="Назначить руководителя" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assignableEmployees.map((employee) => (
-                            <SelectItem key={employee.id} value={employee.id}>{employeeName(employee)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <EmployeeSearchAdd
+                        employees={assignableEmployees}
+                        disabled={bulkAssigningLeader}
+                        selectedEmployeeId={bulkLeaderId}
+                        triggerLabel={bulkLeaderId
+                          ? employeeName(assignableEmployees.find((employee) => employee.id === bulkLeaderId))
+                          : 'Выбрать руководителя'}
+                        triggerAriaLabel="Выбрать руководителя для выбранных проектов"
+                        triggerTestId="bulk-leader-select"
+                        triggerClassName="min-w-0 w-full sm:w-[270px]"
+                        onPick={setBulkLeaderId}
+                      />
                       <Button
                         type="button"
                         size="sm"
@@ -4081,6 +4716,160 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           </Card>
         )}
 
+        {!wideProjectTable && (
+        <Card className="min-w-0 overflow-hidden" data-testid="project-summary-shell">
+          <div className="border-b bg-sky-50/60 px-3 py-2 text-xs dark:bg-sky-950/20">
+            <span className="font-semibold">Проекты:</span> нажмите «Открыть свод» — часы, деньги, команда и бонусы появятся прямо под проектом.
+          </div>
+          <ProjectTablePagination
+            page={safeTablePage}
+            pageCount={tablePageCount}
+            pageSize={tablePageSize}
+            start={tablePageStart}
+            end={tablePageEnd}
+            total={filteredRows.length}
+            onPageChange={setTablePage}
+            onPageSizeChange={(value) => {
+              setTablePageSize(value);
+              setTablePage(1);
+            }}
+          />
+          <div className="min-w-0 space-y-3 p-3">
+            {projectsLoading && <div className="py-10 text-center text-sm text-muted-foreground">Загружаю проекты…</div>}
+            {!projectsLoading && filteredRows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{projectsError ? 'Проекты недоступны. Повторите загрузку в сообщении выше.' : 'По текущим фильтрам проектов нет.'}</div>}
+            {!projectsLoading && visibleRows.map((row) => {
+              const expanded = tableDetailLevel === 'detailed' || Boolean(expandedRows[row.id]);
+              const workload = workloadComplexity(row.hours);
+              const currentPartner = teamMemberForRole(row.team, isPartnerRole);
+              const currentLeader = teamMemberForRole(row.team, isLeaderRole);
+              const currentPartnerId = teamMemberId(currentPartner);
+              const hasPartnerTeamTemplate = Boolean(currentPartnerId && partnerTeamTemplate(currentPartnerId, row.id)?.length);
+              const totalBonusAmount = plannedBonusPool(row);
+              const allocatedBonuses = allocatedDraftBonuses(row);
+              const closureStatusLabel = row.status === 'pending_payment_approval'
+                ? 'Готов к бонусам'
+                : row.status === 'ready_to_complete'
+                  ? 'Готов к закрытию'
+                  : row.readiness.level === 'closed'
+                    ? 'Закрыт'
+                    : row.readiness.label;
+              return (
+                <section key={`mobile-${row.id}`} className="min-w-0 overflow-hidden rounded-lg border bg-background" data-project-id={row.id}>
+                  <div className="min-w-0 p-3">
+                    <div className="flex min-w-0 items-start gap-2">
+                      {canSelectProjects && (
+                        <input
+                          type="checkbox"
+                          checked={projectIdsForRow(row).every((projectId) => selectedProjectIds.has(projectId))}
+                          onChange={() => toggleProjectRowSelection(row)}
+                          aria-label={`Выбрать проект ${row.name}`}
+                          className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <Link to={`/project/${row.id}`} className="block break-words text-sm font-semibold leading-5 hover:underline">{row.name}</Link>
+                        <div className="mt-1 break-words text-xs leading-4 text-muted-foreground">{row.company} · {row.client}</div>
+                      </div>
+                      <Badge variant="outline" className={`shrink-0 text-[10px] ${issueBadgeClass(row.readiness.level)}`}>{closureStatusLabel}</Badge>
+                    </div>
+
+                    <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs">
+                      <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Срок</div><div className="mt-1 break-words font-semibold tabular-nums">{formatDate(row.deadline)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">{row.deadlineState.label}</div></div>
+                      <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Часы</div><div className="mt-1 font-semibold tabular-nums">{hoursLoading ? 'Загрузка…' : hoursError ? 'Нет данных' : `${workload.total.toFixed(1)} ч`}</div><div className="mt-0.5 text-[10px] text-muted-foreground">{hoursLoading || hoursError ? 'таймшиты сверяются' : `${row.hours.approved.toFixed(1)} утверждено`}</div></div>
+                      {canSeeContractMoney && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Договор без НДС</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(row.amount)}</div></div>}
+                      {isExecutive && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Бонусы</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">Распределено {displayMoney(allocatedBonuses)}</div></div>}
+                    </div>
+
+                    {canManageTeam && (
+                      <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">
+                        <div className="min-w-0 space-y-1">
+                          <div className="text-[10px] font-medium uppercase text-muted-foreground">Партнёр</div>
+                          <EmployeeSearchAdd
+                            employees={partnerEmployees}
+                            disabled={savingProjectId === `${row.id}:add:partner`}
+                            selectedEmployeeId={currentPartnerId}
+                            triggerLabel={currentPartner ? teamName(currentPartner) : 'Назначить партнёра'}
+                            triggerAriaLabel={`Партнёр проекта ${row.name}`}
+                            triggerClassName="h-10 w-full text-xs"
+                            onPick={(employeeId) => addTeamMember(row, 'partner', employeeId)}
+                          />
+                          {hasPartnerTeamTemplate && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto w-full justify-start whitespace-normal px-1 py-1 text-left text-[11px] text-sky-700"
+                              disabled={savingProjectId === `${row.id}:team-template`}
+                              onClick={() => setProjectTeamTemplateTarget({ rowId: row.id, partnerId: currentPartnerId })}
+                            >
+                              Применить шаблон команды партнёра…
+                            </Button>
+                          )}
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="text-[10px] font-medium uppercase text-muted-foreground">Руководитель</div>
+                          <EmployeeSearchAdd
+                            employees={assignableEmployees}
+                            disabled={savingProjectId === `${row.id}:add:project_leader`}
+                            selectedEmployeeId={teamMemberId(currentLeader)}
+                            triggerLabel={currentLeader ? teamName(currentLeader) : 'Назначить руководителя'}
+                            triggerAriaLabel={`Руководитель проекта ${row.name}`}
+                            triggerClassName="h-10 w-full text-xs"
+                            onPick={(employeeId) => addTeamMember(row, 'project_leader', employeeId)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      {canManageProjectStatus ? (
+                        <Select value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined} onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)} disabled={savingProjectId === `${row.id}:status`}><SelectTrigger className="h-10 w-full min-w-0 text-xs" aria-label={`Изменить статус проекта ${row.name}`}><SelectValue placeholder={MANAGED_PROJECT_STATUS_LABELS[row.status as ManagedProjectStatus] || row.status || 'Статус'} /></SelectTrigger><SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value} disabled={(option.value === 'pending_payment_approval' || option.value === 'completed') && (hoursLoading || Boolean(hoursError) || !hoursComplete || row.hours.pending > 0)}>{option.label}</SelectItem>)}</SelectContent></Select>
+                      ) : <div className="flex items-center"><Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>{closureStatusLabel}</Badge></div>}
+                      <div className="grid grid-cols-2 gap-2">
+                        {canEditPeriods && <Button type="button" variant="outline" size="sm" className="h-10 min-w-0 px-2 text-xs" onClick={() => { startProjectDateEdit(row); setExpandedRows({ [row.id]: true }); }}>Сроки</Button>}
+                        <Button type="button" variant={expanded ? 'secondary' : 'default'} size="sm" className="h-10 min-w-0 px-2 text-xs" aria-expanded={expanded} aria-controls={`project-details-${row.id}`} onClick={() => toggleRow(row.id)}>
+                          {expanded ? 'Свернуть' : 'Открыть свод'} {expanded ? <ChevronDown className="ml-1 h-3.5 w-3.5" /> : <ChevronRight className="ml-1 h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {expanded && (
+                    <div className="min-w-0 space-y-3 border-t bg-muted/20 p-2 sm:p-3">
+                      {renderProjectInlineDetail(row, false)}
+                      {editingProjectDatesRowId === row.id && (
+                        <div className="grid min-w-0 gap-2 rounded-lg border bg-background p-3 sm:grid-cols-2">
+                          <label className="min-w-0 space-y-1"><span className="text-xs text-muted-foreground">Начало</span><Input aria-label={`Начало проекта ${row.name}`} type="date" className="h-10 w-full min-w-0" value={projectDateDraft.startDate} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, startDate: event.target.value }))} /></label>
+                          <label className="min-w-0 space-y-1"><span className="text-xs text-muted-foreground">Дедлайн</span><Input aria-label={`Дедлайн проекта ${row.name}`} type="date" className="h-10 w-full min-w-0" value={projectDateDraft.deadline} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, deadline: event.target.value }))} /></label>
+                          <Button type="button" size="sm" className="h-10" disabled={savingProjectId === `${row.id}:dates`} onClick={() => saveProjectDates(row)}>Сохранить сроки</Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-10" onClick={cancelProjectDateEdit}>Отмена</Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+          <ProjectTablePagination
+            page={safeTablePage}
+            pageCount={tablePageCount}
+            pageSize={tablePageSize}
+            start={tablePageStart}
+            end={tablePageEnd}
+            total={filteredRows.length}
+            onPageChange={(page) => {
+              setTablePage(page);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onPageSizeChange={(value) => {
+              setTablePageSize(value);
+              setTablePage(1);
+            }}
+          />
+        </Card>
+        )}
+
+        {wideProjectTable && (
         <Card className="overflow-x-auto overflow-y-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-sky-50/60 px-3 py-2 text-xs dark:bg-sky-950/20">
             <div><span className="font-semibold">Общая таблица CEO:</span> одна строка — один проект.</div>
@@ -4176,7 +4965,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   const allocatedBonuses = allocatedDraftBonuses(row);
                   const bonusRemaining = totalBonusAmount - allocatedBonuses;
                   const rowProjectIds = row.projectIds?.length ? row.projectIds : [row.id];
-                  const paymentLedger = projectPaymentLedger(rowProjectIds, paymentRegistrySummary.byKey);
+                  const paymentLedger = projectPaymentLedger(rowProjectIds, paymentRegistrySummary.byProject);
                   const groupedBonusRow = rowProjectIds.length > 1;
                   const bonusTeamMembers = row.coverageTeam || row.team || [];
                   const bonusRoleColumns = bonusRoleColumnsForTeam(bonusTeamMembers);
@@ -4187,14 +4976,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                       if (!firstBonusRoleByMember.has(identity)) firstBonusRoleByMember.set(identity, column.key);
                     }
                   }
-                  const bonusEditingLocked = groupedBonusRow
-                    || paymentRegistryLoading
-                    || Boolean(paymentRegistryError)
-                    || paymentLedger.approvedUnpaidAmount > 0
-                    || paymentLedger.paidAmount > 0;
+                  const compactBonusLockReason = !canEditBonusDraft
+                    ? 'Изменять бонусы может только генеральный директор'
+                    : row.finances.bonusPoolManuallyAdjusted === true
+                      ? 'Пул задан точной суммой. Откройте свод проекта, чтобы изменить сумму или вернуть формулу'
+                      : groupedBonusRow || paymentRegistryLoading || paymentRegistryError || paymentLedger.rowCount > 0
+                        ? 'Сначала завершите сверку записей и платёжного реестра'
+                        : '';
+                  const bonusEditingLocked = Boolean(compactBonusLockReason);
                   const workload = workloadComplexity(row.hours);
-                  const currentPartner = teamMemberForRole(row.coverageTeam || row.team, isPartnerRole);
-                  const currentLeader = teamMemberForRole(row.coverageTeam || row.team, isLeaderRole);
+                  const currentPartner = teamMemberForRole(row.team, isPartnerRole);
+                  const currentLeader = teamMemberForRole(row.team, isLeaderRole);
+                  const currentPartnerId = teamMemberId(currentPartner);
+                  const hasPartnerTeamTemplate = Boolean(currentPartnerId && partnerTeamTemplate(currentPartnerId, row.id)?.length);
                   const commandModel = buildProjectCommandCenterModel(row.project);
                   const closureStatusLabel = row.status === 'pending_payment_approval'
                     ? 'Готов к бонусам'
@@ -4245,19 +5039,43 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             <div>
                               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Партнёр</div>
                               {canManageTeam ? (
-                                <Select value={teamMemberId(currentPartner) || undefined} onValueChange={(employeeId) => addTeamMember(row, 'partner', employeeId)} disabled={savingProjectId === `${row.id}:add:partner`}>
-                                  <SelectTrigger className="h-8 w-full text-xs" aria-label={`Партнёр проекта ${row.name}`}><SelectValue placeholder="Назначить партнёра" /></SelectTrigger>
-                                  <SelectContent>{partnerEmployees.map((partner) => <SelectItem key={partner.id} value={partner.id}>{employeeName(partner)}</SelectItem>)}</SelectContent>
-                                </Select>
+                                <div className="space-y-1">
+                                  <EmployeeSearchAdd
+                                    employees={partnerEmployees}
+                                    disabled={savingProjectId === `${row.id}:add:partner`}
+                                    selectedEmployeeId={currentPartnerId}
+                                    triggerLabel={currentPartner ? teamName(currentPartner) : 'Назначить партнёра'}
+                                    triggerAriaLabel={`Партнёр проекта ${row.name}`}
+                                    triggerClassName="h-8 w-full text-xs"
+                                    onPick={(employeeId) => addTeamMember(row, 'partner', employeeId)}
+                                  />
+                                  {hasPartnerTeamTemplate && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-auto w-full justify-start whitespace-normal px-1 py-1 text-left text-[11px] text-sky-700"
+                                      disabled={savingProjectId === `${row.id}:team-template`}
+                                      onClick={() => setProjectTeamTemplateTarget({ rowId: row.id, partnerId: currentPartnerId })}
+                                    >
+                                      Применить шаблон команды…
+                                    </Button>
+                                  )}
+                                </div>
                               ) : <div className="font-medium">{currentPartner ? teamName(currentPartner) : '—'}</div>}
                             </div>
                             <div>
                               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Руководитель</div>
                               {canManageTeam ? (
-                                <Select value={teamMemberId(currentLeader) || undefined} onValueChange={(employeeId) => addTeamMember(row, 'project_leader', employeeId)} disabled={savingProjectId === `${row.id}:add:project_leader`}>
-                                  <SelectTrigger className="h-8 w-full text-xs" aria-label={`Руководитель проекта ${row.name}`}><SelectValue placeholder="Назначить руководителя" /></SelectTrigger>
-                                  <SelectContent>{assignableEmployees.map((employee) => <SelectItem key={employee.id} value={employee.id}>{employeeName(employee)}</SelectItem>)}</SelectContent>
-                                </Select>
+                                <EmployeeSearchAdd
+                                  employees={assignableEmployees}
+                                  disabled={savingProjectId === `${row.id}:add:project_leader`}
+                                  selectedEmployeeId={teamMemberId(currentLeader)}
+                                  triggerLabel={currentLeader ? teamName(currentLeader) : 'Назначить руководителя'}
+                                  triggerAriaLabel={`Руководитель проекта ${row.name}`}
+                                  triggerClassName="h-8 w-full text-xs"
+                                  onPick={(employeeId) => addTeamMember(row, 'project_leader', employeeId)}
+                                />
                               ) : <div className="font-medium">{currentLeader ? teamName(currentLeader) : '—'}</div>}
                             </div>
                           </div>
@@ -4306,7 +5124,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 {paymentLedger.paidAmount > 0 && <div className="text-xs font-medium text-emerald-700">Выплачено: {displayMoney(paymentLedger.paidAmount)}</div>}
                               </>
                             )}
-                            <div className="mt-2 flex items-center justify-end gap-1" title={bonusEditingLocked ? 'Редактирование заблокировано: сначала завершите сверку записей и платёжного реестра' : undefined}><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id || bonusEditingLocked} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)} aria-label={`Уменьшить процент бонуса для ${row.name}`}><Minus className="h-3 w-3" /></Button><span className="w-10 text-center text-xs font-semibold tabular-nums">{Number(row.finances.bonusPercent || 0).toFixed(0)}%</span><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id || bonusEditingLocked} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)} aria-label={`Увеличить процент бонуса для ${row.name}`}><Plus className="h-3 w-3" /></Button></div>
+                            <div className="mt-2 flex items-center justify-end gap-1" title={compactBonusLockReason || undefined}><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id || bonusEditingLocked} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) - 1)} aria-label={`Уменьшить процент бонуса для ${row.name}`}><Minus className="h-3 w-3" /></Button><span className="w-10 text-center text-xs font-semibold tabular-nums">{Number(row.finances.bonusPercent || 0).toFixed(0)}%</span><Button type="button" variant="outline" size="icon" className="h-6 w-6" disabled={savingProjectId === row.id || bonusEditingLocked} onClick={() => setBonusPercent(row, Number(row.finances.bonusPercent || 0) + 1)} aria-label={`Увеличить процент бонуса для ${row.name}`}><Plus className="h-3 w-3" /></Button></div>
                             <Button type="button" variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => openBonusWorkspace(row.id)}>По сотрудникам</Button>
                           </TableCell>
                         )}
@@ -4327,37 +5145,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         <TableRow key={`${row.id}-details`} className="bg-muted/20 hover:bg-muted/20">
                           <TableCell colSpan={tableColSpan} className="p-0">
                             <div className="space-y-4 border-t px-4 py-4">
-                              <section className="rounded-lg border bg-background shadow-sm" aria-label={`Краткая карточка проекта ${row.name}`}>
-                                <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
-                                  <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <h3 className="font-semibold">{row.name}</h3>
-                                      <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>{row.readiness.label}</Badge>
-                                    </div>
-                                    <div className="mt-1 text-xs text-muted-foreground">{row.company} · {row.client} · {row.type}</div>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button asChild variant="outline" size="sm" className="h-8"><Link to={`/project/${row.id}`}>Открыть проект <ExternalLink className="ml-1 h-3.5 w-3.5" /></Link></Button>
-                                    <Button type="button" variant={advancedRows[row.id] ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => toggleAdvancedRow(row.id)}>{advancedRows[row.id] ? 'Скрыть расширенное' : 'Расширенное редактирование'}</Button>
-                                  </div>
+                              {renderProjectInlineDetail(row)}
+                              {editingProjectDatesRowId === row.id && (
+                                <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-background px-4 py-3">
+                                  <label className="min-w-0 flex-1 space-y-1 sm:flex-none"><span className="text-xs text-muted-foreground">Начало</span><Input aria-label={`Начало проекта ${row.name}`} type="date" className="h-10" value={projectDateDraft.startDate} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, startDate: event.target.value }))} /></label>
+                                  <label className="min-w-0 flex-1 space-y-1 sm:flex-none"><span className="text-xs text-muted-foreground">Дедлайн</span><Input aria-label={`Дедлайн проекта ${row.name}`} type="date" className="h-10" value={projectDateDraft.deadline} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, deadline: event.target.value }))} /></label>
+                                  <Button type="button" size="sm" className="h-10" disabled={savingProjectId === `${row.id}:dates`} onClick={() => saveProjectDates(row)}>Сохранить сроки</Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-10" onClick={cancelProjectDateEdit}>Отмена</Button>
                                 </div>
-                                <div className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-5">
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Команда</div><div className="mt-1 text-sm"><span className="font-medium">Партнёр:</span> {currentPartner ? teamName(currentPartner) : '—'}</div><div className="text-sm"><span className="font-medium">Руководитель:</span> {currentLeader ? teamName(currentLeader) : '—'}</div><div className="mt-1 text-xs text-muted-foreground">Команда: {(row.coverageTeam || row.team).length} чел.</div></div>
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Сроки</div><div className="mt-1 text-sm font-medium tabular-nums">{formatDate(row.startDate)} — {formatDate(row.deadline)}</div><div className="mt-1 text-xs text-muted-foreground">{row.periods.length ? row.periods.map((period: AuditPeriod) => period.name).join(', ') : 'Период не указан'}</div>{canEditPeriods && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => startProjectDateEdit(row)}>Изменить сроки</Button>}</div>
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Таймшиты</div>{hoursLoading ? <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загрузка…</div> : hoursError ? <div className="mt-2 text-sm font-medium text-red-700">Данные недоступны</div> : <><div className="mt-1 text-lg font-semibold tabular-nums">{workload.total.toFixed(1)} ч</div><div className="text-xs text-muted-foreground">{row.hours.approved.toFixed(1)} утверждено · {row.hours.pending.toFixed(1)} ждут</div><Badge variant="outline" className={`mt-2 ${workload.className}`}>{workload.label}</Badge></>}</div>
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Договор</div><div className="mt-1 text-sm font-medium">{row.contract?.number ? `№ ${row.contract.number}` : 'Номер не указан'}</div><div className="mt-1 text-base font-semibold tabular-nums">{displayMoney(row.amount)}</div><div className="text-xs text-muted-foreground">{row.contractFiles.length ? `${row.contractFiles.length} файл(а)` : 'Файл не загружен'}</div></div>
-                                  <div className="p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Финансы CEO</div><div className="mt-1 text-sm"><span className="text-muted-foreground">Пул:</span> <span className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</span></div><div className="text-sm"><span className="text-muted-foreground">Распределено:</span> <span className="font-medium tabular-nums">{displayMoney(allocatedBonuses)}</span></div>{paymentRegistryLoading ? <div className="text-xs text-muted-foreground">Реестр сверяется…</div> : paymentRegistryError ? <div className="text-xs font-medium text-red-700">Реестр выплат недоступен</div> : <><div className="text-sm"><span className="text-muted-foreground">К выплате:</span> <span className="font-medium tabular-nums text-amber-700">{displayMoney(paymentLedger.approvedUnpaidAmount)}</span></div><div className="text-sm"><span className="text-muted-foreground">Выплачено:</span> <span className="font-medium tabular-nums text-emerald-700">{displayMoney(paymentLedger.paidAmount)}</span></div></>}<div className="text-sm"><span className="text-muted-foreground">Доход:</span> <span className={`font-semibold tabular-nums ${Number(row.finances.grossProfit) < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{displayMoney(row.finances.grossProfit)}</span></div></div>
-                                </div>
-                                {editingProjectDatesRowId === row.id && (
-                                  <div className="flex flex-wrap items-end gap-2 border-t bg-muted/20 px-4 py-3">
-                                    <label className="space-y-1"><span className="text-xs text-muted-foreground">Начало</span><Input aria-label={`Начало проекта ${row.name}`} type="date" className="h-8" value={projectDateDraft.startDate} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, startDate: event.target.value }))} /></label>
-                                    <label className="space-y-1"><span className="text-xs text-muted-foreground">Дедлайн</span><Input aria-label={`Дедлайн проекта ${row.name}`} type="date" className="h-8" value={projectDateDraft.deadline} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, deadline: event.target.value }))} /></label>
-                                    <Button type="button" size="sm" className="h-8" disabled={savingProjectId === `${row.id}:dates`} onClick={() => saveProjectDates(row)}>Сохранить сроки</Button>
-                                    <Button type="button" variant="ghost" size="sm" className="h-8" onClick={cancelProjectDateEdit}>Отмена</Button>
-                                  </div>
-                                )}
-                                {row.contractFiles.length > 0 && <div className="flex flex-wrap gap-2 border-t px-4 py-3">{row.contractFiles.slice(0, 2).map((file: any, index: number) => { const label = file?.fileName || file?.name || `Файл ${index + 1}`; const fileKey = `${row.id}:compact:${file?.id || label}-${index}`; return <Button key={fileKey} type="button" variant="outline" size="sm" className="h-8" disabled={openingFileKey === fileKey} onClick={() => void openContractFile(file, label, fileKey)}><Download className="mr-1.5 h-3.5 w-3.5" />Скачать договор</Button>; })}</div>}
-                              </section>
+                              )}
                               {advancedRows[row.id] && (
                                 <div className="flex flex-col gap-4">
                                   <ProjectDataIntegrityDrawer model={commandModel} canRepair={canManageTeam || canManageProjectStatus} />
@@ -4784,7 +5580,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               </div>
 
-                              {isExecutive && (
+                              {SHOW_LEGACY_BONUS_WORKSPACE && isExecutive && (
                                 <div className="order-first grid gap-3 md:grid-cols-4 xl:grid-cols-10">
                                   <MetricBox label="Сумма без НДС" value={`${money.format(row.amount)} ₸`} />
                                   <MetricBox label="Плановый бонусный пул" value={`${money.format(totalBonusAmount)} ₸`} />
@@ -4799,7 +5595,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               )}
 
-                              {isExecutive && (
+                              {SHOW_LEGACY_BONUS_WORKSPACE && isExecutive && (
                               <div id={`bonus-workspace-${row.id}`} className="order-first scroll-mt-4 rounded-md border bg-background" aria-label={`Бонусы команды проекта ${row.name}`}>
                                 <div className="flex flex-wrap items-start justify-between gap-3 border-b px-3 py-3">
                                   <div>
@@ -5047,6 +5843,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             }}
           />
         </Card>
+        )}
 
         <AlertDialog open={Boolean(gphEditorRow)} onOpenChange={(open) => {
           if (open) return;
@@ -5115,6 +5912,37 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           )}
         </AlertDialog>
 
+        <AlertDialog
+          open={Boolean(projectTeamTemplateTarget)}
+          onOpenChange={(open) => {
+            if (!open && savingProjectId !== `${projectTeamTemplateTarget?.rowId}:team-template`) {
+              setProjectTeamTemplateTarget(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Заменить общую команду шаблоном партнёра?</AlertDialogTitle>
+              <AlertDialogDescription>
+                «{projectTeamTemplateTargetDefinition?.label || 'Шаблон команды партнёра'}» заменит общую команду проекта «{projectTeamTemplateTargetRow?.name || 'проект'}» только после этого подтверждения. Команды, отдельно назначенные внутри периодов, договоры, часы, бонусные выплаты и файлы не изменятся.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={savingProjectId === `${projectTeamTemplateTarget?.rowId}:team-template`}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="confirm-project-team-template"
+                disabled={!projectTeamTemplateTargetDefinition || savingProjectId === `${projectTeamTemplateTarget?.rowId}:team-template`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void applyPartnerTeamTemplateToProject();
+                }}
+              >
+                {savingProjectId === `${projectTeamTemplateTarget?.rowId}:team-template` ? 'Применяю…' : 'Да, заменить общую команду'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <AlertDialog open={bulkCompanyAssignOpen} onOpenChange={setBulkCompanyAssignOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -5143,7 +5971,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <AlertDialogHeader>
               <AlertDialogTitle>Назначить партнёра выбранным проектам?</AlertDialogTitle>
               <AlertDialogDescription>
-                Партнёр «{partnerEmployees.find((employee) => employee.id === bulkPartnerId) ? employeeName(partnerEmployees.find((employee) => employee.id === bulkPartnerId)) : 'не выбран'}» будет назначен для {selectedProjectIds.size} проектов. Если у партнёра уже есть команда на другом проекте, она подставится как готовый шаблон.
+                Партнёр «{partnerEmployees.find((employee) => employee.id === bulkPartnerId) ? employeeName(partnerEmployees.find((employee) => employee.id === bulkPartnerId)) : 'не выбран'}» заменит только партнёра у {selectedProjectIds.size} проектов. Остальные участники общей команды и все команды периодов сохранятся. Шаблон команды автоматически не применяется.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

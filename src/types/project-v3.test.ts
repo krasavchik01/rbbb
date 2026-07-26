@@ -30,6 +30,45 @@ describe('calculateProjectFinances', () => {
     expect(finances.grossProfit).toBeLessThan(0);
   });
 
+  it('keeps a manual CEO pool in tenge instead of replacing it with the formula', () => {
+    const finances = calculateProjectFinances({
+      contract: { amountWithoutVAT: 1_000_000 },
+      finances: {
+        bonusPercent: 10,
+        preExpensePercent: 0,
+        bonusPoolOverrideAmount: 175_000,
+        bonusPoolManuallyAdjusted: true,
+        bonusPoolHistory: [{ type: 'pool_amount_change', at: '2026-07-26T00:00:00.000Z' }],
+      },
+      team: [{ userId: 'employee-1', role: 'assistant_1', bonusPercent: 2 }],
+    } as any);
+
+    expect(finances.totalBonusAmount).toBe(175_000);
+    expect(finances.bonusPercent).toBe(10);
+    expect(finances.bonusPoolOverrideAmount).toBe(175_000);
+    expect(finances.bonusPoolManuallyAdjusted).toBe(true);
+    expect(finances.teamBonuses['employee-1'].amount).toBe(3_500);
+    expect(finances.bonusPoolHistory).toHaveLength(1);
+  });
+
+  it('returns to the percentage formula when the manual pool flag is cleared', () => {
+    const finances = calculateProjectFinances({
+      contract: { amountWithoutVAT: 1_000_000 },
+      finances: {
+        bonusPercent: 12,
+        preExpensePercent: 0,
+        bonusPoolOverrideAmount: 175_000,
+        bonusPoolManuallyAdjusted: false,
+      },
+      team: [],
+    } as any);
+
+    expect(finances.totalBonusAmount).toBe(120_000);
+    expect(finances.bonusPercent).toBe(12);
+    expect(finances.bonusPoolOverrideAmount).toBeNull();
+    expect(finances.bonusPoolManuallyAdjusted).toBe(false);
+  });
+
   it('normalizes missing role percentages, string manual amounts and multiple roles', () => {
     const automatic = calculateProjectFinances({
       contract: { amountWithoutVAT: 1_000_000 },

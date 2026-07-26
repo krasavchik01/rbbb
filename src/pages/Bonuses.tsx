@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -534,6 +535,10 @@ export default function Bonuses() {
         return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Отклонён</Badge>;
     }
   };
+
+  if (isCeoOrAdmin) {
+    return <Navigate to="/projects?view=ready_bonus" replace />;
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 page-enter">

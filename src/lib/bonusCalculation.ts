@@ -14,7 +14,7 @@
  *   overhead   = base × overheadPct
  *   contractors= ∑ project.finances.contractors[].amount
  *   remainder  = max(0, base − overhead − contractors)
- *   bonusPool  = remainder × bonusPct
+ *   bonusPool  = ручной пул CEO или remainder × bonusPct
  *   role pool  = bonusPool × distribution[role]%
  *   per-user   = либо manuallyAdjusted, либо плановая доля внутри role pool
  *                по project.team[].bonusPercent (внутри роли) или поровну.
@@ -165,11 +165,20 @@ export function computeProjectBonus(
 ): BonusComputeResult {
   const base = readAmountWithoutVAT(project);
   const contractors = readContractorsAmount(project);
-  const { overheadPercent, bonusPercent, distribution } = effectiveSettings(project, settings);
+  const { overheadPercent, bonusPercent: formulaBonusPercent, distribution } = effectiveSettings(project, settings);
+  const projectFinances = getProjectNotes(project).finances || {};
 
   const overhead = base * (overheadPercent / 100);
   const remainder = Math.max(0, base - overhead - contractors);
-  const bonusPool = remainder * (bonusPercent / 100);
+  const hasManualPool = projectFinances.bonusPoolManuallyAdjusted === true
+    && projectFinances.bonusPoolOverrideAmount !== undefined
+    && projectFinances.bonusPoolOverrideAmount !== null;
+  const bonusPool = hasManualPool
+    ? Math.max(0, Number(projectFinances.bonusPoolOverrideAmount) || 0)
+    : remainder * (formulaBonusPercent / 100);
+  const bonusPercent = hasManualPool && remainder > 0
+    ? (bonusPool / remainder) * 100
+    : formulaBonusPercent;
 
   const team = readTeam(project);
   const teamBonuses = getProjectNotes(project).finances?.teamBonuses || {};

@@ -14,6 +14,10 @@ const visualsSource = fs.readFileSync(
   new URL('../src/components/projects/ExecutivePortfolioVisuals.tsx', import.meta.url),
   'utf8',
 );
+const inlineDetailSource = fs.readFileSync(
+  new URL('../src/components/projects/ProjectInlineDetail.tsx', import.meta.url),
+  'utf8',
+);
 
 test('executive portfolio overview is imported and rendered only for executives', () => {
   assert.match(
@@ -57,15 +61,17 @@ test('project draft bonuses are labelled as allocated, not falsely paid', () => 
     /function allocatedDraftBonuses\([^)]*\)[\s\S]{0,240}totalPaidBonuses/,
   );
   assert.match(
-    pageSource,
-    /Распределено(?: команде)?:<\/span>\s*<span[^>]*>\{displayMoney\((?:paidBonuses|allocatedBonuses)\)\}<\/span>/,
+    inlineDetailSource,
+    /<BonusFact label="Распределено" value=\{formatMoney\(allocated\)\}/,
   );
   assert.doesNotMatch(
-    pageSource,
-    /Выплачено:<\/span>\s*<span[^>]*>\{displayMoney\((?:paidBonuses|allocatedBonuses)\)\}<\/span>/,
+    inlineDetailSource,
+    /<BonusFact label="Выплачено" value=\{formatMoney\(allocated\)\}/,
   );
-  assert.match(overviewSource, /label="Распределено команде"/);
-  assert.match(overviewSource, /label="Фактически выплачено"[\s\S]{0,180}summary\.paidFromRegistry/);
+  assert.match(inlineDetailSource, /Реальная выплата подтверждается платёжным реестром/);
+  assert.match(inlineDetailSource, /Выплачено \{formatMoney\(paid\)\}/);
+  assert.match(overviewSource, /label="Бонусный пул"[\s\S]{0,180}summary\.plannedBonusPool/);
+  assert.match(overviewSource, /label="Выплачено по реестру"[\s\S]{0,180}summary\.paidFromRegistry/);
 });
 
 test('CEO totals load one unified timesheet snapshot and the final bonus registry', () => {
@@ -100,7 +106,8 @@ test('financial status transitions and bonus drafts fail closed when source data
   assert.match(pageSource, /const requiresVerifiedHours = nextStatus === 'pending_payment_approval' \|\| nextStatus === 'completed'/);
   assert.match(pageSource, /requiresVerifiedHours && \(hoursLoading \|\| hoursError \|\| !hoursComplete\)/);
   assert.match(pageSource, /paymentRegistryLoading[\s\S]{0,500}Excel не выгружен/);
-  assert.match(pageSource, /const bonusEditingLocked = groupedBonusRow[\s\S]{0,300}paymentLedger\.paidAmount > 0/);
+  assert.match(pageSource, /const bonusLockedReason = !canEditBonusDraft[\s\S]{0,650}paymentLedger\.rowCount > 0/);
+  assert.match(pageSource, /const compactBonusLockReason = !canEditBonusDraft[\s\S]{0,500}paymentLedger\.rowCount > 0/);
 });
 
 test('CEO projects page exposes simple visual charts without extra database reads', () => {

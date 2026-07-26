@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, Clock, Gift, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, Banknote, CheckCircle2, Clock, Gift, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -56,11 +55,11 @@ export function ExecutivePortfolioOverview({
 }) {
   return (
     <Card className="overflow-hidden border-slate-200 shadow-sm dark:border-slate-800" aria-label="Картина бизнеса генерального директора">
-      <div className="border-b bg-gradient-to-r from-slate-50 via-background to-sky-50/60 px-4 py-4 dark:from-slate-950 dark:to-sky-950/20 sm:px-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="border-b bg-gradient-to-r from-slate-50 via-background to-sky-50/60 px-4 py-3 dark:from-slate-950 dark:to-sky-950/20 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-tight">Картина бизнеса</h2>
+              <h2 className="text-base font-semibold tracking-tight sm:text-lg">Картина бизнеса</h2>
               <Badge variant="outline">{summary.totalProjects} проектов</Badge>
               {registryLoading ? (
                 <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Реестр загружается</Badge>
@@ -70,72 +69,30 @@ export function ExecutivePortfolioOverview({
                 <Badge variant="outline" className="border-emerald-200 text-emerald-700">Реестр выплат подключён</Badge>
               )}
             </div>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Портфель, риски и бонусы в одном месте. Плановый расчёт проекта отделён от утверждённого платёжного реестра.
+            <p className="mt-1 max-w-3xl text-xs text-muted-foreground sm:text-sm">
+              Сначала риски и деньги; детальный расчёт открывается прямо внутри нужного проекта.
             </p>
           </div>
-          <Button asChild variant="outline" className="w-full justify-between sm:w-auto">
-            <Link to="/bonuses">Открыть реестр выплат <ArrowRight className="ml-2 h-4 w-4" /></Link>
-          </Button>
+          <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => onApplyView('all')}>Показать все проекты</Button>
         </div>
       </div>
 
-      <div className="border-b p-4 sm:p-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold">Сначала посмотрите сюда</h3>
-          <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => onApplyView('all')}>Показать всё</Button>
+      <div className="grid border-b lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:divide-x">
+        <div className="p-3 sm:p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Требуют решения</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <DecisionCard label="Просрочены" value={summary.overdueProjects} detail="срок прошёл" tone="danger" onClick={() => onApplyView('overdue')} />
+            <DecisionCard label="Требуют действия" value={summary.attentionProjects} detail="есть проблема" tone="warn" onClick={() => onApplyView('attention')} />
+            <DecisionCard label="Готовы к бонусам" value={summary.readyForBonuses} detail="можно считать" onClick={() => onApplyView('ready_bonus')} />
+            <DecisionCard label="Проверить бонусы" value={summary.bonusReviewProjects} detail={`${summary.bonusConfiguredProjects} заполнено`} tone={summary.bonusReviewProjects > 0 ? 'warn' : 'positive'} onClick={() => onApplyView('bonus_attention')} />
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          <DecisionCard label="Просрочены" value={summary.overdueProjects} detail="срок уже прошёл" tone="danger" onClick={() => onApplyView('overdue')} />
-          <DecisionCard label="Требуют действия" value={summary.attentionProjects} detail="данные, команда или часы" tone="warn" onClick={() => onApplyView('attention')} />
-          <DecisionCard label="Готовы к бонусам" value={summary.readyForBonuses} detail="можно считать выплаты" onClick={() => onApplyView('ready_bonus')} />
-          <DecisionCard label="Проверить бонусы" value={summary.bonusReviewProjects} detail={`${summary.bonusConfiguredProjects} расчётов заполнено`} tone={summary.bonusReviewProjects > 0 ? 'warn' : 'positive'} onClick={() => onApplyView('bonus_attention')} />
+        <div className="grid grid-cols-2 gap-px bg-border">
+          <ExecutiveMetric icon={<Banknote className="h-4 w-4" />} label="Договоры без НДС" value={money(summary.contractAmount)} detail={`${summary.activeProjects} в работе`} />
+          <ExecutiveMetric icon={<TrendingUp className="h-4 w-4" />} label="Прогнозный доход" value={money(summary.grossProfit)} detail={`Маржа ${summary.profitMargin.toFixed(1)}%`} tone={summary.grossProfit < 0 ? 'danger' : 'positive'} />
+          <ExecutiveMetric icon={<Gift className="h-4 w-4" />} label="Бонусный пул" value={money(summary.plannedBonusPool)} detail={summary.overallocatedBonuses > 0 ? `Сверх пула ${money(summary.overallocatedBonuses)}` : `Осталось ${money(summary.unallocatedBonuses)}`} tone={summary.overallocatedBonuses > 0 ? 'danger' : summary.unallocatedBonuses > 0 ? 'warn' : 'default'} />
+          <ExecutiveMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Выплачено по реестру" value={registryLoading ? 'Загрузка…' : registryError ? 'Нет данных' : money(summary.paidFromRegistry)} detail={registryLoading ? 'Сверяем реестр' : registryError ? 'Факт не подтверждён' : `К выплате ${money(summary.approvedForPayment)}`} tone={registryError ? 'danger' : !registryLoading && summary.paidFromRegistry > 0 ? 'positive' : 'default'} />
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-px bg-border xl:grid-cols-6">
-        <ExecutiveMetric
-          icon={<Banknote className="h-4 w-4" />}
-          label="Договоры без НДС"
-          value={money(summary.contractAmount)}
-          detail={`${summary.activeProjects} проектов в работе`}
-        />
-        <ExecutiveMetric
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Прогнозный доход"
-          value={money(summary.grossProfit)}
-          detail={`После ГПХ, предрасхода и распределённых бонусов · маржа ${summary.profitMargin.toFixed(1)}%`}
-          tone={summary.grossProfit < 0 ? 'danger' : 'positive'}
-        />
-        <ExecutiveMetric
-          icon={<Gift className="h-4 w-4" />}
-          label="Плановый бонусный пул"
-          value={money(summary.plannedBonusPool)}
-          detail="Черновой расчёт из проектов"
-        />
-        <ExecutiveMetric
-          icon={<Wallet className="h-4 w-4" />}
-          label="Распределено команде"
-          value={money(summary.allocatedBonuses)}
-          detail={summary.overallocatedBonuses > 0
-            ? `Сверх пула ${money(summary.overallocatedBonuses)} · осталось ${money(summary.unallocatedBonuses)}`
-            : `Осталось распределить ${money(summary.unallocatedBonuses)}`}
-          tone={summary.overallocatedBonuses > 0 || summary.unallocatedBonuses > 0 ? 'warn' : 'default'}
-        />
-        <ExecutiveMetric
-          icon={<Clock className="h-4 w-4" />}
-          label="Утверждено к выплате"
-          value={registryLoading ? 'Загрузка…' : registryError ? 'Нет данных' : money(summary.approvedForPayment)}
-          detail={registryLoading ? 'Сверяем платёжный реестр' : registryError ? 'Не считать черновик выплатой' : 'Только утверждённые строки bonuses'}
-          tone={registryError ? 'danger' : !registryLoading && summary.approvedForPayment > 0 ? 'warn' : 'default'}
-        />
-        <ExecutiveMetric
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Фактически выплачено"
-          value={registryLoading ? 'Загрузка…' : registryError ? 'Нет данных' : money(summary.paidFromRegistry)}
-          detail={registryLoading ? 'Сверяем платёжный реестр' : registryError ? 'Факт выплаты сейчас не подтверждён' : `Подтверждено датой выплаты · ${summary.registryRows} строк реестра`}
-          tone={registryError ? 'danger' : !registryLoading && summary.paidFromRegistry > 0 ? 'positive' : 'default'}
-        />
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-b bg-muted/10 px-4 py-3 text-xs sm:px-5">
@@ -155,7 +112,7 @@ export function ExecutivePortfolioOverview({
         />
       </div>
 
-      <details className="group px-4 py-3 sm:px-5">
+      <details className="group px-4 py-2.5 sm:px-5">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">Как считаются бонусы и откуда взяты цифры</summary>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div className="rounded-lg border bg-muted/20 p-3.5">
@@ -217,7 +174,7 @@ function ExecutiveMetric({
   return (
     <div className="min-w-0 bg-background p-4">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">{icon}{label}</div>
-      <div className={`mt-2 whitespace-normal text-base font-semibold tabular-nums sm:text-xl ${valueTone}`}>{value}</div>
+      <div className={`mt-1.5 whitespace-normal text-sm font-semibold tabular-nums sm:text-lg ${valueTone}`}>{value}</div>
       <div className="mt-1 text-[11px] leading-4 text-muted-foreground">{detail}</div>
     </div>
   );
@@ -253,12 +210,12 @@ function DecisionCard({
         ? 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20'
         : 'hover:bg-muted/40';
   return (
-    <button type="button" className={`min-h-24 rounded-lg border p-2.5 text-left transition-colors sm:p-3 ${toneClass}`} onClick={onClick}>
+    <button type="button" className={`min-h-20 rounded-lg border p-2.5 text-left transition-colors ${toneClass}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         {(tone === 'warn' || tone === 'danger') && <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
       </div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
       <div className="mt-0.5 text-[11px] text-muted-foreground">{detail}</div>
     </button>
   );

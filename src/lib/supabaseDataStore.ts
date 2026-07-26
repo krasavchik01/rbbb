@@ -570,7 +570,10 @@ class SupabaseDataStore {
     }
   }
 
-  async updateProject(id: string, updates: any): Promise<Project | null> {
+  async updateProject(
+    id: string,
+    updatesOrFactory: any | ((currentProject: Project) => any | Promise<any>),
+  ): Promise<Project | null> {
     try {
       const { data: currentProject } = await supabase
         .from('projects')
@@ -579,6 +582,12 @@ class SupabaseDataStore {
         .single();
 
       if (currentProject) {
+        // A functional update is evaluated against the latest database row,
+        // not against a potentially stale React snapshot. The updated_at
+        // predicate below then protects the read/merge/write window itself.
+        const updates = typeof updatesOrFactory === 'function'
+          ? await updatesOrFactory(this.mapSupabaseProject(currentProject as SupabaseProject))
+          : updatesOrFactory;
         const existingNotes = getProjectNotes({ notes: currentProject.notes });
         const { notes: updateNotes, ...noteFields } = updates || {};
         const notesPatch: Partial<CanonicalProjectNotes> = updateNotes && typeof updateNotes === 'object'
@@ -627,23 +636,21 @@ class SupabaseDataStore {
         };
         if (nextStartDate !== undefined) projectUpdatePayload.start_date = nextStartDate;
         if (nextDeadline !== undefined) projectUpdatePayload.deadline = nextDeadline;
-        const { error: updateError } = await supabase
+        let updateQuery = supabase
           .from('projects')
           .update(projectUpdatePayload)
           .eq('id', id);
-
-        if (!updateError) {
-          return this.mapSupabaseProject({
-            ...currentProject,
-            name: nextName,
-            notes: serializedNotes,
-            status: supabaseStatus,
-            kpi_percentage: Number(nextCompletion),
-            ...(nextStartDate !== undefined ? { start_date: nextStartDate } : {}),
-            ...(nextDeadline !== undefined ? { deadline: nextDeadline } : {}),
-            updated_at: new Date().toISOString()
-          } as SupabaseProject);
+        if (currentProject.updated_at) {
+          updateQuery = updateQuery.eq('updated_at', currentProject.updated_at);
         }
+        const { data: updatedRows, error: updateError } = await updateQuery.select('*');
+
+        if (updateError) throw updateError;
+        const updatedProject = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows;
+        if (!updatedProject) {
+          throw new Error('Проект уже изменён другим пользователем. Обновите страницу и повторите действие.');
+        }
+        return this.mapSupabaseProject(updatedProject as SupabaseProject);
       }
 
       throw new Error('Could not update project');

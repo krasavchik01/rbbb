@@ -8,6 +8,7 @@ const executiveOverviewSource = fs.readFileSync(new URL('../src/components/proje
 const executiveVisualsSource = fs.readFileSync(new URL('../src/components/projects/ExecutivePortfolioVisuals.tsx', import.meta.url), 'utf8');
 const workloadSource = fs.readFileSync(new URL('../src/components/projects/ProjectWorkloadChart.tsx', import.meta.url), 'utf8');
 const integritySource = fs.readFileSync(new URL('../src/components/projects/ProjectDataIntegrityDrawer.tsx', import.meta.url), 'utf8');
+const inlineDetailSource = fs.readFileSync(new URL('../src/components/projects/ProjectInlineDetail.tsx', import.meta.url), 'utf8');
 const permissionsSource = fs.readFileSync(new URL('../src/lib/projectCommandCenterPermissions.ts', import.meta.url), 'utf8');
 const storeSource = fs.readFileSync(new URL('../src/lib/supabaseDataStore.ts', import.meta.url), 'utf8');
 
@@ -17,9 +18,10 @@ test('CEO sees one compact editable project register before optional detail', ()
   assert.match(pageSource, /Партнёр \/ руководитель/);
   assert.match(pageSource, /Часы \/ сложность/);
   assert.match(pageSource, /workloadComplexity\(row\.hours\)/);
-  assert.match(pageSource, /onValueChange=\{\(employeeId\) => addTeamMember\(row, 'partner', employeeId\)\}/);
-  assert.match(pageSource, /onValueChange=\{\(employeeId\) => addTeamMember\(row, 'project_leader', employeeId\)\}/);
-  assert.match(pageSource, /Расширенное редактирование/);
+  assert.match(pageSource, /onPick=\{\(employeeId\) => addTeamMember\(row, 'partner', employeeId\)\}/);
+  assert.match(pageSource, /onPick=\{\(employeeId\) => addTeamMember\(row, 'project_leader', employeeId\)\}/);
+  assert.match(inlineDetailSource, /data-testid="project-advanced-toggle"/);
+  assert.match(inlineDetailSource, /Ещё детали/);
   assert.match(pageSource, /advancedRows\[row\.id\] &&/);
   assert.match(pageSource, /Скачать Excel ИТОГО/);
 });
@@ -29,8 +31,8 @@ test('CEO portfolio analytics layer is mounted above the smart table', () => {
   assert.match(pageSource, /<ExecutivePortfolioVisuals[\s\S]*summary=\{executiveSummary\}/);
   assert.match(pageSource, /<ProjectWorkloadChart[\s\S]*items=\{workloadItems\}/);
   assert.match(executiveOverviewSource, /Картина бизнеса/);
-  assert.match(executiveOverviewSource, /Сначала посмотрите сюда/);
-  assert.match(executiveOverviewSource, /Фактически выплачено/);
+  assert.match(executiveOverviewSource, /Сначала риски и деньги/);
+  assert.match(executiveOverviewSource, /Выплачено по реестру/);
   assert.match(executiveVisualsSource, /Путь бонусов/);
   assert.match(executiveVisualsSource, /Сроки активных проектов/);
   assert.match(pulseSource, /hoursLoading/);

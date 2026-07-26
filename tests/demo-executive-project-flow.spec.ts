@@ -23,16 +23,15 @@ test.describe('executive demo: project to payment registry', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    await page.getByTitle('Раскрыть').first().click();
-    const snapshot = page.getByLabel(`Краткая карточка проекта ${demoProject.name}`);
+    const shell = page.getByTestId('project-summary-shell');
+    await shell.getByRole('button', { name: /Открыть свод/ }).first().click();
+    const snapshot = shell.getByTestId(`project-details-${DEMO_PROJECT_ID}`);
     await expect(snapshot).toBeVisible();
     await expect(snapshot).toContainText('RBI Audit Kazakhstan');
     await expect(snapshot).toContainText('Годовой аудит 2026');
     await expect(snapshot).toContainText(/48\s*000\s*000\s*₸/);
     await expect(snapshot).toContainText('Демо Партнёр');
     await expect(snapshot).toContainText('Демо Менеджер');
-    await page.getByRole('button', { name: 'Расширенное редактирование' }).click();
-    await expect(page.getByText('Аудит финансовой отчётности')).toBeVisible();
     expect(network.productionMutations).toEqual([]);
     expect(network.unhandledRequests).toEqual([]);
   });
@@ -135,19 +134,14 @@ test.describe('executive demo: project to payment registry', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('bonuses remain a preliminary calculation and cannot be mistaken for payment', async ({ page }) => {
+  test('CEO bonus route returns to the single project cockpit', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/bonuses');
     await waitForDemoApp(page);
 
-    await expect(page.getByText('Предварительный расчёт · технические проценты')).toBeVisible();
-    await expect(page.getByText('Регистрация выплат временно заблокирована')).toBeVisible();
-    await expect(page.getByText(/финальные выплаты не зарегистрированы/i)).toBeVisible();
-    await expect(page.getByText('Демо Партнёр').first()).toBeVisible();
-    await expect(page.getByText('Демо Менеджер').first()).toBeVisible();
-    await expect(page.getByText('Демо Ассистент').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: /Утвердить и закрыть/i })).toHaveCount(0);
-    await expect(page.getByText('Выплачено').first()).toBeVisible();
+    await expect(page).toHaveURL(/\/projects\?view=ready_bonus$/);
+    await expect(page.getByTestId('project-summary-shell')).toBeVisible();
+    await expect(page.getByText('Предварительный расчёт · технические проценты')).toHaveCount(0);
     expect(network.productionMutations).toEqual([]);
     expect(network.unhandledRequests).toEqual([]);
   });

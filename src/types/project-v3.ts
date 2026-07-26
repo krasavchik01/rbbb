@@ -211,6 +211,16 @@ export interface ProjectFinances {
   bonusBase: number;                           // Сумма без НДС - ГПХ - Предрасход
   bonusPercent: number;                        // Процент бонуса (можно настроить)
   totalBonusAmount: number;                    // Общая сумма бонуса
+  bonusPoolOverrideAmount?: number | null;     // Ручной пул CEO в тенге
+  bonusPoolManuallyAdjusted?: boolean;         // Не пересчитывать пул по проценту
+  bonusPoolHistory?: Array<{
+    type: string;
+    by?: string;
+    byName?: string;
+    at: string;
+    from?: unknown;
+    to?: unknown;
+  }>;
   
   // Распределение бонусов
   teamBonuses: {
@@ -422,8 +432,18 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
 
   const bonusBase = Math.max(0, amountWithoutVAT - totalContractorsAmount - preExpenseAmount);
   // 0% is a valid CEO decision and must not silently jump back to the 10% default.
-  const bonusPercent = Math.max(0, parseProjectMoney(financesSource.bonusPercent ?? 10));
-  const totalBonusAmount = bonusBase * (bonusPercent / 100);
+  const formulaBonusPercent = Math.max(0, parseProjectMoney(financesSource.bonusPercent ?? 10));
+  const rawPoolOverride = financesSource.bonusPoolOverrideAmount;
+  const bonusPoolManuallyAdjusted = financesSource.bonusPoolManuallyAdjusted === true
+    && rawPoolOverride !== undefined
+    && rawPoolOverride !== null;
+  const totalBonusAmount = bonusPoolManuallyAdjusted
+    ? Math.max(0, parseProjectMoney(rawPoolOverride))
+    : bonusBase * (formulaBonusPercent / 100);
+  // Keep the configured formula percent even while a fixed pool is active, so
+  // "Вернуть расчёт по проценту" restores the CEO's last formula instead of a
+  // percentage derived from the temporary manual amount.
+  const bonusPercent = formulaBonusPercent;
   const existingTeamBonuses = financesSource.teamBonuses || {};
 
   const teamBonuses: ProjectFinances['teamBonuses'] = {};
@@ -471,6 +491,11 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
     bonusBase,
     bonusPercent,
     totalBonusAmount,
+    bonusPoolOverrideAmount: bonusPoolManuallyAdjusted ? totalBonusAmount : null,
+    bonusPoolManuallyAdjusted,
+    bonusPoolHistory: Array.isArray(financesSource.bonusPoolHistory)
+      ? financesSource.bonusPoolHistory.slice(-20)
+      : [],
     teamBonuses,
     totalPaidBonuses,
     totalCosts,

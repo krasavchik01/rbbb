@@ -250,7 +250,10 @@ export function projectFinances(project: any): AnyRecord {
   const totalContractorsAmount = firstPositiveNumber(source.totalContractorsAmount);
   const bonusBase = firstPositiveNumber(source.bonusBase, amountWithoutVAT - totalContractorsAmount - preExpenseAmount);
   const bonusPercent = parseMoney(source.bonusPercent ?? 10);
-  const totalBonusAmount = firstPositiveNumber(source.totalBonusAmount, source.totalPaidBonuses, bonusBase * (bonusPercent / 100));
+  const hasStoredBonusPool = source.totalBonusAmount !== undefined && source.totalBonusAmount !== null;
+  const totalBonusAmount = hasStoredBonusPool
+    ? Math.max(0, parseMoney(source.totalBonusAmount))
+    : firstPositiveNumber(source.totalPaidBonuses, bonusBase * (bonusPercent / 100));
   const totalPaidBonuses = firstPositiveNumber(source.totalPaidBonuses, totalBonusAmount);
   const totalCosts = firstPositiveNumber(source.totalCosts, totalPaidBonuses + totalContractorsAmount + preExpenseAmount);
   const grossProfit = firstPositiveNumber(source.grossProfit, amountWithoutVAT - totalCosts);

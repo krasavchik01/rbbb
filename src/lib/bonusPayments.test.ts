@@ -109,6 +109,13 @@ describe('bonus payment registry', () => {
     expect(summary.pendingAmount).toBe(25);
     expect(summary.approvedUnpaidAmount).toBe(40);
     expect(summary.paidAmount).toBe(60);
+    expect(summary.byProject.get('project-1')).toEqual({
+      pendingAmount: 25,
+      approvedUnpaidAmount: 40,
+      paidAmount: 60,
+      rowCount: 3,
+      latestPaymentDate: '2026-07-15',
+    });
     expect(summary.byKey.get(bonusPaymentKey('project-1', 'employee-1'))).toMatchObject({
       pendingAmount: 25,
       approvedUnpaidAmount: 40,
@@ -130,5 +137,60 @@ describe('bonus payment registry', () => {
     expect(summary.totalRows).toBe(2);
     expect(summary.unmatchedRows).toBe(0);
     expect(summary.outOfScopeRows).toBe(1);
+  });
+
+  it('keeps every project payment row in project totals when employee linkage is missing', () => {
+    const summary = summarizeBonusPaymentRegistry([
+      row({ id: 'matched', status: 'approved', bonus_amount: 100 }),
+      row({ id: 'unmatched-pending', employee_id: null, status: 'pending', bonus_amount: 25 }),
+      row({ id: 'unmatched-approved', employee_id: null, status: 'approved', bonus_amount: 40 }),
+      row({
+        id: 'unmatched-paid',
+        employee_id: null,
+        status: 'pending',
+        bonus_amount: 60,
+        payment_date: '2026-07-20',
+      }),
+    ]);
+
+    expect(summary).toMatchObject({
+      pendingAmount: 25,
+      approvedUnpaidAmount: 140,
+      paidAmount: 60,
+      totalRows: 4,
+      unmatchedRows: 3,
+      outOfScopeRows: 0,
+    });
+    expect(summary.byProject.get('project-1')).toEqual({
+      pendingAmount: 25,
+      approvedUnpaidAmount: 140,
+      paidAmount: 60,
+      rowCount: 4,
+      latestPaymentDate: '2026-07-20',
+    });
+    expect(summary.byKey.get(bonusPaymentKey('project-1', 'employee-1'))).toEqual({
+      pendingAmount: 0,
+      approvedUnpaidAmount: 100,
+      paidAmount: 0,
+      rowCount: 1,
+      latestPaymentDate: null,
+    });
+  });
+
+  it('reports rows without a project without leaking them into project or CEO totals', () => {
+    const summary = summarizeBonusPaymentRegistry([
+      row({ id: 'missing-project', project_id: null, status: 'approved', bonus_amount: 500 }),
+    ]);
+
+    expect(summary).toMatchObject({
+      pendingAmount: 0,
+      approvedUnpaidAmount: 0,
+      paidAmount: 0,
+      totalRows: 1,
+      unmatchedRows: 1,
+      outOfScopeRows: 0,
+    });
+    expect(summary.byProject.size).toBe(0);
+    expect(summary.byKey.size).toBe(0);
   });
 });

@@ -44,6 +44,9 @@ export interface CanonicalProjectFinances extends UnknownRecord {
   bonusBase?: number;
   bonusPercent?: number;
   totalBonusAmount?: number;
+  bonusPoolOverrideAmount?: number | null;
+  bonusPoolManuallyAdjusted?: boolean;
+  bonusPoolHistory?: UnknownRecord[];
   distribution?: Record<string, number>;
   teamBonuses?: Record<string, TeamBonusDraft>;
   totalPaidBonuses?: number;

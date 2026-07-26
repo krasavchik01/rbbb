@@ -141,9 +141,10 @@ export type DemoNetworkJournal = {
   unhandledRequests: RequestEntry[];
   blockedExternalAssets: RequestEntry[];
   unknownTables: string[];
+  tableRows: Record<string, unknown[]>;
 };
 
-const tableRows: Record<string, unknown[]> = {
+const baseTableRows: Record<string, unknown[]> = {
   projects: [demoProject],
   employees: demoEmployees,
   timesheet_entries: demoTimesheets,
@@ -165,6 +166,10 @@ const tableRows: Record<string, unknown[]> = {
   check_ins: [],
 };
 
+function cloneTableRows(): Record<string, unknown[]> {
+  return JSON.parse(JSON.stringify(baseTableRows)) as Record<string, unknown[]>;
+}
+
 function entryFor(route: Route): RequestEntry {
   const request = route.request();
   return { method: request.method(), url: request.url(), body: request.postData() };
@@ -176,25 +181,31 @@ function tableFromUrl(url: URL): string {
   return index >= 0 ? decodeURIComponent(url.pathname.slice(index + marker.length).split('/')[0]) : '';
 }
 
-function filterRows(rows: unknown[], url: URL): unknown[] {
-  return rows.filter((candidate) => {
-    const row = candidate as Record<string, unknown>;
-    for (const [key, rawValue] of url.searchParams.entries()) {
-      if (['select', 'order', 'limit', 'offset', 'on_conflict'].includes(key)) continue;
-      if (rawValue.startsWith('eq.')) {
-        const expected = rawValue.slice(3);
-        if (String(row[key] ?? '') !== expected) return false;
-      }
-      if (rawValue.startsWith('in.(')) {
-        const values = rawValue.slice(4, -1).split(',');
-        if (!values.includes(String(row[key] ?? ''))) return false;
-      }
+function rowMatchesUrl(candidate: unknown, url: URL): boolean {
+  const row = candidate as Record<string, unknown>;
+  for (const [key, rawValue] of url.searchParams.entries()) {
+    if (['select', 'order', 'limit', 'offset', 'on_conflict'].includes(key)) continue;
+    if (rawValue.startsWith('eq.')) {
+      const expected = rawValue.slice(3);
+      if (String(row[key] ?? '') !== expected) return false;
     }
-    return true;
-  });
+    if (rawValue.startsWith('in.(')) {
+      const values = rawValue.slice(4, -1).split(',');
+      if (!values.includes(String(row[key] ?? ''))) return false;
+    }
+  }
+  return true;
 }
 
-async function fulfillSupabase(route: Route, journal: DemoNetworkJournal) {
+function filterRows(rows: unknown[], url: URL): unknown[] {
+  return rows.filter((candidate) => rowMatchesUrl(candidate, url));
+}
+
+async function fulfillSupabase(
+  route: Route,
+  journal: DemoNetworkJournal,
+  tableRows: Record<string, unknown[]>,
+) {
   const requestEntry = entryFor(route);
   journal.requests.push(requestEntry);
   const request = route.request();
@@ -219,7 +230,29 @@ async function fulfillSupabase(route: Route, journal: DemoNetworkJournal) {
   if (!['GET', 'HEAD'].includes(method)) {
     journal.mutationRequests.push(requestEntry);
     const body = request.postDataJSON?.() as Record<string, unknown> | undefined;
-    const responseRows = method === 'DELETE' ? [] : [{ id: `mock-${table}-mutation`, ...(body || {}) }];
+    let responseRows: unknown[] = [];
+
+    if (method === 'PATCH' || method === 'PUT') {
+      const patch = body || {};
+      responseRows = sourceRows
+        .filter((row) => rowMatchesUrl(row, url))
+        .map((row) => ({ ...(row as Record<string, unknown>), ...patch }));
+      tableRows[table] = sourceRows.map((row) => (
+        rowMatchesUrl(row, url)
+          ? { ...(row as Record<string, unknown>), ...patch }
+          : row
+      ));
+    } else if (method === 'POST') {
+      const candidates = Array.isArray(body) ? body : [body || {}];
+      responseRows = candidates.map((candidate, index) => ({
+        id: (candidate as Record<string, unknown>).id || `mock-${table}-mutation-${Date.now()}-${index}`,
+        ...(candidate as Record<string, unknown>),
+      }));
+      tableRows[table] = [...sourceRows, ...responseRows];
+    } else if (method === 'DELETE') {
+      tableRows[table] = sourceRows.filter((row) => !rowMatchesUrl(row, url));
+    }
+
     await route.fulfill({
       status: method === 'POST' ? 201 : 200,
       contentType: 'application/json',
@@ -269,6 +302,10 @@ async function fulfillApplicationApi(route: Route, journal: DemoNetworkJournal) 
 }
 
 export async function installDemoNetwork(page: Page): Promise<DemoNetworkJournal> {
+  // Every browser page receives its own mutable database snapshot. This keeps
+  // PATCH persistence realistic across reloads without leaking state between
+  // Playwright tests, which run fully in parallel.
+  const tableRows = cloneTableRows();
   const journal: DemoNetworkJournal = {
     requests: [],
     mutationRequests: [],
@@ -276,6 +313,7 @@ export async function installDemoNetwork(page: Page): Promise<DemoNetworkJournal
     unhandledRequests: [],
     blockedExternalAssets: [],
     unknownTables: [],
+    tableRows,
   };
 
   await page.route('**/*', async (route) => {
@@ -298,7 +336,7 @@ export async function installDemoNetwork(page: Page): Promise<DemoNetworkJournal
     await route.abort('blockedbyclient');
   });
 
-  await page.route('**://*.supabase.co/**', route => fulfillSupabase(route, journal));
+  await page.route('**://*.supabase.co/**', route => fulfillSupabase(route, journal, tableRows));
   await page.route('**/api/**', route => fulfillApplicationApi(route, journal));
   return journal;
 }
