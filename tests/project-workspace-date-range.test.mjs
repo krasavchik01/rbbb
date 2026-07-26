@@ -9,5 +9,5 @@ test('project workspace renders ranges in chronological order even when saved da
   assert.match(source, /leftStamp !== null && rightStamp !== null && leftStamp > rightStamp/);
   assert.match(source, /return `\$\{dateCell\(rightValue\)\} — \$\{dateCell\(leftValue\)\}`;/);
   assert.match(source, /dateRangeCell\(normalizedStartDate \|\| normalizedContract\?\.serviceStartDate, normalizedDeadline \|\| normalizedContract\?\.serviceEndDate\)/);
-  assert.match(source, /dateRangeCell\(period\.startDate, period\.endDate \|\| period\.deadline\)/);
+  assert.match(source, /dateRangeCell\(stage\.startDate, stage\.endDate \|\| stage\.deadline\)/);
 });

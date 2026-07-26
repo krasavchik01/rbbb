@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const dataStoreSource = fs.readFileSync(new URL('../src/lib/supabaseDataStore.ts', import.meta.url), 'utf8');
 const projectsSource = fs.readFileSync(new URL('../src/pages/Projects-simple.tsx', import.meta.url), 'utf8');
+const activeCreationSource = fs.readFileSync(new URL('../src/pages/CreateProjectProcurement.tsx', import.meta.url), 'utf8');
+const workspaceSource = fs.readFileSync(new URL('../src/pages/ProjectWorkspace.tsx', import.meta.url), 'utf8');
 
 test('Supabase project mapper exposes stage and audit-period metadata from notes to legacy project UI', () => {
   assert.match(dataStoreSource, /stages\?: any\[\]/);
@@ -25,4 +27,19 @@ test('legacy procurement stage editor infers audit-period type from the saved da
   assert.match(projectsSource, /team: existing\?\.team/);
   assert.match(projectsSource, /teamSource: existing\?\.teamSource/);
   assert.doesNotMatch(projectsSource, /type: existing\?\.type \|\| 'custom'/);
+});
+
+test('active project creation stores stages directly and does not create nested audit periods', () => {
+  assert.match(activeCreationSource, /const configuredStages = hasStages && projectStages\.length > 0/);
+  assert.match(activeCreationSource, /stages: configuredStages\.length > 0 \? configuredStages : undefined/);
+  assert.doesNotMatch(activeCreationSource, /const auditPeriods: AuditPeriod\[\]/);
+  assert.doesNotMatch(activeCreationSource, /^\s+auditPeriods,\s*$/m);
+  assert.doesNotMatch(activeCreationSource, /auditPeriodId: stage\.auditPeriodId/);
+});
+
+test('active project workspace has no audit-period tab or editor', () => {
+  assert.doesNotMatch(workspaceSource, /AuditPeriodsEditor/);
+  assert.doesNotMatch(workspaceSource, /TabsTrigger value="periods"/);
+  assert.doesNotMatch(workspaceSource, /TabsContent value="periods"/);
+  assert.match(workspaceSource, /Этапы проекта/);
 });

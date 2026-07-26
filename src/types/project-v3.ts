@@ -5,6 +5,7 @@
 
 import { UserRole } from './roles';
 import type { AuditPeriod } from '@/lib/auditPeriods';
+import { financeParticipants, isProtectedDetachedBonus } from '@/lib/projectLegacyCompatibility';
 
 // Статусы проекта
 export type ProjectStatus = 
@@ -408,7 +409,16 @@ const firstPositiveProjectMoney = (...values: any[]): number => {
 export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFinances => {
   const rawProject = project as any;
   const notes = readProjectNotes(rawProject);
-  const financesSource = rawProject?.finances || notes?.finances || {};
+  const notesFinances = notes?.finances || {};
+  const directFinances = rawProject?.finances || {};
+  const financesSource = {
+    ...notesFinances,
+    ...directFinances,
+    teamBonuses: {
+      ...(notesFinances.teamBonuses || {}),
+      ...(directFinances.teamBonuses || {}),
+    },
+  };
   const amountWithoutVAT = firstPositiveProjectMoney(
     project.contract?.amountWithoutVAT,
     notes?.contract?.amountWithoutVAT,
@@ -447,24 +457,23 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
   const existingTeamBonuses = financesSource.teamBonuses || {};
 
   const teamBonuses: ProjectFinances['teamBonuses'] = {};
-  const team: TeamMember[] = Array.isArray(project.team)
-    ? project.team
-    : Array.isArray(notes?.team) ? notes.team : [];
+  const team: TeamMember[] = financeParticipants(project) as TeamMember[];
 
   team.forEach((member: TeamMember) => {
     const userId = member.userId || (member as any).id || (member as any).employeeId;
     if (!userId) return;
     const existingBonus = existingTeamBonuses[userId];
     const manuallyAdjusted = Boolean(existingBonus?.manuallyAdjusted);
+    const amountLocked = isProtectedDetachedBonus(existingBonus);
     const memberPercent = Math.max(0, parseProjectMoney(member.bonusPercent));
     const previousCalculated = teamBonuses[userId];
-    const combinedPercent = manuallyAdjusted
+    const combinedPercent = amountLocked
       ? Math.max(0, parseProjectMoney(existingBonus?.percent ?? memberPercent))
       : Math.max(0, parseProjectMoney(previousCalculated?.percent)) + memberPercent;
-    const amount = manuallyAdjusted
+    const amount = amountLocked
       ? Math.max(0, parseProjectMoney(existingBonus?.amount))
       : totalBonusAmount * (combinedPercent / 100);
-    const percent = manuallyAdjusted && totalBonusAmount > 0
+    const percent = amountLocked && totalBonusAmount > 0
       ? Number(((amount / totalBonusAmount) * 100).toFixed(2))
       : combinedPercent;
 

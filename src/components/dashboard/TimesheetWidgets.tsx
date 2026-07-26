@@ -321,7 +321,7 @@ export function BonusesOverviewWidget() {
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/bonuses')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/projects?view=ready_bonus')}>
             Детально <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         </div>

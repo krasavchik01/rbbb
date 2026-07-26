@@ -15,11 +15,8 @@ const Analytics = lazy(() => import('@/pages/Analytics'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Employees = lazy(() => import('@/pages/Employees'));
 const Timesheets = lazy(() => import('@/pages/Timesheets'));
-const AssignPartners = lazy(() => import('@/pages/AssignPartners'));
-const Bonuses = lazy(() => import('@/pages/Bonuses'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
 const CreateProjectProcurement = lazy(() => import('@/pages/CreateProjectProcurement'));
-const ProjectApproval = lazy(() => import('@/pages/ProjectApproval'));
 const ProjectWorkspace = lazy(() => import('@/pages/ProjectWorkspace'));
 const SupabaseDiagnostics = lazy(() => import('@/pages/SupabaseDiagnostics'));
 const DatabaseTest = lazy(() => import('@/pages/DatabaseTest'));
@@ -127,26 +124,11 @@ function App() {
               }
             />
             <Route path="/timesheet-approval" element={<Navigate to="/projects" replace />} />
-            <Route
-              path="/assign-partners"
-              element={
-                <ProtectedRoute allowedRoles={ROLE_GROUPS.management}>
-                  <Layout>
-                    <AssignPartners />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/bonuses"
-              element={
-                <ProtectedRoute allowedRoles={ROLE_GROUPS.executive}>
-                  <Layout>
-                    <Bonuses />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* Team, approval and bonus work now lives in one canonical project ledger.
+                Preserve old bookmarks as safe redirects so legacy pages cannot overwrite
+                notes.team or create a second finance source. */}
+            <Route path="/assign-partners" element={<Navigate to="/projects?view=no_partner" replace />} />
+            <Route path="/bonuses" element={<Navigate to="/projects?view=ready_bonus" replace />} />
             <Route
               path="/settings"
               element={
@@ -200,18 +182,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/project-approval"
-              element={
-                <ProtectedRoute allowedRoles={ROLE_GROUPS.management}>
-                  <Layout>
-                    <WidgetErrorBoundary fullPage label="Утверждение проектов">
-                      <ProjectApproval />
-                    </WidgetErrorBoundary>
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/project-approval" element={<Navigate to="/projects?view=attention" replace />} />
             <Route
               path="/tenders"
               element={

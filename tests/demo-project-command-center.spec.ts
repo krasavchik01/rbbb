@@ -6,9 +6,9 @@ const require = createRequire(import.meta.url);
 const XLSX = require('xlsx');
 
 test.describe('CEO command center completion', () => {
-  test('column filters and saved views are usable in the project summary', async ({ page }) => {
+  test('saved views and the simple project search are usable in the unified summary', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
-    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
     await waitForDemoApp(page);
 
@@ -20,17 +20,10 @@ test.describe('CEO command center completion', () => {
     await expect(page.getByRole('combobox', { name: 'Сохранённые виды свода' })).toBeVisible();
     await expect.poll(async () => page.evaluate(() => window.localStorage.getItem('rbbb:project-command-center:saved-views:v1') || '')).toContain('CEO daily demo');
 
-    await expect(page.getByRole('button', { name: 'Фильтр колонки: Наша компания' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Фильтр колонки: Договор' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Фильтр колонки: Предмет договора' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Фильтр колонки: Этап' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Фильтр колонки: Бизнес-сезон' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Фильтр колонки: Часы' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Фильтр колонки: Проект / клиент' }).click();
-    await page.getByLabel('Поиск по колонке Проект / клиент').fill(demoProject.name.slice(0, 12));
-    await expect(page.getByText('Фильтры колонок:')).toBeVisible();
-    await expect(page.getByRole('link', { name: demoProject.name })).toBeVisible();
+    await expect(page.getByLabel('Единый свод проектов')).toBeVisible();
+    await page.getByPlaceholder(/Клиент, проект, партнёр или руководитель/i).fill(demoProject.name.slice(0, 12));
+    await expect(page.getByTestId('project-summary-shell').locator(`tr[data-project-id="${demoProject.id}"]`)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Фильтр колонки:/ })).toHaveCount(0);
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -59,34 +52,27 @@ test.describe('CEO command center completion', () => {
     expect(network.unhandledRequests).toEqual([]);
   });
 
-  test('admin has CEO command center and can edit project deadlines and contract amount', async ({ page }) => {
+  test('admin has the unified command center and can edit project deadlines', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'admin');
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/projects');
     await waitForDemoApp(page);
 
     await expect(page.getByText('CEO-ведомость')).toBeVisible();
-    await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeVisible();
-    await page.getByText('Общая аналитика портфеля', { exact: true }).click();
-    await expect(page.getByLabel('Визуальная картина портфеля генерального директора')).toBeVisible();
-    const desktopTable = page.getByLabel('Общая CEO-таблица проектов');
-    await expect(desktopTable).toBeVisible();
-    await expect(desktopTable.getByLabel(`Партнёр проекта ${demoProject.name}`)).toBeVisible();
-    await expect(desktopTable.getByLabel(`Руководитель проекта ${demoProject.name}`)).toBeVisible();
-    await expect(desktopTable.getByText('Сложность: Низкая')).toBeVisible();
+    const table = page.getByLabel('Единый свод проектов');
+    const projectRow = table.locator(`tr[data-project-id="${demoProject.id}"]`);
+    await expect(projectRow).toBeVisible();
+    await expect(projectRow.getByLabel(`Партнёр проекта ${demoProject.name}`)).toBeVisible();
+    await expect(projectRow.getByLabel(`Руководитель проекта ${demoProject.name}`)).toBeVisible();
+    await expect(projectRow).toContainText(/48\s*000\s*000\s*₸/);
     await expect(page.getByRole('button', { name: /Скачать Excel ИТОГО/ })).toBeVisible();
-    await desktopTable.getByRole('button', { name: 'Изменить', exact: true }).click();
-    await desktopTable.getByLabel(`Сумма договора ${demoProject.name}`).fill('12345678');
-    await desktopTable.getByRole('button', { name: 'Сохранить', exact: true }).click();
-    await expect.poll(() => network.mutationRequests.map((request) => request.body || '').join('\n')).toContain('12345678');
+    await projectRow.getByRole('button', { name: /15\.01\.2026.*20\.12\.2026.*изменить/i }).click();
+    await expect(projectRow.getByTestId(`project-details-${demoProject.id}`)).toBeVisible();
+    await projectRow.getByLabel(`Начало проекта ${demoProject.name}`).fill('2026-02-01');
+    await projectRow.getByLabel(`Дедлайн проекта ${demoProject.name}`).fill('2026-11-30');
+    await projectRow.getByRole('button', { name: 'Сохранить', exact: true }).click();
 
-    await desktopTable.getByRole('button', { name: 'Изменить сроки' }).first().click();
-    await expect(desktopTable.getByTestId(`project-details-${demoProject.id}`)).toBeVisible();
-    await desktopTable.getByLabel(`Начало проекта ${demoProject.name}`).fill('2026-02-01');
-    await desktopTable.getByLabel(`Дедлайн проекта ${demoProject.name}`).fill('2026-11-30');
-    await desktopTable.getByRole('button', { name: 'Сохранить сроки' }).click();
-
-    await expect.poll(() => network.mutationRequests.length).toBeGreaterThan(1);
+    await expect.poll(() => network.mutationRequests.length).toBe(1);
     const payload = network.mutationRequests.map((request) => request.body || '').join('\n');
     expect(payload).toContain('2026-02-01');
     expect(payload).toContain('2026-11-30');
@@ -95,22 +81,20 @@ test.describe('CEO command center completion', () => {
     expect(network.unhandledRequests).toEqual([]);
   });
 
-  test('portfolio analytics, workload chart and integrity drawer are visible to CEO', async ({ page }) => {
+  test('the unified CEO row replaces duplicate portfolio dashboards', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeVisible();
-    await page.getByText('Общая аналитика портфеля', { exact: true }).click();
-    await expect(page.getByLabel('Визуальная картина портфеля генерального директора')).toBeVisible();
-    await expect(page.getByLabel('Загрузка команды по таймшитам')).toBeVisible();
-    await page.getByTitle('Раскрыть').first().click();
-    const detail = page.getByLabel('Общая CEO-таблица проектов').getByTestId(`project-details-${demoProject.id}`);
+    await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeHidden();
+    await expect(page.getByText('Общая аналитика портфеля', { exact: true })).toBeHidden();
+    const detail = page.getByLabel('Единый свод проектов').getByTestId(`project-details-${demoProject.id}`);
     await expect(detail).toBeVisible();
-    await detail.getByRole('button', { name: 'Ещё детали' }).click();
-    await expect(page.getByLabel('Проверка целостности данных проекта')).toBeVisible();
-    await expect(page.getByText('Это read-only проверка. Массовые исправления запрещены без preview и подтверждения.')).toBeVisible();
+    await expect(detail).toContainText('Команда');
+    await expect(detail).toContainText('Таймшиты');
+    await expect(detail).toContainText('Как складывается доход');
+    await expect(detail).toContainText('Бонусы проекта');
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -121,20 +105,15 @@ test.describe('CEO command center completion', () => {
       await page.goto('/projects');
       await waitForDemoApp(page);
       await expect(page.getByText('CEO-ведомость')).toBeVisible();
-      await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeVisible();
-      await page.getByText('Общая аналитика портфеля', { exact: true }).click();
-      await expect(page.getByLabel('Визуальная картина портфеля генерального директора')).toBeVisible();
-      await expect(page.getByText('Путь бонусов', { exact: true })).toBeVisible();
-      await expect(page.getByText('Где сейчас проекты', { exact: true })).toBeVisible();
-      await expect(page.getByText('Сроки активных проектов', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Картина бизнеса генерального директора')).toBeHidden();
       const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(horizontalOverflow).toBeLessThanOrEqual(1);
       const shell = page.getByTestId('project-summary-shell');
-      await shell.getByRole('button', { name: /Открыть свод/ }).first().click();
-      const detail = shell.getByTestId(`project-details-${demoProject.id}`);
+      const detail = shell.locator(`tr[data-project-id="${demoProject.id}"]`).getByTestId(`project-details-${demoProject.id}`);
       await expect(detail).toBeVisible();
       await expect(detail.getByText('Таймшиты', { exact: true })).toBeAttached();
       await expect(detail.getByText('Как складывается доход', { exact: true })).toBeAttached();
+      await expect(detail.getByText('Бонусы проекта', { exact: true })).toBeAttached();
       await page.screenshot({ path: `test-results/command-center-${width}.png`, fullPage: true });
       expect(network.productionMutations).toEqual([]);
     });

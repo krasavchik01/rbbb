@@ -67,6 +67,8 @@ export interface CanonicalProjectNotes extends UnknownRecord {
   status?: string;
   completionPercent?: number;
   team?: CanonicalTeamMember[];
+  teamSource?: 'canonical' | 'legacy_union';
+  teamUnifiedAt?: string;
   auditPeriods?: CanonicalAuditPeriod[];
   finances?: CanonicalProjectFinances;
   contract?: UnknownRecord;

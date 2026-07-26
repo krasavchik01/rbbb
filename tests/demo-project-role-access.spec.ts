@@ -3,7 +3,7 @@ import { USER_ROLES, type UserRole } from '../src/types/roles';
 import { DEMO_PROJECT_ID, demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
 const PROJECT_EDIT_ROLES: UserRole[] = ['procurement', 'admin'];
-const TEAM_EDIT_ROLES: UserRole[] = ['ceo', 'admin'];
+const TEAM_EDIT_ROLES: UserRole[] = ['ceo', 'deputy_director', 'admin'];
 
 async function dynamicProjectSurface(page: Page) {
   return page.evaluate(() => {
@@ -48,7 +48,7 @@ test.describe('project passport by every role', () => {
 
       const canEditProject = PROJECT_EDIT_ROLES.includes(role);
       const canEditTeam = TEAM_EDIT_ROLES.includes(role);
-      await expect(page.getByRole('button', { name: 'Изменить состав' })).toHaveCount(canEditTeam ? 1 : 0);
+      await expect(page.getByRole('button', { name: 'Управлять в своде' })).toHaveCount(canEditTeam ? 1 : 0);
 
       await page.getByRole('tab', { name: /Файлы/ }).click();
       await expect(page.getByLabel('📁 Файлы').getByText('Договор_DEMO-2026-001.pdf')).toBeVisible();

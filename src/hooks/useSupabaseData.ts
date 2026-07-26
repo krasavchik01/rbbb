@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/lib/appSettings';
 import { projectIsVisibleWithinCompanyScope } from '@/lib/userCompanyAccess';
 import { findCompanyByAnyValue } from '@/types/companies';
-import { getProjectNotes } from '@/lib/projectNotes';
+import { effectiveProjectTeam } from '@/lib/projectLegacyCompatibility';
 
 // Хук для сотрудников
 export function useEmployees() {
@@ -105,7 +105,7 @@ export function useEmployees() {
 }
 
 function getProjectTeamMembers(project: any): any[] {
-  return getProjectNotes(project).team || [];
+  return effectiveProjectTeam(project);
 }
 
 function normalizeIdentity(value: any): string {
@@ -147,7 +147,7 @@ function teamMemberIdentity(member: any) {
   };
 }
 
-function projectHasTeamMember(project: any, user?: { id?: string | null; email?: string | null; name?: string | null } | null): boolean {
+export function projectHasTeamMember(project: any, user?: { id?: string | null; email?: string | null; name?: string | null } | null): boolean {
   if (!user?.id && !user?.email && !user?.name) return false;
   const userId = normalizeIdentity(user.id);
   const userEmail = normalizeIdentity(user.email);

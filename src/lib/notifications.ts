@@ -261,7 +261,7 @@ export const notifyNewProject = async (projectName: string, creatorName: string,
     title: '📋 Новый проект для утверждения',
     message: `${creatorName} создал проект "${projectName}". Требуется ваше утверждение.`,
     type: 'info',
-    action_url: '/project-approval',
+    action_url: '/projects?view=attention',
   });
 };
 
@@ -302,7 +302,7 @@ export const notifyDeputyDirectorNewProject = async (projectName: string, client
       title: '📋 Новый проект требует утверждения',
       message: `Отдел закупок создал проект "${projectName}" для клиента ${clientName}. Сумма: ${amount} ₸. Требуется ваше утверждение.`,
       type: 'info',
-      action_url: '/project-approval',
+      action_url: '/projects?view=attention',
     });
 
     console.log('✅ Уведомление создано:', notification);

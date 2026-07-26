@@ -19,9 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -66,15 +64,17 @@ import {
 import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
+import {
+  canonicalTeamMarkerPatch,
+  dedupeCanonicalTeamMembers,
+  effectiveProjectTeam,
+  financeParticipants,
+  isSettledBonus,
+  projectForFinanceCalculation,
+} from '@/lib/projectLegacyCompatibility';
 import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPermissions';
 import { ProjectDataIntegrityDrawer } from '@/components/projects/ProjectDataIntegrityDrawer';
-import { ProjectPortfolioPulse } from '@/components/projects/ProjectPortfolioPulse';
-import { ProjectWorkloadChart, type WorkloadItem } from '@/components/projects/ProjectWorkloadChart';
-import {
-  ExecutivePortfolioOverview,
-  type ExecutivePortfolioSummary,
-} from '@/components/projects/ExecutivePortfolioOverview';
-import { ExecutivePortfolioVisuals } from '@/components/projects/ExecutivePortfolioVisuals';
+import type { ExecutivePortfolioSummary } from '@/components/projects/ExecutivePortfolioOverview';
 import {
   ProjectInlineDetail,
   type ProjectInlineBonusEmployee,
@@ -100,6 +100,11 @@ type ProjectViewFilter =
   | 'ready_bonus'
   | 'bonus_attention'
   | 'portfolio_attention';
+
+// Historical layouts stay compile-checked during the migration, but are
+// unreachable: /projects is the only mounted management screen.
+const LEGACY_PROJECT_VIEWS_ENABLED: boolean = false;
+
 type ProjectDeadlineFilter = 'all' | 'overdue' | 'next_30' | 'no_deadline';
 type ProjectPeriodFilter = 'all' | 'has_periods' | 'no_periods';
 type AuditPeriodTypeFilter = 'all' | AuditPeriod['type'];
@@ -168,6 +173,7 @@ type SavedCommandCenterView = {
 const COMMAND_CENTER_VIEW_STORAGE_KEY = 'rbbb:project-command-center:saved-views:v1';
 const PROJECT_TABLE_PAGE_SIZES = [25, 50] as const;
 const SHOW_LEGACY_BONUS_WORKSPACE = false;
+const SHOW_LEGACY_GROUPED_PROJECT_ROWS = false;
 
 const money = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
@@ -499,10 +505,6 @@ function uniqueMembersFromTeams(teams: CanonicalTeamMember[][]): CanonicalTeamMe
   return members;
 }
 
-function coverageTeam(projectTeam: CanonicalTeamMember[], periods: AuditPeriod[]): CanonicalTeamMember[] {
-  return uniqueMembersFromTeams([projectTeam || [], ...(periods || []).map(periodTeam)]);
-}
-
 function coveragePartnerNames(team: any[]): string[] {
   return team.filter((member) => teamRole(member) === 'partner').map(teamName);
 }
@@ -525,9 +527,14 @@ function hoursPairKey(employeeId: string, projectId: string): string {
 function financeFor(project: any, team: CanonicalTeamMember[] = projectTeam(project)) {
   const normalizedFinances = readProjectFinances(project);
   try {
-    return calculateProjectFinances({
-      ...project,
+    const calculationProject = projectForFinanceCalculation(project);
+    const participants = dedupeCanonicalTeamMembers([
+      Array.isArray(calculationProject?.team) ? calculationProject.team : [],
       team,
+    ]);
+    return calculateProjectFinances({
+      ...calculationProject,
+      team: participants,
       finances: {
         ...normalizedFinances,
         amountWithoutVAT: projectAmount(project),
@@ -551,13 +558,6 @@ function financeFor(project: any, team: CanonicalTeamMember[] = projectTeam(proj
   }
 }
 
-function exportPeriodLabel(period: AuditPeriod): string {
-  const parts = [periodLabel(period)];
-  if (period.deadline) parts.push(`дедлайн ${formatDate(period.deadline)}`);
-  parts.push(periodStatusLabel(period.status));
-  return parts.join(' · ');
-}
-
 function exportTeamList(team: any[], finances: any, includeBonuses: boolean): string {
   if (!Array.isArray(team) || team.length === 0) return '';
 
@@ -575,12 +575,6 @@ function exportTeamList(team: any[], finances: any, includeBonuses: boolean): st
 
     return [`${column.label}: ${names.join(', ')}`];
   }).join('\n');
-}
-
-function exportPeriodTeamList(period: AuditPeriod, includeBonuses: boolean): string {
-  const team = periodTeam(period);
-  const finances = (period as any)?.finances || {};
-  return exportTeamList(team, finances, includeBonuses);
 }
 
 function exportContractLabel(row: any): string {
@@ -604,7 +598,6 @@ function buildProjectExportRows(
       Клиент: row.client,
       'Вид проекта': row.type,
       'Срок проекта': `${formatDate(row.startDate)} - ${formatDate(row.deadline)}`,
-      Периоды: row.periods?.length ? row.periods.map(exportPeriodLabel).join('\n') : 'нет периодов',
       Статус: row.readiness?.label || '',
       'Что не так': row.readiness?.issues?.join(', ') || '',
       Закрытие: row.readiness?.level === 'closed' ? 'Закрыт' : 'В работе',
@@ -629,15 +622,6 @@ function buildProjectExportRows(
     base['Руководитель'] =
       realTeam.filter((member: any) => isLeaderRole(teamRole(member))).map(teamName).join(', ') || 'не назначен';
     base['Команда'] = exportTeamList(realTeam, row.finances || {}, access.isExecutive);
-    base['Периоды и команды'] =
-      row.periods?.length
-        ? row.periods
-            .map((period: AuditPeriod) => {
-              const team = exportPeriodTeamList(period, access.isExecutive);
-              return team ? `${exportPeriodLabel(period)}\n${team}` : exportPeriodLabel(period);
-            })
-            .join('\n\n')
-        : '';
     base['Часы утверждено'] = Number(row.hours?.approved || 0);
     base['Часы ждут'] = Number(row.hours?.pending || 0);
     base['Записей в базе'] = row.duplicateRows?.length || 1;
@@ -1002,21 +986,6 @@ function yearFromDate(value: string): string {
   return String(date.getFullYear());
 }
 
-const MONTH_NAMES = [
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-];
-
 function parseDateValue(value: string): Date | null {
   if (!value) return null;
   const text = String(value).trim();
@@ -1050,20 +1019,11 @@ function yearRangeEnd(year: number): Date {
 }
 
 function rowDateRanges(row: any): DateRange[] {
-  const ranges: DateRange[] = [];
+  // Operational filtering follows the project's own dates only. Historical
+  // auditPeriods are a read-only migration archive and must not move a project
+  // into another year/date range.
   const projectRange = makeDateRange(row.startDate, row.deadline);
-  if (projectRange) ranges.push(projectRange);
-
-  for (const period of row.periods || []) {
-    const periodRange = makeDateRange(period.startDate, period.endDate || period.deadline);
-    if (periodRange) ranges.push(periodRange);
-    if (!periodRange && period.deadline) {
-      const deadlineRange = makeDateRange(period.deadline, period.deadline);
-      if (deadlineRange) ranges.push(deadlineRange);
-    }
-  }
-
-  return ranges;
+  return projectRange ? [projectRange] : [];
 }
 
 function businessSeasonRange(year: number): DateRange {
@@ -1325,39 +1285,6 @@ function rowMatchesDateFilter(row: any, value: YearFilter): boolean {
   return rowDateRanges(row).some((range) => rangesIntersect(range, target));
 }
 
-function periodFilterLabel(value: string): string {
-  if (value === 'all') return 'Все даты';
-  const yearMatch = value.match(/^year:(20\d{2})$/);
-  if (yearMatch) return yearMatch[1];
-  const quarterMatch = value.match(/^quarter:(20\d{2})-Q([1-4])$/);
-  if (quarterMatch) return `${quarterMatch[1]} · ${quarterMatch[2]} квартал`;
-  const monthMatch = value.match(/^month:(20\d{2})-(0[1-9]|1[0-2])$/);
-  if (monthMatch) return `${monthMatch[1]} · ${MONTH_NAMES[Number(monthMatch[2]) - 1]}`;
-  return value;
-}
-
-function rowDateBucketKeys(row: any): { years: Set<string>; quarters: Set<string>; months: Set<string> } {
-  const years = new Set<string>();
-  const quarters = new Set<string>();
-  const months = new Set<string>();
-
-  for (const range of rowDateRanges(row)) {
-    const cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-    const end = new Date(range.end.getFullYear(), range.end.getMonth(), 1);
-    while (cursor.getTime() <= end.getTime()) {
-      const year = cursor.getFullYear();
-      const month = cursor.getMonth() + 1;
-      const quarter = Math.floor((month - 1) / 3) + 1;
-      years.add(`year:${year}`);
-      quarters.add(`quarter:${year}-Q${quarter}`);
-      months.add(`month:${year}-${String(month).padStart(2, '0')}`);
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-  }
-
-  return { years, quarters, months };
-}
-
 function rowYears(row: any): string[] {
   const years = new Set<string>();
   for (const value of [row.name, row.client, row.company, row.startDate, row.deadline]) {
@@ -1535,17 +1462,6 @@ function teamMemberForRole(team: any[], predicate: (role: string) => boolean): a
 function displayMoney(value: unknown): string {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? `${money.format(parsed)} ₸` : '—';
-}
-
-function SummaryItem({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warn' }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={`font-semibold tabular-nums ${tone === 'warn' ? 'text-amber-700 dark:text-amber-300' : 'text-foreground'}`}>
-        {value}
-      </span>
-    </div>
-  );
 }
 
 function ProjectFilterField({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
@@ -1759,7 +1675,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const urlSyncReadyRef = useRef(false);
   const bonusMutationLocksRef = useRef<Set<string>>(new Set());
   const [search, setSearch] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('q') || '');
-  const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(() => readInitialColumnFilters());
+  const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(() => ({
+    ...readInitialColumnFilters(),
+    season: '',
+    period: '',
+  }));
   const [viewFilter, setViewFilter] = useState<ProjectViewFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('view') as ProjectViewFilter)) || 'all');
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>('all');
   const [partnerFilter, setPartnerFilter] = useState<PartnerFilter>('all');
@@ -1768,8 +1688,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
   const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('deadline') as ProjectDeadlineFilter)) || 'all');
-  const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('periods') as ProjectPeriodFilter)) || 'all');
-  const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('periodType') as AuditPeriodTypeFilter)) || 'all');
+  const [periodFilter, setPeriodFilter] = useState<ProjectPeriodFilter>('all');
+  const [auditPeriodTypeFilter, setAuditPeriodTypeFilter] = useState<AuditPeriodTypeFilter>('all');
   const [sortBy, setSortBy] = useState<ProjectSort>(() => (typeof window === 'undefined' ? 'deadline_asc' : (new URLSearchParams(window.location.search).get('sort') as ProjectSort)) || 'deadline_asc');
   const [tableDetailLevel, setTableDetailLevel] = useState<TableDetailLevel>('compact');
   const [tablePage, setTablePage] = useState(1);
@@ -1802,6 +1722,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     rowId: string;
     partnerId: string;
   } | null>(null);
+  const [teamRoleDrafts, setTeamRoleDrafts] = useState<Record<string, string>>({});
   const [bulkLeaderId, setBulkLeaderId] = useState('');
   const [bulkLeaderAssignOpen, setBulkLeaderAssignOpen] = useState(false);
   const [bulkAssigningLeader, setBulkAssigningLeader] = useState(false);
@@ -1833,6 +1754,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     user && hasPermission(user.role, 'CHANGE_BONUS_MANUALLY') && !isImpersonating,
   );
   const canSeeContractMoney = capabilities.canSeeContractMoney || isExecutive;
+  const canSeeBonusSummary = capabilities.canSeeBonusSummary || isExecutive;
   const canManageTeam = capabilities.canManageTeam;
   const canCloseProjects = capabilities.canCloseProjects;
   const canDeleteProjects = capabilities.canDeleteProjects;
@@ -1910,12 +1832,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           ...(currentProject.finances || {}),
           amountWithoutVAT: amount,
         };
-        const finances = calculateProjectFinances({
+        const finances = calculateProjectFinances(projectForFinanceCalculation({
           ...currentProject,
-          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
           contract,
           finances: existingFinances,
-        });
+        }));
         return {
           amountWithoutVAT: amount,
           contract,
@@ -2083,7 +2004,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       const startDate = rawProjectStartDate(project);
       const deadline = rawProjectDeadline(project);
       const periods = keepExplicitPeriodTeams(projectPeriods(project), project.id);
-      const realTeam = coverageTeam(team, periods);
+      const realTeam = effectiveProjectTeam(project);
       const finances = financeFor(project, realTeam);
       const baseReadiness = projectReadiness({
         status,
@@ -2128,14 +2049,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       };
     });
 
-    const groups = new Map<string, any[]>();
-    for (const row of rawRows) {
-      const key = projectGroupKey(row);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)?.push(row);
-    }
+    if (SHOW_LEGACY_GROUPED_PROJECT_ROWS) {
+      const groups = new Map<string, any[]>();
+      for (const row of rawRows) {
+        const key = projectGroupKey(row);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)?.push(row);
+      }
 
-    return Array.from(groups.values()).map((groupRows) => {
+      return Array.from(groups.values()).map((groupRows) => {
       if (groupRows.length === 1) return groupRows[0];
 
       const primary = choosePrimaryProjectRow(groupRows);
@@ -2201,21 +2123,25 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         projectIds: groupRows.flatMap((row) => row.projectIds || [row.id]),
         duplicateRows: groupRows,
       };
-    });
+      });
+    }
+
+    return rawRows;
   }, [projects, hoursTotals, canSeeContractMoney, hoursLoading, hoursComplete, hoursError]);
 
   const gphEditorRow = gphEditorRowId ? rows.find((row) => row.id === gphEditorRowId) : undefined;
 
   const teamTemplateCandidates = useMemo<TeamTemplateCandidate[]>(() => rows.flatMap((row) => {
-    if (!row.team?.length) return [];
-    const partner = row.team.find((member: any) => isPartnerRole(teamRole(member)));
+    const sourceTeam = row.coverageTeam || row.team || [];
+    if (!sourceTeam.length) return [];
+    const partner = sourceTeam.find((member: any) => isPartnerRole(teamRole(member)));
     const partnerId = partner ? teamMemberId(partner) : '';
     return [{
       partnerId,
       ownerName: partner ? teamName(partner) : row.name,
       sourceProjectId: row.id,
-      signature: teamTemplateSignature(row.team),
-      team: row.team.map((member: CanonicalTeamMember) => ({ ...member })),
+      signature: teamTemplateSignature(sourceTeam),
+      team: sourceTeam.map((member: CanonicalTeamMember) => ({ ...member })),
     }];
   }), [rows]);
 
@@ -2365,64 +2291,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     };
   }, [rows, summary, paymentRegistrySummary, hoursRowCount, hoursComplete, hoursLoading, hoursError]);
 
-  const workloadItems = useMemo<WorkloadItem[]>(() => {
-    const map = new Map<string, WorkloadItem>();
-    for (const row of rows) {
-      const activeProject = row.baseReadiness?.level !== 'closed' ? 1 : 0;
-      const seenMembers = new Set<string>();
-      for (const member of row.coverageTeam || row.team || []) {
-        const name = teamName(member);
-        const id = teamMemberId(member) || name;
-        if (!id || seenMembers.has(id)) continue;
-        seenMembers.add(id);
-        const current = map.get(id) || { name, approvedHours: 0, pendingHours: 0, activeProjects: 0 };
-        const memberKey = teamMemberId(member);
-        const hours = memberKey
-          ? (row.projectIds || [row.id]).reduce(
-            (total: ProjectHoursTotals, projectId: string) => {
-              const projectHours = memberHours.get(hoursPairKey(memberKey, projectId));
-              total.approved += Number(projectHours?.approved || 0);
-              total.pending += Number(projectHours?.pending || 0);
-              return total;
-            },
-            { approved: 0, pending: 0 },
-          )
-          : { approved: 0, pending: 0 };
-        current.approvedHours += hours.approved;
-        current.pendingHours += hours.pending;
-        current.activeProjects += activeProject;
-        map.set(id, current);
-      }
-    }
-    return [...map.values()]
-      .filter((item) => item.approvedHours > 0 || item.pendingHours > 0 || item.activeProjects > 0)
-      .sort((a, b) => (b.approvedHours + b.pendingHours + b.activeProjects * 2) - (a.approvedHours + a.pendingHours + a.activeProjects * 2))
-      .slice(0, 8);
-  }, [rows, memberHours]);
-
-  const applyPulseView = (view: 'all' | 'working' | 'attention' | 'closed' | 'overdue' | 'next_30' | 'no_deadline' | 'waiting_hours' | 'ready_bonus' | 'bonus_attention' | 'portfolio_attention') => {
-    // The counters describe the whole accessible portfolio. Clear every
-    // unrelated filter so the rows after a click reconcile with the counter.
-    setSearch('');
-    setColumnFilters({ ...EMPTY_COLUMN_FILTERS });
-    setCompanyFilter('all');
-    setPartnerFilter('all');
-    setYearFilter('all');
-    setBusinessSeasonFilter('all');
-    setDateFromFilter('');
-    setDateToFilter('');
-    setPeriodFilter('all');
-    setAuditPeriodTypeFilter('all');
-    setSelectedSavedViewId('');
-    if (view === 'overdue' || view === 'next_30' || view === 'no_deadline') {
-      setDeadlineFilter(view);
-      setViewFilter('all');
-      return;
-    }
-    setDeadlineFilter('all');
-    setViewFilter(view);
-  };
-
   const currentSavedViewPayload = (): Omit<SavedCommandCenterView, 'id' | 'name'> => ({
     search,
     viewFilter,
@@ -2461,16 +2329,21 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setViewFilter(view.viewFilter);
     setCompanyFilter(view.companyFilter);
     setPartnerFilter(view.partnerFilter);
-    setYearFilter(view.yearFilter);
-    setBusinessSeasonFilter(view.businessSeasonFilter);
+    setYearFilter('all');
+    setBusinessSeasonFilter('all');
     setDateFromFilter(view.dateFromFilter);
     setDateToFilter(view.dateToFilter);
     setDeadlineFilter(view.deadlineFilter);
-    setPeriodFilter(view.periodFilter);
-    setAuditPeriodTypeFilter(view.auditPeriodTypeFilter);
+    setPeriodFilter('all');
+    setAuditPeriodTypeFilter('all');
     setSortBy(view.sortBy);
     setTableDetailLevel(view.tableDetailLevel);
-    setColumnFilters({ ...EMPTY_COLUMN_FILTERS, ...view.columnFilters });
+    setColumnFilters({
+      ...EMPTY_COLUMN_FILTERS,
+      ...view.columnFilters,
+      season: '',
+      period: '',
+    });
   };
 
   const deleteSelectedSavedView = () => {
@@ -2507,36 +2380,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   }, [rows, appSettings.companies]);
 
-  const dateFilterOptions = useMemo(() => {
-    const years = new Map<string, number>();
-    const quarters = new Map<string, number>();
-    const months = new Map<string, number>();
-    const seasons = new Map<string, number>();
-
-    for (const row of rows) {
-      const keys = rowDateBucketKeys(row);
-      for (const key of keys.years) years.set(key, (years.get(key) || 0) + 1);
-      for (const key of keys.quarters) quarters.set(key, (quarters.get(key) || 0) + 1);
-      for (const key of keys.months) months.set(key, (months.get(key) || 0) + 1);
-      for (const season of rowBusinessSeasonYears(row)) {
-        const key = `season:${season}`;
-        seasons.set(key, (seasons.get(key) || 0) + 1);
-      }
-    }
-
-    const sortDesc = ([a]: [string, number], [b]: [string, number]) => b.localeCompare(a);
-    const toOption = ([value, count]: [string, number]) => ({ value, label: periodFilterLabel(value), count });
-
-    return {
-      years: [...years.entries()].sort(sortDesc).map(toOption),
-      quarters: [...quarters.entries()].sort(sortDesc).map(toOption),
-      months: [...months.entries()].sort(sortDesc).map(toOption),
-      seasons: [...seasons.entries()]
-        .sort(sortDesc)
-        .map(([value, count]) => ({ value, label: businessSeasonLabel(Number(value.slice('season:'.length))), count })),
-    };
-  }, [rows]);
-
   const selectedPartnerLabel = useMemo(() => {
     if (partnerFilter === 'all') return '';
     if (partnerFilter === 'unassigned') return 'Без партнера';
@@ -2549,17 +2392,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return companyOptions.find((item) => item.key === companyFilter)?.name || '';
   }, [companyFilter, companyOptions]);
 
-  const selectedDateFilterLabel = useMemo(() => {
-    return periodFilterLabel(yearFilter);
-  }, [yearFilter]);
-
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     const exactRange = makeDateRange(dateFromFilter, dateToFilter);
     const filtered = rows.filter((row) => {
-      const periodText = row.periods.map(periodLabel).join(' ');
       const coverageTeamText = (row.coverageTeam || row.team || []).map(teamName).join(' ');
-      const haystack = `${row.company} ${row.name} ${row.client} ${row.type} ${row.startDate} ${row.deadline} ${periodText} ${Object.values(row.teamColumns).join(' ')} ${coverageTeamText}`.toLowerCase();
+      const haystack = `${row.company} ${row.name} ${row.client} ${row.type} ${row.startDate} ${row.deadline} ${Object.values(row.teamColumns).join(' ')} ${coverageTeamText}`.toLowerCase();
       if (query && !haystack.includes(query)) return false;
       if (companyFilter === 'missing') {
         if (!rowHasMissingCompany(row)) return false;
@@ -2910,6 +2748,64 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
+  const assignCompanyToProject = async (row: (typeof rows)[number], companyId: string) => {
+    if (!canBulkAssignCompany || !updateProject) return;
+    const company = companyOptions.find((option) => option.key === companyId)?.company;
+    if (!company) return;
+    setSavingProjectId(`${row.id}:company`);
+    try {
+      await updateProject(row.id, {
+        companyId: company.id,
+        companyName: company.name,
+        company: company.name,
+        ourCompany: company.name,
+      });
+      toast({
+        title: 'Компания назначена',
+        description: `${row.name}: ${company.name}. Команда, договор, часы и бонусы сохранены.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось назначить компанию',
+        description: error?.message || 'Попробуйте ещё раз.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingProjectId(null);
+    }
+  };
+
+  const canonicalTeamUpdatePatch = (currentProject: any, nextTeam: CanonicalTeamMember[]) => {
+    const currentNotes = readProjectNotes(currentProject);
+    const marker = canonicalTeamMarkerPatch(currentProject, nextTeam);
+    const canonicalTeam = Array.isArray(marker.team)
+      ? marker.team
+      : dedupeCanonicalTeamMembers([nextTeam]);
+    const existingFinances = {
+      ...(currentNotes.finances || {}),
+      ...(currentProject?.finances || {}),
+    };
+    const markedProject = {
+      ...currentProject,
+      team: canonicalTeam,
+      notes: {
+        ...currentNotes,
+        ...marker,
+        finances: existingFinances,
+      },
+      finances: existingFinances,
+    };
+    const calculationProject = projectForFinanceCalculation(markedProject);
+    const finances = calculateProjectFinances({
+      ...calculationProject,
+      finances: {
+        ...existingFinances,
+        amountWithoutVAT: projectAmount(currentProject),
+      },
+    });
+    return { ...marker, finances };
+  };
+
   const assignPartnerToSelectedProjects = async () => {
     if (!canBulkAssignPartner || !updateProject || bulkAssigningPartner || selectedProjectIds.size === 0) return;
     const partner = partnerEmployees.find((employee) => employee.id === bulkPartnerId);
@@ -2925,7 +2821,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
         const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
-          const nextTeam = projectTeam(currentProject)
+          const nextTeam = effectiveProjectTeam(currentProject)
             .filter((member: any) => teamRole(member) !== 'partner')
             .map((member: CanonicalTeamMember) => ({ ...member }));
           nextTeam.unshift({
@@ -2938,17 +2834,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             assignedAt: new Date().toISOString(),
             assignedBy: user?.id || 'bulk-partner',
           });
-          const currentNotes = readProjectNotes(currentProject);
-          const existingFinances = {
-            ...(currentNotes.finances || {}),
-            ...(currentProject?.finances || {}),
-          };
-          const finances = calculateProjectFinances({
-            ...currentProject,
-            team: coverageTeam(nextTeam, getAuditPeriods(currentProject)),
-            finances: { ...existingFinances, amountWithoutVAT: projectAmount(currentProject) },
-          });
-          return { team: nextTeam, finances };
+          return canonicalTeamUpdatePatch(currentProject, nextTeam);
         })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
@@ -2958,7 +2844,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       setBulkPartnerAssignOpen(false);
       toast({
         title: failedIds.length > 0 ? 'Партнёр назначен частично' : 'Партнёр назначен',
-        description: `${employeeName(partner)}: ${ids.length - failedIds.length} проектов. Существующие команды проектов и команды периодов сохранены.`,
+        description: `${employeeName(partner)}: ${ids.length - failedIds.length} проектов. Полный исторический состав сохранён в единой команде проекта.`,
         variant: failedIds.length > 0 ? 'destructive' : 'default',
       });
     } catch (error: any) {
@@ -2984,17 +2870,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         const batch = ids.slice(index, index + 20);
         const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
           const team = template.team.map((member) => ({ ...member }));
-          const currentNotes = readProjectNotes(currentProject);
-          const existingFinances = {
-            ...(currentNotes.finances || {}),
-            ...(currentProject?.finances || {}),
-          };
-          const finances = calculateProjectFinances({
-            ...currentProject,
-            team: coverageTeam(team, getAuditPeriods(currentProject)),
-            finances: { ...existingFinances, amountWithoutVAT: projectAmount(currentProject) },
-          });
-          return { team, finances };
+          return canonicalTeamUpdatePatch(currentProject, team);
         })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
@@ -3004,7 +2880,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       setBulkTeamAssignOpen(false);
       toast({
         title: failedIds.length > 0 ? 'Команда назначена частично' : 'Команда назначена',
-        description: `${template.label}: ${ids.length - failedIds.length} проектов. Отдельные команды периодов сохранены.`,
+        description: `${template.label}: ${ids.length - failedIds.length} проектов. Команда сохранена единым составом проекта.`,
         variant: failedIds.length > 0 ? 'destructive' : 'default',
       });
     } catch (error: any) {
@@ -3029,7 +2905,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
         const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
-          const team = projectTeam(currentProject)
+          const team = effectiveProjectTeam(currentProject)
             .filter((member: any) => !isLeaderRole(teamRole(member)))
             .map((member: CanonicalTeamMember) => ({ ...member }));
           team.push({
@@ -3042,17 +2918,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             assignedAt: new Date().toISOString(),
             assignedBy: user?.id || 'bulk-leader',
           });
-          const currentNotes = readProjectNotes(currentProject);
-          const existingFinances = {
-            ...(currentNotes.finances || {}),
-            ...(currentProject?.finances || {}),
-          };
-          const finances = calculateProjectFinances({
-            ...currentProject,
-            team: coverageTeam(team, getAuditPeriods(currentProject)),
-            finances: { ...existingFinances, amountWithoutVAT: projectAmount(currentProject) },
-          });
-          return { team, finances };
+          return canonicalTeamUpdatePatch(currentProject, team);
         })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
@@ -3084,9 +2950,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       ...(currentProject?.finances || {}),
       ...financesPatch,
     };
-    return calculateProjectFinances({
+    const calculationProject = projectForFinanceCalculation({
       ...currentProject,
-      team: coverageTeam(commonTeam, periods),
+      team: commonTeam,
+      notes: {
+        ...currentNotes,
+        team: commonTeam,
+        auditPeriods: periods,
+        finances: existingFinances,
+      },
+      finances: existingFinances,
+    });
+    return calculateProjectFinances({
+      ...calculationProject,
       finances: {
         ...existingFinances,
         amountWithoutVAT: projectAmount(currentProject),
@@ -3220,18 +3096,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             clearedManualPool: existingFinances.bonusPoolManuallyAdjusted === true,
           },
         ].slice(-20);
-        const projectWithPercent = {
-          ...currentProject,
-          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
-          finances: {
-            ...existingFinances,
-            amountWithoutVAT: projectAmount(currentProject),
-            bonusPercent,
-            bonusPoolOverrideAmount: null,
-            bonusPoolManuallyAdjusted: false,
-            bonusPoolHistory: nextHistory,
-          },
+        const nextFinancesSource = {
+          ...existingFinances,
+          amountWithoutVAT: projectAmount(currentProject),
+          bonusPercent,
+          bonusPoolOverrideAmount: null,
+          bonusPoolManuallyAdjusted: false,
+          bonusPoolHistory: nextHistory,
         };
+        const projectWithPercent = projectForFinanceCalculation({
+          ...currentProject,
+          finances: nextFinancesSource,
+        });
         const finances = calculateProjectFinances(projectWithPercent);
         return { finances: {
           ...existingFinances,
@@ -3286,11 +3162,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             },
           ].slice(-20),
         };
-        const finances = calculateProjectFinances({
+        const finances = calculateProjectFinances(projectForFinanceCalculation({
           ...currentProject,
-          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
           finances: nextFinancesSource,
-        });
+        }));
         return { finances };
       });
       toast({ title: 'Бонусный пул проекта сохранён', description: `${row.name}: ${money.format(amount)} ₸` });
@@ -3337,11 +3212,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             },
           ].slice(-20),
         };
-        const finances = calculateProjectFinances({
+        const finances = calculateProjectFinances(projectForFinanceCalculation({
           ...currentProject,
-          team: coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject)),
           finances: nextFinancesSource,
-        });
+        }));
         savedFormulaPercent = Number(finances.bonusPercent || 0) || 0;
         return { finances };
       });
@@ -3503,7 +3377,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     try {
       await updateProject(row.id, (currentProject: any) => {
         const currentNotes = readProjectNotes(currentProject);
-        const calculationTeam = coverageTeam(projectTeam(currentProject), getAuditPeriods(currentProject));
+        const calculationProject = projectForFinanceCalculation(currentProject);
+        const calculationTeam = calculationProject.team as CanonicalTeamMember[];
         const currentMember = calculationTeam.find((item: CanonicalTeamMember) => (
           teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
         ));
@@ -3514,9 +3389,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         };
         const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
         const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
-        const projectWithMemberPercent = {
+        const projectWithMemberPercent = projectForFinanceCalculation({
           ...currentProject,
-          team: calculationTeam,
           finances: {
             ...existingFinances,
             amountWithoutVAT: projectAmount(currentProject),
@@ -3528,7 +3402,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               },
             },
           },
-        };
+        });
         const finances = calculateProjectFinances(projectWithMemberPercent);
         if (finances.teamBonuses[memberId]) {
           finances.teamBonuses[memberId] = {
@@ -3651,32 +3525,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         assignedBy: user?.id || 'inline-table',
       };
       await updateProject(row.id, (currentProject: any) => {
-        const currentTeam = projectTeam(currentProject);
+        const currentTeam = effectiveProjectTeam(currentProject);
         const nextTeam = roleKey === 'partner'
           ? [nextMember, ...currentTeam.filter((member: any) => teamRole(member) !== 'partner')]
           : isLeaderRole(roleKey)
             ? [...currentTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
             : [...currentTeam, nextMember];
-        const currentNotes = readProjectNotes(currentProject);
-        const existingFinances = {
-          ...(currentNotes.finances || {}),
-          ...(currentProject?.finances || {}),
-        };
-        const amount = projectAmount(currentProject);
-        const finances = calculateProjectFinances({
-          ...currentProject,
-          team: coverageTeam(nextTeam, getAuditPeriods(currentProject)),
-          finances: {
-            ...existingFinances,
-            amountWithoutVAT: amount,
-          },
-        });
-        return { team: nextTeam, finances };
+        return canonicalTeamUpdatePatch(currentProject, nextTeam);
       });
       toast({
         title: isPartnerRole(roleKey) ? 'Партнёр назначен' : 'Участник добавлен',
         description: isPartnerRole(roleKey)
-          ? `${employeeName(employee)}. Остальная команда проекта и команды периодов сохранены.`
+          ? `${employeeName(employee)}. Весь исторический состав материализован в единой команде проекта.`
           : employeeName(employee),
       });
     } catch (error: any) {
@@ -3708,25 +3568,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     try {
       await updateProject(row.id, (currentProject: any) => {
         const nextTeam = template.map((member) => ({ ...member }));
-        const currentNotes = readProjectNotes(currentProject);
-        const existingFinances = {
-          ...(currentNotes.finances || {}),
-          ...(currentProject?.finances || {}),
-        };
-        const amount = projectAmount(currentProject);
-        const finances = calculateProjectFinances({
-          ...currentProject,
-          team: coverageTeam(nextTeam, getAuditPeriods(currentProject)),
-          finances: {
-            ...existingFinances,
-            amountWithoutVAT: amount,
-          },
-        });
-        return { team: nextTeam, finances };
+        return canonicalTeamUpdatePatch(currentProject, nextTeam);
       });
       toast({
         title: 'Шаблон команды применён',
-        description: `${projectTeamTemplateTargetDefinition?.label || 'Команда партнёра'}. Команды периодов сохранены.`,
+        description: `${projectTeamTemplateTargetDefinition?.label || 'Команда партнёра'}. Состав сохранён как единая команда проекта.`,
       });
       setProjectTeamTemplateTarget(null);
     } catch (error: any) {
@@ -3747,16 +3593,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setSavingProjectId(`${row.id}:remove:${id || memberIndex}`);
     try {
       await updateProject(row.id, (currentProject: any) => {
+        const materializedTeam = effectiveProjectTeam(currentProject);
         let roleIndex = -1;
-        const nextTeam = projectTeam(currentProject).filter((item: CanonicalTeamMember) => {
+        const nextTeam = materializedTeam.filter((item: CanonicalTeamMember) => {
           if (teamRole(item) !== role) return true;
           roleIndex += 1;
           if (id && teamMemberId(item)) return teamMemberId(item) !== id;
           return roleIndex !== memberIndex;
         });
-        const periods = getAuditPeriods(currentProject);
-        const finances = calculateFinancesFromCurrentProject(currentProject, nextTeam, periods);
-        return { team: nextTeam, finances };
+        return canonicalTeamUpdatePatch(currentProject, nextTeam);
       });
     } catch (error: any) {
       toast({
@@ -4093,11 +3938,30 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
-  const renderProjectInlineDetail = (row: (typeof rows)[number], showAdvancedToggle = true) => {
+  const renderProjectInlineDetail = (
+    row: (typeof rows)[number],
+    showAdvancedToggle = true,
+    embedded = false,
+  ) => {
     const rowProjectIds = row.projectIds?.length ? row.projectIds : [row.id];
     const paymentLedger = projectPaymentLedger(rowProjectIds, paymentRegistrySummary.byProject);
     const groupedBonusRow = rowProjectIds.length > 1;
-    const bonusTeamMembers: CanonicalTeamMember[] = row.coverageTeam || row.team || [];
+    const currentTeamMembers: CanonicalTeamMember[] = row.coverageTeam || row.team || [];
+    const protectedBonusMembers = financeParticipants(row.project)
+      .filter((member: any) => member?.legacyBonusOnly)
+      .map((member: CanonicalTeamMember) => {
+        const memberId = teamMemberId(member);
+        const employee = memberId
+          ? (employees as any[]).find((item) => item.id === memberId)
+          : undefined;
+        return employee
+          ? { ...member, userName: employeeName(employee), name: employeeName(employee) }
+          : member;
+      });
+    const bonusTeamMembers = dedupeCanonicalTeamMembers([
+      currentTeamMembers,
+      protectedBonusMembers,
+    ]);
     const memberGroups = new Map<string, { id: string; source: CanonicalTeamMember; roles: Set<string> }>();
 
     for (const member of bonusTeamMembers) {
@@ -4110,7 +3974,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       memberGroups.set(identity, {
         id: teamMemberId(member),
         source: member,
-        roles: new Set([projectRoleLabel(teamRole(member))]),
+        roles: new Set([
+          projectRoleLabel(teamRole(member)),
+          ...(member.legacyBonusOnly ? ['Сохранённый бонус · вне команды'] : []),
+        ]),
       });
     }
 
@@ -4134,6 +4001,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const bonusEmployees: ProjectInlineBonusEmployee[] = Array.from(memberGroups.entries()).map(([identity, group]) => {
       const memberId = group.id;
       if (memberId) memberSourceById.set(memberId, group.source);
+      const savedBonus = memberId ? row.finances.teamBonuses?.[memberId] : undefined;
+      const settledDetachedBonus = Boolean(group.source.legacyBonusOnly) && isSettledBonus(savedBonus);
       const memberLedger = memberId
         ? memberPaymentLedger(rowProjectIds, memberId, paymentRegistrySummary.byKey)
         : { approvedUnpaidAmount: 0, paidAmount: 0, pendingAmount: 0, rowCount: 0, latestPaymentDate: null };
@@ -4161,12 +4030,21 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         approvedForPayment: memberLedger.approvedUnpaidAmount,
         paidAmount: memberLedger.paidAmount,
         pendingAmount: memberLedger.pendingAmount,
-        editable: bonusEditable && Boolean(memberId),
-        lockedReason: memberId ? bonusLockedReason : 'У сотрудника нет идентификатора — сначала исправьте карточку команды.',
+        editable: bonusEditable && Boolean(memberId) && !settledDetachedBonus,
+        lockedReason: settledDetachedBonus
+          ? 'Бонус уже утверждён или выплачен и сохранён только для сверки.'
+          : memberId
+            ? bonusLockedReason
+            : 'У сотрудника нет идентификатора — сначала исправьте карточку команды.',
       };
     });
-    const currentPartner = teamMemberForRole(bonusTeamMembers, isPartnerRole);
-    const currentLeader = teamMemberForRole(bonusTeamMembers, isLeaderRole);
+    const currentPartner = teamMemberForRole(currentTeamMembers, isPartnerRole);
+    const currentLeader = teamMemberForRole(currentTeamMembers, isLeaderRole);
+    const currentCompanyId = companyOptions.find((option) => rowMatchesCompanyOption(row, option.company))?.key;
+    const commonPartner = currentPartner;
+    const commonLeader = currentLeader;
+    const commonPartnerId = teamMemberId(commonPartner);
+    const selectedTeamRole = teamRoleDrafts[row.id] || 'manager_1';
     const totalBonusAmount = plannedBonusPool(row);
     const allocatedBonuses = allocatedDraftBonuses(row);
     const bonusBase = Number(row.finances.bonusBase || 0) || 0;
@@ -4185,12 +4063,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         name={row.name}
         company={row.company}
         client={row.client}
-        serviceType={[row.type, ...(row.periods || []).slice(0, 2).map((period: AuditPeriod) => period.name)].filter(Boolean).join(' · ')}
+        serviceType={row.type}
         statusLabel={closureStatusLabel}
         statusTone={inlineReadinessTone(row.readiness.level)}
         issues={row.readiness.issues}
         team={{
-          count: bonusTeamMembers.length,
+          count: currentTeamMembers.length,
           partnerName: currentPartner ? teamName(currentPartner) : null,
           leaderName: currentLeader ? teamName(currentLeader) : null,
         }}
@@ -4213,8 +4091,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           grossIncome: Number(row.finances.grossProfit || 0),
         }}
         showFinances={canSeeContractMoney}
-        showBonuses={isExecutive}
-        bonuses={isExecutive ? {
+        showBonuses={canSeeBonusSummary}
+        bonuses={canSeeBonusSummary ? {
           poolAmount: totalBonusAmount,
           poolPercent: formulaPercent,
           formulaPoolAmount: Math.max(0, bonusBase * (formulaPercent / 100)),
@@ -4228,8 +4106,163 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           employees: bonusEmployees,
         } : undefined}
         showAdvancedToggle={showAdvancedToggle}
-        advancedOpen={Boolean(advancedRows[row.id])}
+        advancedOpen={!embedded && Boolean(advancedRows[row.id])}
         onToggleAdvanced={() => toggleAdvancedRow(row.id)}
+        embedded={embedded}
+        managementControls={embedded ? (
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.1fr)_minmax(420px,1.7fr)]">
+            <div className="min-w-0 space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Компания, статус и срок</div>
+              {canBulkAssignCompany ? (
+                <Select
+                  value={currentCompanyId}
+                  onValueChange={(companyId) => void assignCompanyToProject(row, companyId)}
+                  disabled={savingProjectId === `${row.id}:company`}
+                >
+                  <SelectTrigger className="h-9 w-full text-xs" aria-label={`Наша компания проекта ${row.name}`}>
+                    <SelectValue placeholder="Назначить нашу компанию" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companyOptions.map((company) => (
+                      <SelectItem key={company.key} value={company.key}>{company.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm font-medium">Наша компания: {row.company || '—'}</div>
+              )}
+              {canManageProjectStatus ? (
+                <Select
+                  value={statusOptions.some((option) => option.value === row.status) ? row.status : undefined}
+                  onValueChange={(value) => setProjectStatus(row, value as ManagedProjectStatus)}
+                  disabled={savingProjectId === `${row.id}:status`}
+                >
+                  <SelectTrigger className="h-9 w-full text-xs" aria-label={`Изменить статус проекта ${row.name}`}>
+                    <SelectValue placeholder={closureStatusLabel} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        disabled={(option.value === 'pending_payment_approval' || option.value === 'completed') && (hoursLoading || Boolean(hoursError) || !hoursComplete || row.hours.pending > 0)}
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge variant="outline" className={issueBadgeClass(row.readiness.level)}>{closureStatusLabel}</Badge>
+              )}
+              {editingProjectDatesRowId === row.id ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Input type="date" aria-label={`Начало проекта ${row.name}`} className="h-9 text-xs" value={projectDateDraft.startDate} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, startDate: event.target.value }))} />
+                  <Input type="date" aria-label={`Дедлайн проекта ${row.name}`} className="h-9 text-xs" value={projectDateDraft.deadline} onChange={(event) => setProjectDateDraft((draft) => ({ ...draft, deadline: event.target.value }))} />
+                  <Button type="button" size="sm" className="h-8 text-xs" disabled={savingProjectId === `${row.id}:dates`} onClick={() => saveProjectDates(row)}>Сохранить</Button>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={cancelProjectDateEdit}>Отмена</Button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" size="sm" className="h-9 w-full justify-start text-xs" disabled={!canEditPeriods} onClick={() => startProjectDateEdit(row)}>
+                  {formatDate(row.startDate)} — {formatDate(row.deadline)} · изменить
+                </Button>
+              )}
+            </div>
+
+            <div className="min-w-0 space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Партнёр и руководитель</div>
+              <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                {canManageTeam ? (
+                  <EmployeeSearchAdd
+                    employees={partnerEmployees}
+                    disabled={savingProjectId === `${row.id}:add:partner`}
+                    selectedEmployeeId={commonPartnerId}
+                    triggerLabel={commonPartner ? teamName(commonPartner) : 'Назначить партнёра'}
+                    triggerAriaLabel={`Партнёр проекта ${row.name}`}
+                    onPick={(employeeId) => addTeamMember(row, 'partner', employeeId)}
+                  />
+                ) : <div className="text-sm font-medium">Партнёр: {currentPartner ? teamName(currentPartner) : '—'}</div>}
+                {canManageTeam ? (
+                  <EmployeeSearchAdd
+                    employees={assignableEmployees}
+                    disabled={savingProjectId === `${row.id}:add:project_leader`}
+                    selectedEmployeeId={teamMemberId(commonLeader)}
+                    triggerLabel={commonLeader ? teamName(commonLeader) : 'Назначить руководителя'}
+                    triggerAriaLabel={`Руководитель проекта ${row.name}`}
+                    onPick={(employeeId) => addTeamMember(row, 'project_leader', employeeId)}
+                  />
+                ) : <div className="text-sm font-medium">Руководитель: {currentLeader ? teamName(currentLeader) : '—'}</div>}
+              </div>
+              {canManageTeam && commonPartnerId && partnerTeamTemplate(commonPartnerId, row.id)?.length ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto w-full justify-start whitespace-normal px-1 py-1 text-left text-xs text-sky-700"
+                  disabled={savingProjectId === `${row.id}:team-template`}
+                  onClick={() => setProjectTeamTemplateTarget({ rowId: row.id, partnerId: commonPartnerId })}
+                >
+                  Применить сохранённый шаблон команды партнёра…
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Команда · {currentTeamMembers.length} чел.</div>
+                {row.periods?.some((period: AuditPeriod) => periodTeam(period).length > 0) && (
+                  <span className="text-[10px] text-muted-foreground">сохранённый состав восстановлен</span>
+                )}
+              </div>
+              <div className="flex min-h-8 flex-wrap gap-1.5">
+                {currentTeamMembers.length === 0 && <span className="text-xs text-muted-foreground">Команда ещё не назначена</span>}
+                {currentTeamMembers.map((member: CanonicalTeamMember, index: number) => {
+                  const memberId = teamMemberId(member);
+                  const role = teamRole(member);
+                  const unifiedRoleMembers = currentTeamMembers.filter((candidate: CanonicalTeamMember) => teamRole(candidate) === role);
+                  const unifiedRoleIndex = unifiedRoleMembers.findIndex((candidate: CanonicalTeamMember) => (
+                    memberId ? teamMemberId(candidate) === memberId : teamName(candidate) === teamName(member)
+                  ));
+                  const editableMember = unifiedRoleIndex >= 0;
+                  return (
+                    <Badge key={`${memberId || teamName(member)}-${role}-${index}`} variant="outline" className="max-w-full gap-1 whitespace-normal py-1 text-[10px]">
+                      <span className="font-medium">{projectRoleLabel(role)}:</span> {teamName(member)}
+                      {canManageTeam && editableMember && (
+                        <button
+                          type="button"
+                          className="ml-0.5 rounded px-1 text-red-600 hover:bg-red-50"
+                          aria-label={`Убрать ${teamName(member)} из команды проекта`}
+                          disabled={savingProjectId === `${row.id}:remove:${memberId || unifiedRoleIndex}`}
+                          onClick={() => void removeTeamMember(row, member, unifiedRoleIndex)}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </Badge>
+                  );
+                })}
+              </div>
+              {canManageTeam && (
+                <div className="grid min-w-0 gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+                  <Select value={selectedTeamRole} onValueChange={(value) => setTeamRoleDrafts((current) => ({ ...current, [row.id]: value }))}>
+                    <SelectTrigger className="h-9 w-full text-xs" aria-label={`Роль нового участника проекта ${row.name}`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TEAM_COLUMNS.map((column) => <SelectItem key={column.key} value={column.key}>{column.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <EmployeeSearchAdd
+                    employees={assignableEmployees}
+                    disabled={savingProjectId === `${row.id}:add:${selectedTeamRole}`}
+                    triggerLabel={`Добавить: ${projectRoleLabel(selectedTeamRole)}`}
+                    triggerAriaLabel={`Добавить сотрудника в команду проекта ${row.name}`}
+                    onPick={(employeeId) => addTeamMember(row, selectedTeamRole, employeeId)}
+                    onAddContractor={canManageContractors ? () => openGphAssignment(row.id, selectedTeamRole) : undefined}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ) : undefined}
         onPoolAmountCommit={(amount) => setBonusPoolAmount(row, amount)}
         onPoolPercentCommit={(percent) => setBonusPercent(row, percent)}
         onResetPoolFormula={() => resetBonusPoolToFormula(row)}
@@ -4282,57 +4315,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       </div>
 
       <div className="min-w-0 max-w-full space-y-4 px-4 py-4 sm:px-6 lg:px-8">
-        {projectsError ? (
+        {projectsError && (
           <Card role="alert" className="border-red-200 bg-red-50/60 p-5 dark:bg-red-950/20">
             <div className="font-semibold text-red-800 dark:text-red-200">Свод проектов не загрузился</div>
             <p className="mt-1 text-sm text-red-700 dark:text-red-300">Финансовые показатели и бонусы не показываются нулями, потому что исходные данные сейчас недоступны: {projectsError}</p>
             <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refreshProjects()}>Повторить загрузку</Button>
           </Card>
-        ) : isExecutive ? (
-          <>
-            <ExecutivePortfolioOverview
-              summary={executiveSummary}
-              registryLoading={paymentRegistryLoading}
-              registryError={paymentRegistryError}
-              onApplyView={applyPulseView}
-            />
-            <details className="group min-w-0 rounded-lg border bg-background" data-testid="executive-analytics-details">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold marker:content-none">
-                <span>Общая аналитика портфеля</span>
-                <span className="text-xs font-normal text-muted-foreground group-open:hidden">Графики проектов, сроков, бонусов и загрузки</span>
-                <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Скрыть графики</span>
-              </summary>
-              <div className="space-y-4 border-t p-3 sm:p-4">
-                <ExecutivePortfolioVisuals
-                  summary={executiveSummary}
-                  registryLoading={paymentRegistryLoading}
-                  registryError={paymentRegistryError}
-                  onApplyView={applyPulseView}
-                />
-                <ProjectWorkloadChart
-                  items={workloadItems}
-                  loading={hoursLoading}
-                  error={hoursError || (!hoursLoading && !hoursComplete ? 'Таймшиты загрузились не полностью' : null)}
-                />
-              </div>
-            </details>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border bg-background px-4 py-3 text-sm">
-              <SummaryItem label="Всего" value={summary.total.toString()} />
-              <SummaryItem label="В работе" value={(summary.total - summary.closed).toString()} />
-              <SummaryItem label="Требуют действия" value={summary.attention.toString()} tone={summary.attention > 0 ? 'warn' : 'default'} />
-              <SummaryItem label="Закрыты" value={summary.closed.toString()} />
-              <SummaryItem label="Просрочены" value={summary.overdue.toString()} tone={summary.overdue > 0 ? 'warn' : 'default'} />
-              <SummaryItem label="30 дней" value={summary.soon.toString()} tone={summary.soon > 0 ? 'warn' : 'default'} />
-              <SummaryItem label="Без срока" value={summary.noDeadline.toString()} tone={summary.noDeadline > 0 ? 'warn' : 'default'} />
-              <SummaryItem label="Часы" value={hoursLoading ? 'Загрузка…' : hoursError ? 'Нет данных' : `${summary.approvedHours.toFixed(1)} ч`} tone={hoursError ? 'warn' : 'default'} />
-              {!hoursLoading && !hoursError && summary.pendingHours > 0 && <SummaryItem label="Ждут" value={`${summary.pendingHours.toFixed(1)} ч`} tone="warn" />}
-            </div>
-            <ProjectPortfolioPulse summary={{ ...summary, hoursLoading, hoursError: Boolean(hoursError) }} onApplyView={applyPulseView} />
-            <ProjectWorkloadChart items={workloadItems} loading={hoursLoading} error={hoursError || (!hoursLoading && !hoursComplete ? 'Таймшиты загрузились не полностью' : null)} />
-          </>
         )}
 
         <Card className="p-3">
@@ -4381,71 +4369,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </SelectContent>
               </Select>
               </ProjectFilterField>
-              <ProjectFilterField label="Календарный период">
-              <Select value={yearFilter} onValueChange={(value) => setYearFilter(value as YearFilter)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Период" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все даты</SelectItem>
-                  <SelectGroup>
-                    <SelectLabel>Годы</SelectLabel>
-                    {dateFilterOptions.years.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label} · {item.count}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Кварталы</SelectLabel>
-                    {dateFilterOptions.quarters.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label} · {item.count}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Месяцы</SelectLabel>
-                    {dateFilterOptions.months.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label} · {item.count}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              </ProjectFilterField>
-              <ProjectFilterField label="Бизнес-сезон">
-              <Select value={businessSeasonFilter} onValueChange={(value) => setBusinessSeasonFilter(value as BusinessSeasonFilter)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Бизнес-сезон" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все бизнес-сезоны</SelectItem>
-                  {dateFilterOptions.seasons.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label} · {item.count}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              </ProjectFilterField>
               <ProjectFilterField label="Дата с">
               <Input
                 type="date"
-                aria-label="Начало периода фильтра"
+                aria-label="Дата начала диапазона"
                 value={dateFromFilter}
                 onChange={(event) => setDateFromFilter(event.target.value)}
-                title="Показать проекты, пересекающиеся с датой начала"
+                title="Показать проекты, пересекающиеся с начальной датой"
               />
               </ProjectFilterField>
               <ProjectFilterField label="Дата по">
               <Input
                 type="date"
-                aria-label="Конец периода фильтра"
+                aria-label="Дата окончания диапазона"
                 value={dateToFilter}
                 onChange={(event) => setDateToFilter(event.target.value)}
-                title="Показать проекты, пересекающиеся с датой окончания"
+                title="Показать проекты, пересекающиеся с конечной датой"
               />
               </ProjectFilterField>
               <ProjectFilterField label="Состояние проекта">
@@ -4482,7 +4421,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </SelectContent>
               </Select>
               </ProjectFilterField>
-              <ProjectFilterField label="Наличие периодов">
+              {LEGACY_PROJECT_VIEWS_ENABLED && <ProjectFilterField label="Наличие периодов">
               <Select value={periodFilter} onValueChange={(value) => setPeriodFilter(value as ProjectPeriodFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -4493,8 +4432,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="no_periods">Нет периодов</SelectItem>
                 </SelectContent>
               </Select>
-              </ProjectFilterField>
-              <ProjectFilterField label="Тип периода">
+              </ProjectFilterField>}
+              {LEGACY_PROJECT_VIEWS_ENABLED && <ProjectFilterField label="Тип периода">
               <Select value={auditPeriodTypeFilter} onValueChange={(value) => setAuditPeriodTypeFilter(value as AuditPeriodTypeFilter)}>
                 <SelectTrigger className="w-full" aria-label="Тип аудиторского периода">
                   <SelectValue placeholder="Тип периода" />
@@ -4507,7 +4446,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="custom">Особый период</SelectItem>
                 </SelectContent>
               </Select>
-              </ProjectFilterField>
+              </ProjectFilterField>}
               <ProjectFilterField label="Сортировка">
               <Select value={sortBy} onValueChange={(value) => setSortBy(value as ProjectSort)}>
                 <SelectTrigger className="w-full">
@@ -4575,16 +4514,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
             </div>
           </div>
-          {(companyFilter !== 'all' || partnerFilter !== 'all' || yearFilter !== 'all' || businessSeasonFilter !== 'all' || dateFromFilter || dateToFilter || periodFilter !== 'all' || auditPeriodTypeFilter !== 'all') && (
+          {(companyFilter !== 'all' || partnerFilter !== 'all' || dateFromFilter || dateToFilter) && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Сверка:</span>
               {companyFilter !== 'all' && <Badge variant="secondary">Наша компания: {selectedCompanyLabel}</Badge>}
               {partnerFilter !== 'all' && <Badge variant="secondary">Партнер: {selectedPartnerLabel}</Badge>}
-              {yearFilter !== 'all' && <Badge variant="secondary">Период: {selectedDateFilterLabel}</Badge>}
-              {businessSeasonFilter !== 'all' && <Badge variant="secondary">{dateFilterOptions.seasons.find((item) => item.value === businessSeasonFilter)?.label || 'Бизнес-сезон'}</Badge>}
               {(dateFromFilter || dateToFilter) && <Badge variant="secondary">Даты: {dateFromFilter || '…'} — {dateToFilter || '…'}</Badge>}
-              {periodFilter !== 'all' && <Badge variant="secondary">{periodFilter === 'has_periods' ? 'Есть периоды' : 'Без периодов'}</Badge>}
-              {auditPeriodTypeFilter !== 'all' && <Badge variant="secondary">{auditPeriodTypeLabel(auditPeriodTypeFilter)}</Badge>}
               <span className="ml-auto text-muted-foreground">
                 Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span>; записей в базе: <span className="font-medium text-foreground tabular-nums">{filteredDatabaseRecordCount}</span>
               </span>
@@ -4716,7 +4651,90 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           </Card>
         )}
 
-        {!wideProjectTable && (
+        <div className="min-w-0 overflow-hidden rounded-lg border bg-background" data-testid="project-summary-shell">
+          <ProjectTablePagination
+            page={safeTablePage}
+            pageCount={tablePageCount}
+            pageSize={tablePageSize}
+            start={tablePageStart}
+            end={tablePageEnd}
+            total={filteredRows.length}
+            onPageChange={setTablePage}
+            onPageSizeChange={(value) => {
+              setTablePageSize(value);
+              setTablePage(1);
+            }}
+          />
+          <table className="w-full table-fixed border-collapse text-sm" aria-label="Единый свод проектов">
+            <TableHeader>
+              <TableRow className="bg-muted/35 hover:bg-muted/35">
+                <TableHead className="h-auto px-3 py-3 sm:px-4">
+                  <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="font-semibold text-foreground">Единый свод · один проект = одна строка</div>
+                      <div className="mt-0.5 text-xs font-normal text-muted-foreground">Договор, компания, команда, сроки, часы, статус и бонусы находятся внутри одной строки проекта.</div>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-normal tabular-nums">
+                      <span>Проектов: <b className="text-foreground">{executiveSummary.totalProjects}</b></span>
+                      <span>В работе: <b className="text-foreground">{executiveSummary.activeProjects}</b></span>
+                      <span>Просрочено: <b className={executiveSummary.overdueProjects > 0 ? 'text-red-700' : 'text-foreground'}>{executiveSummary.overdueProjects}</b></span>
+                      {canSeeContractMoney && <span>Договоры: <b className="text-foreground">{displayMoney(executiveSummary.contractAmount)}</b></span>}
+                      {isExecutive && <span>Бонусный пул: <b className="text-foreground">{displayMoney(executiveSummary.plannedBonusPool)}</b></span>}
+                      {isExecutive && <span>К выплате: <b className="text-amber-700">{displayMoney(executiveSummary.approvedForPayment)}</b></span>}
+                      {isExecutive && <span>Выплачено: <b className="text-emerald-700">{displayMoney(executiveSummary.paidFromRegistry)}</b></span>}
+                    </div>
+                  </div>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {projectsLoading && (
+                <TableRow><TableCell className="py-12 text-center text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Загружаю проекты…</TableCell></TableRow>
+              )}
+              {!projectsLoading && filteredRows.length === 0 && (
+                <TableRow><TableCell className="py-12 text-center text-muted-foreground">{projectsError ? 'Проекты недоступны. Повторите загрузку выше.' : 'По текущим фильтрам проектов нет.'}</TableCell></TableRow>
+              )}
+              {!projectsLoading && visibleRows.map((row, rowIndex) => (
+                <TableRow key={`ledger-${row.id}`} className="align-top hover:bg-background" data-project-id={row.id} data-testid="project-ledger-row">
+                  <TableCell className="min-w-0 p-0 align-top">
+                    <div className="flex items-center gap-2 border-b bg-muted/15 px-3 py-2 sm:px-4">
+                      {canSelectProjects && (
+                        <input
+                          type="checkbox"
+                          checked={selectedProjectIds.has(row.id)}
+                          onChange={() => toggleProjectRowSelection(row)}
+                          aria-label={`Выбрать проект ${row.name}`}
+                          className="h-4 w-4 shrink-0 accent-primary"
+                        />
+                      )}
+                      <span className="text-[11px] font-medium text-muted-foreground tabular-nums">Строка {tablePageStart + rowIndex + 1} · ID {String(row.id).slice(0, 8)}</span>
+                      {row.contract?.number && <Badge variant="outline" className="ml-auto text-[10px]">Договор № {row.contract.number}</Badge>}
+                    </div>
+                    {renderProjectInlineDetail(row, false, true)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </table>
+          <ProjectTablePagination
+            page={safeTablePage}
+            pageCount={tablePageCount}
+            pageSize={tablePageSize}
+            start={tablePageStart}
+            end={tablePageEnd}
+            total={filteredRows.length}
+            onPageChange={(page) => {
+              setTablePage(page);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onPageSizeChange={(value) => {
+              setTablePageSize(value);
+              setTablePage(1);
+            }}
+          />
+        </div>
+
+        {LEGACY_PROJECT_VIEWS_ENABLED && !wideProjectTable && (
         <Card className="min-w-0 overflow-hidden" data-testid="project-summary-shell">
           <div className="border-b bg-sky-50/60 px-3 py-2 text-xs dark:bg-sky-950/20">
             <span className="font-semibold">Проекты:</span> нажмите «Открыть свод» — часы, деньги, команда и бонусы появятся прямо под проектом.
@@ -4869,7 +4887,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         </Card>
         )}
 
-        {wideProjectTable && (
+        {LEGACY_PROJECT_VIEWS_ENABLED && wideProjectTable && (
         <Card className="overflow-x-auto overflow-y-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-sky-50/60 px-3 py-2 text-xs dark:bg-sky-950/20">
             <div><span className="font-semibold">Общая таблица CEO:</span> одна строка — один проект.</div>
@@ -5924,7 +5942,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <AlertDialogHeader>
               <AlertDialogTitle>Заменить общую команду шаблоном партнёра?</AlertDialogTitle>
               <AlertDialogDescription>
-                «{projectTeamTemplateTargetDefinition?.label || 'Шаблон команды партнёра'}» заменит общую команду проекта «{projectTeamTemplateTargetRow?.name || 'проект'}» только после этого подтверждения. Команды, отдельно назначенные внутри периодов, договоры, часы, бонусные выплаты и файлы не изменятся.
+                «{projectTeamTemplateTargetDefinition?.label || 'Шаблон команды партнёра'}» заменит единый состав проекта «{projectTeamTemplateTargetRow?.name || 'проект'}» только после этого подтверждения. Договоры, сроки, часы, бонусные выплаты и файлы не изменятся.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -5971,7 +5989,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <AlertDialogHeader>
               <AlertDialogTitle>Назначить партнёра выбранным проектам?</AlertDialogTitle>
               <AlertDialogDescription>
-                Партнёр «{partnerEmployees.find((employee) => employee.id === bulkPartnerId) ? employeeName(partnerEmployees.find((employee) => employee.id === bulkPartnerId)) : 'не выбран'}» заменит только партнёра у {selectedProjectIds.size} проектов. Остальные участники общей команды и все команды периодов сохранятся. Шаблон команды автоматически не применяется.
+                Партнёр «{partnerEmployees.find((employee) => employee.id === bulkPartnerId) ? employeeName(partnerEmployees.find((employee) => employee.id === bulkPartnerId)) : 'не выбран'}» заменит только партнёра у {selectedProjectIds.size} проектов. Остальной исторический состав будет сохранён в единой команде проекта. Шаблон команды автоматически не применяется.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -5994,7 +6012,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <AlertDialogHeader>
               <AlertDialogTitle>Применить команду к выбранным проектам?</AlertDialogTitle>
               <AlertDialogDescription>
-                «{teamTemplates.find((template) => template.id === bulkTeamTemplateId)?.label || 'Шаблон не выбран'}» заменит общую команду у {selectedProjectIds.size} проектов. Отдельные команды внутри периодов, договоры, часы, бонусные выплаты и файлы не изменятся.
+                «{teamTemplates.find((template) => template.id === bulkTeamTemplateId)?.label || 'Шаблон не выбран'}» заменит единый состав у {selectedProjectIds.size} проектов. Договоры, сроки, часы, бонусные выплаты и файлы не изменятся.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -6018,7 +6036,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <AlertDialogHeader>
               <AlertDialogTitle>Назначить руководителя выбранным проектам?</AlertDialogTitle>
               <AlertDialogDescription>
-                Руководитель «{assignableEmployees.find((employee) => employee.id === bulkLeaderId) ? employeeName(assignableEmployees.find((employee) => employee.id === bulkLeaderId)) : 'не выбран'}» заменит текущего руководителя у {selectedProjectIds.size} проектов. Назначения, отдельно заданные в периодах, останутся без изменений.
+                Руководитель «{assignableEmployees.find((employee) => employee.id === bulkLeaderId) ? employeeName(assignableEmployees.find((employee) => employee.id === bulkLeaderId)) : 'не выбран'}» заменит текущего руководителя у {selectedProjectIds.size} проектов. Остальной исторический состав будет сохранён в единой команде проекта.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

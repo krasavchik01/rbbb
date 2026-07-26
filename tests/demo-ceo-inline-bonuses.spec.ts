@@ -26,21 +26,22 @@ function projectPatch(network: DemoNetworkJournal) {
 
 async function openDemoProjectInline(page: Parameters<typeof loginAsDemoRole>[0]) {
   const shell = page.getByTestId('project-summary-shell');
-  await shell.getByRole('button', { name: /Открыть свод/ }).first().click();
-  const detail = shell.getByTestId(`project-details-${DEMO_PROJECT_ID}`);
+  const row = shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`);
+  await expect(row).toHaveCount(1);
+  const detail = row.getByTestId(`project-details-${DEMO_PROJECT_ID}`);
   await expect(detail).toBeVisible();
   return detail;
 }
 
 test.describe('CEO inline project bonuses', () => {
-  test('one expand shows the project picture and every employee bonus, then collapses it', async ({ page }) => {
+  test('one project row shows the project picture and every employee bonus without another dashboard', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/projects');
     await waitForDemoApp(page);
 
     const shell = page.getByTestId('project-summary-shell');
     await expect(shell).toBeVisible();
-    await expect(shell.getByTestId(`project-details-${DEMO_PROJECT_ID}`)).toHaveCount(0);
+    await expect(shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`)).toHaveCount(1);
 
     const detail = await openDemoProjectInline(page);
     await expect(detail).toContainText(demoProject.name);
@@ -63,9 +64,6 @@ test.describe('CEO inline project bonuses', () => {
     }
     await expect(detail.getByTestId('project-advanced-content')).toHaveCount(0);
     await expect(page).toHaveURL(/\/projects$/);
-
-    await shell.getByRole('button', { name: /Свернуть/ }).first().click();
-    await expect(shell.getByTestId(`project-details-${DEMO_PROJECT_ID}`)).toHaveCount(0);
     expect(network.mutationRequests).toEqual([]);
     expect(network.productionMutations).toEqual([]);
   });
@@ -254,10 +252,10 @@ test.describe('CEO inline project bonuses', () => {
     await waitForDemoApp(page);
     const detail = await openDemoProjectInline(page);
     await expect(detail).toContainText(/В реестре ждёт\s*50\s*000/);
-    await expect(detail.getByRole('button', {
-      name: `Увеличить бонусный пул ${demoProject.name} на 50 000 тенге`,
-      exact: true,
-    })).toBeDisabled();
+    const bonuses = detail.getByTestId('project-bonus-editor');
+    await expect(bonuses).toContainText('Только просмотр');
+    await expect(bonuses.locator('input, button')).toHaveCount(0);
+    await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toHaveCount(0);
     expect(projectPatchRequests(network)).toHaveLength(0);
     expect(network.productionMutations).toEqual([]);
   });
@@ -269,10 +267,10 @@ test.describe('CEO inline project bonuses', () => {
     const detail = await openDemoProjectInline(page);
 
     await expect(detail).toContainText('Изменение бонусов доступно только генеральному директору');
-    await expect(detail.getByRole('button', {
-      name: `Увеличить бонусный пул ${demoProject.name} на 50 000 тенге`,
-      exact: true,
-    })).toBeDisabled();
+    const bonuses = detail.getByTestId('project-bonus-editor');
+    await expect(bonuses).toContainText('Только просмотр');
+    await expect(bonuses.locator('input, button')).toHaveCount(0);
+    await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toHaveCount(0);
     expect(projectPatchRequests(network)).toHaveLength(0);
     expect(network.productionMutations).toEqual([]);
   });

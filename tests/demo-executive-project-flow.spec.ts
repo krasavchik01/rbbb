@@ -18,17 +18,20 @@ async function visibleUnnamedButtons(page: Page) {
 }
 
 test.describe('executive demo: project to payment registry', () => {
-  test('CEO command center links company, contract subject, service, stage and period in one project passport', async ({ page }) => {
+  test('CEO command center keeps company, contract, dates, team and money in one project passport', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/projects');
     await waitForDemoApp(page);
 
     const shell = page.getByTestId('project-summary-shell');
-    await shell.getByRole('button', { name: /Открыть свод/ }).first().click();
-    const snapshot = shell.getByTestId(`project-details-${DEMO_PROJECT_ID}`);
+    const projectRow = shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`);
+    await expect(projectRow).toHaveCount(1);
+    const snapshot = projectRow.getByTestId(`project-details-${DEMO_PROJECT_ID}`);
     await expect(snapshot).toBeVisible();
     await expect(snapshot).toContainText('RBI Audit Kazakhstan');
-    await expect(snapshot).toContainText('Годовой аудит 2026');
+    await expect(snapshot).toContainText('DEMO-2026-001');
+    await expect(snapshot).toContainText('15.01.2026 — 20.12.2026');
+    await expect(snapshot).not.toContainText(/бизнес-сезон|audit period/i);
     await expect(snapshot).toContainText(/48\s*000\s*000\s*₸/);
     await expect(snapshot).toContainText('Демо Партнёр');
     await expect(snapshot).toContainText('Демо Менеджер');
@@ -41,9 +44,11 @@ test.describe('executive demo: project to payment registry', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    const projectLink = page.getByRole('link', { name: demoProject.name });
+    const projectRow = page.getByTestId('project-summary-shell').locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`);
+    await expect(projectRow).toContainText(demoProject.name);
+    await expect(projectRow).toContainText(/48\s*000\s*000\s*₸/);
+    const projectLink = projectRow.getByRole('link', { name: 'Файлы и договор', exact: true });
     await expect(projectLink).toBeVisible();
-    await expect(page.getByText(/48\s*000\s*000\s*₸/).first()).toBeVisible();
 
     await projectLink.click();
     await expect(page).toHaveURL(new RegExp(`/project/${DEMO_PROJECT_ID}$`));
@@ -64,7 +69,7 @@ test.describe('executive demo: project to payment registry', () => {
     await expect(page.getByText('Демо Ассистент').first()).toBeVisible();
     await expect(page.getByText('Сумма без НДС')).toBeVisible();
     await expect(page.getByText(/48\s*000\s*000\s*₸/).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Изменить состав' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Управлять в своде' })).toBeVisible();
     await expect(visibleUnnamedButtons(page)).resolves.toEqual([]);
     expect(network.productionMutations).toEqual([]);
     expect(network.unhandledRequests).toEqual([]);
@@ -74,9 +79,13 @@ test.describe('executive demo: project to payment registry', () => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto(`/project/${DEMO_PROJECT_ID}`);
     await waitForDemoApp(page);
-    await page.getByRole('button', { name: 'Изменить состав' }).click();
-    await expect(page.getByRole('dialog')).toContainText('Назначение команды проекта');
-    await expect(page.getByRole('dialog')).toContainText('Назначено: 3');
+    await page.getByRole('button', { name: 'Управлять в своде' }).click();
+    await expect(page).toHaveURL(/\/projects\?q=/);
+    await waitForDemoApp(page);
+    const row = page.getByTestId('project-summary-shell').locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`);
+    await expect(row).toContainText('Команда · 3 чел.');
+    await expect(row.getByRole('button', { name: `Партнёр проекта ${demoProject.name}`, exact: true })).toBeVisible();
+    await expect(row.getByRole('button', { name: `Руководитель проекта ${demoProject.name}`, exact: true })).toBeVisible();
     expect(network.productionMutations).toEqual([]);
 
   });
@@ -90,6 +99,7 @@ test.describe('executive demo: project to payment registry', () => {
     await expect(page.getByText('Демо Менеджер').first()).toBeVisible();
     await expect(page.getByText('Демо Ассистент').first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Изменить состав' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Управлять в своде' })).toHaveCount(0);
     await page.getByRole('tab', { name: /Договор/ }).click();
     await expect(page.getByText(/48\s*000\s*000/).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Редактировать' })).toHaveCount(0);

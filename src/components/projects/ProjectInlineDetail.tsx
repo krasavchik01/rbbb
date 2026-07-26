@@ -110,6 +110,10 @@ export interface ProjectInlineDetailProps {
   onResetPoolFormula?: () => Promise<boolean>;
   onEmployeeAmountCommit?: (employeeId: string, amount: number) => Promise<boolean>;
   onResetEmployeeFormula?: (employeeId: string) => Promise<boolean>;
+  /** Render directly inside a command-center table row, without a nested card shell. */
+  embedded?: boolean;
+  /** Role-aware controls supplied by the command center (team, status, dates). */
+  managementControls?: ReactNode;
 }
 
 const moneyFormatter = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
@@ -168,18 +172,23 @@ export function ProjectInlineDetail({
   onResetPoolFormula,
   onEmployeeAmountCommit,
   onResetEmployeeFormula,
+  embedded = false,
+  managementControls,
 }: ProjectInlineDetailProps) {
   const approvedHours = safePositive(hours.approved);
   const pendingHours = safePositive(hours.pending);
   const totalHours = approvedHours + pendingHours;
   const approvedWidth = safePercent(approvedHours, totalHours);
   const pendingWidth = totalHours > 0 ? Math.max(0, 100 - approvedWidth) : 0;
+  const Root = embedded ? 'div' : Card;
   return (
-    <Card
+    <Root
       id={`project-details-${projectId}`}
-      className="min-w-0 max-w-full overflow-hidden border-slate-200 shadow-sm dark:border-slate-800"
+      className={embedded
+        ? 'min-w-0 max-w-full overflow-hidden bg-background'
+        : 'min-w-0 max-w-full overflow-hidden border-slate-200 shadow-sm dark:border-slate-800'}
       data-testid={`project-details-${projectId}`}
-      data-project-id={projectId}
+      data-project-id={embedded ? undefined : projectId}
       aria-label={`Свод проекта ${name}`}
     >
       <div className="flex min-w-0 flex-col gap-3 border-b bg-gradient-to-r from-background to-sky-50/60 px-3 py-3 dark:to-sky-950/20 sm:px-4 lg:flex-row lg:items-start lg:justify-between">
@@ -189,7 +198,11 @@ export function ProjectInlineDetail({
             <Badge variant="outline" className={toneClasses[statusTone]}>{statusLabel}</Badge>
           </div>
           <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
-            {[company, client, serviceType].filter(Boolean).join(' · ') || 'Основные данные проекта не указаны'}
+            {[
+              company ? `Наша компания: ${company}` : '',
+              client ? `Клиент: ${client}` : '',
+              serviceType ? `Услуга: ${serviceType}` : '',
+            ].filter(Boolean).join(' · ') || 'Основные данные проекта не указаны'}
           </p>
           {issues.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Что требует внимания">
@@ -203,7 +216,7 @@ export function ProjectInlineDetail({
         </div>
         <div className="flex w-full flex-wrap gap-2 lg:w-auto lg:justify-end">
           <Button asChild type="button" variant="outline" size="sm" className="h-10 min-w-0 flex-1 sm:flex-none">
-            <Link to={`/project/${projectId}`}>Открыть проект <ExternalLink className="ml-1.5 h-3.5 w-3.5" /></Link>
+            <Link to={`/project/${projectId}`}>Файлы и договор <ExternalLink className="ml-1.5 h-3.5 w-3.5" /></Link>
           </Button>
           {showAdvancedToggle && <Button
             type="button"
@@ -220,14 +233,20 @@ export function ProjectInlineDetail({
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-2 gap-px bg-border" data-testid="project-inline-facts">
+      {managementControls && (
+        <section className="min-w-0 border-b bg-background px-3 py-3 sm:px-4" aria-label="Управление проектом">
+          {managementControls}
+        </section>
+      )}
+
+      <div className={`grid min-w-0 grid-cols-2 gap-px bg-border ${embedded ? 'lg:grid-cols-4' : ''}`} data-testid="project-inline-facts">
         <FactCard icon={<Users className="h-4 w-4" />} label="Команда">
           <div className="font-semibold">{Math.max(0, team.count)} чел.</div>
           <div className="mt-1 break-words text-[11px] leading-4 text-muted-foreground">
             Партнёр: {team.partnerName || '—'}<br />Руководитель: {team.leaderName || '—'}
           </div>
         </FactCard>
-        <FactCard icon={<CalendarClock className="h-4 w-4" />} label="Срок">
+        <FactCard icon={<CalendarClock className="h-4 w-4" />} label="Сроки проекта">
           <div className="break-words font-semibold tabular-nums">{deadline.rangeLabel || 'Не указан'}</div>
           <Badge variant="outline" className={`mt-1.5 max-w-full whitespace-normal text-[10px] ${toneClasses[deadline.tone || 'neutral']}`}>
             {deadline.stateLabel || 'Нет оценки срока'}
@@ -251,7 +270,7 @@ export function ProjectInlineDetail({
         </FactCard>
         <FactCard icon={<FileText className="h-4 w-4" />} label="Договор">
           <div className="break-words font-semibold">{contract.number ? `№ ${contract.number}` : 'Номер не указан'}</div>
-          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">{formatMoney(finances.contractAmount)} · {Math.max(0, contract.filesCount)} файл(а)</div>
+          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">Сумма без НДС: {formatMoney(finances.contractAmount)} · {Math.max(0, contract.filesCount)} файл(а)</div>
         </FactCard>
       </div>
 
@@ -280,6 +299,7 @@ export function ProjectInlineDetail({
           onResetPoolFormula={onResetPoolFormula}
           onEmployeeAmountCommit={onEmployeeAmountCommit}
           onResetEmployeeFormula={onResetEmployeeFormula}
+          compact={embedded}
         />
       )}
 
@@ -288,7 +308,7 @@ export function ProjectInlineDetail({
           {advancedContent}
         </div>
       )}
-    </Card>
+    </Root>
   );
 }
 
@@ -335,6 +355,7 @@ function BonusEditor({
   onResetPoolFormula,
   onEmployeeAmountCommit,
   onResetEmployeeFormula,
+  compact = false,
 }: {
   projectId: string;
   projectName: string;
@@ -345,6 +366,7 @@ function BonusEditor({
   onResetPoolFormula?: () => Promise<boolean>;
   onEmployeeAmountCommit?: (employeeId: string, amount: number) => Promise<boolean>;
   onResetEmployeeFormula?: (employeeId: string) => Promise<boolean>;
+  compact?: boolean;
 }) {
   const pool = safePositive(bonuses.poolAmount);
   const allocated = safePositive(finances.allocatedBonusAmount);
@@ -385,8 +407,13 @@ function BonusEditor({
             <Badge variant="outline" className={bonuses.manuallyAdjusted ? toneClasses.warning : toneClasses.info}>
               {bonuses.manuallyAdjusted ? 'Пул задан вручную' : 'Пул по формуле'}
             </Badge>
+            {!editable && <Badge variant="outline" className={toneClasses.neutral}>Только просмотр</Badge>}
           </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Пул и суммы каждого сотрудника меняются прямо здесь. Реальная выплата подтверждается платёжным реестром.</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {editable
+              ? 'Пул и суммы каждого сотрудника меняются прямо здесь. Реальная выплата подтверждается платёжным реестром.'
+              : 'Точный пул, распределение и выплаты показаны без права изменения. Редактирование выполняет генеральный директор.'}
+          </p>
         </div>
         {bonuses.lockedReason && (
           <div className="max-w-full rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-sm">
@@ -396,8 +423,8 @@ function BonusEditor({
       </div>
 
       <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
-        <BonusFact label="Пул" value={formatMoney(pool)} />
-        <BonusFact label="Распределено" value={formatMoney(allocated)} />
+        <BonusFact label="Бонусный пул" value={formatMoney(pool)} />
+        <BonusFact label="Итого бонусов" value={formatMoney(allocated)} />
         <BonusFact label={overallocated ? 'Сверх пула' : 'Остаток'} value={formatMoney(Math.abs(remainder))} tone={overallocated ? 'danger' : remainder > 0 ? 'warning' : 'positive'} />
         <BonusFact
           label="Статус выплаты"
@@ -423,7 +450,7 @@ function BonusEditor({
         </div>
       </div>
 
-      <div className="mt-3 rounded-lg border bg-background p-3" data-testid={`project-bonus-pool-${projectId}`}>
+      {editable && <div className="mt-3 rounded-lg border bg-background p-3" data-testid={`project-bonus-pool-${projectId}`}>
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 text-xs font-medium">Сумма бонусного пула</div>
@@ -450,9 +477,9 @@ function BonusEditor({
           <span>{bonuses.formulaPoolAmount == null ? 'Формульная сумма не рассчитана' : `По формуле: ${formatMoney(bonuses.formulaPoolAmount)}`}</span>
           <Button type="button" variant="ghost" size="sm" className="h-10 max-w-full whitespace-normal px-2 text-xs" disabled={!editable || !onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Вернуть по формуле</Button>
         </div>
-      </div>
+      </div>}
 
-      <div className="mt-3 space-y-2" aria-label="Бонусы сотрудников">
+      <div className={compact ? 'mt-3 grid min-w-0 gap-2 md:grid-cols-2 2xl:grid-cols-3' : 'mt-3 space-y-2'} aria-label="Бонусы сотрудников">
         {bonuses.employees.length === 0 ? (
           <div className="rounded-lg border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">Сначала назначьте команду проекта.</div>
         ) : bonuses.employees.map((employee) => (
@@ -464,6 +491,7 @@ function BonusEditor({
             registryState={registryState}
             onAmountCommit={onEmployeeAmountCommit}
             onResetFormula={onResetEmployeeFormula}
+            compact={compact}
           />
         ))}
       </div>
@@ -497,6 +525,7 @@ function EmployeeBonusRow({
   registryState,
   onAmountCommit,
   onResetFormula,
+  compact = false,
 }: {
   projectId: string;
   employee: ProjectInlineBonusEmployee;
@@ -504,6 +533,7 @@ function EmployeeBonusRow({
   registryState: ProjectInlineDataState;
   onAmountCommit?: (employeeId: string, amount: number) => Promise<boolean>;
   onResetFormula?: (employeeId: string) => Promise<boolean>;
+  compact?: boolean;
 }) {
   const editable = globallyEditable && employee.editable !== false;
   const [resetBusy, setResetBusy] = useState(false);
@@ -519,7 +549,7 @@ function EmployeeBonusRow({
   };
 
   return (
-    <div className="min-w-0 rounded-lg border bg-background p-3" data-testid={`member-bonus-${projectId}-${employee.id}`} data-employee-id={employee.id}>
+    <div className={`min-w-0 rounded-lg border bg-background ${compact ? 'p-2.5' : 'p-3'}`} data-testid={`member-bonus-${projectId}-${employee.id}`} data-employee-id={employee.id}>
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
@@ -532,7 +562,7 @@ function EmployeeBonusRow({
         <PaymentStatus employee={employee} registryState={registryState} />
       </div>
 
-      <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      {editable ? <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <div className="min-w-0">
           <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-1 text-xs">
             <span className="font-medium">Итоговый бонус</span>
@@ -549,8 +579,16 @@ function EmployeeBonusRow({
           />
         </div>
         <Button type="button" variant="ghost" size="sm" className="h-10 w-full whitespace-normal px-2 text-xs sm:w-auto" disabled={!editable || !onResetFormula || resetBusy} onClick={() => void resetFormula()} data-testid={`employee-bonus-reset-${employee.id}`}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />По формуле</Button>
-      </div>
-      {employee.lockedReason && <div className="mt-2 text-[11px] leading-4 text-amber-800 dark:text-amber-200">{employee.lockedReason}</div>}
+      </div> : (
+        <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2" data-testid={`employee-bonus-readonly-${employee.id}`}>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium">Итоговый бонус</span>
+            <span className="text-base font-semibold tabular-nums">{formatMoney(safePositive(employee.amount))}</span>
+          </div>
+          {employee.percent != null && <div className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">{employee.percent.toFixed(1)}% от пула</div>}
+        </div>
+      )}
+      {employee.lockedReason && globallyEditable && <div className="mt-2 text-[11px] leading-4 text-amber-800 dark:text-amber-200">{employee.lockedReason}</div>}
     </div>
   );
 }

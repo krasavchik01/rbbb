@@ -90,7 +90,7 @@ export function buildProjectStageMetrics(projects: any[] = []): ProjectStageMetr
       shortTitle: 'Закупки',
       count: counts.procurement_added,
       hint: 'ждёт решения CEO/замдира',
-      route: '/project-approval',
+      route: '/projects?view=attention',
       tone: 'amber',
     },
     {
@@ -99,7 +99,7 @@ export function buildProjectStageMetrics(projects: any[] = []): ProjectStageMetr
       shortTitle: 'Без команды',
       count: counts.awaiting_team,
       hint: 'нужно назначить партнёра/PM/команду',
-      route: '/assign-partners',
+      route: '/projects?view=no_partner',
       tone: 'orange',
     },
     {
@@ -117,7 +117,7 @@ export function buildProjectStageMetrics(projects: any[] = []): ProjectStageMetr
       shortTitle: 'Закрытие',
       count: counts.ready_for_closure,
       hint: 'проверить часы, финансы и бонусы',
-      route: '/bonuses',
+      route: '/projects?view=ready_bonus',
       tone: 'violet',
     },
     {

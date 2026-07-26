@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
-import { TEAM_ROLE_SLOTS } from "@/types/roles";
+import { PROJECT_ROLES, TEAM_ROLE_SLOTS } from "@/types/roles";
 
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
@@ -35,14 +35,17 @@ import { ProjectFileManager } from "@/components/projects/ProjectFileManager";
 // TemplateManager, WorkPaperTree, WorkPaperViewer removed
 import { ContractEditor } from "@/components/projects/ContractEditor";
 import { ProjectEditProcurement } from "@/components/projects/ProjectEditProcurement";
-import { AuditPeriodsEditor } from "@/components/projects/AuditPeriodsEditor";
 import Tasks from "@/pages/Tasks";
 // WorkPaper types removed
 import { ProjectAmendment } from "@/types/project-v3";
-import type { AuditPeriod } from "@/lib/auditPeriods";
 import { TeamAssignment } from "@/components/projects/TeamAssignment";
 import { useMemo } from "react";
 import { getProjectStatusLabel, isTaskDoneStatus } from "@/lib/projectWorkflow";
+import {
+  canonicalTeamMarkerPatch,
+  effectiveProjectTeam,
+  projectForFinanceCalculation,
+} from "@/lib/projectLegacyCompatibility";
 import {
   buildContractUpdate,
   projectContract as readProjectContract,
@@ -51,6 +54,10 @@ import {
   projectFinances as readProjectFinances,
   projectStartDate as readProjectStartDate,
 } from "@/lib/contractData";
+
+// The former slot dialog wrote a second team source. Team management is now
+// performed only in the canonical /projects ledger.
+const LEGACY_SLOT_EDITOR_ENABLED: boolean = false;
 
 const mapProjectAmendmentRecord = (record: any): ProjectAmendment => ({
   id: String(record.id || `amend_${Date.now()}`),
@@ -167,8 +174,8 @@ function ProjectFlatSummary({
   onEditTeam,
   canSeeFinance,
 }: ProjectFlatSummaryProps) {
-  const team = project.team || project.notes?.team || [];
-  const periods = project.notes?.auditPeriods || project.auditPeriods || [];
+  const team = effectiveProjectTeam(project);
+  const stages = project.stages || project.notes?.stages || [];
   const completedTasks = projectTasks.filter((task: any) => isTaskDoneStatus(task.status)).length;
   const pendingTasks = projectTasks.length - completedTasks;
   const approvedHours = Number(projectHours?.approved || 0);
@@ -178,9 +185,9 @@ function ProjectFlatSummary({
     const name = employee?.name || member.name || member.userName || member.employeeName || 'Не назначен';
     return `${teamRoleLabel(member.role)}: ${name}`;
   }).join('\n');
-  const periodText = periods.length
-    ? periods.map((period: any) => `${textCell(period.name || period.title, 'Период')} · ${dateRangeCell(period.startDate, period.endDate || period.deadline)} · ${textCell(period.status, 'статус не указан')}`).join('\n')
-    : 'Периоды не заведены';
+  const stageText = stages.length
+    ? stages.map((stage: any) => `${textCell(stage.name || stage.title, 'Этап')} · ${dateRangeCell(stage.startDate, stage.endDate || stage.deadline)}`).join('\n')
+    : 'Этапы не добавлены';
   const fileText = normalizedFiles.length
     ? normalizedFiles.map((file: any) => file.name || file.fileName || file.path || 'Файл').join('\n')
     : 'Файлы не прикреплены';
@@ -221,7 +228,7 @@ function ProjectFlatSummary({
             </tr>
             <tr className={rowClass}><th className={labelClass}>Договор</th><td className={valueClass}>№{textCell(normalizedContract?.number, 'не указан')} · {dateCell(normalizedContract?.date)}\n{textCell(normalizedContract?.subject)}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Сроки</th><td className={valueClass}>{dateRangeCell(normalizedStartDate || normalizedContract?.serviceStartDate, normalizedDeadline || normalizedContract?.serviceEndDate)}</td></tr>
-            <tr className={rowClass}><th className={labelClass}>Этапы / периоды</th><td className={valueClass}>{periodText}</td></tr>
+            <tr className={rowClass}><th className={labelClass}>Этапы проекта</th><td className={valueClass}>{stageText}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Задачи</th><td className={valueClass}>{completedTasks} из {projectTasks.length} выполнено · в работе: {pendingTasks}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Часы</th><td className={valueClass}>{approvedHours}ч утверждено{pendingHours > 0 ? ` · +${pendingHours}ч ждут партнёра` : ''}</td></tr>
             <tr className={rowClass}>
@@ -229,7 +236,7 @@ function ProjectFlatSummary({
               <td className={valueClass}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <span>{teamByRole || 'Команда пока не назначена'}</span>
-                  {canEditTeam && <Button type="button" size="sm" variant="outline" onClick={onEditTeam}><Edit className="mr-2 h-4 w-4" />Изменить состав</Button>}
+                  {canEditTeam && <Button type="button" size="sm" variant="outline" onClick={onEditTeam}><Edit className="mr-2 h-4 w-4" />Управлять в своде</Button>}
                 </div>
               </td>
             </tr>
@@ -269,6 +276,7 @@ export default function ProjectWorkspace() {
   const [showTeamDialog, setShowTeamDialog] = useState(false);
   // Слоты команды: роль → ID сотрудника (или null)
   const [teamSlots, setTeamSlots] = useState<Record<string, string | null>>({});
+  const [initialTeamSlots] = useState<Record<string, string | null>>({});
   const [, setOpenSlotDropdown] = useState<string | null>(null);
   const [, setSlotSearch] = useState('');
   const [addingNewInSlot, setAddingNewInSlot] = useState<string | null>(null);
@@ -291,18 +299,10 @@ export default function ProjectWorkspace() {
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
   const canManageProjectCompany = isCEO || isAdmin || isDeputy;
-  const canEditAuditPeriods = isPartner || isAdmin || isCEO || isDeputy;
   const projectStatus = project?.notes?.status || project?.status;
-  // Управление командой: admin/ceo — всегда, deputy_director — пока проект не
-  // ушёл в активную работу (этап распределения/сборки команды). Партнёр, PM,
-  // ассистенты и т.д. команду менять не могут.
-  const hasTeamYet = !!(project?.team?.length || project?.notes?.team?.length);
-  const isAssemblyPhase = !hasTeamYet
-    || projectStatus === 'approved'
-    || projectStatus === 'team_assembled'
-    || projectStatus === 'new'
-    || projectStatus === 'pending_approval';
-  const canEditTeam = isAdmin || isCEO || (isDeputy && isAssemblyPhase);
+  // Единая команда проекта управляется CEO, администратором и замдиректора
+  // на любой стадии проекта.
+  const canEditTeam = isAdmin || isCEO || isDeputy;
 
   const isCompleted = projectStatus === 'completed' || projectStatus === 'closed' || projectStatus === 'Завершён';
   const isInProgress = projectStatus === 'in_progress' || projectStatus === 'active' || projectStatus === 'В работе';
@@ -418,27 +418,13 @@ export default function ProjectWorkspace() {
     );
   }, [id, allTasks, project]);
 
-  // Загрузить существующую команду в слоты
-  const loadTeamIntoSlots = useCallback((proj: any) => {
-    const existingTeam = proj?.team || proj?.notes?.team || [];
-    const slots: Record<string, string | null> = {};
-    existingTeam.forEach((m: any) => {
-      const slotKey = m.slotKey || m.role || '';
-      if (slotKey) {
-        slots[slotKey] = m.userId || m.id || null;
-      }
-    });
-    setTeamSlots(slots);
-  }, []);
-
   // Открыть диалог назначения команды если пришли с флагом — но только если
   // у пользователя есть право редактировать команду.
   useEffect(() => {
     if (openTeamAssignment && project && canEditTeam) {
-      setShowTeamDialog(true);
-      loadTeamIntoSlots(project);
+      navigate(`/projects?q=${encodeURIComponent(project.name || '')}`, { replace: true });
     }
-  }, [openTeamAssignment, project, loadTeamIntoSlots, canEditTeam]);
+  }, [openTeamAssignment, project, canEditTeam, navigate]);
 
   // Загрузка дополнительных соглашений из JSON проекта
   useEffect(() => {
@@ -564,25 +550,6 @@ export default function ProjectWorkspace() {
     // Если projects.length === 0, просто ждем следующего рендера (проекты еще загружаются)
   }, [id, projects, loadProjectData, projectFromState, project]);
 
-  const saveAuditPeriods = async (periods: AuditPeriod[]) => {
-    const projectId = project?.id || project?.notes?.id || id;
-    if (!projectId) return;
-
-    await supabaseDataStore.updateProject(projectId, {
-      ...(project?.notes || {}),
-      auditPeriods: periods,
-    });
-    setProject((prev: any) => ({
-      ...prev,
-      auditPeriods: periods,
-      notes: { ...(prev?.notes || {}), auditPeriods: periods },
-    }));
-    toast({
-      title: 'Периоды обновлены',
-      description: 'Изменения сохранены внутри проекта.',
-    });
-  };
-
   if (!project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -676,8 +643,7 @@ export default function ProjectWorkspace() {
         isSavingCompany={isSavingCompany}
         canEditTeam={canEditTeam}
         onEditTeam={() => {
-          loadTeamIntoSlots(project);
-          setShowTeamDialog(true);
+          navigate(`/projects?q=${encodeURIComponent(project.name || '')}`);
         }}
         canSeeFinance={Boolean(
           (project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || ''))
@@ -687,10 +653,9 @@ export default function ProjectWorkspace() {
       />
 
       {/* Вкладки оставлены только для редактирования/детальных рабочих операций. Основная информация выше в своде. */}
-      <Tabs defaultValue={isProcurement ? "files" : "periods"} className="w-full">
+      <Tabs defaultValue="files" className="w-full">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">✅ Задачи</TabsTrigger>}
-          <TabsTrigger value="periods" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📆 Периоды</TabsTrigger>
           <TabsTrigger value="files" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📁 Файлы</TabsTrigger>
           <TabsTrigger value="contract" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📜 Договор</TabsTrigger>
         </TabsList>
@@ -701,16 +666,6 @@ export default function ProjectWorkspace() {
             <Tasks projectId={project?.id || id} embedded />
           </TabsContent>
         )}
-
-        <TabsContent value="periods" className="space-y-4 mt-4">
-          <AuditPeriodsEditor
-            project={project}
-            employees={employees || []}
-            currentUserId={user?.id}
-            canEdit={canEditAuditPeriods}
-            onSave={saveAuditPeriods}
-          />
-        </TabsContent>
 
         {/* Вкладка файлов */}
         <TabsContent value="files" className="space-y-4 mt-4">
@@ -989,47 +944,51 @@ export default function ProjectWorkspace() {
                   //   approved/in_progress/planning → ready_to_complete (PM «Готов к закрытию»)
                   //   ready_to_complete → pending_payment_approval (партнёр «Утверждаю»)
                   const nextStatus = isReadyToComplete ? 'pending_payment_approval' : 'ready_to_complete';
-                  const updatedProject = {
-                    ...project,
-                    status: nextStatus,
-                    notes: {
-                      ...project.notes,
+                  const savedProject = await supabaseDataStore.updateProject(project.id, (currentProject: any) => {
+                    const effectiveTeam = effectiveProjectTeam(currentProject);
+                    const teamMarker = canonicalTeamMarkerPatch(currentProject, effectiveTeam);
+                    const statusAudit = nextStatus === 'ready_to_complete'
+                      ? {
+                          markedReadyAt: new Date().toISOString(),
+                          markedReadyBy: user.id,
+                        }
+                      : {
+                          submittedForPaymentApprovalAt: new Date().toISOString(),
+                          submittedForPaymentApprovalBy: user.id,
+                        };
+                    const nextNotes = {
+                      ...(currentProject.notes || {}),
+                      ...teamMarker,
                       status: nextStatus,
-                      ...(nextStatus === 'ready_to_complete'
-                        ? {
-                            markedReadyAt: new Date().toISOString(),
-                            markedReadyBy: user.id,
-                          }
-                        : {
-                            submittedForPaymentApprovalAt: new Date().toISOString(),
-                            submittedForPaymentApprovalBy: user.id,
-                          }),
-                    }
-                  };
+                      ...statusAudit,
+                    };
+                    const nextProject = {
+                      ...currentProject,
+                      ...teamMarker,
+                      status: nextStatus,
+                      notes: nextNotes,
+                    };
+                    const finances = calculateProjectFinances(projectForFinanceCalculation(nextProject));
 
-                  // Сохраняем в Supabase
-                  await supabaseDataStore.updateProject(project.id, updatedProject);
-
-                  // Рассчитываем финансы и бонусы
-                  const finances = calculateProjectFinances(updatedProject);
-
-                  // Обновляем финансы проекта
-                  const projectWithFinances = {
-                    ...updatedProject,
-                    finances: {
-                      ...updatedProject.finances,
-                      ...finances
-                    }
-                  };
-
-                  await supabaseDataStore.updateProject(project.id, projectWithFinances);
+                    return {
+                      ...teamMarker,
+                      status: nextStatus,
+                      finances,
+                      notes: {
+                        ...nextNotes,
+                        finances,
+                      },
+                    };
+                  });
+                  if (!savedProject) throw new Error('Не удалось сохранить проект');
+                  const updatedProject = savedProject;
 
                   // Уведомления по этапу:
                   //  - nextStatus = ready_to_complete (PM «Готов») → уведомить ПАРТНЁРА проекта
                   //  - nextStatus = pending_payment_approval (партнёр «Утверждаю») → уведомить CEO/admin
                   const team = updatedProject.team || [];
                   const partner = team.find((m: any) => m.role === 'partner');
-                  const projectName = updatedProject.name || updatedProject.title || 'Проект';
+                  const projectName = updatedProject.name || 'Проект';
 
                   if (nextStatus === 'ready_to_complete' && partner?.userId) {
                     notifyReadyForPartnerApproval({
@@ -1058,7 +1017,7 @@ export default function ProjectWorkspace() {
                   setShowCompleteDialog(false);
 
                   // Обновляем проект в локальном состоянии
-                  setProject(projectWithFinances);
+                  setProject(updatedProject);
 
                   // Перезагружаем страницу через 2 секунды
                   setTimeout(() => {
@@ -1083,6 +1042,7 @@ export default function ProjectWorkspace() {
 
       {/* Диалог назначения команды — слоты по ролям. Только для admin/ceo и
           для зам.директора пока проект на стадии сборки команды. */}
+      {LEGACY_SLOT_EDITOR_ENABLED && (
       <Dialog open={showTeamDialog && canEditTeam} onOpenChange={(open) => {
         setShowTeamDialog(open);
         if (!open) {
@@ -1128,7 +1088,7 @@ export default function ProjectWorkspace() {
                   className="h-10 text-sm"
                   autoFocus
                 />
-                {addingNewInSlot.startsWith('gph') && (
+                {addingNewInSlot!.startsWith('gph') && (
                   <div className="flex gap-2">
                     <Button
                       variant={newEmployeeType === 'gph' ? 'default' : 'outline'}
@@ -1164,7 +1124,7 @@ export default function ProjectWorkspace() {
                     onClick={async () => {
                       try {
                         const slot = TEAM_ROLE_SLOTS.find(s => s.key === addingNewInSlot)!;
-                        const empRole = addingNewInSlot.startsWith('gph')
+                        const empRole = addingNewInSlot!.startsWith('gph')
                           ? (newEmployeeType === 'gph' ? 'employee' : 'employee')
                           : (slot.roles[0] || 'employee');
 
@@ -1181,7 +1141,7 @@ export default function ProjectWorkspace() {
 
                         if (error) throw error;
 
-                        setTeamSlots(prev => ({ ...prev, [addingNewInSlot]: newEmp.id }));
+                        setTeamSlots(prev => ({ ...prev, [addingNewInSlot!]: newEmp.id }));
                         setAddingNewInSlot(null);
                         setNewEmployeeName('');
 
@@ -1218,44 +1178,91 @@ export default function ProjectWorkspace() {
               <Button
                 onClick={async () => {
                   try {
-                    // Формируем команду из слотов
-                    const existingTeam = project?.team || project?.notes?.team || [];
+                    // Односоставный редактор слотов не должен молча удалять
+                    // дополнительные, legacy- или многократные назначения.
+                    const existingTeam = effectiveProjectTeam(project);
                     const existingMemberIds = new Set(
                       existingTeam.map((m: any) => m?.userId || m?.id || m?.employeeId).filter(Boolean),
                     );
-                    const fullTeam = TEAM_ROLE_SLOTS
-                      .filter(slot => teamSlots[slot.key])
-                      .map(slot => {
-                        const empId = teamSlots[slot.key]!;
-                        const emp = (employees || []).find((e: any) => e.id === empId);
-                        const isGph = slot.key.startsWith('gph');
-                        return {
-                          userId: empId,
-                          name: emp?.name || '',
-                          userName: emp?.name || '',
-                          role: emp?.role || slot.label,
-                          slotKey: slot.key,
-                          type: isGph ? (newEmployeeType || 'gph') : 'staff',
-                          assignedAt: new Date().toISOString(),
-                          assignedBy: user?.id || '',
-                        };
+                    const editableSlotKeys = new Set(TEAM_ROLE_SLOTS.map((slot) => slot.key));
+                    const preservedTeam = existingTeam.filter((member: any) => {
+                      const slotKey = member?.slotKey || member?.role || '';
+                      if (!editableSlotKeys.has(slotKey)) return true;
+
+                      const memberId = member?.userId || member?.id || member?.employeeId || null;
+                      const initiallyDisplayedId = initialTeamSlots[slotKey] || null;
+                      if (!initiallyDisplayedId || memberId !== initiallyDisplayedId) {
+                        // A second occupant of the same slot was never shown by
+                        // this legacy single-select control, so preserve it.
+                        return true;
+                      }
+                      return teamSlots[slotKey] === initiallyDisplayedId;
+                    });
+                    const fullTeam = [...preservedTeam];
+
+                    for (const slot of TEAM_ROLE_SLOTS) {
+                      const empId = teamSlots[slot.key];
+                      if (!empId) continue;
+                      const alreadyPresent = fullTeam.some((member: any) => (
+                        (member?.userId || member?.id || member?.employeeId) === empId
+                        && (member?.slotKey || member?.role) === slot.key
+                      ));
+                      if (alreadyPresent) continue;
+
+                      const emp = (employees || []).find((item: any) => item.id === empId);
+                      const isGph = slot.key.startsWith('gph');
+                      const projectRole = isGph ? 'contractor' : slot.key;
+                      const defaultBonusPercent = isGph
+                        ? 0
+                        : Number(PROJECT_ROLES.find((item) => item.role === projectRole)?.bonusPercent || 0);
+                      fullTeam.push({
+                        userId: empId,
+                        name: emp?.name || '',
+                        userName: emp?.name || '',
+                        userEmail: emp?.email,
+                        role: projectRole,
+                        bonusPercent: defaultBonusPercent,
+                        slotKey: slot.key,
+                        type: isGph ? (newEmployeeType || 'gph') : 'staff',
+                        assignedAt: new Date().toISOString(),
+                        assignedBy: user?.id || '',
                       });
+                    }
 
                     const projectId = project?.id || project?.notes?.id || id;
                     const nextStatus = fullTeam.length > 0 ? 'in_progress' : (project?.notes?.status || project?.status || 'approved');
-                    const updatedNotes = {
-                      ...(project?.notes || {}),
-                      team: fullTeam,
-                      status: nextStatus,
-                      teamAssembledAt: fullTeam.length > 0 ? new Date().toISOString() : project?.notes?.teamAssembledAt,
-                      teamAssembledBy: fullTeam.length > 0 ? (user?.id || '') : project?.notes?.teamAssembledBy,
-                    };
 
-                    await supabaseDataStore.updateProject(projectId, {
-                      team: fullTeam,
-                      status: nextStatus,
-                      notes: updatedNotes
+                    const savedTeamProject = await supabaseDataStore.updateProject(projectId, (currentProject: any) => {
+                      const latestMarker = canonicalTeamMarkerPatch(currentProject, fullTeam);
+                      const latestNotes = {
+                        ...(currentProject.notes || {}),
+                        ...latestMarker,
+                        status: nextStatus,
+                        teamAssembledAt: fullTeam.length > 0
+                          ? new Date().toISOString()
+                          : currentProject.notes?.teamAssembledAt,
+                        teamAssembledBy: fullTeam.length > 0
+                          ? (user?.id || '')
+                          : currentProject.notes?.teamAssembledBy,
+                      };
+                      const latestProject = {
+                        ...currentProject,
+                        ...latestMarker,
+                        status: nextStatus,
+                        notes: latestNotes,
+                      };
+                      const finances = calculateProjectFinances(projectForFinanceCalculation(latestProject));
+                      return {
+                        ...latestMarker,
+                        status: nextStatus,
+                        finances,
+                        notes: {
+                          ...latestNotes,
+                          finances,
+                        },
+                      };
                     });
+                    if (!savedTeamProject) throw new Error('Не удалось сохранить команду проекта');
 
                     const projectName = project?.name || project?.title || project?.notes?.name || 'Проект';
                     const notifyIds = fullTeam
@@ -1288,12 +1295,7 @@ export default function ProjectWorkspace() {
                       console.error('[ProjectWorkspace] team notifications failed', notifyError);
                     }
 
-                    setProject((prev: any) => ({
-                      ...prev,
-                      status: nextStatus,
-                      team: fullTeam,
-                      notes: updatedNotes
-                    }));
+                    setProject(savedTeamProject as any);
 
                     setShowTeamDialog(false);
 
@@ -1310,7 +1312,10 @@ export default function ProjectWorkspace() {
                     });
                   }
                 }}
-                disabled={Object.values(teamSlots).filter(Boolean).length === 0}
+                disabled={
+                  Object.values(teamSlots).filter(Boolean).length === 0
+                  && effectiveProjectTeam(project).length === 0
+                }
               >
                 <Users className="w-4 h-4 mr-2" />
                 Назначить команду ({Object.values(teamSlots).filter(Boolean).length})
@@ -1319,6 +1324,7 @@ export default function ProjectWorkspace() {
           </div>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Диалог редактирования для закупщика */}
       {project && (

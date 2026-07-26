@@ -6,41 +6,30 @@ const pageSource = fs.readFileSync(
   new URL('../src/pages/ProjectCommandCenter.tsx', import.meta.url),
   'utf8',
 );
-const overviewSource = fs.readFileSync(
-  new URL('../src/components/projects/ExecutivePortfolioOverview.tsx', import.meta.url),
-  'utf8',
-);
-const visualsSource = fs.readFileSync(
-  new URL('../src/components/projects/ExecutivePortfolioVisuals.tsx', import.meta.url),
-  'utf8',
-);
 const inlineDetailSource = fs.readFileSync(
   new URL('../src/components/projects/ProjectInlineDetail.tsx', import.meta.url),
   'utf8',
 );
 
-test('executive portfolio overview is imported and rendered only for executives', () => {
-  assert.match(
+test('the unified ledger replaces the separate executive dashboard', () => {
+  assert.doesNotMatch(
     pageSource,
     /import\s*\{[^}]*\bExecutivePortfolioOverview\b[^}]*\}\s*from\s*['"]@\/components\/projects\/ExecutivePortfolioOverview['"]/s,
   );
   assert.equal(
     (pageSource.match(/<ExecutivePortfolioOverview\b/g) || []).length,
-    1,
-    'the CEO overview must have one source-of-truth render',
+    0,
+    'the separate CEO overview must not be mounted',
   );
-  assert.ok(
-    /(?:\{|:)\s*isExecutive\s*(?:&&|\?)\s*\(\s*(?:<>\s*)?<ExecutivePortfolioOverview\b[^>]*summary=\{executiveSummary\}[^>]*\/>/s.test(pageSource),
-    'ExecutivePortfolioOverview must be mounted behind the isExecutive guard',
-  );
-  assert.match(overviewSource, /aria-label="Картина бизнеса генерального директора"/);
+  assert.match(pageSource, /aria-label="Единый свод проектов"/);
+  assert.match(pageSource, /data-testid="project-ledger-row"/);
+  assert.match(pageSource, /Единый свод · один проект = одна строка/);
 });
 
-test('CEO decision cards activate real ready-for-bonus and bonus-attention filters', () => {
+test('CEO status filters keep real ready-for-bonus and bonus-attention views', () => {
   for (const view of ['ready_bonus', 'bonus_attention']) {
     assert.match(pageSource, new RegExp(`\\| '${view}'`));
     assert.match(pageSource, new RegExp(`viewFilter === '${view}'`));
-    assert.match(overviewSource, new RegExp(`onApplyView\\('${view}'\\)`));
   }
 });
 
@@ -62,7 +51,7 @@ test('project draft bonuses are labelled as allocated, not falsely paid', () => 
   );
   assert.match(
     inlineDetailSource,
-    /<BonusFact label="Распределено" value=\{formatMoney\(allocated\)\}/,
+    /<BonusFact label="Итого бонусов" value=\{formatMoney\(allocated\)\}/,
   );
   assert.doesNotMatch(
     inlineDetailSource,
@@ -70,8 +59,8 @@ test('project draft bonuses are labelled as allocated, not falsely paid', () => 
   );
   assert.match(inlineDetailSource, /Реальная выплата подтверждается платёжным реестром/);
   assert.match(inlineDetailSource, /Выплачено \{formatMoney\(paid\)\}/);
-  assert.match(overviewSource, /label="Бонусный пул"[\s\S]{0,180}summary\.plannedBonusPool/);
-  assert.match(overviewSource, /label="Выплачено по реестру"[\s\S]{0,180}summary\.paidFromRegistry/);
+  assert.match(pageSource, /Бонусный пул:[\s\S]{0,120}executiveSummary\.plannedBonusPool/);
+  assert.match(pageSource, /Выплачено:[\s\S]{0,120}executiveSummary\.paidFromRegistry/);
 });
 
 test('CEO totals load one unified timesheet snapshot and the final bonus registry', () => {
@@ -110,24 +99,19 @@ test('financial status transitions and bonus drafts fail closed when source data
   assert.match(pageSource, /const compactBonusLockReason = !canEditBonusDraft[\s\S]{0,500}paymentLedger\.rowCount > 0/);
 });
 
-test('CEO projects page exposes simple visual charts without extra database reads', () => {
-  assert.match(pageSource, /import \{ ExecutivePortfolioVisuals \} from '@\/components\/projects\/ExecutivePortfolioVisuals'/);
-  assert.equal((pageSource.match(/<ExecutivePortfolioVisuals\b/g) || []).length, 1);
-  assert.match(pageSource, /<ExecutivePortfolioVisuals[\s\S]{0,300}summary=\{executiveSummary\}/);
-  assert.match(visualsSource, /Всё главное на графиках/);
-  assert.match(visualsSource, /Путь бонусов/);
-  assert.match(visualsSource, /Где сейчас проекты/);
-  assert.match(visualsSource, /Таймшиты/);
-  assert.match(visualsSource, /Сроки активных проектов/);
-  assert.match(visualsSource, /Нули не показываем/);
-  assert.match(visualsSource, /safeChartPercent\(approvedHours, totalHours\)/);
-  assert.doesNotMatch(visualsSource, /from ['"]recharts['"]/);
+test('CEO projects page does not mount separate visual dashboards', () => {
+  assert.doesNotMatch(pageSource, /import \{ ExecutivePortfolioVisuals \}/);
+  assert.equal((pageSource.match(/<ExecutivePortfolioVisuals\b/g) || []).length, 0);
+  assert.equal((pageSource.match(/<ProjectWorkloadChart\b/g) || []).length, 0);
+  assert.equal((pageSource.match(/<ProjectPortfolioPulse\b/g) || []).length, 0);
+  assert.match(pageSource, /Договор, компания, команда, сроки, часы, статус и бонусы находятся внутри одной строки проекта/);
 });
 
-test('portfolio chart uses exclusive business states and workload sums grouped project hours', () => {
+test('compact portfolio totals use exclusive business states without a workload dashboard', () => {
   assert.match(pageSource, /if \(row\.status === 'pending_payment_approval'\) acc\.readyBonus \+= 1/);
   assert.match(pageSource, /else if \(row\.baseReadiness\.level === 'attention'\) acc\.attention \+= 1/);
   assert.match(pageSource, /else acc\.inWork \+= 1/);
-  assert.match(pageSource, /row\.projectIds \|\| \[row\.id\]\)\.reduce/);
-  assert.match(pageSource, /const seenMembers = new Set<string>\(\)/);
+  assert.match(pageSource, /plannedBonusPool:\s*summary\.plannedBonusPool/);
+  assert.match(pageSource, /paidFromRegistry:\s*paymentRegistrySummary\.paidAmount/);
+  assert.doesNotMatch(pageSource, /const workloadItems = useMemo/);
 });

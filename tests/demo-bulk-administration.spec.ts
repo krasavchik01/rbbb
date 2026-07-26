@@ -8,12 +8,15 @@ test.describe('bulk administration and deputy project status', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
 
-    const table = page.getByLabel('Общая CEO-таблица проектов');
-    await table.getByTitle('Раскрыть').first().click();
-    await table.getByTestId(`project-details-${demoProject.id}`).getByRole('button', { name: 'Ещё детали' }).click();
-    const supervisorHeading = table.getByText('Супервайзер 3', { exact: true }).first();
-    const supervisorCard = supervisorHeading.locator('..').locator('..');
-    await supervisorCard.getByRole('button', { name: 'Добавить', exact: true }).click();
+    const projectRow = page.getByTestId('project-summary-shell').locator(`tr[data-project-id="${demoProject.id}"]`);
+    await expect(projectRow).toBeVisible();
+    const role = projectRow.getByRole('combobox', { name: `Роль нового участника проекта ${demoProject.name}`, exact: true });
+    await role.click();
+    await page.getByRole('option', { name: 'Супервайзер 3', exact: true }).click();
+    await projectRow.getByRole('button', {
+      name: `Добавить сотрудника в команду проекта ${demoProject.name}`,
+      exact: true,
+    }).click();
     await page.getByTestId('add-contractor').click();
     const contractorNameInput = page.getByTestId('contractor-name-input');
     const gphInput = page.getByTestId('contractor-amount-input');

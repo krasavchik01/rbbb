@@ -154,22 +154,27 @@ test.describe('project filters and explicit team assignment', () => {
       'Поиск',
       'Наша компания',
       'Партнёр',
-      'Календарный период',
-      'Бизнес-сезон',
       'Дата с',
       'Дата по',
       'Состояние проекта',
       'Срок проекта',
-      'Наличие периодов',
-      'Тип периода',
       'Сортировка',
       'Вид Excel',
     ]) {
       await expect(filters.getByText(label, { exact: true })).toBeVisible();
     }
+    for (const forbiddenLabel of [
+      'Календарный период',
+      'Бизнес-сезон',
+      'Наличие периодов',
+      'Тип периода',
+    ]) {
+      await expect(filters.getByText(forbiddenLabel, { exact: true })).toHaveCount(0);
+    }
+    await expect(filters).not.toContainText(/audit period/i);
 
     const controls = filters.locator('input, button[role="combobox"]');
-    expect(await controls.count()).toBeGreaterThanOrEqual(13);
+    expect(await controls.count()).toBeGreaterThanOrEqual(8);
     const boxes = await controls.evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
       return { left: box.left, right: box.right, width: box.width, height: box.height };
@@ -233,7 +238,7 @@ test.describe('project filters and explicit team assignment', () => {
     await searchEmployee(page, page.getByTestId('bulk-partner-select'), ALT_PARTNER.email, ALT_PARTNER.name);
     await page.getByRole('button', { name: 'Назначить только партнёра', exact: true }).click();
     const dialog = page.getByRole('alertdialog');
-    await expect(dialog).toContainText(/команд[аы].*(?:сохран|не измен)/i);
+    await expect(dialog).toContainText(/состав будет сохранён.*команд/i);
     await dialog.getByRole('button', { name: 'Назначить 1', exact: true }).click();
 
     await expect.poll(() => targetProjectPatches(network).length).toBe(1);
@@ -256,31 +261,12 @@ test.describe('project filters and explicit team assignment', () => {
     ]));
     expect(periodTeamIds).not.toContain(ALT_PARTNER.id);
 
-    const targetCard = page.locator(`[data-project-id="${DEMO_PROJECT_ID}"]`);
-    const applyTemplate = targetCard.getByRole('button', { name: /Применить шаблон команды партнёра/i });
-    await expect(applyTemplate).toBeVisible();
-    await applyTemplate.click();
-    await expect(page.getByRole('alertdialog')).toContainText(/заменит общую команду/i);
-    await page.getByTestId('confirm-project-team-template').click();
-
-    await expect.poll(() => targetProjectPatches(network).length).toBe(2);
-    const templatedNotes = targetPatchNotes(network);
-    expect(memberIds(templatedNotes.team)).toEqual([
-      ALT_PARTNER.id,
-      DEMO_EMPLOYEE_IDS.procurement,
-      DEMO_EMPLOYEE_IDS.ceo,
-    ]);
-    expect(memberIds(templatedNotes.auditPeriods?.[0]?.team)).toEqual(expect.arrayContaining([
-      DEMO_EMPLOYEE_IDS.partner,
-      DEMO_EMPLOYEE_IDS.manager,
-      DEMO_EMPLOYEE_IDS.assistant,
-    ]));
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('leader search by role and period-member search by full name both assign the chosen employee', async ({ page }) => {
+  test('leader search by role and project-member search by full name both assign the chosen employee', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
-    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
     await waitForDemoApp(page);
     await selectDemoProject(page);
@@ -291,25 +277,22 @@ test.describe('project filters and explicit team assignment', () => {
     await expect.poll(() => targetProjectPatches(network).length).toBe(1);
     expect(memberIds(targetPatchNotes(network).team)).toContain(DEMO_EMPLOYEE_IDS.procurement);
 
-    const table = page.getByLabel('Общая CEO-таблица проектов');
-    await table.getByTitle('Раскрыть').first().click();
-    await table.getByTestId(`project-details-${DEMO_PROJECT_ID}`).getByRole('button', { name: 'Ещё детали' }).click();
-    const supervisorHeading = table.getByText('Супервайзер 3', { exact: true }).first();
-    await expect(supervisorHeading).toBeVisible();
-    const supervisorCard = supervisorHeading.locator('..').locator('..');
+    const projectRow = page.getByTestId('project-summary-shell').locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`);
     await searchEmployee(
       page,
-      supervisorCard.getByRole('button', { name: 'Добавить', exact: true }),
+      projectRow.getByRole('button', {
+        name: new RegExp(`Добавить (?:участника проекта|сотрудника в команду проекта) ${demoProject.name}`),
+      }),
       'Алия Генеральный директор',
       'Алия Генеральный директор',
     );
 
     await expect.poll(() => targetProjectPatches(network).length).toBe(2);
     const notes = targetPatchNotes(network);
-    const supervisor = notes.auditPeriods?.[0]?.team?.find((member: Record<string, any>) => (
+    const addedMember = notes.team?.find((member: Record<string, any>) => (
       String(member.userId || member.id) === DEMO_EMPLOYEE_IDS.ceo
     ));
-    expect(supervisor).toMatchObject({ role: 'supervisor_3' });
+    expect(addedMember).toBeTruthy();
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -325,7 +308,7 @@ test.describe('project filters and explicit team assignment', () => {
     await page.getByRole('option', { name: new RegExp(`Команда партнёра: ${ALT_PARTNER.name}`) }).click();
     await page.getByTestId('bulk-assign-team').click();
     const dialog = page.getByRole('alertdialog');
-    await expect(dialog).toContainText(/заменит общую команду/i);
+    await expect(dialog).toContainText(/заменит единый состав/i);
     await dialog.getByTestId('confirm-bulk-team').click();
 
     await expect.poll(() => targetProjectPatches(network).length).toBe(1);
@@ -390,60 +373,4 @@ test.describe('project filters and explicit team assignment', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('adding a period merges with a period saved after the editor opened', async ({ page }) => {
-    const network = await loginAsDemoRole(page, 'deputy_director');
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/projects');
-    await waitForDemoApp(page);
-
-    const table = page.getByLabel('Общая CEO-таблица проектов');
-    await table.getByTitle('Раскрыть').first().click();
-    await table.getByTestId(`project-details-${DEMO_PROJECT_ID}`).getByRole('button', { name: 'Ещё детали' }).click();
-    await table.getByRole('button', { name: 'Добавить период', exact: true }).click();
-    await table.getByPlaceholder('Например: 2024').fill('Период из открытого редактора');
-
-    externallyUpdateDemoProject(network, (notes) => ({
-      ...notes,
-      auditPeriods: [
-        ...(notes.auditPeriods || []),
-        {
-          id: 'external-period',
-          name: 'Параллельно добавленный период',
-          type: 'custom',
-          startDate: '2026-08-01',
-          endDate: '2026-08-31',
-          deadline: '2026-09-05',
-          team: [{
-            userId: DEMO_EMPLOYEE_IDS.procurement,
-            userName: 'Демо Закупки',
-            role: 'supervisor_3',
-            bonusPercent: 7,
-          }],
-          teamSource: 'period',
-        },
-      ],
-      finances: {
-        ...(notes.finances || {}),
-        bonusPoolOverrideAmount: 777_777,
-        bonusPoolManuallyAdjusted: true,
-      },
-      files: [...(notes.files || []), { id: 'external-period-file', name: 'Период.pdf' }],
-    }));
-
-    await table.getByRole('button', { name: 'Сохранить период', exact: true }).click();
-    await expect.poll(() => targetProjectPatches(network).length).toBe(1);
-    const notes = targetPatchNotes(network);
-    expect(notes.auditPeriods?.map((period: Record<string, any>) => period.name)).toEqual(expect.arrayContaining([
-      'Параллельно добавленный период',
-      'Период из открытого редактора',
-    ]));
-    const externalPeriod = notes.auditPeriods?.find((period: Record<string, any>) => period.id === 'external-period');
-    expect(memberIds(externalPeriod?.team)).toContain(DEMO_EMPLOYEE_IDS.procurement);
-    expect(notes.finances).toMatchObject({
-      bonusPoolOverrideAmount: 777_777,
-      bonusPoolManuallyAdjusted: true,
-    });
-    expect(notes.files).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'external-period-file' })]));
-    expect(network.productionMutations).toEqual([]);
-  });
 });

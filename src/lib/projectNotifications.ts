@@ -40,7 +40,7 @@ export const notifyProjectCreated = async (params: {
       title: '📋 Новый проект требует утверждения',
       message: `${params.creatorName} создал проект "${params.projectName}" для ${params.clientName}. Сумма: ${params.currency}${params.amount}. Требуется ваше утверждение.`,
       type: 'info',
-      action_url: '/project-approval',
+      action_url: '/projects?view=attention',
     });
   } catch (error) {
     console.error('❌ Ошибка создания уведомления для зам. директора:', error);
@@ -197,7 +197,7 @@ export const notifyProjectReadyForCeoBonuses = async (params: {
         title: '💰 Проект ждёт утверждения бонусов',
         message: `${params.partnerName} подтвердил завершение проекта «${params.projectName}». Открой «Бонусы» — там полный расчёт с часами по таймщитам, можно скорректировать и закрыть.`,
         type: 'success',
-        action_url: '/bonuses',
+        action_url: '/projects?view=ready_bonus',
       }),
     ),
   );
@@ -472,7 +472,7 @@ export const notifyBonusesApproved = async (params: {
         title: '💰 Бонусы утверждены!',
         message: `${params.ceoName} утвердил выплату бонусов по проекту "${params.projectName}".`,
         type: 'success',
-        action_url: '/bonuses',
+        action_url: '/projects?view=ready_bonus',
       })
     )
   );
@@ -492,7 +492,7 @@ export const notifyBonusPaid = async (params: {
     title: '💸 Бонус выплачен!',
     message: `Вам начислен бонус ${params.currency}${params.amount} за проект "${params.projectName}".`,
     type: 'success',
-    action_url: '/bonuses',
+    action_url: '/projects?view=ready_bonus',
   });
 };
 

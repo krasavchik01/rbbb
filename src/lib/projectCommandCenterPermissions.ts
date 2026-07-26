@@ -1,5 +1,6 @@
 export interface ProjectCommandCenterCapabilities {
   canSeeContractMoney: boolean;
+  canSeeBonusSummary: boolean;
   canManageTeam: boolean;
   canCloseProjects: boolean;
   canDeleteProjects: boolean;
@@ -15,6 +16,7 @@ export interface ProjectCommandCenterCapabilities {
 const EXECUTIVE_ROLES = ['ceo', 'admin'];
 const DELEGATED_ROLES = ['admin', 'ceo', 'deputy_director'];
 const MONEY_ROLES = ['admin', 'ceo', 'procurement'];
+const BONUS_SUMMARY_ROLES = ['admin', 'ceo', 'deputy_director'];
 
 export function projectCommandCenterCapabilities(role?: string | null): ProjectCommandCenterCapabilities {
   const userRole = String(role || '');
@@ -24,6 +26,7 @@ export function projectCommandCenterCapabilities(role?: string | null): ProjectC
   const canManageTeam = isDelegated;
   return {
     canSeeContractMoney,
+    canSeeBonusSummary: BONUS_SUMMARY_ROLES.includes(userRole),
     canManageTeam,
     canCloseProjects: isExecutive,
     canDeleteProjects: isExecutive,

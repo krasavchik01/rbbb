@@ -18,7 +18,6 @@ import { notifyDeputyDirectorNewProject } from "@/lib/notifications";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { ProjectStagesEditor } from "@/components/projects/ProjectStagesEditor";
 import { AdditionalServicesSelector } from "@/components/projects/AdditionalServicesSelector";
-import type { AuditPeriod, AuditPeriodType } from "@/lib/auditPeriods";
 
 interface ContactPerson {
   name: string;
@@ -30,17 +29,6 @@ interface ContactPerson {
 interface ConsortiumMember {
   companyId: string;
   sharePercentage: number;
-}
-
-function auditPeriodTypeForRange(startDate: string, endDate: string): AuditPeriodType {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return 'custom';
-  const months = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
-  if (months >= 11 && months <= 13) return 'year';
-  if (months >= 8 && months <= 10) return 'nine_months';
-  if (months >= 5 && months <= 7) return 'six_months';
-  return 'custom';
 }
 
 export default function CreateProjectProcurement() {
@@ -285,37 +273,12 @@ export default function CreateProjectProcurement() {
     const vatRateValue = parseFloat(vatRate) || 0;
     const selectedCompany = findCompanyByAnyValue(companyId, companies);
     const projectId = `proj_${Date.now()}`;
-    const now = new Date().toISOString();
-    const defaultPeriodStart = serviceStartDate || contractDate;
-    const defaultPeriodEnd = serviceEndDate || serviceStartDate || contractDate;
-    const stagesWithPeriods = hasStages && projectStages.length > 0
-      ? projectStages.map((stage, index) => ({
+    const configuredStages = hasStages && projectStages.length > 0
+      ? projectStages.map((stage) => ({
           ...stage,
-          auditPeriodId: stage.auditPeriodId || `ap_${projectId}_stage_${index + 1}`,
+          auditPeriodId: undefined,
         }))
       : [];
-    const auditPeriods: AuditPeriod[] = (stagesWithPeriods.length > 0 ? stagesWithPeriods : [{
-      id: `stage_${projectId}_primary`,
-      name: 'Основной период',
-      startDate: defaultPeriodStart,
-      endDate: defaultPeriodEnd,
-      auditPeriodId: `ap_${projectId}_primary`,
-    } as ProjectStage]).map((stage, index) => ({
-      id: stage.auditPeriodId || `ap_${projectId}_${index + 1}`,
-      name: stage.name?.trim() || (index === 0 ? 'Основной период' : `Период ${index + 1}`),
-      type: auditPeriodTypeForRange(stage.startDate || defaultPeriodStart, stage.endDate || defaultPeriodEnd),
-      startDate: stage.startDate || defaultPeriodStart,
-      endDate: stage.endDate || defaultPeriodEnd,
-      year: Number((stage.startDate || defaultPeriodStart || '').slice(0, 4)) || undefined,
-      status: 'planned',
-      deadline: stage.endDate || defaultPeriodEnd,
-      taskIds: [],
-      documentIds: [],
-      sourceProjectId: projectId,
-      createdBy: user?.id || 'procurement',
-      createdAt: now,
-      updatedAt: now,
-    }));
 
     // Создаём объект проекта
     const project = {
@@ -373,8 +336,9 @@ export default function CreateProjectProcurement() {
       kpiRatings: [],
       
       // Новые поля: этапы и услуги
-      stages: stagesWithPeriods.length > 0 ? stagesWithPeriods : undefined,
-      auditPeriods,
+      // Один договор / один срок оказания услуг = один проект.
+      // Этапы принадлежат самому проекту и не создают вложенные сущности.
+      stages: configuredStages.length > 0 ? configuredStages : undefined,
       additionalServices: hasAdditionalServices && additionalServices.length > 0 ? additionalServices : undefined,
       
       finances: {
@@ -1000,7 +964,7 @@ export default function CreateProjectProcurement() {
         {hasStages && (
           <>
             <p className="mb-3 text-sm text-muted-foreground">
-              Каждый этап создаст связанный период аудита. Если этапов нет, при сохранении будет создан основной период по сроку договора.
+              Этапы — необязательные шаги работ внутри этого проекта. Новый договор, год или отдельный аудит оформляйте новым проектом.
             </p>
             <ProjectStagesEditor
               stages={projectStages}

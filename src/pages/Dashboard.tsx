@@ -844,8 +844,8 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {[
-            { title: 'Проекты на утверждении', value: operationalMetrics.actions.projectApprovals, hint: 'procurement → руководство', icon: FileText, to: '/project-approval', iconClass: 'bg-amber-500/10 text-amber-600' },
-            { title: 'Без команды', value: operationalMetrics.actions.projectsWithoutTeam, hint: 'нужно назначить партнёра/команду', icon: Users, to: '/assign-partners', iconClass: 'bg-orange-500/10 text-orange-600' },
+            { title: 'Проекты на утверждении', value: operationalMetrics.actions.projectApprovals, hint: 'procurement → руководство', icon: FileText, to: '/projects?view=attention', iconClass: 'bg-amber-500/10 text-amber-600' },
+            { title: 'Без команды', value: operationalMetrics.actions.projectsWithoutTeam, hint: 'нужно назначить партнёра/команду', icon: Users, to: '/projects?view=no_partner', iconClass: 'bg-orange-500/10 text-orange-600' },
             { title: 'Часы ждут апрува', value: operationalMetrics.actions.pendingTimesheetRows, hint: `${operationalMetrics.timesheets.submittedHours.toFixed(1)} ч`, icon: Timer, to: '/timesheet-approval', iconClass: 'bg-emerald-500/10 text-emerald-600' },
             { title: 'Просрочены', value: operationalMetrics.actions.overdueProjects, hint: 'дедлайны проектов', icon: AlertTriangle, to: '/projects', iconClass: 'bg-red-500/10 text-red-600' },
             { title: 'Заблокировано задач', value: operationalMetrics.actions.blockedTasks, hint: 'мешает движению', icon: XCircle, to: '/tasks', iconClass: 'bg-rose-500/10 text-rose-600' },
