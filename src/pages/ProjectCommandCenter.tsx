@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { useAppSettings } from '@/lib/appSettings';
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import {
   legacyProjectCompanyLabel,
   projectHasMissingCompanyIdentity,
@@ -588,7 +589,7 @@ function exportContractLabel(row: any): string {
 function buildProjectExportRows(
   sourceRows: any[],
   detailLevel: TableDetailLevel,
-  access: { canSeeContractMoney: boolean; isExecutive: boolean },
+  access: { canSeeContractMoney: boolean; canSeeBonuses: boolean; canSeeTeam: boolean; canSeeHours: boolean },
 ): Record<string, string | number>[] {
   return sourceRows.map((row, index) => {
     const totalBonusAmount = Number(row.finances?.totalBonusAmount || row.finances?.totalPaidBonuses) || 0;
@@ -609,21 +610,27 @@ function buildProjectExportRows(
       base['Договор'] = exportContractLabel(row);
     }
 
-    if (access.isExecutive) {
+    if (access.canSeeBonuses) {
       base['Бонусный пул %'] = Number(row.finances?.bonusPercent || 0);
       base['Бонусы'] = totalBonusAmount;
+    }
+    if (access.canSeeContractMoney && access.canSeeBonuses) {
       base['Грязный доход'] = Number(row.finances?.grossProfit || 0);
     }
 
     if (detailLevel === 'compact') return base;
 
     const realTeam = row.coverageTeam || row.team || [];
-    base['Партнер'] = row.partnerNames?.join(', ') || 'не назначен';
-    base['Руководитель'] =
-      realTeam.filter((member: any) => isLeaderRole(teamRole(member))).map(teamName).join(', ') || 'не назначен';
-    base['Команда'] = exportTeamList(realTeam, row.finances || {}, access.isExecutive);
-    base['Часы утверждено'] = Number(row.hours?.approved || 0);
-    base['Часы ждут'] = Number(row.hours?.pending || 0);
+    if (access.canSeeTeam) {
+      base['Партнер'] = row.partnerNames?.join(', ') || 'не назначен';
+      base['Руководитель'] =
+        realTeam.filter((member: any) => isLeaderRole(teamRole(member))).map(teamName).join(', ') || 'не назначен';
+      base['Команда'] = exportTeamList(realTeam, row.finances || {}, access.canSeeBonuses);
+    }
+    if (access.canSeeHours) {
+      base['Часы утверждено'] = Number(row.hours?.approved || 0);
+      base['Часы ждут'] = Number(row.hours?.pending || 0);
+    }
     base['Записей в базе'] = row.duplicateRows?.length || 1;
     base['ID проектов'] = (row.projectIds || [row.id]).join(', ');
 
@@ -1168,7 +1175,7 @@ function numberColumnMatches(amount: number, filter: string): boolean {
   return textColumnMatches(String(amount), raw);
 }
 
-function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean, isExecutive: boolean): boolean {
+function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean, canSeeBonuses: boolean): boolean {
   if (!hasActiveColumnFilters(filters)) return true;
   const notes = readProjectNotes(row.project);
   const commandModel = buildProjectCommandCenterModel(row.project);
@@ -1199,7 +1206,7 @@ function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMon
     textColumnMatches(completenessText, filters.completeness) &&
     (!canSeeMoney || numberColumnMatches(Number(row.amount || 0), filters.money)) &&
     numberColumnMatches(hourValue, filters.hours) &&
-    (!isExecutive || numberColumnMatches(bonusValue, filters.bonus))
+    (!canSeeBonuses || numberColumnMatches(bonusValue, filters.bonus))
   );
 }
 
@@ -1750,12 +1757,25 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     scope || (user?.role === 'ceo' || user?.role === 'admin' ? 'executive' : 'operations');
   const isExecutive = effectiveScope === 'executive';
   const capabilities = projectCommandCenterCapabilities(user?.role);
-  const canEditBonusDraft = Boolean(
-    user && hasPermission(user.role, 'CHANGE_BONUS_MANUALLY') && !isImpersonating,
+  const canSeeTeam = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'team');
+  const canSeeHours = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'hours');
+  const canSeeContractMoney = canRoleViewProjectSection(
+    appSettings.projectAccess,
+    user?.role,
+    'contractMoney',
   );
-  const canSeeContractMoney = capabilities.canSeeContractMoney || isExecutive;
-  const canSeeBonusSummary = capabilities.canSeeBonusSummary || isExecutive;
-  const canManageTeam = capabilities.canManageTeam;
+  const canSeeBonusSummary = canRoleViewProjectSection(
+    appSettings.projectAccess,
+    user?.role,
+    'bonuses',
+  );
+  const canEditBonusDraft = Boolean(
+    user
+      && canSeeBonusSummary
+      && hasPermission(user.role, 'CHANGE_BONUS_MANUALLY')
+      && !isImpersonating,
+  );
+  const canManageTeam = capabilities.canManageTeam && canSeeTeam;
   const canCloseProjects = capabilities.canCloseProjects;
   const canDeleteProjects = capabilities.canDeleteProjects;
   const canBulkAssignCompany = capabilities.canBulkAssignCompany;
@@ -1764,7 +1784,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canBulkAssignLeader = capabilities.canBulkAssignLeader;
   const canSelectProjects = canDeleteProjects || canBulkAssignCompany || canBulkAssignPartner || canBulkAssignTeam || canBulkAssignLeader;
   const canManageProjectStatus = capabilities.canManageProjectStatus;
-  const canManageContractors = capabilities.canManageContractors;
+  const canManageContractors = capabilities.canManageContractors && canSeeContractMoney;
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = capabilities.canEditPeriods;
   const canEditContractAmount = canSeeContractMoney;
@@ -1955,7 +1975,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   }, [projectHoursScopeKey, projectsLoading, projectsError]);
 
   useEffect(() => {
-    if (!isExecutive) {
+    if (!canSeeBonusSummary) {
       setPaymentRows([]);
       setPaymentRegistryLoading(false);
       setPaymentRegistryError(null);
@@ -1990,7 +2010,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       active = false;
       controller.abort();
     };
-  }, [isExecutive, projectHoursScopeKey, projectsLoading, projectsError]);
+  }, [canSeeBonusSummary, projectHoursScopeKey, projectsLoading, projectsError]);
 
   const rows = useMemo(() => {
     const rawRows = projects.map((project: any) => {
@@ -2426,14 +2446,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (viewFilter === 'no_amount' && !rowHasIssue(row, 'нет суммы')) return false;
       if (viewFilter === 'waiting_hours' && !rowHasIssue(row, 'ждут часы')) return false;
       if (viewFilter === 'ready_bonus' && row.status !== 'pending_payment_approval') return false;
-      if (viewFilter === 'bonus_attention' && !rowNeedsBonusReview(row, hoursComplete && !hoursLoading && !hoursError)) return false;
+      if (
+        viewFilter === 'bonus_attention'
+        && canSeeBonusSummary
+        && !rowNeedsBonusReview(row, hoursComplete && !hoursLoading && !hoursError)
+      ) return false;
       if (deadlineFilter === 'overdue' && row.deadlineState.tone !== 'overdue') return false;
       if (deadlineFilter === 'next_30' && row.deadlineState.tone !== 'soon') return false;
       if (deadlineFilter === 'no_deadline' && row.deadlineState.tone !== 'none') return false;
       if (periodFilter === 'has_periods' && row.periods.length === 0) return false;
       if (periodFilter === 'no_periods' && row.periods.length > 0) return false;
       if (!rowMatchesAuditPeriodType(row, auditPeriodTypeFilter)) return false;
-      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney, isExecutive)) return false;
+      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney, canSeeBonusSummary)) return false;
       return true;
     });
 
@@ -2444,7 +2468,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, isExecutive, hoursComplete, hoursLoading, hoursError]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, hoursComplete, hoursLoading, hoursError]);
 
   const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize));
   const safeTablePage = Math.min(tablePage, tablePageCount);
@@ -2463,7 +2487,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setTablePage((current) => Math.min(current, tablePageCount));
   }, [tablePageCount]);
 
-  const tableColSpan = 6 + (canSeeContractMoney ? 1 : 0) + (isExecutive ? 2 : 0);
+  const canSeeGrossIncome = canSeeContractMoney && canSeeBonusSummary;
+  const tableColSpan = 6
+    + (canSeeContractMoney ? 1 : 0)
+    + (canSeeBonusSummary ? 1 : 0)
+    + (canSeeGrossIncome ? 1 : 0);
   const setColumnFilter = (key: ColumnFilterKey, value: string) => {
     setColumnFilters((current) => ({ ...current, [key]: value }));
   };
@@ -2559,7 +2587,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     try {
       const XLSX = await loadXlsx();
-      if (isExecutive && canSeeContractMoney) {
+      if (canSeeBonusSummary && canSeeContractMoney) {
         if (paymentRegistryLoading) {
           toast({
             title: 'Реестр выплат ещё загружается',
@@ -2586,7 +2614,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
       const exportRows = buildProjectExportRows(filteredRows, tableDetailLevel, {
         canSeeContractMoney,
-        isExecutive,
+        canSeeBonuses: canSeeBonusSummary,
+        canSeeTeam,
+        canSeeHours,
       });
       const worksheet = XLSX.utils.json_to_sheet(exportRows);
       autosizeExportSheet(worksheet, exportRows);
@@ -4038,6 +4068,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             : 'У сотрудника нет идентификатора — сначала исправьте карточку команды.',
       };
     });
+    const activeTeamIdentities = new Set(
+      currentTeamMembers.map((member) => teamMemberId(member) || bonusMemberIdentity(member)),
+    );
+    const teamMembers = bonusEmployees
+      .filter((employee) => activeTeamIdentities.has(employee.id))
+      .map((employee) => ({
+        id: employee.id,
+        name: employee.name,
+        roles: employee.roles,
+        approvedHours: employee.approvedHours,
+        pendingHours: employee.pendingHours,
+      }));
     const currentPartner = teamMemberForRole(currentTeamMembers, isPartnerRole);
     const currentLeader = teamMemberForRole(currentTeamMembers, isLeaderRole);
     const currentCompanyId = companyOptions.find((option) => rowMatchesCompanyOption(row, option.company))?.key;
@@ -4068,9 +4110,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         statusTone={inlineReadinessTone(row.readiness.level)}
         issues={row.readiness.issues}
         team={{
-          count: currentTeamMembers.length,
+          count: teamMembers.length,
           partnerName: currentPartner ? teamName(currentPartner) : null,
           leaderName: currentLeader ? teamName(currentLeader) : null,
+          members: teamMembers,
         }}
         deadline={{
           rangeLabel: `${formatDate(row.startDate)} — ${formatDate(row.deadline)}`,
@@ -4090,6 +4133,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           allocatedBonusAmount: allocatedBonuses,
           grossIncome: Number(row.finances.grossProfit || 0),
         }}
+        showTeam={canSeeTeam}
+        showHours={canSeeHours}
         showFinances={canSeeContractMoney}
         showBonuses={canSeeBonusSummary}
         bonuses={canSeeBonusSummary ? {
@@ -4110,7 +4155,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         onToggleAdvanced={() => toggleAdvancedRow(row.id)}
         embedded={embedded}
         managementControls={embedded ? (
-          <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.1fr)_minmax(420px,1.7fr)]">
+          <div className={`grid min-w-0 gap-3 ${canSeeTeam ? 'xl:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.1fr)_minmax(420px,1.7fr)]' : ''}`}>
             <div className="min-w-0 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Компания, статус и срок</div>
               {canBulkAssignCompany ? (
@@ -4169,7 +4214,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               )}
             </div>
 
-            <div className="min-w-0 space-y-2">
+            {canSeeTeam && <div className="min-w-0 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Партнёр и руководитель</div>
               <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 {canManageTeam ? (
@@ -4205,16 +4250,16 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   Применить сохранённый шаблон команды партнёра…
                 </Button>
               ) : null}
-            </div>
+            </div>}
 
-            <div className="min-w-0 space-y-2">
+            {canSeeTeam && <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Команда · {currentTeamMembers.length} чел.</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Команда · {teamMembers.length} чел.</div>
                 {row.periods?.some((period: AuditPeriod) => periodTeam(period).length > 0) && (
                   <span className="text-[10px] text-muted-foreground">сохранённый состав восстановлен</span>
                 )}
               </div>
-              <div className="flex min-h-8 flex-wrap gap-1.5">
+              <div className="grid min-h-8 gap-1.5" data-testid={`project-team-management-${row.id}`}>
                 {currentTeamMembers.length === 0 && <span className="text-xs text-muted-foreground">Команда ещё не назначена</span>}
                 {currentTeamMembers.map((member: CanonicalTeamMember, index: number) => {
                   const memberId = teamMemberId(member);
@@ -4225,12 +4270,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   ));
                   const editableMember = unifiedRoleIndex >= 0;
                   return (
-                    <Badge key={`${memberId || teamName(member)}-${role}-${index}`} variant="outline" className="max-w-full gap-1 whitespace-normal py-1 text-[10px]">
-                      <span className="font-medium">{projectRoleLabel(role)}:</span> {teamName(member)}
+                    <div key={`${memberId || teamName(member)}-${role}-${index}`} className="grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_2rem] items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-[11px]">
+                      <span className="min-w-0 break-words font-medium text-muted-foreground">{projectRoleLabel(role)}</span>
+                      <span className="min-w-0 break-words font-semibold">{teamName(member)}</span>
                       {canManageTeam && editableMember && (
                         <button
                           type="button"
-                          className="ml-0.5 rounded px-1 text-red-600 hover:bg-red-50"
+                          className="flex h-7 w-7 items-center justify-center rounded text-red-600 hover:bg-red-50"
                           aria-label={`Убрать ${teamName(member)} из команды проекта`}
                           disabled={savingProjectId === `${row.id}:remove:${memberId || unifiedRoleIndex}`}
                           onClick={() => void removeTeamMember(row, member, unifiedRoleIndex)}
@@ -4238,7 +4284,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                           ×
                         </button>
                       )}
-                    </Badge>
+                    </div>
                   );
                 })}
               </div>
@@ -4260,7 +4306,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   />
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         ) : undefined}
         onPoolAmountCommit={(amount) => setBonusPoolAmount(row, amount)}
@@ -4398,8 +4444,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="working">В работе без проблем</SelectItem>
                   <SelectItem value="attention">Требуют действия</SelectItem>
                   <SelectItem value="closed">Закрытые</SelectItem>
-                  {isExecutive && <SelectItem value="ready_bonus">Готовы к бонусам</SelectItem>}
-                  {isExecutive && <SelectItem value="bonus_attention">Проверить расчёт бонусов</SelectItem>}
+                  <SelectItem value="ready_bonus">Готовы к бонусам</SelectItem>
+                  {canSeeBonusSummary && <SelectItem value="bonus_attention">Проверить расчёт бонусов</SelectItem>}
                   <SelectItem value="no_partner">Без партнера</SelectItem>
                   <SelectItem value="no_leader">Без руководителя</SelectItem>
                   {canSeeContractMoney && <SelectItem value="no_contract">Без договора</SelectItem>}
@@ -4672,16 +4718,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <div className="font-semibold text-foreground">Единый свод · один проект = одна строка</div>
-                      <div className="mt-0.5 text-xs font-normal text-muted-foreground">Договор, компания, команда, сроки, часы, статус и бонусы находятся внутри одной строки проекта.</div>
+                      <div className="mt-0.5 text-xs font-normal text-muted-foreground">
+                        {canSeeBonusSummary
+                          ? 'Договор, компания, вся команда, сроки, часы, статус и бонус каждого находятся внутри одной строки проекта.'
+                          : 'Договор, компания, вся команда, сроки, часы и статус находятся внутри одной строки проекта.'}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-normal tabular-nums">
                       <span>Проектов: <b className="text-foreground">{executiveSummary.totalProjects}</b></span>
                       <span>В работе: <b className="text-foreground">{executiveSummary.activeProjects}</b></span>
                       <span>Просрочено: <b className={executiveSummary.overdueProjects > 0 ? 'text-red-700' : 'text-foreground'}>{executiveSummary.overdueProjects}</b></span>
                       {canSeeContractMoney && <span>Договоры: <b className="text-foreground">{displayMoney(executiveSummary.contractAmount)}</b></span>}
-                      {isExecutive && <span>Бонусный пул: <b className="text-foreground">{displayMoney(executiveSummary.plannedBonusPool)}</b></span>}
-                      {isExecutive && <span>К выплате: <b className="text-amber-700">{displayMoney(executiveSummary.approvedForPayment)}</b></span>}
-                      {isExecutive && <span>Выплачено: <b className="text-emerald-700">{displayMoney(executiveSummary.paidFromRegistry)}</b></span>}
+                      {canSeeBonusSummary && <span>Бонусный пул: <b className="text-foreground">{displayMoney(executiveSummary.plannedBonusPool)}</b></span>}
+                      {canSeeBonusSummary && <span>К выплате: <b className="text-amber-700">{displayMoney(executiveSummary.approvedForPayment)}</b></span>}
+                      {canSeeBonusSummary && <span>Выплачено: <b className="text-emerald-700">{displayMoney(executiveSummary.paidFromRegistry)}</b></span>}
                     </div>
                   </div>
                 </TableHead>
@@ -4795,7 +4845,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                       <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Срок</div><div className="mt-1 break-words font-semibold tabular-nums">{formatDate(row.deadline)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">{row.deadlineState.label}</div></div>
                       <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Часы</div><div className="mt-1 font-semibold tabular-nums">{hoursLoading ? 'Загрузка…' : hoursError ? 'Нет данных' : `${workload.total.toFixed(1)} ч`}</div><div className="mt-0.5 text-[10px] text-muted-foreground">{hoursLoading || hoursError ? 'таймшиты сверяются' : `${row.hours.approved.toFixed(1)} утверждено`}</div></div>
                       {canSeeContractMoney && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Договор без НДС</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(row.amount)}</div></div>}
-                      {isExecutive && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Бонусы</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">Распределено {displayMoney(allocatedBonuses)}</div></div>}
+                      {canSeeBonusSummary && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Бонусы</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">Распределено {displayMoney(allocatedBonuses)}</div></div>}
                     </div>
 
                     {canManageTeam && (
@@ -4917,7 +4967,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               setTablePage(1);
             }}
           />
-          <table className={`${isExecutive ? 'min-w-[1460px]' : 'min-w-[1040px]'} w-full caption-bottom text-sm`} aria-label="Общая CEO-таблица проектов">
+          <table className={`${canSeeBonusSummary ? 'min-w-[1460px]' : 'min-w-[1040px]'} w-full caption-bottom text-sm`} aria-label="Общая CEO-таблица проектов">
             <TableHeader>
               <TableRow className="bg-muted/40">
                 <TableHead className="w-[72px]">
@@ -4956,8 +5006,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <CommandCenterColumnFilter label="Часы" value={columnFilters.hours} placeholder="Напр. 10-80" active={!!columnFilters.hours} onChange={(value) => setColumnFilter('hours', value)} onClear={() => clearColumnFilter('hours')} />
                 </TableHead>
                 {canSeeContractMoney && <TableHead className="min-w-[170px] text-right">Сумма без НДС <CommandCenterColumnFilter label="Сумма договора" value={columnFilters.money} placeholder="Напр. 1000000-5000000" active={!!columnFilters.money} onChange={(value) => setColumnFilter('money', value)} onClear={() => clearColumnFilter('money')} /></TableHead>}
-                {isExecutive && <TableHead className="min-w-[190px] text-right">Бонусы <CommandCenterColumnFilter label="Бонус" value={columnFilters.bonus} placeholder="Напр. 100000-" active={!!columnFilters.bonus} onChange={(value) => setColumnFilter('bonus', value)} onClear={() => clearColumnFilter('bonus')} /></TableHead>}
-                {isExecutive && <TableHead className="min-w-[170px] text-right">Грязный доход</TableHead>}
+                {canSeeBonusSummary && <TableHead className="min-w-[190px] text-right">Бонусы <CommandCenterColumnFilter label="Бонус" value={columnFilters.bonus} placeholder="Напр. 100000-" active={!!columnFilters.bonus} onChange={(value) => setColumnFilter('bonus', value)} onClear={() => clearColumnFilter('bonus')} /></TableHead>}
+                {canSeeGrossIncome && <TableHead className="min-w-[170px] text-right">Грязный доход</TableHead>}
                 <TableHead className="min-w-[190px]">Статус / действия <CommandCenterColumnFilter label="Статус" value={columnFilters.status} active={!!columnFilters.status} onChange={(value) => setColumnFilter('status', value)} onClear={() => clearColumnFilter('status')} /><CommandCenterColumnFilter label="Полнота данных" value={columnFilters.completeness} active={!!columnFilters.completeness} onChange={(value) => setColumnFilter('completeness', value)} onClear={() => clearColumnFilter('completeness')} /></TableHead>
               </TableRow>
             </TableHeader>
@@ -5125,7 +5175,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             ) : <><div className="text-base font-semibold tabular-nums">{displayMoney(row.amount)}</div>{canEditContractAmount && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => startContractAmountEdit(row)}>Изменить</Button>}</>}
                           </TableCell>
                         )}
-                        {isExecutive && (
+                        {canSeeBonusSummary && (
                           <TableCell className="py-3 text-right align-top">
                             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Плановый пул</div>
                             <div className="font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div>
@@ -5146,7 +5196,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             <Button type="button" variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => openBonusWorkspace(row.id)}>По сотрудникам</Button>
                           </TableCell>
                         )}
-                        {isExecutive && <TableCell className="py-3 text-right align-top"><div className={`text-base font-semibold tabular-nums ${Number(row.finances.grossProfit) < 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{displayMoney(row.finances.grossProfit)}</div><div className="mt-1 text-xs text-muted-foreground">после ГПХ, предрасхода и распределённых бонусов</div></TableCell>}
+                        {canSeeGrossIncome && <TableCell className="py-3 text-right align-top"><div className={`text-base font-semibold tabular-nums ${Number(row.finances.grossProfit) < 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{displayMoney(row.finances.grossProfit)}</div><div className="mt-1 text-xs text-muted-foreground">после ГПХ, предрасхода и распределённых бонусов</div></TableCell>}
                         <TableCell className="py-3 align-top">
                           <div className="space-y-2">
                             {canManageProjectStatus ? (
@@ -5444,7 +5494,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                     <div className={`text-xs font-semibold ${isKeyColumn ? 'text-sky-700 dark:text-sky-300' : ''}`}>
                                                       {column.label}
                                                     </div>
-                                                    {isExecutive && <div className="text-[11px] text-muted-foreground">{column.percent}</div>}
+                                                    {canSeeBonusSummary && <div className="text-[11px] text-muted-foreground">{column.percent}</div>}
                                                   </div>
                                                   {members.length === 0 && canManageTeam && (
                                                     <EmployeeSearchAdd
@@ -5598,7 +5648,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               </div>
 
-                              {SHOW_LEGACY_BONUS_WORKSPACE && isExecutive && (
+                              {SHOW_LEGACY_BONUS_WORKSPACE && canSeeBonusSummary && (
                                 <div className="order-first grid gap-3 md:grid-cols-4 xl:grid-cols-10">
                                   <MetricBox label="Сумма без НДС" value={`${money.format(row.amount)} ₸`} />
                                   <MetricBox label="Плановый бонусный пул" value={`${money.format(totalBonusAmount)} ₸`} />
@@ -5613,7 +5663,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                 </div>
                               )}
 
-                              {SHOW_LEGACY_BONUS_WORKSPACE && isExecutive && (
+                              {SHOW_LEGACY_BONUS_WORKSPACE && canSeeBonusSummary && (
                               <div id={`bonus-workspace-${row.id}`} className="order-first scroll-mt-4 rounded-md border bg-background" aria-label={`Бонусы команды проекта ${row.name}`}>
                                 <div className="flex flex-wrap items-start justify-between gap-3 border-b px-3 py-3">
                                   <div>
@@ -5668,7 +5718,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                       >
                                         <div className="mb-2 flex items-center justify-between gap-2">
                                           <div className={`font-medium ${isKeyColumn ? 'text-sky-700 dark:text-sky-300' : ''}`}>{column.label}</div>
-                                          {isExecutive && <div className="text-xs text-muted-foreground">{column.percent}</div>}
+                                          {canSeeBonusSummary && <div className="text-xs text-muted-foreground">{column.percent}</div>}
                                         </div>
                                         {members.length === 0 && !canManageTeam && <div className="text-sm text-muted-foreground">-</div>}
                                         {members.length === 0 && canManageTeam && (
@@ -5766,7 +5816,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                                     </>
                                                   )}
                                                 </div>
-                                                {isExecutive && isPrimaryBonusEditor && (
+                                                {canSeeBonusSummary && isPrimaryBonusEditor && (
                                                   <div className="mt-2 flex items-center justify-between gap-2">
                                                     <div className="text-xs text-muted-foreground tabular-nums">{money.format(amount)} ₸</div>
                                                     <div className="flex items-center gap-1">

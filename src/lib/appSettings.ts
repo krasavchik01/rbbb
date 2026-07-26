@@ -2,6 +2,12 @@
 // Эти настройки управляются администратором и применяются глобально для всех пользователей
 
 import { supabase } from '@/integrations/supabase/client';
+import { apiPost } from '@/lib/api';
+import {
+  DEFAULT_PROJECT_ACCESS_CONTROL,
+  normalizeProjectAccessControl,
+  type ProjectAccessControl,
+} from '@/lib/projectAccessControl';
 import { Company, DEFAULT_COMPANIES, normalizeCompanies } from '@/types/companies';
 import type { UserRole } from '@/types/roles';
 
@@ -32,6 +38,8 @@ export interface AppSettings {
   // Роли, которым показывается блок «Последние активности» на дашборде.
   // Пустой массив = блок скрыт у всех.
   recentActivityVisibleRoles: UserRole[];
+  // Видимость разделов единого свода по ролям. Управляется администратором.
+  projectAccess: ProjectAccessControl;
   // Список компаний (управляемый администратором)
   companies: Company[];
   // SMTP конфигурация для отправки email
@@ -50,6 +58,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   maintenanceMode: false,
   maintenanceMessage: '',
   recentActivityVisibleRoles: ['ceo', 'deputy_director', 'partner'],
+  projectAccess: DEFAULT_PROJECT_ACCESS_CONTROL,
   companies: DEFAULT_COMPANIES // Используем дефолтный список компаний
 };
 
@@ -87,16 +96,20 @@ function extractCompanies(rawCompanies: unknown): Company[] {
   return normalizeCompanies(DEFAULT_SETTINGS.companies);
 }
 
-function preserveSettingsEnvelope(rawCompanies: unknown, companies: Company[]): Company[] | SettingsEnvelope {
-  const normalizedCompanies = normalizeCompanies(companies);
-  if (isSettingsEnvelope(rawCompanies)) {
-    return {
-      ...rawCompanies,
-      companies: normalizedCompanies,
-    };
+function extractProjectAccess(rawCompanies: unknown): ProjectAccessControl {
+  if (!isSettingsEnvelope(rawCompanies)) {
+    return normalizeProjectAccessControl(DEFAULT_SETTINGS.projectAccess);
   }
+  return normalizeProjectAccessControl(rawCompanies.projectAccess);
+}
 
-  return normalizedCompanies;
+function preserveSettingsEnvelope(rawCompanies: unknown, settings: AppSettings): SettingsEnvelope {
+  return {
+    ...(isSettingsEnvelope(rawCompanies) ? rawCompanies : {}),
+    __suiteASettings: 1,
+    companies: normalizeCompanies(settings.companies),
+    projectAccess: normalizeProjectAccessControl(settings.projectAccess),
+  };
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -121,6 +134,7 @@ export async function getAppSettings(): Promise<AppSettings> {
 
     if (data) {
       const companies = extractCompanies(data.companies);
+      const projectAccess = extractProjectAccess(data.companies);
 
       console.log('getAppSettings: данные из Supabase:', {
         hasCompanies: !!data.companies,
@@ -148,6 +162,7 @@ export async function getAppSettings(): Promise<AppSettings> {
         recentActivityVisibleRoles: Array.isArray((data as any).recent_activity_visible_roles)
           ? ((data as any).recent_activity_visible_roles as UserRole[])
           : DEFAULT_SETTINGS.recentActivityVisibleRoles,
+        projectAccess,
         companies
       };
 
@@ -182,6 +197,7 @@ function getLocalSettings(): AppSettings {
         ...DEFAULT_SETTINGS,
         ...parsed,
         companies: normalizeCompanies(parsed.companies || DEFAULT_SETTINGS.companies),
+        projectAccess: normalizeProjectAccessControl(parsed.projectAccess),
         showDemoUsers: false,
       };
     }
@@ -191,6 +207,7 @@ function getLocalSettings(): AppSettings {
   return {
     ...DEFAULT_SETTINGS,
     companies: normalizeCompanies(DEFAULT_SETTINGS.companies),
+    projectAccess: normalizeProjectAccessControl(DEFAULT_SETTINGS.projectAccess),
   };
 }
 
@@ -201,6 +218,7 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
       ...current,
       ...settings,
       companies: normalizeCompanies(settings.companies || current.companies),
+      projectAccess: normalizeProjectAccessControl(settings.projectAccess || current.projectAccess),
       showDemoUsers: false,
     };
 
@@ -216,7 +234,7 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
       throw new Error('Не удалось получить настройки для обновления');
     }
 
-    const companiesPayload = preserveSettingsEnvelope((settingsRow as any).companies, updated.companies);
+    const companiesPayload = preserveSettingsEnvelope((settingsRow as any).companies, updated);
 
     console.log('Сохраняем настройки в Supabase, id:', settingsRow.id, 'данные:', updated);
 
@@ -262,6 +280,31 @@ export async function saveAppSettings(settings: Partial<AppSettings>): Promise<v
     console.error('Ошибка сохранения настроек:', error);
     throw error;
   }
+}
+
+export async function saveProjectAccessSettings(projectAccess: ProjectAccessControl): Promise<void> {
+  const normalized = normalizeProjectAccessControl(projectAccess);
+  const response = await apiPost<{ success: boolean; projectAccess: ProjectAccessControl }>(
+    '/api/project-access-settings',
+    { projectAccess: normalized },
+  );
+  if (response.error || !response.data?.success || !response.data.projectAccess) {
+    throw new Error(response.error || 'Не удалось сохранить матрицу доступов');
+  }
+
+  const current = await getAppSettings();
+  const updated: AppSettings = {
+    ...current,
+    projectAccess: normalizeProjectAccessControl(response.data.projectAccess),
+  };
+  cachedSettings = updated;
+  cacheTimestamp = Date.now();
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+  } catch (error) {
+    console.warn('Не удалось сохранить доступы в localStorage:', error);
+  }
+  window.dispatchEvent(new CustomEvent('appSettingsChanged', { detail: updated }));
 }
 
 export async function updateOfficeLocation(location: Partial<AppSettings['officeLocation']>): Promise<void> {

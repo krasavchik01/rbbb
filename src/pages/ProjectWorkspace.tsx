@@ -23,6 +23,7 @@ import { PROJECT_ROLES, TEAM_ROLE_SLOTS } from "@/types/roles";
 
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import { legacyProjectCompanyLabel } from "@/lib/userCompanyAccess";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -149,6 +150,9 @@ type ProjectFlatSummaryProps = {
   canEditTeam: boolean;
   onEditTeam: () => void;
   canSeeFinance: boolean;
+  canSeeBonuses: boolean;
+  canSeeTeam: boolean;
+  canSeeHours: boolean;
 };
 
 function ProjectFlatSummary({
@@ -173,6 +177,9 @@ function ProjectFlatSummary({
   canEditTeam,
   onEditTeam,
   canSeeFinance,
+  canSeeBonuses,
+  canSeeTeam,
+  canSeeHours,
 }: ProjectFlatSummaryProps) {
   const team = effectiveProjectTeam(project);
   const stages = project.stages || project.notes?.stages || [];
@@ -230,8 +237,8 @@ function ProjectFlatSummary({
             <tr className={rowClass}><th className={labelClass}>Сроки</th><td className={valueClass}>{dateRangeCell(normalizedStartDate || normalizedContract?.serviceStartDate, normalizedDeadline || normalizedContract?.serviceEndDate)}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Этапы проекта</th><td className={valueClass}>{stageText}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Задачи</th><td className={valueClass}>{completedTasks} из {projectTasks.length} выполнено · в работе: {pendingTasks}</td></tr>
-            <tr className={rowClass}><th className={labelClass}>Часы</th><td className={valueClass}>{approvedHours}ч утверждено{pendingHours > 0 ? ` · +${pendingHours}ч ждут партнёра` : ''}</td></tr>
-            <tr className={rowClass}>
+            {canSeeHours && <tr className={rowClass}><th className={labelClass}>Часы</th><td className={valueClass}>{approvedHours}ч утверждено{pendingHours > 0 ? ` · +${pendingHours}ч ждут партнёра` : ''}</td></tr>}
+            {canSeeTeam && <tr className={rowClass}>
               <th className={labelClass}>Команда</th>
               <td className={valueClass}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -239,13 +246,14 @@ function ProjectFlatSummary({
                   {canEditTeam && <Button type="button" size="sm" variant="outline" onClick={onEditTeam}><Edit className="mr-2 h-4 w-4" />Управлять в своде</Button>}
                 </div>
               </td>
-            </tr>
+            </tr>}
             {canSeeFinance && (
               <>
-                <tr className={rowClass}><th className={labelClass}>Финансы</th><td className={valueClass}>Сумма без НДС: {moneyCell(normalizedFinances?.amountWithoutVAT)}\nБаза бонусов: {moneyCell(normalizedFinances?.bonusBase)}\nБонусный пул: {moneyCell(normalizedFinances?.totalBonusAmount)}\nГрязный доход: {moneyCell(normalizedFinances?.grossProfit)}</td></tr>
-                <tr className={rowClass}><th className={labelClass}>Расходы</th><td className={valueClass}>ГПХ / субподряд: {moneyCell(normalizedFinances?.totalContractorsAmount)}\nПредрасход: {moneyCell(normalizedFinances?.preExpenseAmount)}\nИтого расходы: {moneyCell(normalizedFinances?.totalCosts)}</td></tr>
+                <tr className={rowClass}><th className={labelClass}>Финансы</th><td className={valueClass}>Сумма без НДС: {moneyCell(normalizedFinances?.amountWithoutVAT)}{canSeeBonuses ? `\nГрязный доход: ${moneyCell(normalizedFinances?.grossProfit)}` : ''}</td></tr>
+                <tr className={rowClass}><th className={labelClass}>Расходы</th><td className={valueClass}>ГПХ / субподряд: {moneyCell(normalizedFinances?.totalContractorsAmount)}\nПредрасход: {moneyCell(normalizedFinances?.preExpenseAmount)}\n{canSeeBonuses ? `Итого расходы: ${moneyCell(normalizedFinances?.totalCosts)}` : `Операционные расходы: ${moneyCell(Number(normalizedFinances?.totalContractorsAmount || 0) + Number(normalizedFinances?.preExpenseAmount || 0))}`}</td></tr>
               </>
             )}
+            {canSeeBonuses && <tr className={rowClass}><th className={labelClass}>Бонусы</th><td className={valueClass}>База бонусов: {moneyCell(normalizedFinances?.bonusBase)}\nБонусный пул: {moneyCell(normalizedFinances?.totalBonusAmount)}</td></tr>}
             <tr className={rowClass}><th className={labelClass}>Файлы</th><td className={valueClass}>{fileText}</td></tr>
             <tr className={rowClass}><th className={labelClass}>Доп. соглашения</th><td className={valueClass}>{amendments.length ? amendments.map((item) => `№${item.number || '—'} от ${dateCell(item.date)} · ${textCell(item.description, '')}`).join('\n') : 'Нет доп. соглашений'}</td></tr>
           </tbody>
@@ -298,11 +306,15 @@ export default function ProjectWorkspace() {
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
   const isProcurementOrAdmin = isProcurement || isAdmin;
+  const canSeeTeam = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'team');
+  const canSeeHours = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'hours');
+  const canSeeContractMoney = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'contractMoney');
+  const canSeeBonuses = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'bonuses');
   const canManageProjectCompany = isCEO || isAdmin || isDeputy;
   const projectStatus = project?.notes?.status || project?.status;
   // Единая команда проекта управляется CEO, администратором и замдиректора
   // на любой стадии проекта.
-  const canEditTeam = isAdmin || isCEO || isDeputy;
+  const canEditTeam = canSeeTeam && (isAdmin || isCEO || isDeputy);
 
   const isCompleted = projectStatus === 'completed' || projectStatus === 'closed' || projectStatus === 'Завершён';
   const isInProgress = projectStatus === 'in_progress' || projectStatus === 'active' || projectStatus === 'В работе';
@@ -645,11 +657,14 @@ export default function ProjectWorkspace() {
         onEditTeam={() => {
           navigate(`/projects?q=${encodeURIComponent(project.name || '')}`);
         }}
-        canSeeFinance={Boolean(
+        canSeeFinance={canSeeContractMoney && Boolean(
           (project.financialVisibility?.enabled && project.financialVisibility?.visibleTo?.includes(user?.id || ''))
           || !project.financialVisibility
           || ((normalizedFinances?.amountWithoutVAT > 0 || project.finances) && (isPartner || isDirector || isAdmin || isPM))
         )}
+        canSeeBonuses={canSeeBonuses}
+        canSeeTeam={canSeeTeam}
+        canSeeHours={canSeeHours}
       />
 
       {/* Вкладки оставлены только для редактирования/детальных рабочих операций. Основная информация выше в своде. */}

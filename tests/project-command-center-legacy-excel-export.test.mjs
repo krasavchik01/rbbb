@@ -52,8 +52,8 @@ test('CEO Excel export creates one total sheet and partner sheets', () => {
   assert.match(pageSource, /legacyUniqueSheetName\(workbook, sheetName\)/);
 });
 
-test('CEO download path uses the legacy workbook while non-executive export remains available', () => {
-  assert.match(pageSource, /if \(isExecutive && canSeeContractMoney\) \{/);
+test('authorized bonus download uses the legacy workbook while restricted export remains available', () => {
+  assert.match(pageSource, /if \(canSeeBonusSummary && canSeeContractMoney\) \{/);
   assert.match(pageSource, /buildLegacyCeoWorkbook\(XLSX, filteredRows, paymentRegistrySummary\.byProject\)/);
   assert.match(pageSource, /Реестр выплат ещё загружается/);
   assert.match(pageSource, /Платёжный реестр недоступен/);

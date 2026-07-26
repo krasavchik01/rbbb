@@ -26,6 +26,16 @@ export interface ProjectInlineTeamSummary {
   count: number;
   partnerName?: string | null;
   leaderName?: string | null;
+  /** One deduplicated visible row per active project participant. */
+  members: ProjectInlineTeamMember[];
+}
+
+export interface ProjectInlineTeamMember {
+  id: string;
+  name: string;
+  roles: string[];
+  approvedHours: number;
+  pendingHours: number;
 }
 
 export interface ProjectInlineDeadlineSummary {
@@ -98,6 +108,8 @@ export interface ProjectInlineDetailProps {
   hours: ProjectInlineHoursSummary;
   contract: ProjectInlineContractSummary;
   finances: ProjectInlineFinances;
+  showTeam?: boolean;
+  showHours?: boolean;
   showFinances?: boolean;
   showBonuses?: boolean;
   bonuses?: ProjectInlineBonuses;
@@ -160,6 +172,8 @@ export function ProjectInlineDetail({
   hours,
   contract,
   finances,
+  showTeam = true,
+  showHours = true,
   showFinances = true,
   showBonuses = false,
   bonuses,
@@ -180,6 +194,12 @@ export function ProjectInlineDetail({
   const totalHours = approvedHours + pendingHours;
   const approvedWidth = safePercent(approvedHours, totalHours);
   const pendingWidth = totalHours > 0 ? Math.max(0, 100 - approvedWidth) : 0;
+  const visibleFactCount = 2 + Number(showTeam) + Number(showHours);
+  const factGridColumns = visibleFactCount >= 4
+    ? 'lg:grid-cols-4'
+    : visibleFactCount === 3
+      ? 'lg:grid-cols-3'
+      : 'lg:grid-cols-2';
   const Root = embedded ? 'div' : Card;
   return (
     <Root
@@ -239,20 +259,20 @@ export function ProjectInlineDetail({
         </section>
       )}
 
-      <div className={`grid min-w-0 grid-cols-2 gap-px bg-border ${embedded ? 'lg:grid-cols-4' : ''}`} data-testid="project-inline-facts">
-        <FactCard icon={<Users className="h-4 w-4" />} label="Команда">
+      <div className={`grid min-w-0 grid-cols-1 gap-px bg-border sm:grid-cols-2 ${factGridColumns}`} data-testid="project-inline-facts">
+        {showTeam && <FactCard icon={<Users className="h-4 w-4" />} label="Команда">
           <div className="font-semibold">{Math.max(0, team.count)} чел.</div>
           <div className="mt-1 break-words text-[11px] leading-4 text-muted-foreground">
             Партнёр: {team.partnerName || '—'}<br />Руководитель: {team.leaderName || '—'}
           </div>
-        </FactCard>
+        </FactCard>}
         <FactCard icon={<CalendarClock className="h-4 w-4" />} label="Сроки проекта">
           <div className="break-words font-semibold tabular-nums">{deadline.rangeLabel || 'Не указан'}</div>
           <Badge variant="outline" className={`mt-1.5 max-w-full whitespace-normal text-[10px] ${toneClasses[deadline.tone || 'neutral']}`}>
             {deadline.stateLabel || 'Нет оценки срока'}
           </Badge>
         </FactCard>
-        <FactCard icon={<Clock3 className="h-4 w-4" />} label="Таймшиты">
+        {showHours && <FactCard icon={<Clock3 className="h-4 w-4" />} label="Таймшиты">
           {hours.state === 'loading' ? (
             <div className="text-sm text-muted-foreground">Загружаются…</div>
           ) : hours.state === 'error' ? (
@@ -267,24 +287,49 @@ export function ProjectInlineDetail({
               <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{approvedHours.toFixed(1)} утверждено · {pendingHours.toFixed(1)} ждёт</div>
             </>
           )}
-        </FactCard>
+        </FactCard>}
         <FactCard icon={<FileText className="h-4 w-4" />} label="Договор">
           <div className="break-words font-semibold">{contract.number ? `№ ${contract.number}` : 'Номер не указан'}</div>
-          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">Сумма без НДС: {formatMoney(finances.contractAmount)} · {Math.max(0, contract.filesCount)} файл(а)</div>
+          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            {showFinances ? <>Сумма без НДС: {formatMoney(finances.contractAmount)} · </> : null}
+            {Math.max(0, contract.filesCount)} файл(а)
+          </div>
         </FactCard>
       </div>
 
+      {showTeam && <TeamMemberLedger
+        projectId={projectId}
+        members={team.members}
+        showHours={showHours}
+        bonusEmployees={showBonuses && bonuses ? bonuses.employees : undefined}
+        bonusesEditable={Boolean(showBonuses && bonuses?.editable)}
+        registryState={showBonuses && bonuses ? bonuses.registryState || 'ready' : 'ready'}
+        onAmountCommit={showBonuses ? onEmployeeAmountCommit : undefined}
+        onResetFormula={showBonuses ? onResetEmployeeFormula : undefined}
+      />}
+
       {showFinances && <section className="min-w-0 border-t px-3 py-3 sm:px-4" aria-label="Финансовый поток проекта" data-testid="project-finance-flow">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><BriefcaseBusiness className="h-4 w-4" /> Как складывается доход</div>
-        <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className={`grid min-w-0 grid-cols-2 gap-2 ${showBonuses ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
           <FlowValue index="1" label="Договор" value={finances.contractAmount} />
           <FlowValue index="2" label="Минус ГПХ" value={finances.gphAmount} negative />
           <FlowValue index="3" label="Минус предрасход" value={finances.preExpenseAmount} negative />
-          <FlowValue index="4" label="Минус бонусы" value={finances.allocatedBonusAmount} negative />
-          <FlowValue index="5" label="Грязный доход" value={finances.grossIncome} result />
+          {showBonuses ? (
+            <>
+              <FlowValue index="4" label="Минус бонусы" value={finances.allocatedBonusAmount} negative />
+              <FlowValue index="5" label="Грязный доход" value={finances.grossIncome} result />
+            </>
+          ) : (
+            <FlowValue
+              index="4"
+              label="Остаток до бонусов"
+              value={safePositive(finances.contractAmount) - safePositive(finances.gphAmount) - safePositive(finances.preExpenseAmount)}
+              result
+            />
+          )}
         </div>
         <div className="mt-2 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground" aria-hidden="true">
-          <span>Договор</span><ArrowRight className="h-3 w-3 shrink-0" /><span>Расходы</span><ArrowRight className="h-3 w-3 shrink-0" /><span className="truncate">Итоговый доход</span>
+          <span>Договор</span><ArrowRight className="h-3 w-3 shrink-0" /><span>Расходы</span><ArrowRight className="h-3 w-3 shrink-0" /><span className="truncate">{showBonuses ? 'Итоговый доход' : 'До распределения бонусов'}</span>
         </div>
       </section>}
 
@@ -297,9 +342,6 @@ export function ProjectInlineDetail({
           onPoolAmountCommit={onPoolAmountCommit}
           onPoolPercentCommit={onPoolPercentCommit}
           onResetPoolFormula={onResetPoolFormula}
-          onEmployeeAmountCommit={onEmployeeAmountCommit}
-          onResetEmployeeFormula={onResetEmployeeFormula}
-          compact={embedded}
         />
       )}
 
@@ -353,9 +395,6 @@ function BonusEditor({
   onPoolAmountCommit,
   onPoolPercentCommit,
   onResetPoolFormula,
-  onEmployeeAmountCommit,
-  onResetEmployeeFormula,
-  compact = false,
 }: {
   projectId: string;
   projectName: string;
@@ -364,9 +403,6 @@ function BonusEditor({
   onPoolAmountCommit?: (amount: number) => Promise<boolean>;
   onPoolPercentCommit?: (percent: number) => Promise<boolean>;
   onResetPoolFormula?: () => Promise<boolean>;
-  onEmployeeAmountCommit?: (employeeId: string, amount: number) => Promise<boolean>;
-  onResetEmployeeFormula?: (employeeId: string) => Promise<boolean>;
-  compact?: boolean;
 }) {
   const pool = safePositive(bonuses.poolAmount);
   const allocated = safePositive(finances.allocatedBonusAmount);
@@ -479,22 +515,6 @@ function BonusEditor({
         </div>
       </div>}
 
-      <div className={compact ? 'mt-3 grid min-w-0 gap-2 md:grid-cols-2 2xl:grid-cols-3' : 'mt-3 space-y-2'} aria-label="Бонусы сотрудников">
-        {bonuses.employees.length === 0 ? (
-          <div className="rounded-lg border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">Сначала назначьте команду проекта.</div>
-        ) : bonuses.employees.map((employee) => (
-          <EmployeeBonusRow
-            key={employee.id}
-            projectId={projectId}
-            employee={employee}
-            globallyEditable={editable}
-            registryState={registryState}
-            onAmountCommit={onEmployeeAmountCommit}
-            onResetFormula={onResetEmployeeFormula}
-            compact={compact}
-          />
-        ))}
-      </div>
     </section>
   );
 }
@@ -518,22 +538,214 @@ function BonusFact({
   );
 }
 
+function TeamMemberLedger({
+  projectId,
+  members,
+  showHours,
+  bonusEmployees,
+  bonusesEditable,
+  registryState,
+  onAmountCommit,
+  onResetFormula,
+}: {
+  projectId: string;
+  members: ProjectInlineTeamMember[];
+  showHours: boolean;
+  bonusEmployees?: ProjectInlineBonusEmployee[];
+  bonusesEditable: boolean;
+  registryState: ProjectInlineDataState;
+  onAmountCommit?: (employeeId: string, amount: number) => Promise<boolean>;
+  onResetFormula?: (employeeId: string) => Promise<boolean>;
+}) {
+  const bonusesVisible = Array.isArray(bonusEmployees);
+  const activeMembers = dedupeTeamMembers(members);
+  const activeIds = new Set(activeMembers.map((member) => member.id));
+  const bonusesById = new Map((bonusEmployees || []).map((employee) => [employee.id, employee]));
+  const visibleBonusRows = bonusesVisible
+    ? [
+        ...activeMembers.map((member) => mergeMemberBonus(member, bonusesById.get(member.id))),
+        ...(bonusEmployees || []).filter((employee) => !activeIds.has(employee.id)),
+      ]
+    : [];
+  const visibleCount = bonusesVisible ? visibleBonusRows.length : activeMembers.length;
+  const headerGridColumns = bonusesVisible
+    ? showHours
+      ? 'grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.55fr)_minmax(0,1.6fr)]'
+      : 'grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]'
+    : showHours
+      ? 'grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.65fr)]'
+      : 'grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]';
+
+  return (
+    <section
+      className="min-w-0 border-t bg-background"
+      aria-label={bonusesVisible ? 'Команда и бонусы проекта' : 'Состав команды проекта'}
+      data-testid="project-team-ledger"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <h4 className="text-sm font-semibold">{bonusesVisible ? 'Команда и бонусы' : 'Состав команды'}</h4>
+        </div>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {activeMembers.length} чел.{visibleCount > activeMembers.length ? ` · ещё ${visibleCount - activeMembers.length} из сохранённого расчёта` : ''}
+        </span>
+      </div>
+
+      <div
+        className={`hidden min-w-0 border-y bg-muted/20 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:px-4 lg:grid ${headerGridColumns} gap-3`}
+        aria-hidden="true"
+      >
+        <span>Сотрудник</span>
+        <span>Роль в проекте</span>
+        {showHours && <span>Утверждено</span>}
+        {bonusesVisible && <span>Точный бонус</span>}
+      </div>
+
+      {visibleCount === 0 ? (
+        <div className="border-t border-dashed px-3 py-4 text-sm text-muted-foreground sm:px-4">
+          Команда ещё не назначена.
+        </div>
+      ) : bonusesVisible ? (
+        <div className="min-w-0" aria-label="Бонусы сотрудников">
+          {visibleBonusRows.map((employee) => (
+            <EmployeeBonusRow
+              key={employee.id}
+              projectId={projectId}
+              employee={employee}
+              globallyEditable={bonusesEditable}
+              registryState={registryState}
+              showHours={showHours}
+              onAmountCommit={onAmountCommit}
+              onResetFormula={onResetFormula}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="min-w-0">
+          {activeMembers.map((member) => (
+            <TeamMemberRow key={member.id} projectId={projectId} member={member} showHours={showHours} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function dedupeTeamMembers(members: ProjectInlineTeamMember[]): ProjectInlineTeamMember[] {
+  const result = new Map<string, ProjectInlineTeamMember>();
+  for (const member of Array.isArray(members) ? members : []) {
+    const id = String(member?.id || '').trim();
+    const name = String(member?.name || '').trim();
+    const identity = id || name.toLocaleLowerCase('ru');
+    if (!identity) continue;
+    const existing = result.get(identity);
+    if (!existing) {
+      result.set(identity, {
+        ...member,
+        id: id || identity,
+        name: name || 'Без имени',
+        roles: Array.from(new Set(member.roles || [])),
+      });
+      continue;
+    }
+    result.set(identity, {
+      ...existing,
+      roles: Array.from(new Set([...(existing.roles || []), ...(member.roles || [])])),
+      approvedHours: Math.max(safePositive(existing.approvedHours), safePositive(member.approvedHours)),
+      pendingHours: Math.max(safePositive(existing.pendingHours), safePositive(member.pendingHours)),
+    });
+  }
+  return Array.from(result.values());
+}
+
+function mergeMemberBonus(
+  member: ProjectInlineTeamMember,
+  employee?: ProjectInlineBonusEmployee,
+): ProjectInlineBonusEmployee {
+  if (!employee) {
+    return {
+      ...member,
+      amount: 0,
+      editable: false,
+      lockedReason: 'Расчёт бонуса для сотрудника не загружен.',
+    };
+  }
+  return {
+    ...employee,
+    name: member.name || employee.name,
+    roles: Array.from(new Set([...(member.roles || []), ...(employee.roles || [])])),
+    approvedHours: safePositive(member.approvedHours),
+    pendingHours: safePositive(member.pendingHours),
+  };
+}
+
+function TeamMemberRow({
+  projectId,
+  member,
+  showHours,
+}: {
+  projectId: string;
+  member: ProjectInlineTeamMember;
+  showHours: boolean;
+}) {
+  return (
+    <div
+      className={`grid min-w-0 gap-2 border-b px-3 py-2.5 last:border-b-0 sm:px-4 lg:items-center lg:gap-3 ${showHours ? 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.65fr)]' : 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]'}`}
+      data-testid={`project-team-member-${projectId}-${member.id}`}
+      data-team-member-row="true"
+      data-employee-id={member.id}
+    >
+      <div className="min-w-0">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Сотрудник</div>
+        <div className="break-words text-sm font-semibold leading-5">{member.name}</div>
+      </div>
+      <MemberRoles roles={member.roles} />
+      {showHours && <MemberHours approved={member.approvedHours} pending={member.pendingHours} />}
+    </div>
+  );
+}
+
+function MemberRoles({ roles }: { roles: string[] }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Роль в проекте</div>
+      <div className="mt-0.5 flex min-w-0 flex-wrap gap-1 lg:mt-0">
+        {(roles || []).map((role) => (
+          <Badge key={role} variant="outline" className="max-w-full whitespace-normal text-[10px]">{role}</Badge>
+        ))}
+        {(roles || []).length === 0 && <span className="text-xs text-muted-foreground">Роль не указана</span>}
+      </div>
+    </div>
+  );
+}
+
+function MemberHours({ approved, pending }: { approved: number; pending: number }) {
+  return (
+    <div className="min-w-0 tabular-nums">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Утверждено</div>
+      <div className="text-sm font-semibold">{safePositive(approved).toFixed(1)} ч</div>
+      {safePositive(pending) > 0 && <div className="text-[10px] leading-4 text-amber-700 dark:text-amber-300">{safePositive(pending).toFixed(1)} ч ждёт</div>}
+    </div>
+  );
+}
+
 function EmployeeBonusRow({
   projectId,
   employee,
   globallyEditable,
   registryState,
+  showHours,
   onAmountCommit,
   onResetFormula,
-  compact = false,
 }: {
   projectId: string;
   employee: ProjectInlineBonusEmployee;
   globallyEditable: boolean;
   registryState: ProjectInlineDataState;
+  showHours: boolean;
   onAmountCommit?: (employeeId: string, amount: number) => Promise<boolean>;
   onResetFormula?: (employeeId: string) => Promise<boolean>;
-  compact?: boolean;
 }) {
   const editable = globallyEditable && employee.editable !== false;
   const [resetBusy, setResetBusy] = useState(false);
@@ -549,20 +761,27 @@ function EmployeeBonusRow({
   };
 
   return (
-    <div className={`min-w-0 rounded-lg border bg-background ${compact ? 'p-2.5' : 'p-3'}`} data-testid={`member-bonus-${projectId}-${employee.id}`} data-employee-id={employee.id}>
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
-          <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-            {employee.roles.map((role) => <Badge key={role} variant="outline" className="max-w-full whitespace-normal text-[10px]">{role}</Badge>)}
-            <Badge variant="outline" className={employee.manuallyAdjusted ? toneClasses.warning : toneClasses.info}>{employee.manuallyAdjusted ? 'вручную' : 'по формуле'}</Badge>
-          </div>
-          <div className="mt-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">{safePositive(employee.approvedHours).toFixed(1)} ч утверждено{safePositive(employee.pendingHours) > 0 ? ` · ${safePositive(employee.pendingHours).toFixed(1)} ч ждёт` : ''}</div>
+    <div
+      className={`grid min-w-0 gap-2 border-b px-3 py-2.5 last:border-b-0 sm:px-4 lg:items-center lg:gap-3 ${showHours ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.55fr)_minmax(0,1.6fr)]' : 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]'}`}
+      data-testid={`member-bonus-${projectId}-${employee.id}`}
+      data-team-member-row="true"
+      data-employee-id={employee.id}
+    >
+      <div className="min-w-0">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Сотрудник</div>
+        <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
+        <div className="mt-1">
+          <PaymentStatus employee={employee} registryState={registryState} />
         </div>
-        <PaymentStatus employee={employee} registryState={registryState} />
       </div>
-
-      {editable ? <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <MemberRoles roles={employee.roles} />
+      {showHours && <MemberHours approved={employee.approvedHours} pending={employee.pendingHours} />}
+      <div className="min-w-0">
+        <div className="mb-1 flex min-w-0 flex-wrap items-center justify-between gap-1 text-[10px]">
+          <span className="font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Точный бонус</span>
+          <Badge variant="outline" className={employee.manuallyAdjusted ? toneClasses.warning : toneClasses.info}>{employee.manuallyAdjusted ? 'вручную' : 'по формуле'}</Badge>
+        </div>
+      {editable ? <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <div className="min-w-0">
           <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-1 text-xs">
             <span className="font-medium">Итоговый бонус</span>
@@ -589,6 +808,7 @@ function EmployeeBonusRow({
         </div>
       )}
       {employee.lockedReason && globallyEditable && <div className="mt-2 text-[11px] leading-4 text-amber-800 dark:text-amber-200">{employee.lockedReason}</div>}
+      </div>
     </div>
   );
 }

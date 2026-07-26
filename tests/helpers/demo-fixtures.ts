@@ -282,6 +282,26 @@ async function fulfillApplicationApi(route: Route, journal: DemoNetworkJournal) 
   const url = new URL(request.url());
   if (!['GET', 'HEAD'].includes(method)) journal.mutationRequests.push(requestEntry);
 
+  if (url.pathname.includes('/api/project-access-settings') && method === 'POST') {
+    const body = request.postDataJSON() as { projectAccess?: Record<string, string[]> };
+    const settingsRow = (journal.tableRows.app_settings[0] || {}) as Record<string, unknown>;
+    const rawCompanies = settingsRow.companies;
+    const envelope = rawCompanies && typeof rawCompanies === 'object' && !Array.isArray(rawCompanies)
+      ? { ...(rawCompanies as Record<string, unknown>) }
+      : { companies: Array.isArray(rawCompanies) ? rawCompanies : [] };
+    const projectAccess = body.projectAccess || {};
+    journal.tableRows.app_settings[0] = {
+      ...settingsRow,
+      companies: { ...envelope, __suiteASettings: 1, projectAccess },
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, projectAccess }),
+    });
+    return;
+  }
+
   if (url.pathname.includes('/api/seafile/list')) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: demoFiles }) });
     return;

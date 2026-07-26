@@ -41,7 +41,7 @@ test('column filters compose as OR inside one column and AND across columns', ()
   assert.match(pageSource, /textColumnMatches\(`\$\{row\.name\} \$\{row\.client\}`, filters\.project\) &&/);
   assert.match(pageSource, /numberColumnMatches\(hourValue, filters\.hours\) &&/);
   assert.match(pageSource, /numberColumnMatches\(bonusValue, filters\.bonus\)/);
-  assert.match(pageSource, /rowMatchesColumnFilters\(row, columnFilters, canSeeContractMoney, isExecutive\)/);
+  assert.match(pageSource, /rowMatchesColumnFilters\(row, columnFilters, canSeeContractMoney, canSeeBonusSummary\)/);
 });
 
 test('true saved views use localStorage rather than hardcoded pseudo-presets', () => {

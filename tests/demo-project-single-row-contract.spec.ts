@@ -31,6 +31,30 @@ const DETACHED_BONUS_EMPLOYEE = {
   updated_at: '2026-07-12T00:00:00.000Z',
 };
 
+const DEMO_TEAM_LEDGER = [
+  {
+    id: DEMO_EMPLOYEE_IDS.partner,
+    name: 'Демо Партнёр',
+    role: 'Партнер',
+    approvedHours: '0.0',
+    bonusAmount: '840000',
+  },
+  {
+    id: DEMO_EMPLOYEE_IDS.manager,
+    name: 'Демо Менеджер',
+    role: 'Менеджер 1',
+    approvedHours: '6.0',
+    bonusAmount: '336000',
+  },
+  {
+    id: DEMO_EMPLOYEE_IDS.assistant,
+    name: 'Демо Ассистент',
+    role: 'Ассистент 1',
+    approvedHours: '8.0',
+    bonusAmount: '100800',
+  },
+] as const;
+
 const employeeSearchPlaceholder = /Поиск по (?:имени|ФИО).*(?:почте|email).*роли/i;
 
 type TeamMemberRecord = {
@@ -145,6 +169,29 @@ async function openProjectDetail(page: Page) {
   return detail;
 }
 
+async function expectEditableTeamLedger(detail: Locator) {
+  const ledger = detail.getByTestId('project-team-ledger');
+  await expect(ledger).toBeVisible();
+  const memberRows = ledger.locator('[data-team-member-row="true"]');
+  await expect(memberRows).toHaveCount(DEMO_TEAM_LEDGER.length);
+
+  for (const employee of DEMO_TEAM_LEDGER) {
+    const member = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employee.id}`);
+    await expect(member).toBeVisible();
+    await expect(member).toContainText(employee.name);
+    await expect(member).toContainText(employee.role);
+    await expect(member).toContainText(`${employee.approvedHours} ч`);
+    await expect(member.locator('input')).toHaveValue(employee.bonusAmount);
+  }
+
+  const geometry = await memberRows.evaluateAll((elements) => elements.map((element) => {
+    const rect = element.getBoundingClientRect();
+    return { top: Math.round(rect.top), width: Math.round(rect.width) };
+  }));
+  expect(new Set(geometry.map(({ top }) => top)).size).toBe(DEMO_TEAM_LEDGER.length);
+  expect(Math.min(...geometry.map(({ width }) => width))).toBeGreaterThan(900);
+}
+
 test.describe('single-row project command center contract', () => {
   test('CEO sees exactly one visible row per project id and no period or business-season UI', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
@@ -201,6 +248,7 @@ test.describe('single-row project command center contract', () => {
     await expect(row).toContainText(/3\s*360\s*000\s*₸/);
     await expect(row).toContainText(/1\s*276\s*800\s*₸/);
     await expect(row).toContainText(/2\s*083\s*200\s*₸/);
+    await expectEditableTeamLedger(row.getByTestId(`project-details-${DEMO_PROJECT_ID}`));
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -331,7 +379,7 @@ test.describe('single-row project command center contract', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('deputy director edits team and status while every money control remains read-only', async ({ page }) => {
+  test('deputy director edits team and status without any bonus DOM or bonus amount', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
     await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
@@ -351,21 +399,28 @@ test.describe('single-row project command center contract', () => {
     await expect.poll(() => targetProjectPatches(network).length).toBe(1);
 
     const detail = await openProjectDetail(page);
-    await expect(detail).toContainText(/3\s*360\s*000\s*₸/);
-    await expect(detail).toContainText(/1\s*276\s*800\s*₸/);
-    await expect(detail).toContainText(/2\s*083\s*200\s*₸/);
-    const bonusSummary = detail.getByTestId('project-bonus-editor');
-    await expect(bonusSummary).toBeVisible();
-    await expect(bonusSummary).toContainText('Бонусный пул');
-    await expect(bonusSummary).toContainText('Итого бонусов');
-    await expect(bonusSummary).toContainText('Остаток');
-    await expect(bonusSummary.locator('input, button')).toHaveCount(0);
+    const teamLedger = detail.getByTestId('project-team-ledger');
+    await expect(teamLedger).toBeVisible();
+    await expect(teamLedger.locator('[data-team-member-row="true"]')).toHaveCount(DEMO_TEAM_LEDGER.length);
+    for (const employee of DEMO_TEAM_LEDGER) {
+      const member = detail.getByTestId(`project-team-member-${DEMO_PROJECT_ID}-${employee.id}`);
+      await expect(member).toContainText(employee.name);
+      await expect(member).toContainText(employee.role);
+      await expect(member).toContainText(`${employee.approvedHours} ч`);
+    }
+    await expect(detail.getByTestId('project-bonus-editor')).toHaveCount(0);
+    await expect(detail.locator('[data-testid^="member-bonus-"]')).toHaveCount(0);
+    await expect(detail.locator('[data-testid^="employee-bonus-"]')).toHaveCount(0);
     await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toHaveCount(0);
+    await expect(detail).not.toContainText('Бонусный пул');
+    await expect(detail).not.toContainText(/3\s*360\s*000\s*₸/);
+    await expect(detail).not.toContainText(/1\s*276\s*800\s*₸/);
+    await expect(detail).not.toContainText(/2\s*083\s*200\s*₸/);
     expect(targetProjectPatches(network)).toHaveLength(1);
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('a protected detached bonus stays visible without inflating the active team', async ({ page }) => {
+  test('a protected detached bonus is completely hidden from the deputy director', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
     addProtectedDetachedBonus(network);
     await page.setViewportSize({ width: 1500, height: 900 });
@@ -374,13 +429,11 @@ test.describe('single-row project command center contract', () => {
 
     const row = await projectRow(page);
     await expect(row).toContainText('Команда · 3 чел.');
-    await expect(row).toContainText(DETACHED_BONUS_EMPLOYEE.name);
-    await expect(row).toContainText('Сохранённый бонус · вне команды');
-    await expect(row).toContainText(/222\s*222\s*₸/);
-
-    const detachedBonus = row.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DETACHED_BONUS_EMPLOYEE_ID}`);
-    await expect(detachedBonus).toBeVisible();
-    await expect(detachedBonus.locator('input, button')).toHaveCount(0);
+    await expect(row).not.toContainText(DETACHED_BONUS_EMPLOYEE.name);
+    await expect(row).not.toContainText('Сохранённый бонус · вне команды');
+    await expect(row).not.toContainText(/222\s*222\s*₸/);
+    await expect(row.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DETACHED_BONUS_EMPLOYEE_ID}`)).toHaveCount(0);
+    await expect(row.getByTestId('project-bonus-editor')).toHaveCount(0);
     expect(network.productionMutations).toEqual([]);
   });
 

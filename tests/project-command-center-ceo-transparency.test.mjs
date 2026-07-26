@@ -104,7 +104,8 @@ test('CEO projects page does not mount separate visual dashboards', () => {
   assert.equal((pageSource.match(/<ExecutivePortfolioVisuals\b/g) || []).length, 0);
   assert.equal((pageSource.match(/<ProjectWorkloadChart\b/g) || []).length, 0);
   assert.equal((pageSource.match(/<ProjectPortfolioPulse\b/g) || []).length, 0);
-  assert.match(pageSource, /Договор, компания, команда, сроки, часы, статус и бонусы находятся внутри одной строки проекта/);
+  assert.match(pageSource, /Договор, компания, вся команда, сроки, часы, статус и бонус каждого находятся внутри одной строки проекта/);
+  assert.match(pageSource, /canSeeBonusSummary[\s\S]{0,250}бонус каждого/);
 });
 
 test('compact portfolio totals use exclusive business states without a workload dashboard', () => {

@@ -14,6 +14,7 @@ import { CheckInWidget } from '@/components/CheckInWidget';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 import { MyHoursWidget, PartnerApprovalWidget, BonusesOverviewWidget } from '@/components/dashboard/TimesheetWidgets';
 import { useAppSettings } from '@/lib/appSettings';
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import { supabase } from '@/integrations/supabase/client';
 import { buildDashboardMetrics } from '@/lib/dashboardMetrics';
 import { buildProjectStageMetrics } from '@/lib/projectStages';
@@ -664,6 +665,7 @@ export default function Dashboard() {
   }
 
   const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
+  const canSeeBonuses = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'bonuses');
   const isPartner = user?.role === 'partner';
   const isManager = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isProcurement = user?.role === 'procurement';
@@ -944,7 +946,7 @@ export default function Dashboard() {
           isPartner ||
           user?.role === 'deputy_director' ||
           user?.role === 'admin';
-        if (!showMyHours && !showApproval && !isDirector) return null;
+        if (!showMyHours && !showApproval && !canSeeBonuses) return null;
         return (
           <>
             {(showMyHours || showApproval) && (
@@ -961,7 +963,7 @@ export default function Dashboard() {
                 )}
               </div>
             )}
-            {isDirector && (
+            {canSeeBonuses && (
               <WidgetErrorBoundary label="Бонусы 2024-2025">
                 <BonusesOverviewWidget />
               </WidgetErrorBoundary>

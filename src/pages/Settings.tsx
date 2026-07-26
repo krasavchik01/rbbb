@@ -8,9 +8,10 @@ import { Switch } from '@/components/ui/switch';
 import { useAuth, type User as AuthUser } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { useAppSettings } from '@/lib/appSettings';
+import { saveProjectAccessSettings, useAppSettings } from '@/lib/appSettings';
 import { CompaniesManagement } from '@/components/settings/CompaniesManagement';
 import { EmailSettingsPanel } from '@/components/settings/EmailSettingsPanel';
+import { ProjectAccessManagement } from '@/components/settings/ProjectAccessManagement';
 import { UserCompanyAssignment } from '@/components/settings/UserCompanyAssignment';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,6 +37,7 @@ export default function Settings() {
   const { toast } = useToast();
   const [appSettings, updateAppSettings] = useAppSettings();
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingProjectAccess, setIsSavingProjectAccess] = useState(false);
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -306,7 +308,7 @@ export default function Settings() {
             <TabsTrigger value="companies" className="text-xs sm:text-sm">Компании</TabsTrigger>
           )}
           {(user?.role === 'admin' || user?.role === 'ceo') && (
-            <TabsTrigger value="access" className="text-xs sm:text-sm">Доступ к проектам</TabsTrigger>
+            <TabsTrigger value="access" className="text-xs sm:text-sm">Доступы</TabsTrigger>
           )}
         </TabsList>
 
@@ -811,6 +813,32 @@ export default function Settings() {
         {/* Вкладка Доступ к проектам */}
         {(user?.role === 'admin' || user?.role === 'ceo') && (
           <TabsContent value="access" className="space-y-4">
+            {isAdmin && (
+              <Card className="border-0 p-4 shadow-sm sm:p-6">
+                <ProjectAccessManagement
+                  value={appSettings.projectAccess}
+                  saving={isSavingProjectAccess}
+                  onSave={async (projectAccess) => {
+                    setIsSavingProjectAccess(true);
+                    try {
+                      await saveProjectAccessSettings(projectAccess);
+                      toast({
+                        title: 'Доступы сохранены',
+                        description: 'Галочки применены ко всем ролям в едином своде.',
+                      });
+                    } catch (error: any) {
+                      toast({
+                        title: 'Не удалось сохранить доступы',
+                        description: error?.message || 'Повторите попытку.',
+                        variant: 'destructive',
+                      });
+                    } finally {
+                      setIsSavingProjectAccess(false);
+                    }
+                  }}
+                />
+              </Card>
+            )}
             <Card className="p-4 sm:p-6 border-0 shadow-sm">
               <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-primary" />

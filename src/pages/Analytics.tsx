@@ -4,6 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/hooks/useProjects-simple';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppSettings } from '@/lib/appSettings';
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import {
   TrendingUp,
   Users,
@@ -80,10 +82,11 @@ const SimplePieChart = ({ data, title }: { data: Array<{name: string, value: num
 export default function Analytics() {
   const { projects = [] } = useProjects();
   const { employees = [] } = useEmployees();
-  const { checkPermission } = useAuth();
+  const { user } = useAuth();
+  const [appSettings] = useAppSettings();
   
   // Проверка прав доступа к бонусам
-  const canViewBonuses = checkPermission('VIEW_ALL_BONUSES');
+  const canViewBonuses = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'bonuses');
 
   // Статистика проектов
   const projectStats = useMemo(() => {

@@ -8,6 +8,33 @@ import {
   type DemoNetworkJournal,
 } from './helpers/demo-fixtures';
 
+const TEAM_LEDGER_EXPECTATIONS = [
+  {
+    id: DEMO_EMPLOYEE_IDS.partner,
+    name: 'Демо Партнёр',
+    role: 'Партнер',
+    hours: '0.0 ч',
+    inputValue: '840000',
+    money: /840\s*000\s*₸/,
+  },
+  {
+    id: DEMO_EMPLOYEE_IDS.manager,
+    name: 'Демо Менеджер',
+    role: 'Менеджер 1',
+    hours: '6.0 ч',
+    inputValue: '336000',
+    money: /336\s*000\s*₸/,
+  },
+  {
+    id: DEMO_EMPLOYEE_IDS.assistant,
+    name: 'Демо Ассистент',
+    role: 'Ассистент 1',
+    hours: '8.0 ч',
+    inputValue: '100800',
+    money: /100\s*800\s*₸/,
+  },
+] as const;
+
 function projectPatchRequests(network: DemoNetworkJournal) {
   return network.mutationRequests.filter((request) => (
     request.method === 'PATCH' && request.url.includes('/rest/v1/projects')
@@ -36,6 +63,7 @@ async function openDemoProjectInline(page: Parameters<typeof loginAsDemoRole>[0]
 test.describe('CEO inline project bonuses', () => {
   test('one project row shows the project picture and every employee bonus without another dashboard', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
+    await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
     await waitForDemoApp(page);
 
@@ -55,13 +83,24 @@ test.describe('CEO inline project bonuses', () => {
       name: `Увеличить бонусный пул ${demoProject.name} на 50 000 тенге`,
       exact: true,
     })).toBeVisible();
-    for (const employeeId of [
-      DEMO_EMPLOYEE_IDS.partner,
-      DEMO_EMPLOYEE_IDS.manager,
-      DEMO_EMPLOYEE_IDS.assistant,
-    ]) {
-      await expect(detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employeeId}`)).toBeVisible();
+    const teamLedger = detail.getByTestId('project-team-ledger');
+    await expect(teamLedger).toBeVisible();
+    const memberRows = teamLedger.locator('[data-team-member-row="true"]');
+    await expect(memberRows).toHaveCount(TEAM_LEDGER_EXPECTATIONS.length);
+    for (const employee of TEAM_LEDGER_EXPECTATIONS) {
+      const member = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employee.id}`);
+      await expect(member).toBeVisible();
+      await expect(member).toContainText(employee.name);
+      await expect(member).toContainText(employee.role);
+      await expect(member).toContainText(employee.hours);
+      await expect(member.locator('input')).toHaveValue(employee.inputValue);
     }
+    const rowGeometry = await memberRows.evaluateAll((elements) => elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: Math.round(rect.top), width: Math.round(rect.width) };
+    }));
+    expect(new Set(rowGeometry.map(({ top }) => top)).size).toBe(TEAM_LEDGER_EXPECTATIONS.length);
+    expect(Math.min(...rowGeometry.map(({ width }) => width))).toBeGreaterThan(900);
     await expect(detail.getByTestId('project-advanced-content')).toHaveCount(0);
     await expect(page).toHaveURL(/\/projects$/);
     expect(network.mutationRequests).toEqual([]);
@@ -271,6 +310,17 @@ test.describe('CEO inline project bonuses', () => {
     await expect(bonuses).toContainText('Только просмотр');
     await expect(bonuses.locator('input, button')).toHaveCount(0);
     await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toHaveCount(0);
+    const teamLedger = detail.getByTestId('project-team-ledger');
+    await expect(teamLedger.locator('[data-team-member-row="true"]')).toHaveCount(TEAM_LEDGER_EXPECTATIONS.length);
+    for (const employee of TEAM_LEDGER_EXPECTATIONS) {
+      const member = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employee.id}`);
+      await expect(member).toBeVisible();
+      await expect(member).toContainText(employee.name);
+      await expect(member).toContainText(employee.role);
+      await expect(member).toContainText(employee.hours);
+      await expect(member).toContainText(employee.money);
+      await expect(member.locator('input, button')).toHaveCount(0);
+    }
     expect(projectPatchRequests(network)).toHaveLength(0);
     expect(network.productionMutations).toEqual([]);
   });
