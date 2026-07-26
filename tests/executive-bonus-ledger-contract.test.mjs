@@ -76,3 +76,18 @@ test('each employee has a printable receipt with project sources and handwritten
   assert.match(source, /Подпись/);
   assert.match(source, /Дата/);
 });
+
+test('the bonus ledger exposes one amount-range filter shared by list, KPI and print scopes', () => {
+  const source = bonusPresentationSource();
+  for (const testId of [
+    'bonus-amount-metric',
+    'bonus-amount-min',
+    'bonus-amount-max',
+    'bonus-visible-count',
+  ]) {
+    assert.ok(source.includes(testId), `missing ${testId} amount-filter surface`);
+  }
+  for (const label of ['Рассчитано', 'Утверждено', 'Выплачено', 'Не в реестре']) {
+    assert.ok(source.includes(label), `missing ${label} amount metric`);
+  }
+});

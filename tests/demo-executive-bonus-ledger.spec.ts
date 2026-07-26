@@ -166,6 +166,73 @@ test.describe('executive employee bonus ledger', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
+  test('amount range filters every source and keeps employees, KPI and print in the same scope', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.print = () => undefined;
+    });
+    const network = await openExecutiveBonusLedger(page, 'ceo');
+    const metric = page.getByTestId('bonus-amount-metric');
+    const minimum = page.getByTestId('bonus-amount-min');
+    const maximum = page.getByTestId('bonus-amount-max');
+    const employeeRows = page.locator('[data-bonus-employee-row="true"]');
+
+    const selectMetric = async (name: RegExp) => {
+      await metric.click();
+      await page.getByRole('option', { name }).click();
+    };
+    const setRange = async (from: number, to: number) => {
+      await minimum.fill(String(from));
+      await maximum.fill(String(to));
+    };
+
+    await selectMetric(/^Рассчитано$/i);
+    await setRange(830_000, 850_000);
+    await expect(page.getByTestId('bonus-visible-count')).toContainText('1');
+    await expect(employeeRows).toHaveCount(1);
+    await expect(page.getByTestId(`bonus-employee-row-${DEMO_EMPLOYEE_IDS.partner}`)).toBeVisible();
+    await expect(page.getByTestId('bonus-project-sources')).toContainText(demoProject.name);
+    await expect(page.getByTestId('bonus-project-sources')).not.toContainText(SECOND_PROJECT_NAME);
+    await expect(page.getByTestId('bonus-kpi-planned')).toContainText(/840\s*000/);
+
+    await selectMetric(/^Утверждено$/i);
+    await setRange(330_000, 340_000);
+    await expect(page.getByTestId('bonus-visible-count')).toContainText('1');
+    await expect(employeeRows).toHaveCount(1);
+    await expect(page.getByTestId(`bonus-employee-row-${DEMO_EMPLOYEE_IDS.manager}`)).toBeVisible();
+    await expect(page.getByTestId('bonus-kpi-planned')).toContainText(/336\s*000/);
+    await expect(page.getByTestId('bonus-kpi-approved')).toContainText(/336\s*000/);
+
+    await selectMetric(/^Выплачено$/i);
+    await setRange(830_000, 850_000);
+    await expect(page.getByTestId('bonus-visible-count')).toContainText('1');
+    await expect(employeeRows).toHaveCount(1);
+    await expect(page.getByTestId(`bonus-employee-row-${DEMO_EMPLOYEE_IDS.partner}`)).toBeVisible();
+    await expect(page.getByTestId('bonus-kpi-paid')).toContainText(/840\s*000/);
+
+    await selectMetric(/^Не в реестре$/i);
+    await setRange(150_000, 170_000);
+    await expect(page.getByTestId('bonus-visible-count')).toContainText('1');
+    await expect(employeeRows).toHaveCount(1);
+    const partnerRow = page.getByTestId(`bonus-employee-row-${DEMO_EMPLOYEE_IDS.partner}`);
+    await expect(partnerRow).toBeVisible();
+    await expect(partnerRow.getByTestId('bonus-project-sources')).toContainText(SECOND_PROJECT_NAME);
+    await expect(partnerRow.getByTestId('bonus-project-sources')).not.toContainText(demoProject.name);
+    await expect(page.getByTestId('bonus-kpi-planned')).toContainText(/160\s*000/);
+    await expect(page.getByTestId('bonus-kpi-approved')).toContainText(/0\s*₸/);
+    await expect(page.getByTestId('bonus-kpi-paid')).toContainText(/0\s*₸/);
+    await expect(page.getByTestId('bonus-kpi-unregistered')).toContainText(/160\s*000/);
+
+    await partnerRow.getByRole('button', { name: /Распечатать ведомость/ }).click();
+    const slip = page.getByTestId('bonus-print-slip');
+    await expect(slip).toContainText(SECOND_PROJECT_NAME);
+    await expect(slip).not.toContainText(demoProject.name);
+    await expect(slip).toContainText(/Расчётный итог:\s*160\s*000\s*₸/i);
+
+    expect(network.mutationRequests).toEqual([]);
+    expect(network.productionMutations).toEqual([]);
+    expect(network.unhandledRequests).toEqual([]);
+  });
+
   test('admin has the same ledger while deputy has neither the route nor its navigation item', async ({ page }) => {
     let network = await loginAsDemoRole(page, 'admin');
     await page.goto('/projects');
@@ -192,6 +259,15 @@ test.describe('executive employee bonus ledger', () => {
   test('the executive bonus ledger stays readable without horizontal page scrolling on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const network = await openExecutiveBonusLedger(page, 'ceo');
+
+    await expect(page.getByTestId('bonus-amount-metric')).toBeVisible();
+    await expect(page.getByTestId('bonus-amount-min')).toBeVisible();
+    await expect(page.getByTestId('bonus-amount-max')).toBeVisible();
+    await page.getByTestId('bonus-amount-metric').click();
+    await page.getByRole('option', { name: /^Не в реестре$/i }).click();
+    await page.getByTestId('bonus-amount-min').fill('150000');
+    await page.getByTestId('bonus-amount-max').fill('170000');
+    await expect(page.getByTestId('bonus-visible-count')).toContainText('1');
 
     const geometry = await page.evaluate(() => ({
       viewport: window.innerWidth,

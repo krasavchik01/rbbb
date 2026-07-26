@@ -78,6 +78,14 @@ type SourceAmountField =
   | 'overRegisteredAmount';
 
 type LedgerStatusFilter = 'all' | 'unregistered' | 'pending' | 'approved' | 'paid' | 'mismatch';
+type LedgerAmountMetric = 'plannedAmount' | 'approvedAmount' | 'paidAmount' | 'unregisteredAmount';
+
+const AMOUNT_METRIC_LABELS: Record<LedgerAmountMetric, string> = {
+  plannedAmount: 'Рассчитано',
+  approvedAmount: 'Утверждено',
+  paidAmount: 'Выплачено',
+  unregisteredAmount: 'Не в реестре',
+};
 
 function currencySymbol(currency: string): string {
   return CURRENCY_SYMBOLS[currency] || currency;
@@ -172,6 +180,13 @@ function sourceMatchesStatus(source: BonusProjectSource, filter: LedgerStatusFil
   if (filter === 'approved') return source.approvedAmount > 0;
   if (filter === 'paid') return source.paidAmount > 0;
   return source.overRegisteredAmount > 0 || source.projectAllocatedAmount > source.projectBonusPoolAmount;
+}
+
+function parseAmountFilter(value: string): number | null {
+  const normalized = value.replace(/[\s\u00a0]/g, '').replace(',', '.');
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function sourceSearchText(source: BonusProjectSource): string {
@@ -335,6 +350,9 @@ export default function Bonuses() {
   const [search, setSearch] = useState('');
   const [season, setSeason] = useState('all');
   const [status, setStatus] = useState<LedgerStatusFilter>('all');
+  const [amountMetric, setAmountMetric] = useState<LedgerAmountMetric>('plannedAmount');
+  const [amountFrom, setAmountFrom] = useState('');
+  const [amountTo, setAmountTo] = useState('');
   const [page, setPage] = useState(1);
   const [printEmployee, setPrintEmployee] = useState<EmployeeBonusLedger | null>(null);
 
@@ -390,16 +408,21 @@ export default function Bonuses() {
   }), [projects, employees, payments, hours]);
 
   const normalizedSearch = search.trim().toLowerCase();
+  const amountFromValue = parseAmountFilter(amountFrom);
+  const amountToValue = parseAmountFilter(amountTo);
   const visibleEmployees = useMemo(() => ledger.employees.flatMap((employee) => {
     const employeeMatches = `${employee.employeeName} ${employee.employeeEmail}`.toLowerCase().includes(normalizedSearch);
     const sources = employee.sources.filter((source) => {
       if (season !== 'all' && source.season?.key !== season) return false;
       if (!sourceMatchesStatus(source, status)) return false;
+      const selectedAmount = Number(source[amountMetric]) || 0;
+      if (amountFromValue !== null && selectedAmount < amountFromValue) return false;
+      if (amountToValue !== null && selectedAmount > amountToValue) return false;
       if (!normalizedSearch || employeeMatches) return true;
       return sourceSearchText(source).includes(normalizedSearch);
     });
     return sources.length > 0 ? [{ ...employee, sources }] : [];
-  }), [ledger.employees, normalizedSearch, season, status]);
+  }), [ledger.employees, normalizedSearch, season, status, amountMetric, amountFromValue, amountToValue]);
   const visibleSources = useMemo(
     () => visibleEmployees.flatMap((employee) => employee.sources),
     [visibleEmployees],
@@ -432,7 +455,7 @@ export default function Bonuses() {
 
   useEffect(() => {
     setPage(1);
-  }, [normalizedSearch, season, status]);
+  }, [normalizedSearch, season, status, amountMetric, amountFromValue, amountToValue]);
 
   const kzt = ledger.currencyTotals.KZT || {
     currency: 'KZT',
@@ -480,11 +503,11 @@ export default function Bonuses() {
     .map((employee) => ({
       name: employee.employeeName.length > 24 ? `${employee.employeeName.slice(0, 22)}…` : employee.employeeName,
       fullName: employee.employeeName,
-      value: sumKzt(employee.sources, 'plannedAmount'),
+      value: sumKzt(employee.sources, amountMetric),
     }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value)
-    .slice(0, 10), [visibleEmployees]);
+    .slice(0, 10), [visibleEmployees, amountMetric]);
   const chartEmployeeData = topEmployees.length > 0 ? topEmployees : [{ name: 'Нет данных', fullName: 'Нет данных', value: 0 }];
 
   const nonKzt = Object.values(ledger.currencyTotals).filter((item) => item.currency !== 'KZT' && (
@@ -701,8 +724,8 @@ export default function Bonuses() {
           <div className="flex items-start gap-2">
             <BarChart3 className="mt-0.5 h-5 w-5 text-primary" />
             <div>
-              <h2 className="font-black">Лестница расчётных бонусов</h2>
-              <p className="text-xs text-muted-foreground">Топ сотрудников по текущему фильтру · KZT</p>
+              <h2 className="font-black">Лестница сотрудников</h2>
+              <p className="text-xs text-muted-foreground">Топ по «{AMOUNT_METRIC_LABELS[amountMetric]}» в текущей выборке · KZT</p>
             </div>
           </div>
           <div className="mt-4 h-72 min-w-0">
@@ -722,15 +745,15 @@ export default function Bonuses() {
       </section>
 
       <Card className="min-w-0 p-3 sm:p-4">
-        <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(260px,1fr)_220px_220px_auto] lg:items-end">
-          <label className="min-w-0">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-12 xl:items-end">
+          <label className="min-w-0 xl:col-span-3">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Поиск</span>
             <div className="relative min-w-0">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник, проект, компания или роль" className="w-full pl-9" />
             </div>
           </label>
-          <label className="min-w-0">
+          <label className="min-w-0 xl:col-span-2">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Бизнес-сезон</span>
             <Select value={season} onValueChange={setSeason}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -740,7 +763,7 @@ export default function Bonuses() {
               </SelectContent>
             </Select>
           </label>
-          <label className="min-w-0">
+          <label className="min-w-0 xl:col-span-2">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Состояние денег</span>
             <Select value={status} onValueChange={(value) => setStatus(value as LedgerStatusFilter)}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -754,7 +777,41 @@ export default function Bonuses() {
               </SelectContent>
             </Select>
           </label>
-          <div className="text-sm text-muted-foreground lg:pb-2 lg:text-right">
+          <label className="min-w-0 xl:col-span-2">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Фильтровать сумму</span>
+            <Select value={amountMetric} onValueChange={(value) => setAmountMetric(value as LedgerAmountMetric)}>
+              <SelectTrigger data-testid="bonus-amount-metric" aria-label="Показатель суммы" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(AMOUNT_METRIC_LABELS) as Array<[LedgerAmountMetric, string]>).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <div className="min-w-0 xl:col-span-2">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Диапазон суммы</span>
+            <div className="grid min-w-0 grid-cols-2 gap-2">
+              <Input
+                data-testid="bonus-amount-min"
+                aria-label="Сумма от"
+                inputMode="decimal"
+                value={amountFrom}
+                onChange={(event) => setAmountFrom(event.target.value)}
+                placeholder="От"
+              />
+              <Input
+                data-testid="bonus-amount-max"
+                aria-label="Сумма до"
+                inputMode="decimal"
+                value={amountTo}
+                onChange={(event) => setAmountTo(event.target.value)}
+                placeholder="До"
+              />
+            </div>
+          </div>
+          <div data-testid="bonus-visible-count" className="text-sm text-muted-foreground xl:col-span-1 xl:pb-2 xl:text-right">
             Показано <strong className="text-foreground">{visibleEmployees.length}</strong> из {ledger.employees.length} сотрудников
           </div>
         </div>
