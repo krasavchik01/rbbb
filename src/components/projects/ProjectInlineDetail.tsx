@@ -297,7 +297,7 @@ export function ProjectInlineDetail({
         </FactCard>
       </div>
 
-      {showTeam && <TeamMemberLedger
+      {(showTeam || showBonuses) && <TeamMemberLedger
         projectId={projectId}
         members={team.members}
         showHours={showHours}

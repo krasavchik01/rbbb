@@ -9,6 +9,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 const accessSource = read('src/lib/projectAccessControl.ts');
 const commandCenterSource = read('src/pages/ProjectCommandCenter.tsx');
+const inlineDetailSource = read('src/components/projects/ProjectInlineDetail.tsx');
 const workspaceSource = read('src/pages/ProjectWorkspace.tsx');
 const apiSource = read('api/project-access-settings.mjs');
 const migrationSource = read('supabase/migrations/20260726000000_restrict_app_settings_updates_to_admin.sql');
@@ -29,4 +30,17 @@ test('admin access writes use a verified server endpoint and RLS removes the bro
 test('restricted roles cannot infer bonus differences from filters or finance totals', () => {
   assert.match(commandCenterSource, /viewFilter === 'bonus_attention'[\s\S]{0,100}&& canSeeBonusSummary/);
   assert.match(workspaceSource, /canSeeBonuses \? `Итого расходы:[\s\S]{0,250}` : `Операционные расходы:/);
+});
+
+test('team and hours visibility also gates table columns, search and filters', () => {
+  assert.match(commandCenterSource, /const coverageTeamText = canSeeTeam/);
+  assert.match(commandCenterSource, /canSeeTeam && <ProjectFilterField label=/);
+  assert.match(commandCenterSource, /canSeeTeam && <TableHead className="min-w-\[230px\]">/);
+  assert.match(commandCenterSource, /canSeeHours && <TableHead className="min-w-\[150px\]">/);
+  assert.match(commandCenterSource, /!canSeeTeam \|\| textColumnMatches\(partnerText/);
+  assert.match(commandCenterSource, /!canSeeHours \|\| numberColumnMatches\(hourValue/);
+});
+
+test('employee bonuses remain visible independently from the ordinary team section', () => {
+  assert.match(inlineDetailSource, /\{\(showTeam \|\| showBonuses\) && <TeamMemberLedger/);
 });

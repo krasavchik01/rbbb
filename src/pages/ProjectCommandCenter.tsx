@@ -1175,7 +1175,14 @@ function numberColumnMatches(amount: number, filter: string): boolean {
   return textColumnMatches(String(amount), raw);
 }
 
-function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMoney: boolean, canSeeBonuses: boolean): boolean {
+function rowMatchesColumnFilters(
+  row: any,
+  filters: ColumnFilterState,
+  canSeeMoney: boolean,
+  canSeeBonuses: boolean,
+  canSeeTeam: boolean,
+  canSeeHours: boolean,
+): boolean {
   if (!hasActiveColumnFilters(filters)) return true;
   const notes = readProjectNotes(row.project);
   const commandModel = buildProjectCommandCenterModel(row.project);
@@ -1200,12 +1207,12 @@ function rowMatchesColumnFilters(row: any, filters: ColumnFilterState, canSeeMon
     textColumnMatches(row.type, filters.service) &&
     textColumnMatches(stageText, filters.stage) &&
     textColumnMatches(periodText, filters.period) &&
-    textColumnMatches(partnerText, filters.partner) &&
-    textColumnMatches(leaderText, filters.leader) &&
+    (!canSeeTeam || textColumnMatches(partnerText, filters.partner)) &&
+    (!canSeeTeam || textColumnMatches(leaderText, filters.leader)) &&
     textColumnMatches(statusText, filters.status) &&
     textColumnMatches(completenessText, filters.completeness) &&
     (!canSeeMoney || numberColumnMatches(Number(row.amount || 0), filters.money)) &&
-    numberColumnMatches(hourValue, filters.hours) &&
+    (!canSeeHours || numberColumnMatches(hourValue, filters.hours)) &&
     (!canSeeBonuses || numberColumnMatches(bonusValue, filters.bonus))
   );
 }
@@ -2412,12 +2419,40 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return companyOptions.find((item) => item.key === companyFilter)?.name || '';
   }, [companyFilter, companyOptions]);
 
+  useEffect(() => {
+    if (!canSeeTeam) {
+      if (partnerFilter !== 'all') setPartnerFilter('all');
+      if (viewFilter === 'no_partner' || viewFilter === 'no_leader') setViewFilter('all');
+      setColumnFilters((current) => (
+        current.partner || current.leader
+          ? { ...current, partner: '', leader: '' }
+          : current
+      ));
+    }
+    if (!canSeeHours) {
+      if (viewFilter === 'waiting_hours') setViewFilter('all');
+      if (sortBy === 'hours_desc') setSortBy('deadline_asc');
+      setColumnFilters((current) => (current.hours ? { ...current, hours: '' } : current));
+    }
+    if (!canSeeContractMoney) {
+      if (sortBy === 'amount_desc') setSortBy('deadline_asc');
+      setColumnFilters((current) => (current.money ? { ...current, money: '' } : current));
+    }
+    if (!canSeeBonusSummary) {
+      if (viewFilter === 'bonus_attention') setViewFilter('all');
+      setColumnFilters((current) => (current.bonus ? { ...current, bonus: '' } : current));
+    }
+  }, [canSeeTeam, canSeeHours, canSeeContractMoney, canSeeBonusSummary, partnerFilter, viewFilter, sortBy]);
+
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     const exactRange = makeDateRange(dateFromFilter, dateToFilter);
     const filtered = rows.filter((row) => {
-      const coverageTeamText = (row.coverageTeam || row.team || []).map(teamName).join(' ');
-      const haystack = `${row.company} ${row.name} ${row.client} ${row.type} ${row.startDate} ${row.deadline} ${Object.values(row.teamColumns).join(' ')} ${coverageTeamText}`.toLowerCase();
+      const coverageTeamText = canSeeTeam
+        ? (row.coverageTeam || row.team || []).map(teamName).join(' ')
+        : '';
+      const teamColumnsText = canSeeTeam ? Object.values(row.teamColumns).join(' ') : '';
+      const haystack = `${row.company} ${row.name} ${row.client} ${row.type} ${row.startDate} ${row.deadline} ${teamColumnsText} ${coverageTeamText}`.toLowerCase();
       if (query && !haystack.includes(query)) return false;
       if (companyFilter === 'missing') {
         if (!rowHasMissingCompany(row)) return false;
@@ -2425,8 +2460,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         const company = companyOptions.find((option) => option.key === companyFilter)?.company;
         if (!company || !rowMatchesCompanyOption(row, company)) return false;
       }
-      if (partnerFilter === 'unassigned' && row.partnerNames.length > 0) return false;
+      if (canSeeTeam && partnerFilter === 'unassigned' && row.partnerNames.length > 0) return false;
       if (
+        canSeeTeam &&
         partnerFilter !== 'all' &&
         partnerFilter !== 'unassigned' &&
         !row.partnerNames.some((name: string) => partnerFilterKey(name) === partnerFilter)
@@ -2440,11 +2476,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (viewFilter === 'attention' && row.baseReadiness.level !== 'attention') return false;
       if (viewFilter === 'portfolio_attention' && (row.baseReadiness.level !== 'attention' || row.status === 'pending_payment_approval')) return false;
       if (viewFilter === 'closed' && row.readiness.level !== 'closed') return false;
-      if (viewFilter === 'no_partner' && !rowHasIssue(row, 'нет партнера')) return false;
-      if (viewFilter === 'no_leader' && !rowHasIssue(row, 'нет руководителя')) return false;
+      if (canSeeTeam && viewFilter === 'no_partner' && !rowHasIssue(row, 'нет партнера')) return false;
+      if (canSeeTeam && viewFilter === 'no_leader' && !rowHasIssue(row, 'нет руководителя')) return false;
       if (viewFilter === 'no_contract' && !rowHasIssue(row, 'нет договора')) return false;
       if (viewFilter === 'no_amount' && !rowHasIssue(row, 'нет суммы')) return false;
-      if (viewFilter === 'waiting_hours' && !rowHasIssue(row, 'ждут часы')) return false;
+      if (canSeeHours && viewFilter === 'waiting_hours' && !rowHasIssue(row, 'ждут часы')) return false;
       if (viewFilter === 'ready_bonus' && row.status !== 'pending_payment_approval') return false;
       if (
         viewFilter === 'bonus_attention'
@@ -2457,18 +2493,18 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (periodFilter === 'has_periods' && row.periods.length === 0) return false;
       if (periodFilter === 'no_periods' && row.periods.length > 0) return false;
       if (!rowMatchesAuditPeriodType(row, auditPeriodTypeFilter)) return false;
-      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney, canSeeBonusSummary)) return false;
+      if (!rowMatchesColumnFilters(row, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours)) return false;
       return true;
     });
 
     return [...filtered].sort((a, b) => {
       if (sortBy === 'deadline_asc') return dateStamp(a.deadline) - dateStamp(b.deadline);
       if (sortBy === 'deadline_desc') return dateStamp(b.deadline) - dateStamp(a.deadline);
-      if (sortBy === 'amount_desc') return b.amount - a.amount;
-      if (sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
+      if (canSeeContractMoney && sortBy === 'amount_desc') return b.amount - a.amount;
+      if (canSeeHours && sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, hoursComplete, hoursLoading, hoursError]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours, hoursComplete, hoursLoading, hoursError]);
 
   const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize));
   const safeTablePage = Math.min(tablePage, tablePageCount);
@@ -2488,7 +2524,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   }, [tablePageCount]);
 
   const canSeeGrossIncome = canSeeContractMoney && canSeeBonusSummary;
-  const tableColSpan = 6
+  const tableColSpan = 4
+    + (canSeeTeam ? 1 : 0)
+    + (canSeeHours ? 1 : 0)
     + (canSeeContractMoney ? 1 : 0)
     + (canSeeBonusSummary ? 1 : 0)
     + (canSeeGrossIncome ? 1 : 0);
@@ -2500,7 +2538,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const primaryFiltersActive = Boolean(
     search.trim()
       || companyFilter !== 'all'
-      || partnerFilter !== 'all'
+      || (canSeeTeam && partnerFilter !== 'all')
       || yearFilter !== 'all'
       || businessSeasonFilter !== 'all'
       || dateFromFilter
@@ -4378,7 +4416,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Клиент, проект, партнёр или руководитель"
+                    placeholder={canSeeTeam ? 'Клиент, проект, партнёр или руководитель' : 'Клиент или проект'}
                     className="pl-9"
                   />
                 </div>
@@ -4399,7 +4437,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 </SelectContent>
               </Select>
               </ProjectFilterField>
-              <ProjectFilterField label="Партнёр">
+              {canSeeTeam && <ProjectFilterField label="Партнёр">
               <Select value={partnerFilter} onValueChange={(value) => setPartnerFilter(value as PartnerFilter)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Партнер" />
@@ -4414,7 +4452,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   ))}
                 </SelectContent>
               </Select>
-              </ProjectFilterField>
+              </ProjectFilterField>}
               <ProjectFilterField label="Дата с">
               <Input
                 type="date"
@@ -4446,11 +4484,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <SelectItem value="closed">Закрытые</SelectItem>
                   <SelectItem value="ready_bonus">Готовы к бонусам</SelectItem>
                   {canSeeBonusSummary && <SelectItem value="bonus_attention">Проверить расчёт бонусов</SelectItem>}
-                  <SelectItem value="no_partner">Без партнера</SelectItem>
-                  <SelectItem value="no_leader">Без руководителя</SelectItem>
+                  {canSeeTeam && <SelectItem value="no_partner">Без партнера</SelectItem>}
+                  {canSeeTeam && <SelectItem value="no_leader">Без руководителя</SelectItem>}
                   {canSeeContractMoney && <SelectItem value="no_contract">Без договора</SelectItem>}
                   {canSeeContractMoney && <SelectItem value="no_amount">Без суммы</SelectItem>}
-                  <SelectItem value="waiting_hours">Ждут часы</SelectItem>
+                  {canSeeHours && <SelectItem value="waiting_hours">Ждут часы</SelectItem>}
                 </SelectContent>
               </Select>
               </ProjectFilterField>
@@ -4501,8 +4539,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                 <SelectContent>
                   <SelectItem value="deadline_asc">Сначала ближайшие</SelectItem>
                   <SelectItem value="deadline_desc">Сначала дальние</SelectItem>
-                  <SelectItem value="amount_desc">Сначала крупные</SelectItem>
-                  <SelectItem value="hours_desc">Сначала по часам</SelectItem>
+                  {canSeeContractMoney && <SelectItem value="amount_desc">Сначала крупные</SelectItem>}
+                  {canSeeHours && <SelectItem value="hours_desc">Сначала по часам</SelectItem>}
                   <SelectItem value="default">Без сортировки</SelectItem>
                 </SelectContent>
               </Select>
@@ -4560,11 +4598,11 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
             </div>
           </div>
-          {(companyFilter !== 'all' || partnerFilter !== 'all' || dateFromFilter || dateToFilter) && (
+          {(companyFilter !== 'all' || (canSeeTeam && partnerFilter !== 'all') || dateFromFilter || dateToFilter) && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Сверка:</span>
               {companyFilter !== 'all' && <Badge variant="secondary">Наша компания: {selectedCompanyLabel}</Badge>}
-              {partnerFilter !== 'all' && <Badge variant="secondary">Партнер: {selectedPartnerLabel}</Badge>}
+              {canSeeTeam && partnerFilter !== 'all' && <Badge variant="secondary">Партнер: {selectedPartnerLabel}</Badge>}
               {(dateFromFilter || dateToFilter) && <Badge variant="secondary">Даты: {dateFromFilter || '…'} — {dateToFilter || '…'}</Badge>}
               <span className="ml-auto text-muted-foreground">
                 Строк свода: <span className="font-medium text-foreground tabular-nums">{filteredDisplayRowCount}</span>; записей в базе: <span className="font-medium text-foreground tabular-nums">{filteredDatabaseRecordCount}</span>
@@ -4843,7 +4881,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
                     <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs">
                       <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Срок</div><div className="mt-1 break-words font-semibold tabular-nums">{formatDate(row.deadline)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">{row.deadlineState.label}</div></div>
-                      <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Часы</div><div className="mt-1 font-semibold tabular-nums">{hoursLoading ? 'Загрузка…' : hoursError ? 'Нет данных' : `${workload.total.toFixed(1)} ч`}</div><div className="mt-0.5 text-[10px] text-muted-foreground">{hoursLoading || hoursError ? 'таймшиты сверяются' : `${row.hours.approved.toFixed(1)} утверждено`}</div></div>
+                      {canSeeHours && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Часы</div><div className="mt-1 font-semibold tabular-nums">{hoursLoading ? 'Загрузка…' : hoursError ? 'Нет данных' : `${workload.total.toFixed(1)} ч`}</div><div className="mt-0.5 text-[10px] text-muted-foreground">{hoursLoading || hoursError ? 'таймшиты сверяются' : `${row.hours.approved.toFixed(1)} утверждено`}</div></div>}
                       {canSeeContractMoney && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Договор без НДС</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(row.amount)}</div></div>}
                       {canSeeBonusSummary && <div className="min-w-0 rounded-md bg-muted/30 p-2"><div className="text-[10px] uppercase text-muted-foreground">Бонусы</div><div className="mt-1 break-words font-semibold tabular-nums">{displayMoney(totalBonusAmount)}</div><div className="mt-0.5 break-words text-[10px] text-muted-foreground">Распределено {displayMoney(allocatedBonuses)}</div></div>}
                     </div>
@@ -4991,20 +5029,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <CommandCenterColumnFilter label="Вид услуги" value={columnFilters.service} active={!!columnFilters.service} onChange={(value) => setColumnFilter('service', value)} onClear={() => clearColumnFilter('service')} />
                   <CommandCenterColumnFilter label="Этап" value={columnFilters.stage} active={!!columnFilters.stage} onChange={(value) => setColumnFilter('stage', value)} onClear={() => clearColumnFilter('stage')} />
                 </TableHead>
-                <TableHead className="min-w-[230px]">
+                {canSeeTeam && <TableHead className="min-w-[230px]">
                   Партнёр / руководитель
                   <CommandCenterColumnFilter label="Партнёр" value={columnFilters.partner} active={!!columnFilters.partner} onChange={(value) => setColumnFilter('partner', value)} onClear={() => clearColumnFilter('partner')} />
                   <CommandCenterColumnFilter label="Руководитель" value={columnFilters.leader} active={!!columnFilters.leader} onChange={(value) => setColumnFilter('leader', value)} onClear={() => clearColumnFilter('leader')} />
-                </TableHead>
+                </TableHead>}
                 <TableHead className="min-w-[190px]">
                   Период / дедлайн
                   <CommandCenterColumnFilter label="Бизнес-сезон" value={columnFilters.season} active={!!columnFilters.season} onChange={(value) => setColumnFilter('season', value)} onClear={() => clearColumnFilter('season')} />
                   <CommandCenterColumnFilter label="Период / дедлайн" value={columnFilters.period} active={!!columnFilters.period} onChange={(value) => setColumnFilter('period', value)} onClear={() => clearColumnFilter('period')} />
                 </TableHead>
-                <TableHead className="min-w-[150px]">
+                {canSeeHours && <TableHead className="min-w-[150px]">
                   Часы / сложность
                   <CommandCenterColumnFilter label="Часы" value={columnFilters.hours} placeholder="Напр. 10-80" active={!!columnFilters.hours} onChange={(value) => setColumnFilter('hours', value)} onClear={() => clearColumnFilter('hours')} />
-                </TableHead>
+                </TableHead>}
                 {canSeeContractMoney && <TableHead className="min-w-[170px] text-right">Сумма без НДС <CommandCenterColumnFilter label="Сумма договора" value={columnFilters.money} placeholder="Напр. 1000000-5000000" active={!!columnFilters.money} onChange={(value) => setColumnFilter('money', value)} onClear={() => clearColumnFilter('money')} /></TableHead>}
                 {canSeeBonusSummary && <TableHead className="min-w-[190px] text-right">Бонусы <CommandCenterColumnFilter label="Бонус" value={columnFilters.bonus} placeholder="Напр. 100000-" active={!!columnFilters.bonus} onChange={(value) => setColumnFilter('bonus', value)} onClear={() => clearColumnFilter('bonus')} /></TableHead>}
                 {canSeeGrossIncome && <TableHead className="min-w-[170px] text-right">Грязный доход</TableHead>}
@@ -5102,7 +5140,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                             {row.contractFiles.length > 0 && <Badge variant="outline" className="text-[11px]">договор ✓</Badge>}
                           </div>
                         </TableCell>
-                        <TableCell className="py-3 align-top">
+                        {canSeeTeam && <TableCell className="py-3 align-top">
                           <div className="space-y-2">
                             <div>
                               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Партнёр</div>
@@ -5147,14 +5185,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                               ) : <div className="font-medium">{currentLeader ? teamName(currentLeader) : '—'}</div>}
                             </div>
                           </div>
-                        </TableCell>
+                        </TableCell>}
                         <TableCell className="py-3 align-top">
                           <div className="font-medium tabular-nums">{formatDate(row.startDate)} — {formatDate(row.deadline)}</div>
                           <div className="mt-1 text-xs text-muted-foreground">{row.periods.length > 0 ? row.periods.map((period: AuditPeriod) => period.name).slice(0, 2).join(', ') : 'Период не указан'}</div>
                           <Badge variant="outline" className={`mt-2 ${deadlineBadgeClass(row.deadlineState.tone)}`}>{row.deadlineState.label}</Badge>
                           {canEditPeriods && <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 px-2 text-xs" onClick={() => { startProjectDateEdit(row); setExpandedRows((current) => ({ ...current, [row.id]: true })); }}>Изменить сроки</Button>}
                         </TableCell>
-                        <TableCell className="py-3 align-top">
+                        {canSeeHours && <TableCell className="py-3 align-top">
                           {hoursLoading ? (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загрузка часов</div>
                           ) : hoursError ? (
@@ -5167,7 +5205,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                               <Badge variant="outline" className={`mt-2 ${workload.className}`}>Сложность: {workload.label}</Badge>
                             </>
                           )}
-                        </TableCell>
+                        </TableCell>}
                         {canSeeContractMoney && (
                           <TableCell className="py-3 text-right align-top">
                             {editingContractAmountRowId === row.id ? (
