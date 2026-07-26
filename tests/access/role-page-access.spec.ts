@@ -7,7 +7,6 @@ type Role = UserRole;
 const roles: Role[] = USER_ROLES;
 const unifiedProjectRoutes: Record<string, string> = {
   '/assign-partners': '/projects',
-  '/bonuses': '/projects',
   '/project-approval': '/projects',
 };
 

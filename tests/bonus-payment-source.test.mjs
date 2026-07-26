@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const bonusesPage = fs.readFileSync(new URL('../src/pages/Bonuses.tsx', import.meta.url), 'utf8');
+const bonusLedger = fs.readFileSync(new URL('../src/lib/bonusLedger.ts', import.meta.url), 'utf8');
 const ceoSummary = fs.readFileSync(
   new URL('../src/components/projects/CEOSummaryTable.tsx', import.meta.url),
   'utf8',
@@ -10,8 +11,10 @@ const ceoSummary = fs.readFileSync(
 
 test('bonuses page reads the final payment registry', () => {
   assert.match(bonusesPage, /loadBonusPayments/);
-  assert.match(bonusesPage, /buildBonusPaymentIndex/);
-  assert.match(bonusesPage, /getBonusPaymentState/);
+  assert.match(bonusesPage, /buildBonusLedger/);
+  assert.match(bonusLedger, /payment_date/);
+  assert.match(bonusLedger, /row\.status === 'approved'/);
+  assert.doesNotMatch(bonusesPage, /buildBonusPaymentIndex/);
 });
 
 test('bonuses page does not imitate payment through project notes', () => {

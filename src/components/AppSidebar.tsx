@@ -10,6 +10,7 @@ import {
   Award,
   Clock,
   CalendarCheck,
+  WalletCards,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -56,6 +57,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
     label: 'Управление',
     items: [
       { title: 'HR', url: '/hr', icon: UserCheck, allowedRoles: ROLE_GROUPS.hrManagement },
+      { title: 'Бонусная ведомость', url: '/bonuses', icon: WalletCards, allowedRoles: ROLE_GROUPS.executive },
     ],
   },
   {

@@ -1,875 +1,873 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BadgeCheck,
+  Banknote,
+  BarChart3,
+  CheckCircle2,
+  CircleDollarSign,
+  Clock3,
+  FileWarning,
+  Loader2,
+  PieChart as PieChartIcon,
+  Printer,
+  Search,
+  Users,
+  WalletCards,
+  X,
+} from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useEmployees } from '@/hooks/useSupabaseData';
-import { useProjects } from '@/hooks/useSupabaseData';
-import { useTasks } from '@/hooks/useTasks';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { calculateProjectFinances } from '@/types/project-v3';
-import { PROJECT_ROLES } from '@/types/roles';
-import { notifyBonusesApproved, notifyProjectClosed } from '@/lib/projectNotifications';
-import { CEOSummaryTable, type CEOSummaryActions } from '@/components/projects/CEOSummaryTable';
+import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import {
-  buildBonusPaymentIndex,
-  getBonusPaymentState,
-  loadBonusPayments,
-  type BonusPaymentRow,
-} from '@/lib/bonusPayments';
+  BONUS_REGISTRY_CURRENCY,
+  buildBonusLedger,
+  type BonusProjectSource,
+  type EmployeeBonusLedger,
+} from '@/lib/bonusLedger';
+import { loadBonusPayments, type BonusPaymentRow } from '@/lib/bonusPayments';
+import {
+  BUSINESS_SEASON_NO_DATE,
+  projectBusinessSeasonValueFromProject,
+} from '@/lib/businessSeason';
+import { loadTimesheetHoursSnapshot, type TimesheetHoursSnapshot } from '@/lib/timesheets';
+import { ROLE_LABELS, type UserRole } from '@/types/roles';
 
-type BonusHistoryEntry = {
-  type: string;
-  by?: string;
-  byName?: string;
-  at: string;
-  from?: unknown;
-  to?: unknown;
+const moneyFormat = new Intl.NumberFormat('ru-RU', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const numberFormat = new Intl.NumberFormat('ru-RU', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  KZT: '₸',
+  USD: '$',
+  EUR: '€',
 };
-import {
-  Gift,
-  TrendingUp,
-  Search,
-  CheckCircle,
-  Clock,
-  Users,
-  XCircle
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+
+const PIE_COLORS = ['#10b981', '#2563eb', '#f59e0b', '#94a3b8'];
+
+type SourceAmountField =
+  | 'plannedAmount'
+  | 'registryPendingAmount'
+  | 'approvedAmount'
+  | 'paidAmount'
+  | 'unregisteredAmount'
+  | 'overRegisteredAmount';
+
+type LedgerStatusFilter = 'all' | 'unregistered' | 'pending' | 'approved' | 'paid' | 'mismatch';
+
+function currencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency] || currency;
+}
+
+function formatMoney(value: number, currency = 'KZT'): string {
+  return `${moneyFormat.format(Number(value) || 0)} ${currencySymbol(currency)}`;
+}
+
+function formatHours(value: number): string {
+  return `${numberFormat.format(Number(value) || 0)} ч`;
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('ru-RU').format(parsed);
+}
+
+function roleLabel(role: string): string {
+  return ROLE_LABELS[role as UserRole] || role.replace(/_/g, ' ') || 'Роль не указана';
+}
+
+function seasonFromProject(project: any) {
+  const value = projectBusinessSeasonValueFromProject(project);
+  if (value === BUSINESS_SEASON_NO_DATE) {
+    return { key: value, label: 'Без даты' };
+  }
+  const endYear = Number(value.replace('season:', ''));
+  return {
+    key: value,
+    label: `Сезон ${endYear} · октябрь ${endYear - 1} — сентябрь ${endYear}`,
+  };
+}
+
+function amountCurrency(source: BonusProjectSource, field: SourceAmountField): string {
+  return field === 'plannedAmount' || field === 'unregisteredAmount'
+    ? source.currency
+    : BONUS_REGISTRY_CURRENCY;
+}
+
+function sourceAmountBreakdown(
+  sources: readonly BonusProjectSource[],
+  field: SourceAmountField,
+): Array<{ currency: string; amount: number }> {
+  const totals = new Map<string, number>();
+  for (const source of sources) {
+    const value = Number(source[field]) || 0;
+    if (value === 0) continue;
+    const currency = amountCurrency(source, field);
+    totals.set(currency, (totals.get(currency) || 0) + value);
+  }
+  return Array.from(totals.entries())
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((a, b) => (a.currency === 'KZT' ? -1 : b.currency === 'KZT' ? 1 : a.currency.localeCompare(b.currency)));
+}
+
+function MoneyBreakdown({
+  sources,
+  field,
+  className = '',
+}: {
+  sources: readonly BonusProjectSource[];
+  field: SourceAmountField;
+  className?: string;
+}) {
+  const values = sourceAmountBreakdown(sources, field);
+  if (values.length === 0) return <span className={className}>0 ₸</span>;
+  return (
+    <span className={className}>
+      {values.map((value, index) => (
+        <span key={value.currency}>
+          {index > 0 ? ' + ' : ''}{formatMoney(value.amount, value.currency)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function sumKzt(sources: readonly BonusProjectSource[], field: SourceAmountField): number {
+  return sources.reduce((sum, source) => {
+    if (amountCurrency(source, field) !== 'KZT') return sum;
+    return sum + (Number(source[field]) || 0);
+  }, 0);
+}
+
+function sourceMatchesStatus(source: BonusProjectSource, filter: LedgerStatusFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'unregistered') return source.unregisteredAmount > 0;
+  if (filter === 'pending') return source.registryPendingAmount > 0;
+  if (filter === 'approved') return source.approvedAmount > 0;
+  if (filter === 'paid') return source.paidAmount > 0;
+  return source.overRegisteredAmount > 0 || source.projectAllocatedAmount > source.projectBonusPoolAmount;
+}
+
+function sourceSearchText(source: BonusProjectSource): string {
+  return `${source.employeeName} ${source.employeeEmail} ${source.projectName} ${source.companyName} ${source.role}`.toLowerCase();
+}
+
+function KpiCard({
+  testId,
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone,
+}: {
+  testId?: string;
+  label: string;
+  value: string;
+  hint: string;
+  icon: typeof Banknote;
+  tone: 'blue' | 'amber' | 'emerald' | 'slate' | 'violet';
+}) {
+  const tones = {
+    blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    amber: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    emerald: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    slate: 'bg-slate-500/10 text-slate-700 dark:text-slate-300',
+    violet: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+  };
+  return (
+    <Card data-testid={testId} className="min-w-0 border-border/70 p-4 shadow-sm">
+      <div className="flex min-w-0 items-start gap-3 xl:block 2xl:flex">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl xl:mb-3 2xl:mb-0 ${tones[tone]}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 whitespace-nowrap text-lg font-black leading-tight text-foreground 2xl:text-xl">{value}</p>
+          <p className="mt-1 text-xs leading-snug text-muted-foreground">{hint}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SourceStatus({ source }: { source: BonusProjectSource }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {source.paidAmount > 0 && <Badge className="bg-emerald-600 text-white">Выплачено</Badge>}
+      {source.approvedAmount > 0 && <Badge className="bg-blue-600 text-white">Утверждено</Badge>}
+      {source.registryPendingAmount > 0 && <Badge variant="secondary">В реестре · ждёт</Badge>}
+      {source.unregisteredAmount > 0 && <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">Не внесено в реестр</Badge>}
+      {source.overRegisteredAmount > 0 && <Badge variant="destructive">Реестр выше расчёта</Badge>}
+      {source.manuallyAdjusted && <Badge variant="outline">Ручная сумма CEO</Badge>}
+    </div>
+  );
+}
+
+function PrintSlip({ employee, onClose }: { employee: EmployeeBonusLedger; onClose: () => void }) {
+  const hasRegistryMoney = employee.sources.some((source) => source.approvedAmount > 0 || source.paidAmount > 0);
+  const approvedForSignature = sumKzt(employee.sources, 'approvedAmount');
+  const paidForSignature = sumKzt(employee.sources, 'paidAmount');
+  const signatureAmount = approvedForSignature > 0 ? approvedForSignature : paidForSignature;
+  const signatureAmountLabel = approvedForSignature > 0
+    ? 'К выдаче по текущему реестру'
+    : 'Подтверждено как выплаченное';
+  return (
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 p-3 sm:p-8 print:static print:bg-white print:p-0">
+      <div
+        data-testid="bonus-print-slip"
+        className="bonus-print-slip mx-auto max-w-4xl bg-white p-5 text-slate-950 shadow-2xl sm:p-10 print:max-w-none print:shadow-none"
+      >
+        <div className="mb-5 flex items-start justify-between gap-4 print:hidden">
+          <p className="text-sm text-slate-600">Предпросмотр документа перед печатью</p>
+          <Button variant="outline" size="icon" aria-label="Закрыть ведомость" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="border-b-2 border-slate-900 pb-5 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">SUITE-A · RB Partners</p>
+          <h1 className="mt-2 text-2xl font-black">Ведомость выплаты бонуса</h1>
+          <p className="mt-1 text-sm text-slate-600">Персональная расшифровка по проектам</p>
+        </div>
+
+        {!hasRegistryMoney && (
+          <div className="mt-5 border-2 border-amber-500 bg-amber-50 p-3 text-center text-sm font-bold text-amber-900">
+            ПРЕДВАРИТЕЛЬНЫЙ РАСЧЁТ — В ФИНАЛЬНОМ ПЛАТЁЖНОМ РЕЕСТРЕ НЕТ УТВЕРЖДЁННОЙ СУММЫ
+          </div>
+        )}
+
+        <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+          <div><span className="text-slate-500">Сотрудник:</span> <strong>{employee.employeeName}</strong></div>
+          <div><span className="text-slate-500">Email:</span> <strong>{employee.employeeEmail || '—'}</strong></div>
+          <div><span className="text-slate-500">Проектов:</span> <strong>{employee.sources.length}</strong></div>
+          <div><span className="text-slate-500">Дата формирования:</span> <strong>{formatDate(new Date().toISOString())}</strong></div>
+        </div>
+
+        <div className="mt-6 overflow-hidden border border-slate-300">
+          <table className="w-full border-collapse text-left text-xs sm:text-sm">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="border-b border-slate-300 p-2">Проект / роль</th>
+                <th className="border-b border-slate-300 p-2 text-right">Расчёт</th>
+                <th className="border-b border-slate-300 p-2 text-right">К выплате</th>
+                <th className="border-b border-slate-300 p-2 text-right">Выплачено</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employee.sources.map((source) => (
+                <tr key={source.key}>
+                  <td className="border-b border-slate-200 p-2 align-top">
+                    <strong>{source.projectName}</strong>
+                    <div className="text-slate-500">{source.companyName} · {roleLabel(source.role)}</div>
+                  </td>
+                  <td className="border-b border-slate-200 p-2 text-right align-top">{formatMoney(source.plannedAmount, source.currency)}</td>
+                  <td className="border-b border-slate-200 p-2 text-right align-top">{formatMoney(source.approvedAmount, BONUS_REGISTRY_CURRENCY)}</td>
+                  <td className="border-b border-slate-200 p-2 text-right align-top">{formatMoney(source.paidAmount, BONUS_REGISTRY_CURRENCY)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-5 grid gap-2 border border-slate-300 bg-slate-50 p-4 text-sm sm:grid-cols-3">
+          <div>Расчётный итог: <strong><MoneyBreakdown sources={employee.sources} field="plannedAmount" /></strong></div>
+          <div>Утверждено к выплате: <strong>{formatMoney(approvedForSignature)}</strong></div>
+          <div>Фактически выплачено: <strong>{formatMoney(paidForSignature)}</strong></div>
+        </div>
+
+        <div className="mt-5 border-2 border-slate-900 p-4 text-center text-base">
+          {signatureAmountLabel}: <strong className="text-lg">{formatMoney(signatureAmount)}</strong>
+        </div>
+
+        <div className="mt-14 grid gap-10 text-sm sm:grid-cols-2">
+          <div>
+            <p className="mb-8 font-semibold">Сумму {formatMoney(signatureAmount)} получил(а): ____________________</p>
+            <p>Подпись сотрудника: ____________________</p>
+          </div>
+          <div>
+            <p className="mb-8">Дата: «____» ______________ 20____ г.</p>
+            <p>Выдал(а) / подпись: ____________________</p>
+          </div>
+        </div>
+
+        <p className="mt-12 border-t border-slate-300 pt-3 text-[10px] text-slate-500">
+          Источник расчёта: карточки проектов. Факт утверждения и выплаты подтверждается только финальным платёжным реестром.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function Bonuses() {
-  const { user } = useAuth();
-  const { projects = [], loading: projectsLoading, error: projectsError, updateProject: updateProjectRecord, refresh: refreshProjects } = useProjects();
-  const { employees = [] } = useEmployees();
-  const { tasks = [] } = useTasks();
-  const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'paid'>('all');
-  const [filterType, setFilterType] = useState<'all' | 'project' | 'kpi' | 'annual'>('all');
-  const [draftAdjustments, setDraftAdjustments] = useState<Record<string, Record<string, string>>>({});
-  const [paymentRows, setPaymentRows] = useState<BonusPaymentRow[]>([]);
-  const [paymentRegistryLoading, setPaymentRegistryLoading] = useState(true);
-  const [paymentRegistryError, setPaymentRegistryError] = useState<string | null>(null);
-  const paymentIndex = useMemo(() => buildBonusPaymentIndex(paymentRows), [paymentRows]);
-  const paymentProjectScope = useMemo(
-    () => Array.from(new Set((projects as any[]).map((project) => String(project.id)).filter(Boolean))).sort().join('|'),
+  const { projects = [], loading: projectsLoading, error: projectsError } = useProjects();
+  const { employees = [], loading: employeesLoading, error: employeesError } = useEmployees();
+  const [payments, setPayments] = useState<BonusPaymentRow[]>([]);
+  const [hours, setHours] = useState<TimesheetHoursSnapshot | null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(true);
+  const [registryError, setRegistryError] = useState<string | null>(null);
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [season, setSeason] = useState('all');
+  const [status, setStatus] = useState<LedgerStatusFilter>('all');
+  const [page, setPage] = useState(1);
+  const [printEmployee, setPrintEmployee] = useState<EmployeeBonusLedger | null>(null);
+
+  const projectScope = useMemo(
+    () => Array.from(new Set(projects.map((project: any) => String(project.id)).filter(Boolean))).sort(),
     [projects],
   );
+  const projectScopeKey = projectScope.join('|');
 
   useEffect(() => {
-    if (projectsLoading && projects.length === 0) return;
-    if (projectsError) {
-      setPaymentRows([]);
-      setPaymentRegistryLoading(false);
-      setPaymentRegistryError('Проекты не загрузились, поэтому платёжный реестр нельзя сопоставить');
-      return;
-    }
+    if (projectsLoading) return;
     let active = true;
     const controller = new AbortController();
-    setPaymentRegistryLoading(true);
-    loadBonusPayments(paymentProjectScope ? paymentProjectScope.split('|') : [], controller.signal)
-      .then((rows) => {
-        if (!active) return;
-        setPaymentRows(rows);
-        setPaymentRegistryError(null);
-      })
-      .catch((error) => {
-        if (!active) return;
-        console.error('[Bonuses] failed to load final payment registry', error);
-        setPaymentRegistryError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (active) setPaymentRegistryLoading(false);
-      });
-    return () => { active = false; controller.abort(); };
-  }, [paymentProjectScope, projectsLoading, projectsError]);
+    setLedgerLoading(true);
+    setRegistryError(null);
+    setHoursError(null);
 
-  // CEO может менять «общий процент бонуса от базы» на лету (по умолчанию 10).
-  const [draftBonusPercent] = useState<Record<string, string>>({});
-  // CEO может «скрыть» бонус сотрудника от него самого (personal view не покажет).
-  const [draftHidden] = useState<Record<string, Record<string, boolean>>>({});
-  // Раскрытие списка задач проекта (по умолчанию свёрнут).
-  // Раскрытие истории изменений конкретного бонуса (ключ = bonus.id).
-  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
-
-  // ЖЁСТКО (CEO 2026-05-22): «Бонусы — это часть только CEO в конце проекта.
-  // Никто кроме CEO нахуй не видит бонусы».
-  //  - CEO/admin: полный обзор фирмы, утверждение, выплаты, скрытие.
-  //  - Любая другая роль (включая зам.ГД, партнёра, PM, супервайзера,
-  //    ассистента) — НЕ видит чужие бонусы. Только свои (personalView)
-  //    через фильтр allBonuses по employeeId === user.id.
-  //  - Зам.ГД / партнёр / PM не имеют доступа к секции утверждения,
-  //    табу «По сотрудникам», сводке фонда, действиям выплаты.
-  const isCeoOrAdmin = user?.role === 'ceo' || user?.role === 'admin';
-  const canApproveBonusPayout = isCeoOrAdmin;
-  const canEditBonuses = isCeoOrAdmin;
-  const personalView = !isCeoOrAdmin;
-  // До утверждения реестра и бизнес-процентов технический расчёт нельзя
-  // превращать в финальное закрытие проекта или платёжную запись.
-  const finalRegistryApprovalEnabled = false;
-
-  const approveProjectBonuses = async (
-    project: any,
-    overrides?: { bonusPercent?: number; overheadPercent?: number; distribution?: Record<string, number> },
-  ) => {
-    if (!user || !canApproveBonusPayout) return;
-
-    try {
-      // Применяем кастомный процент бонуса от базы (CEO мог поменять с 10% на меньше/больше).
-      // overrides.bonusPercent → draftBonusPercent → project.finances.bonusPercent → 10.
-      const customPercentRaw = draftBonusPercent[project.id];
-      const customPercent =
-        overrides?.bonusPercent ??
-        (customPercentRaw !== undefined && customPercentRaw !== '' && !isNaN(Number(customPercentRaw))
-          ? Number(customPercentRaw)
-          : (project.finances?.bonusPercent ?? 10));
-      const projectWithPercent = {
-        ...project,
-        finances: {
-          ...(project.finances || {}),
-          bonusPercent: customPercent,
-          ...(overrides?.overheadPercent != null ? { preExpensePercent: overrides.overheadPercent } : {}),
-          ...(overrides?.distribution ? { distribution: overrides.distribution } : {}),
-        },
-      };
-      const finances = calculateProjectFinances(projectWithPercent);
-      const adjustments = draftAdjustments[project.id] || {};
-      const hiddenMap = draftHidden[project.id] || {};
-      const adjustedTeamBonuses = { ...finances.teamBonuses };
-
-      Object.entries(adjustments).forEach(([employeeId, rawAmount]) => {
-        if (!adjustedTeamBonuses[employeeId]) return;
-        const parsedAmount = Number(rawAmount);
-        if (!Number.isFinite(parsedAmount) || parsedAmount < 0) return;
-
-        adjustedTeamBonuses[employeeId] = {
-          ...adjustedTeamBonuses[employeeId],
-          amount: parsedAmount,
-          percent: finances.totalBonusAmount > 0 ? Number(((parsedAmount / finances.totalBonusAmount) * 100).toFixed(2)) : adjustedTeamBonuses[employeeId].percent,
-          manuallyAdjusted: true,
-        };
-      });
-
-      // Применяем «скрыть от сотрудника» — записываем флаг в каждый bonus
-      Object.entries(hiddenMap).forEach(([employeeId, isHidden]) => {
-        if (adjustedTeamBonuses[employeeId]) {
-          adjustedTeamBonuses[employeeId] = { ...adjustedTeamBonuses[employeeId], hiddenFromEmployee: !!isHidden };
-        }
-      });
-      // Также сохраним предыдущий hiddenFromEmployee для тех кого не трогали
-      Object.keys(adjustedTeamBonuses).forEach((employeeId) => {
-        if (hiddenMap[employeeId] === undefined) {
-          const prev = project?.finances?.teamBonuses?.[employeeId]?.hiddenFromEmployee;
-          if (prev) adjustedTeamBonuses[employeeId] = { ...adjustedTeamBonuses[employeeId], hiddenFromEmployee: true };
-        }
-      });
-
-      const totalPaidBonuses = Object.values(adjustedTeamBonuses).reduce((sum, bonus) => sum + (bonus.amount || 0), 0);
-      const totalCosts = totalPaidBonuses + finances.totalContractorsAmount + finances.preExpenseAmount;
-      const grossProfit = finances.amountWithoutVAT - totalCosts;
-      const profitMargin = finances.amountWithoutVAT > 0 ? (grossProfit / finances.amountWithoutVAT) * 100 : 0;
-
-      const updatedFinances = {
-        ...finances,
-        bonusPercent: customPercent,
-        teamBonuses: adjustedTeamBonuses,
-        totalPaidBonuses,
-        totalCosts,
-        grossProfit,
-        profitMargin,
-      };
-
-      await updateProjectRecord(project.id, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-        approvedBy: user.id,
-        approvedByName: user.name,
-        finances: updatedFinances,
-      });
-
-      const team = project.team || project.notes?.team || [];
-      const teamIds = team.map((member: any) => member.userId || member.id).filter(Boolean);
-      const partner = team.find((member: any) => member.role === 'partner');
-      const pm = team.find((member: any) => ['manager_1', 'manager_2', 'manager_3'].includes(member.role));
-
-      await notifyBonusesApproved({
-        projectName: project.name || project.title || 'Проект',
-        teamIds,
-        ceoName: user.name,
-        projectId: project.id,
-      });
-
-      await notifyProjectClosed({
-        projectName: project.name || project.title || 'Проект',
-        partnerId: partner?.userId || user.id,
-        pmId: pm?.userId || user.id,
-        teamIds,
-        totalAmount: updatedFinances.totalPaidBonuses.toLocaleString('ru-RU'),
-        currency: '₸',
-        projectId: project.id,
-      });
-
-      setDraftAdjustments((prev) => {
-        const next = { ...prev };
-        delete next[project.id];
-        return next;
-      });
-
-      await refreshProjects();
-
-      toast({
-        title: 'Проект закрыт',
-        description: `${project.name || project.title || 'Проект'} утверждён, бонусы сохранены.`,
-      });
-    } catch (error: any) {
-      console.error('Ошибка утверждения бонусов:', error);
-      toast({
-        title: 'Ошибка',
-        description: error?.message || 'Не удалось утвердить бонусы и закрыть проект',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // ─── Действия CEO над отдельным бонусом в табе «По сотрудникам» ─────────
-  // Эти три действия выполняются после того как проект уже закрыт CEO:
-  // выплата (фиксация факта), скрытие от сотрудника, корректировка суммы.
-  //
-  // Каждое изменение пишется в bonus.history[] — это «аудит-лог» прозрачности.
-  // Хранится в notes.finances.teamBonuses[userId].history: { action, by, byName, at, from?, to? }.
-  const patchTeamBonus = async (projectId: string, userId: string, patch: Record<string, unknown>, action?: { type: string; from?: unknown; to?: unknown }) => {
-    const project = projects.find((p: any) => p.id === projectId);
-    if (!project) return;
-    const notes = typeof project.notes === 'string'
-      ? (() => { try { return JSON.parse(project.notes); } catch { return {}; } })()
-      : (project.notes || {});
-    const finances = notes.finances || project.finances || {};
-    const teamBonuses = { ...(finances.teamBonuses || {}) };
-    const prev = teamBonuses[userId] || {};
-    const prevHistory = Array.isArray(prev.history) ? prev.history : [];
-    const nextHistory = action
-      ? [...prevHistory, { ...action, by: user?.id, byName: user?.name, at: new Date().toISOString() }].slice(-20)
-      : prevHistory;
-    teamBonuses[userId] = { ...prev, ...patch, history: nextHistory };
-    const nextFinances = { ...finances, teamBonuses };
-    return updateProjectRecord(projectId, { finances: nextFinances });
-  };
-  const toggleBonusVisibility = async (projectId: string, userId: string, current: boolean) => {
-    if (!canEditBonuses) return;
-    try {
-      await patchTeamBonus(
-        projectId, userId,
-        { hiddenFromEmployee: !current },
-        { type: current ? 'show' : 'hide' },
-      );
-      await refreshProjects();
-    } catch (e: any) {
-      toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
-    }
-  };
-  const reduceBonusAmount = async (projectId: string, userId: string, newAmount: number) => {
-    if (!canEditBonuses) return;
-    try {
-      const project = projects.find((p: any) => p.id === projectId) as any;
-      const notes = typeof project?.notes === 'string' ? (() => { try { return JSON.parse(project.notes); } catch { return {}; } })() : (project?.notes || {});
-      const prevAmount = notes?.finances?.teamBonuses?.[userId]?.amount ?? 0;
-      await patchTeamBonus(
-        projectId, userId,
-        { amount: newAmount, manuallyAdjusted: true },
-        { type: 'amount_change', from: prevAmount, to: newAmount },
-      );
-      toast({ title: 'Сумма обновлена' });
-      await refreshProjects();
-    } catch (e: any) {
-      toast({ title: 'Ошибка', description: e?.message, variant: 'destructive' });
-    }
-  };
-
-  const getProjectTeam = (project: any) => {
-    if (Array.isArray(project?.team)) return project.team;
-    if (Array.isArray(project?.notes?.team)) return project.notes.team;
-    return [];
-  };
-
-  const addProjectTeamRole = async (projectId: string, employeeId: string, role: string) => {
-    if (!canEditBonuses) return;
-    const project = projects.find((p: any) => p.id === projectId);
-    const employee = employees.find((e: any) => e.id === employeeId);
-    if (!project || !employee) return;
-
-    const currentTeam = getProjectTeam(project);
-    const alreadyAssigned = currentTeam.some((member: any) =>
-      (member.userId || member.id || member.employeeId) === employeeId && member.role === role,
-    );
-    if (alreadyAssigned) {
-      toast({
-        title: 'Роль уже назначена',
-        description: `${employee.name || 'Сотрудник'} уже есть в этой роли на проекте.`,
-      });
-      return;
-    }
-
-    const roleSpec = PROJECT_ROLES.find((item) => item.role === role);
-    const nextTeam = [
-      ...currentTeam,
-      {
-        userId: employeeId,
-        userName: employee.name || employee.email || employeeId,
-        name: employee.name || employee.email || employeeId,
-        role,
-        bonusPercent: roleSpec?.bonusPercent ?? 0,
-        assignedAt: new Date().toISOString(),
-        assignedBy: user?.id || 'ceo-summary',
-      },
-    ];
-
-    await updateProjectRecord(projectId, { team: nextTeam });
-    await refreshProjects();
-    toast({
-      title: 'Роль добавлена',
-      description: `${employee.name || 'Сотрудник'} добавлен как ${roleSpec?.label || role}.`,
-    });
-  };
-
-  const removeProjectTeamRole = async (projectId: string, employeeId: string, role: string) => {
-    if (!canEditBonuses) return;
-    const project = projects.find((p: any) => p.id === projectId);
-    if (!project) return;
-    const currentTeam = getProjectTeam(project);
-    const nextTeam = currentTeam.filter((member: any) =>
-      !((member.userId || member.id || member.employeeId) === employeeId && member.role === role),
-    );
-    await updateProjectRecord(projectId, { team: nextTeam });
-    await refreshProjects();
-    toast({ title: 'Роль убрана из команды проекта' });
-  };
-
-  // Получаем все бонусы из проектов
-  const allBonuses = useMemo(() => {
-    const bonuses: Array<{
-      id: string;
-      projectId: string;
-      projectName: string;
-      employeeId: string;
-      employeeName: string;
-      amount: number;
-      percent: number;
-      type: 'project' | 'kpi' | 'annual';
-      status: 'pending' | 'approved' | 'paid';
-      date: string;
-      description: string;
-      hiddenFromEmployee?: boolean;
-      paidAt?: string | null;
-      paidByName?: string | null;
-      role?: string | null;
-      history?: BonusHistoryEntry[];
-    }> = [];
-
-    projects.forEach((project: any) => {
-      if (project.finances && project.finances.teamBonuses) {
-        const finances = calculateProjectFinances(project);
-        Object.entries(finances.teamBonuses).forEach(([userId, bonus]: [string, any]) => {
-          // CEO мог пометить бонус как «скрыть от сотрудника» — в personal view не показываем.
-          if (personalView && bonus?.hiddenFromEmployee) return;
-          const employee = employees.find((e: any) => e.id === userId);
-          if (employee) {
-            const payment = getBonusPaymentState(paymentIndex, project.id, userId);
-            // Финальный статус подтверждает только таблица bonuses.
-            let status: 'pending' | 'approved' | 'paid' = 'pending';
-            if (payment.paid) status = 'paid';
-            else if (payment.registered) status = 'approved';
-            bonuses.push({
-              id: `${project.id}-${userId}`,
-              projectId: project.id,
-              projectName: project.name || project.title || 'Без названия',
-              employeeId: userId,
-              employeeName: employee.name || employee.email || 'Сотрудник',
-              amount: bonus.amount || 0,
-              percent: bonus.percent || 0,
-              type: 'project',
-              status,
-              date: project.updated_at || project.created_at || new Date().toISOString(),
-              description: `Бонус за проект "${project.name || project.title}"`,
-              // Дополнительные поля для CEO-действий
-              hiddenFromEmployee: !!bonus.hiddenFromEmployee,
-              paidAt: payment.paymentDate,
-              paidByName: null,
-              role: bonus.role || null,
-              history: Array.isArray(bonus.history) ? bonus.history : [],
-            } as any);
-          }
-        });
+    Promise.allSettled([
+      // CEO/admin load the whole final registry once. The pure ledger then
+      // reports missing/out-of-scope rows instead of silently hiding them.
+      loadBonusPayments(undefined, controller.signal),
+      loadTimesheetHoursSnapshot(projectScope, controller.signal),
+    ]).then(([paymentResult, hoursResult]) => {
+      if (!active) return;
+      if (paymentResult.status === 'fulfilled') setPayments(paymentResult.value);
+      else {
+        setPayments([]);
+        setRegistryError(paymentResult.reason instanceof Error ? paymentResult.reason.message : String(paymentResult.reason));
       }
-    });
-
-    // В персональном режиме (обычный сотрудник без VIEW_ALL_BONUSES) показываем
-    // только его собственные начисления.
-    const ownerFiltered = personalView && user ? bonuses.filter((b) => b.employeeId === user.id) : bonuses;
-    return ownerFiltered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [projects, employees, paymentIndex, personalView, user]);
-
-  // Фильтрация бонусов
-  const filteredBonuses = useMemo(() => {
-    return allBonuses.filter(bonus => {
-      const matchesSearch = 
-        bonus.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bonus.projectName.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesStatus = filterStatus === 'all' || bonus.status === filterStatus;
-      const matchesType = filterType === 'all' || bonus.type === filterType;
-
-      return matchesSearch && matchesStatus && matchesType;
-    });
-  }, [allBonuses, searchTerm, filterStatus, filterType]);
-
-  // Статистика
-  const stats = useMemo(() => {
-    const safeNumber = (val: number) => isNaN(val) || !isFinite(val) ? 0 : val;
-    const total = safeNumber(allBonuses.reduce((sum, b) => sum + (b.amount || 0), 0));
-    const pending = safeNumber(allBonuses.filter(b => b.status === 'pending').reduce((sum, b) => sum + (b.amount || 0), 0));
-    const approved = safeNumber(allBonuses.filter(b => b.status === 'approved').reduce((sum, b) => sum + (b.amount || 0), 0));
-    const paid = safeNumber(allBonuses.filter(b => b.status === 'paid').reduce((sum, b) => sum + (b.amount || 0), 0));
-
-    return { total, pending, approved, paid, count: allBonuses.length };
-  }, [allBonuses]);
-
-  // Сводка фонда бонусов за период: месяц / квартал / год. Для CEO — общая
-  // картина нагрузки на фонд. Дата бонуса = date поля (updated_at проекта
-  // как правило соответствует утверждению), для выплат — paidAt.
-  // Все суммы в ₸. Период вычисляется от текущей даты назад.
-  const fundSummary = useMemo(() => {
-    const now = Date.now();
-    const DAY = 86400 * 1000;
-    const month30 = now - 30 * DAY;
-    const quarter90 = now - 90 * DAY;
-    const year365 = now - 365 * DAY;
-    const calc = (since: number) => {
-      let accrued = 0; // начислено (approved+paid+pending в этом периоде)
-      let paidSum = 0; // выплачено
-      let waitingPaid = 0; // одобрено, но не выплачено
-      let waitingApprove = 0; // ждёт CEO
-      for (const b of allBonuses) {
-        const d = new Date(b.date).getTime();
-        if (d < since) continue;
-        accrued += b.amount || 0;
-        if (b.status === 'paid') paidSum += b.amount || 0;
-        else if (b.status === 'approved') waitingPaid += b.amount || 0;
-        else if (b.status === 'pending') waitingApprove += b.amount || 0;
+      if (hoursResult.status === 'fulfilled') {
+        setHours(hoursResult.value);
+        if (!hoursResult.value.complete) setHoursError(hoursResult.value.error || 'Таймшиты загружены не полностью');
+      } else {
+        setHours(null);
+        setHoursError(hoursResult.reason instanceof Error ? hoursResult.reason.message : String(hoursResult.reason));
       }
-      return { accrued, paid: paidSum, waitingPaid, waitingApprove };
+      setLedgerLoading(false);
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
     };
-    return { month: calc(month30), quarter: calc(quarter90), year: calc(year365) };
-  }, [allBonuses]);
+  }, [projectScopeKey, projectsLoading]);
 
-  // Бонусы по сотрудникам
-  const bonusesByEmployee = useMemo(() => {
-    const grouped: Record<string, { employee: any; total: number; bonuses: typeof allBonuses }> = {};
-    
-    filteredBonuses.forEach(bonus => {
-      if (!grouped[bonus.employeeId]) {
-        const employee = employees.find((e: any) => e.id === bonus.employeeId);
-        grouped[bonus.employeeId] = {
-          employee: employee || { name: bonus.employeeName },
-          total: 0,
-          bonuses: []
-        };
-      }
-      grouped[bonus.employeeId].total += bonus.amount;
-      grouped[bonus.employeeId].bonuses.push(bonus);
+  const ledger = useMemo(() => buildBonusLedger({
+    projects,
+    employees,
+    payments,
+    approvedHours: hours?.approvedByEmployeeProject,
+    pendingHours: hours?.pendingByEmployeeProject,
+    seasonForProject: seasonFromProject,
+  }), [projects, employees, payments, hours]);
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleEmployees = useMemo(() => ledger.employees.flatMap((employee) => {
+    const employeeMatches = `${employee.employeeName} ${employee.employeeEmail}`.toLowerCase().includes(normalizedSearch);
+    const sources = employee.sources.filter((source) => {
+      if (season !== 'all' && source.season?.key !== season) return false;
+      if (!sourceMatchesStatus(source, status)) return false;
+      if (!normalizedSearch || employeeMatches) return true;
+      return sourceSearchText(source).includes(normalizedSearch);
     });
-
-    return Object.values(grouped).sort((a, b) => b.total - a.total);
-  }, [filteredBonuses, employees]);
-
-  // Адаптер действий для CEOSummaryTable.
-  // Используется только если canApproveBonusPayout (CEO/admin).
-  const ceoTableActions: CEOSummaryActions | undefined = canApproveBonusPayout
-    ? {
-        ...(finalRegistryApprovalEnabled ? {
-          approveAndClose: async (project, settings) => {
-            await approveProjectBonuses(project, settings);
-          },
-        } : {}),
-        addTeamRole: async (projectId, employeeId, role) => {
-          await addProjectTeamRole(projectId, employeeId, role);
-        },
-        removeTeamRole: async (projectId, employeeId, role) => {
-          await removeProjectTeamRole(projectId, employeeId, role);
-        },
-        toggleHidden: async (projectId, userId, current) => {
-          await toggleBonusVisibility(projectId, userId, current);
-        },
-        adjustAmount: async (projectId, userId, amount) => {
-          await reduceBonusAmount(projectId, userId, amount);
-        },
+    return sources.length > 0 ? [{ ...employee, sources }] : [];
+  }), [ledger.employees, normalizedSearch, season, status]);
+  const visibleSources = useMemo(
+    () => visibleEmployees.flatMap((employee) => employee.sources),
+    [visibleEmployees],
+  );
+  const displayKzt = useMemo(() => {
+    const projectsInScope = new Map<string, BonusProjectSource>();
+    for (const source of visibleSources) {
+      if (source.currency === 'KZT' && !projectsInScope.has(source.projectId)) {
+        projectsInScope.set(source.projectId, source);
       }
-    : undefined;
-
-  // Минимальные адаптеры под пропсы CEOSummaryTable.
-  const getProjectAmountForTable = (project: any) => {
-    const notes = project?.notes || {};
-    const amount =
-      Number(project?.contract?.amountWithoutVAT) ||
-      Number(project?.amountWithoutVAT) ||
-      Number(notes?.contract?.amountWithoutVAT) ||
-      Number(notes?.amountWithoutVAT) ||
-      0;
-    return { amount, currency: project?.currency || notes?.currency || '₸' };
-  };
-  const getCompanyDisplayNameForTable = (company: string) => company || '';
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return <Badge className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" />Выплачен</Badge>;
-      case 'approved':
-        return <Badge className="bg-blue-500"><CheckCircle className="w-3 h-3 mr-1" />Одобрен</Badge>;
-      case 'pending':
-        return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Ожидает</Badge>;
-      default:
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Отклонён</Badge>;
     }
+    const scopedProjects = Array.from(projectsInScope.values());
+    return {
+      plannedAmount: sumKzt(visibleSources, 'plannedAmount'),
+      registryPendingAmount: sumKzt(visibleSources, 'registryPendingAmount'),
+      approvedAmount: sumKzt(visibleSources, 'approvedAmount'),
+      paidAmount: sumKzt(visibleSources, 'paidAmount'),
+      unregisteredAmount: sumKzt(visibleSources, 'unregisteredAmount'),
+      bonusPoolAmount: scopedProjects.reduce((sum, source) => sum + source.projectBonusPoolAmount, 0),
+      unallocatedPoolAmount: scopedProjects.reduce(
+        (sum, source) => sum + Math.max(0, source.projectBonusPoolAmount - source.projectAllocatedAmount),
+        0,
+      ),
+    };
+  }, [visibleSources]);
+  const pageSize = 15;
+  const pageCount = Math.max(1, Math.ceil(visibleEmployees.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedEmployees = visibleEmployees.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [normalizedSearch, season, status]);
+
+  const kzt = ledger.currencyTotals.KZT || {
+    currency: 'KZT',
+    bonusPoolAmount: 0,
+    plannedAmount: 0,
+    registryPendingAmount: 0,
+    approvedAmount: 0,
+    paidAmount: 0,
+    registeredAmount: 0,
+    linkedRegistryAmount: 0,
+    unregisteredAmount: 0,
+    overRegisteredAmount: 0,
+    unlinkedRegistryAmount: 0,
+    unallocatedPoolAmount: 0,
+    overAllocatedPoolAmount: 0,
   };
 
-  if (isCeoOrAdmin) {
-    return <Navigate to="/projects?view=ready_bonus" replace />;
-  }
+  const loading = projectsLoading || employeesLoading || ledgerLoading;
+  const reconciliationReady = !loading
+    && !projectsError
+    && !employeesError
+    && !registryError
+    && !hoursError;
+  const currencyReconciliations = Object.values(ledger.currencyTotals).map((totals) => ({
+    ...totals,
+    delta: totals.plannedAmount + totals.overRegisteredAmount - totals.linkedRegistryAmount - totals.unregisteredAmount,
+  }));
+  const reconciliationOk = reconciliationReady
+    && currencyReconciliations.every((item) => Math.abs(item.delta) < 0.01)
+    && ledger.totals.unlinkedPaymentRows === 0
+    && ledger.totals.missingProjectPaymentRows === 0
+    && ledger.totals.outOfScopePaymentRows === 0;
+
+  const pieData = [
+    { name: 'Выплачено', value: displayKzt.paidAmount, color: PIE_COLORS[0] },
+    { name: 'Утверждено к выплате', value: displayKzt.approvedAmount, color: PIE_COLORS[1] },
+    { name: 'В реестре, ждёт решения', value: displayKzt.registryPendingAmount, color: PIE_COLORS[2] },
+    { name: 'Ещё не внесено в реестр', value: displayKzt.unregisteredAmount, color: PIE_COLORS[3] },
+  ];
+  const chartPieData = pieData.some((item) => item.value > 0)
+    ? pieData.filter((item) => item.value > 0)
+    : [{ name: 'Нет данных', value: 1, color: '#cbd5e1' }];
+
+  const topEmployees = useMemo(() => visibleEmployees
+    .map((employee) => ({
+      name: employee.employeeName.length > 24 ? `${employee.employeeName.slice(0, 22)}…` : employee.employeeName,
+      fullName: employee.employeeName,
+      value: sumKzt(employee.sources, 'plannedAmount'),
+    }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10), [visibleEmployees]);
+  const chartEmployeeData = topEmployees.length > 0 ? topEmployees : [{ name: 'Нет данных', fullName: 'Нет данных', value: 0 }];
+
+  const nonKzt = Object.values(ledger.currencyTotals).filter((item) => item.currency !== 'KZT' && (
+    item.bonusPoolAmount || item.plannedAmount || item.registeredAmount
+  ));
+  const unknownIdentities = ledger.employees.filter((employee) => employee.sources.some((source) => !source.identityMatched)).length;
+  const overPercentProjects = new Set(
+    ledger.sources.filter((source) => source.projectTeamPercentTotal > 100.001).map((source) => source.projectId),
+  ).size;
+
+  useEffect(() => {
+    if (!printEmployee) return;
+    const frame = window.requestAnimationFrame(() => window.print());
+    return () => window.cancelAnimationFrame(frame);
+  }, [printEmployee]);
 
   return (
-    <div className="space-y-4 sm:space-y-6 page-enter">
+    <div data-testid="bonus-dashboard" className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 overflow-x-hidden px-3 pb-24 pt-3 sm:px-5 md:px-7 md:pb-8">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .bonus-print-slip, .bonus-print-slip * { visibility: visible !important; }
+          .bonus-print-slip {
+            display: block !important;
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 18mm !important;
+            box-shadow: none !important;
+          }
+          @page { size: A4 portrait; margin: 0; }
+        }
+      `}</style>
 
-      {/* Заголовок */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-          <span className="w-9 h-9 rounded-xl bg-yellow-500/15 flex items-center justify-center">
-            <Gift className="w-5 h-5 text-yellow-500" />
-          </span>
-          Бонусы
-        </h1>
-        <Badge variant="outline" className="mt-2">
-          Предварительный расчёт · технические проценты
+      <header className="flex min-w-0 flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <Link to="/projects" className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" /> Вернуться в свод проектов
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <WalletCards className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Бонусная ведомость</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">Один экран: сотрудники → проекты → расчёт → платёжный реестр</p>
+            </div>
+          </div>
+        </div>
+        <Badge variant="outline" className="w-fit gap-1.5 px-3 py-1.5">
+          <BadgeCheck className="h-4 w-4 text-emerald-600" /> Только CEO и администратор
         </Badge>
-        <p className="text-muted-foreground mt-1 text-sm">Система бонусов и поощрений</p>
-      </div>
+      </header>
 
-      <Card className={`p-4 border ${paymentRegistryError ? 'border-red-300 bg-red-50/60' : 'border-blue-200 bg-blue-50/50'}`}>
-        <div className="flex items-start gap-3">
-          {paymentRegistryLoading ? (
-            <Clock className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-          ) : paymentRegistryError ? (
-            <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-          ) : (
-            <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-          )}
+      {loading && (
+        <Card className="flex items-center gap-3 border-primary/20 bg-primary/5 p-5">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
           <div>
-            <p className="font-semibold text-sm">Финальный платёжный реестр</p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {paymentRegistryLoading
-                ? 'Загружаются утверждённые выплаты из таблицы bonuses…'
-                : paymentRegistryError
-                  ? `Реестр не загрузился: ${paymentRegistryError}. Предварительные расчёты видны, но ни один из них не считается выплатой.`
-                  : paymentIndex.totalRows === 0
-                    ? 'В таблице bonuses нет строк: финальные выплаты не зарегистрированы. Ниже показан только предварительный расчёт.'
-                    : `Загружено строк: ${paymentIndex.totalRows}. Выплату подтверждает только payment_date в таблице bonuses.`}
-            </p>
-            {!paymentRegistryLoading && !paymentRegistryError && paymentIndex.unmatchedRows > 0 && (
-              <p className="text-xs text-amber-700 mt-1">
-                Без полной пары проект + сотрудник: {paymentIndex.unmatchedRows}. Эти строки не сопоставлены автоматически.
+            <p className="font-semibold">Собираем точную ведомость…</p>
+            <p className="text-sm text-muted-foreground">Сверяем проекты, сотрудников, утверждённые часы и финальный реестр выплат.</p>
+          </div>
+        </Card>
+      )}
+
+      {(projectsError || employeesError || registryError || hoursError) && (
+        <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div className="flex items-start gap-3">
+            <FileWarning className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              <p className="font-bold text-destructive">Часть данных не загрузилась</p>
+              <p className="mt-1 text-muted-foreground">
+                {[projectsError, employeesError, registryError, hoursError].filter(Boolean).join(' · ')}
               </p>
-            )}
+              <p className="mt-1 font-medium">Суммы не подменяются нулями молча: ошибка показана до принятия решения.</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <section className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <KpiCard
+          testId="bonus-kpi-planned"
+          label="Рассчитано сотрудникам"
+          value={formatMoney(displayKzt.plannedAmount)}
+          hint={`${visibleEmployees.length} чел. · ${visibleSources.length} источников в текущей выборке`}
+          icon={Users}
+          tone="violet"
+        />
+        <KpiCard
+          testId="bonus-kpi-approved"
+          label="Утверждено к выплате"
+          value={formatMoney(displayKzt.approvedAmount)}
+          hint="По сотрудникам и проектам текущей выборки"
+          icon={BadgeCheck}
+          tone="blue"
+        />
+        <KpiCard
+          testId="bonus-kpi-paid"
+          label="Фактически выплачено"
+          value={formatMoney(displayKzt.paidAmount)}
+          hint="Только строки текущей выборки с датой оплаты"
+          icon={CheckCircle2}
+          tone="emerald"
+        />
+        <KpiCard
+          testId="bonus-kpi-unregistered"
+          label="Ещё не в реестре"
+          value={formatMoney(displayKzt.unregisteredAmount)}
+          hint="Расчёт есть в текущей выборке, платёжной записи нет"
+          icon={Clock3}
+          tone="amber"
+        />
+        <KpiCard
+          label="Пул выбранных проектов"
+          value={formatMoney(displayKzt.bonusPoolAmount)}
+          hint={`Не распределено ${formatMoney(displayKzt.unallocatedPoolAmount)}`}
+          icon={CircleDollarSign}
+          tone="slate"
+        />
+      </section>
+
+      <Card
+        data-testid="bonus-reconciliation"
+        className={`border p-4 ${loading ? 'border-primary/30 bg-primary/5' : reconciliationOk ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            {loading
+              ? <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-primary" />
+              : reconciliationOk
+              ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />}
+            <div className="min-w-0">
+              <p className="font-black">
+                {loading
+                  ? 'Сверяем платёжный реестр…'
+                  : !reconciliationReady
+                    ? 'Сверка не завершена: часть данных недоступна'
+                    : reconciliationOk
+                      ? 'Сверка сошлась'
+                      : 'Нужна сверка платёжного реестра'}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Расчёт {formatMoney(kzt.plannedAmount)} + превышение реестра {formatMoney(kzt.overRegisteredAmount)} =
+                сопоставлено в реестре {formatMoney(kzt.linkedRegistryAmount)} + ещё не внесено {formatMoney(kzt.unregisteredAmount)}.
+                {kzt.unlinkedRegistryAmount > 0 && ` Отдельно без сотрудника: ${formatMoney(kzt.unlinkedRegistryAmount)}.`}
+              </p>
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-2 gap-x-5 gap-y-1 text-xs sm:grid-cols-4">
+            <div><span className="text-muted-foreground">В портфеле</span><strong className="block text-sm">{ledger.totals.paymentRows}</strong></div>
+            <div><span className="text-muted-foreground">Без сотрудника</span><strong className="block text-sm">{ledger.totals.unlinkedPaymentRows} · {formatMoney(kzt.unlinkedRegistryAmount)}</strong></div>
+            <div><span className="text-muted-foreground">Без проекта</span><strong className="block text-sm">{ledger.totals.missingProjectPaymentRows} · {formatMoney(ledger.totals.missingProjectRegistryAmount)}</strong></div>
+            <div><span className="text-muted-foreground">Вне портфеля</span><strong className="block text-sm">{ledger.totals.outOfScopePaymentRows} · {formatMoney(ledger.totals.outOfScopeRegistryAmount)}</strong></div>
           </div>
         </div>
       </Card>
 
-      {canEditBonuses && !finalRegistryApprovalEnabled && (
-        <Card className="p-4 border border-amber-300 bg-amber-50/70">
-          <p className="font-semibold text-sm text-amber-900">Регистрация выплат временно заблокирована</p>
-          <p className="mt-1 text-sm text-amber-800">
-            Суммы ниже — предварительный расчёт. Кнопка финального утверждения появится только после сверки реестра и подтверждения процентов.
-          </p>
+      {(nonKzt.length > 0 || unknownIdentities > 0 || overPercentProjects > 0 || kzt.overAllocatedPoolAmount > 0) && (
+        <Card className="border-amber-500/30 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="min-w-0">
+              <p className="font-bold">Контроль качества перед выплатой</p>
+              <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                {nonKzt.length > 0 && (
+                  <p><strong className="text-foreground">Валюта:</strong> {nonKzt.map((item) => `${item.currency}: ${formatMoney(item.plannedAmount, item.currency)}`).join(' · ')}. Эти суммы не прибавлены к KZT.</p>
+                )}
+                {unknownIdentities > 0 && <p><strong className="text-foreground">Сотрудники:</strong> {unknownIdentities} записей требуют сопоставления с базой; печать расписки заблокирована.</p>}
+                {overPercentProjects > 0 && <p><strong className="text-foreground">Формула:</strong> в {overPercentProjects} проект(ах) сумма ролевых процентов выше 100%.</p>}
+                {kzt.overAllocatedPoolAmount > 0 && <p><strong className="text-foreground">Пул:</strong> распределение выше пулов на {formatMoney(kzt.overAllocatedPoolAmount)}.</p>}
+              </div>
+            </div>
+          </div>
         </Card>
       )}
 
-      {/* Статистика */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Всего бонусов', value: stats.count, sub: 'записей', icon: Gift, color: 'text-primary', bg: 'bg-primary/10' },
-          { label: 'Общая сумма', value: (stats.total || 0).toLocaleString('ru-RU') + ' ₸', sub: 'начислено', icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10' },
-          { label: 'Ожидает', value: (stats.pending || 0).toLocaleString('ru-RU') + ' ₸', sub: 'на рассмотрении', icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-          { label: 'Выплачено', value: (stats.paid || 0).toLocaleString('ru-RU') + ' ₸', sub: 'итого', icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
-          <Card key={label} className="p-4 border-0 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                <Icon className={`w-4 h-4 ${color}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground truncate">{label}</p>
-                <p className="font-bold text-base leading-tight mt-0.5 truncate">{value}</p>
-                <p className="text-xs text-muted-foreground/60">{sub}</p>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Фонд бонусов — динамика за период (для CEO/admin) */}
-      {canEditBonuses && !personalView && (
-        <Card className="p-4 border-0 shadow-sm">
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <section className="grid min-w-0 gap-4 xl:grid-cols-2">
+        <Card data-testid="bonus-status-chart" className="min-w-0 p-4 sm:p-5">
+          <div className="flex items-start gap-2">
+            <PieChartIcon className="mt-0.5 h-5 w-5 text-primary" />
             <div>
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-primary" /> Фонд бонусов — нагрузка за период
-              </h3>
-              <p className="text-xs text-muted-foreground">Сколько уже выплачено, сколько ждёт выплаты, сколько ждёт твоего утверждения</p>
+              <h2 className="font-black">Состояние расчёта и выплат</h2>
+              <p className="text-xs text-muted-foreground">Текущая выборка · KZT не смешивается с иностранной валютой</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {[
-              { label: 'За 30 дней', data: fundSummary.month },
-              { label: 'За квартал (90д)', data: fundSummary.quarter },
-              { label: 'За год (365д)', data: fundSummary.year },
-            ].map(({ label, data }) => (
-              <div key={label} className="rounded-lg bg-muted/30 p-3 space-y-2">
-                <div className="text-xs font-medium text-muted-foreground">{label}</div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Начислено</span>
-                  <span className="font-bold">{data.accrued.toLocaleString('ru-RU')} ₸</span>
+          <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.9fr)] sm:items-center">
+            <div className="h-64 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={88} paddingAngle={2}>
+                    {chartPieData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                  </Pie>
+                  <RechartsTooltip formatter={(value: number | string) => formatMoney(Number(value))} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
+              {pieData.map((item) => (
+                <div key={item.name} className="flex items-start justify-between gap-3 rounded-lg bg-muted/35 p-2.5 text-xs">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="leading-snug text-muted-foreground">{item.name}</span>
+                  </div>
+                  <strong className="shrink-0">{formatMoney(item.value)}</strong>
                 </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-emerald-700">✓ выплачено</span>
-                  <span className="font-medium text-emerald-700">{data.paid.toLocaleString('ru-RU')} ₸</span>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-blue-700">⏳ к выплате</span>
-                  <span className="font-medium text-blue-700">{data.waitingPaid.toLocaleString('ru-RU')} ₸</span>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-amber-700">⚠ ждёт CEO</span>
-                  <span className="font-medium text-amber-700">{data.waitingApprove.toLocaleString('ru-RU')} ₸</span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </Card>
-      )}
 
-      {/* Единый формат для CEO — табличный CEO-свод. Тот же компонент
-          используется в /projects на табе «CEO-свод». Здесь стартовый
-          фильтр выставлен в «pending» (ждут утверждения), но CEO может
-          переключиться. Действия (approve, mark paid, hide, adjust)
-          проброшены через ceoTableActions. */}
-      {canEditBonuses && (
-        <CEOSummaryTable
-          projects={projects}
-          employees={employees}
-          tasks={tasks}
-          getProjectAmount={getProjectAmountForTable}
-          getCompanyDisplayName={getCompanyDisplayNameForTable}
-          initialStatusFilter="all"
-          actions={ceoTableActions}
-          hideHeader={true}
-        />
-      )}
-
-
-      <Tabs defaultValue="list" className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="list" className="gap-1.5"><Gift className="w-3.5 h-3.5" />Список</TabsTrigger>
-            <TabsTrigger value="by-employee" className="gap-1.5"><Users className="w-3.5 h-3.5" />По сотрудникам</TabsTrigger>
-          </TabsList>
-
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-52">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="Поиск..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 bg-muted/40 border-0 focus-visible:ring-1"
-              />
+        <Card data-testid="bonus-top-employees-chart" className="min-w-0 p-4 sm:p-5">
+          <div className="flex items-start gap-2">
+            <BarChart3 className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <h2 className="font-black">Лестница расчётных бонусов</h2>
+              <p className="text-xs text-muted-foreground">Топ сотрудников по текущему фильтру · KZT</p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-                <SelectTrigger className="bg-muted/40 border-0 text-sm">
-                  <SelectValue placeholder="Статус" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
-                  <SelectItem value="pending">Ожидает</SelectItem>
-                  <SelectItem value="approved">Одобрен</SelectItem>
-                  <SelectItem value="paid">Выплачен</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterType} onValueChange={(v) => setFilterType(v as any)}>
-                <SelectTrigger className="bg-muted/40 border-0 text-sm">
-                  <SelectValue placeholder="Тип" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все типы</SelectItem>
-                  <SelectItem value="project">Проект</SelectItem>
-                  <SelectItem value="kpi">KPI</SelectItem>
-                  <SelectItem value="annual">Годовой</SelectItem>
-                </SelectContent>
-              </Select>
+          </div>
+          <div className="mt-4 h-72 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartEmployeeData} layout="vertical" margin={{ top: 0, right: 34, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.25} />
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" width={118} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <RechartsTooltip formatter={(value: number | string) => formatMoney(Number(value))} labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ''} />
+                <Bar dataKey="value" fill="#0ea5e9" radius={[0, 7, 7, 0]} minPointSize={2}>
+                  <LabelList dataKey="value" position="right" formatter={(value: unknown) => moneyFormat.format(Number(value) || 0)} className="fill-foreground text-[10px]" />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </section>
+
+      <Card className="min-w-0 p-3 sm:p-4">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(260px,1fr)_220px_220px_auto] lg:items-end">
+          <label className="min-w-0">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Поиск</span>
+            <div className="relative min-w-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник, проект, компания или роль" className="w-full pl-9" />
             </div>
+          </label>
+          <label className="min-w-0">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Бизнес-сезон</span>
+            <Select value={season} onValueChange={setSeason}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все бизнес-сезоны</SelectItem>
+                {ledger.seasons.map((item) => <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="min-w-0">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Состояние денег</span>
+            <Select value={status} onValueChange={(value) => setStatus(value as LedgerStatusFilter)}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все состояния</SelectItem>
+                <SelectItem value="unregistered">Не внесено в реестр</SelectItem>
+                <SelectItem value="pending">В реестре, ждёт</SelectItem>
+                <SelectItem value="approved">Утверждено к выплате</SelectItem>
+                <SelectItem value="paid">Выплачено</SelectItem>
+                <SelectItem value="mismatch">Есть расхождение</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          <div className="text-sm text-muted-foreground lg:pb-2 lg:text-right">
+            Показано <strong className="text-foreground">{visibleEmployees.length}</strong> из {ledger.employees.length} сотрудников
+          </div>
+        </div>
+      </Card>
+
+      <section data-testid="bonus-employee-table" className="min-w-0 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black">По каждому сотруднику</h2>
+            <p className="text-sm text-muted-foreground">Все проекты, часы контроля, процент, расчёт и факт оплаты — без переходов на другие страницы.</p>
           </div>
         </div>
 
-        <TabsContent value="list" className="space-y-2 mt-2">
-          {filteredBonuses.length === 0 ? (
-            <Card className="p-12 text-center border-0 shadow-sm">
-              <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
-                <Gift className="w-7 h-7 text-muted-foreground/50" />
-              </div>
-              <p className="font-medium text-muted-foreground">Бонусы не найдены</p>
-              <p className="text-sm text-muted-foreground/60 mt-1">Попробуйте изменить фильтры</p>
-            </Card>
-          ) : (
-            filteredBonuses.map((bonus) => (
-              <Card key={bonus.id} className="p-4 border-0 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
-                    <Gift className="w-5 h-5 text-yellow-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-semibold text-sm truncate">{bonus.employeeName}</h3>
-                      {getStatusBadge(bonus.status)}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{bonus.projectName} · {format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-base text-primary">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</p>
-                    <p className="text-xs text-muted-foreground">{bonus.percent}% от базы</p>
-                  </div>
-                </div>
-              </Card>
-            ))
-          )}
-        </TabsContent>
+        {!loading && visibleEmployees.length === 0 && (
+          <Card className="p-10 text-center">
+            <Users className="mx-auto h-9 w-9 text-muted-foreground/40" />
+            <p className="mt-3 font-semibold">По выбранным условиям ничего не найдено</p>
+          </Card>
+        )}
 
-        <TabsContent value="by-employee" className="space-y-3 mt-2">
-          {bonusesByEmployee.length === 0 ? (
-            <Card className="p-12 text-center border-0 shadow-sm">
-              <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
-                <Users className="w-7 h-7 text-muted-foreground/50" />
+        {pagedEmployees.map((employee) => {
+          const printable = employee.sources.every((source) => source.identityMatched);
+          return (
+            <Card
+              key={employee.employeeId}
+              data-testid={`bonus-employee-row-${employee.employeeId}`}
+              data-bonus-employee-row="true"
+              className="min-w-0 overflow-hidden border-border/80 shadow-sm"
+            >
+              <div className="grid min-w-0 gap-4 border-b border-border bg-muted/20 p-4 lg:grid-cols-[minmax(220px,1.2fr)_repeat(4,minmax(120px,0.7fr))_auto] lg:items-center">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 font-black text-primary">
+                    {employee.employeeName.slice(0, 1).toUpperCase() || '?'}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="break-words font-black leading-tight">{employee.employeeName}</h3>
+                    <p className="mt-1 break-all text-xs text-muted-foreground">{employee.employeeEmail || `ID: ${employee.employeeId}`}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{employee.sources.length} проект(а) · {formatHours(employee.sources.reduce((sum, source) => sum + source.approvedHours, 0))} утверждено</p>
+                  </div>
+                </div>
+                <div><p className="text-[11px] uppercase text-muted-foreground">Рассчитано</p><MoneyBreakdown sources={employee.sources} field="plannedAmount" className="font-black" /></div>
+                <div><p className="text-[11px] uppercase text-muted-foreground">Утверждено</p><MoneyBreakdown sources={employee.sources} field="approvedAmount" className="font-black text-blue-600" /></div>
+                <div><p className="text-[11px] uppercase text-muted-foreground">Выплачено</p><MoneyBreakdown sources={employee.sources} field="paidAmount" className="font-black text-emerald-600" /></div>
+                <div><p className="text-[11px] uppercase text-muted-foreground">Не в реестре</p><MoneyBreakdown sources={employee.sources} field="unregisteredAmount" className="font-black text-amber-600" /></div>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 lg:w-auto"
+                  disabled={!printable}
+                  title={printable ? 'Подготовить персональную ведомость' : 'Сначала сопоставьте сотрудника с базой'}
+                  aria-label={`Распечатать ведомость: ${employee.employeeName}`}
+                  onClick={() => setPrintEmployee(employee as EmployeeBonusLedger)}
+                >
+                  <Printer className="h-4 w-4" /> Печать
+                </Button>
               </div>
-              <p className="font-medium text-muted-foreground">Данные не найдены</p>
-            </Card>
-          ) : (
-            bonusesByEmployee.map(({ employee, total, bonuses }) => {
-              const paidTotal = bonuses.filter((b) => b.status === 'paid').reduce((s, b) => s + b.amount, 0);
-              const pendingTotal = total - paidTotal;
-              return (
-              <Card key={employee.id || employee.name} className="p-4 border-0 shadow-sm">
-                <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                      {(employee.name || 'N')[0]}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm truncate">{employee.name || 'Неизвестный сотрудник'}</h3>
-                      <p className="text-xs text-muted-foreground">{bonuses.length} бонусов · выплачено {paidTotal.toLocaleString('ru-RU')} ₸ · ждёт {pendingTotal.toLocaleString('ru-RU')} ₸</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-primary">{(total || 0).toLocaleString('ru-RU')} ₸</p>
-                    <p className="text-xs text-muted-foreground">Всего</p>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  {bonuses.map((bonus: any) => {
-                    const isPaid = bonus.status === 'paid';
-                    return (
-                    <div key={bonus.id} className={`p-2.5 rounded-lg ${isPaid ? 'bg-emerald-50/50 border border-emerald-100' : 'bg-muted/40'}`}>
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{bonus.projectName}</p>
-                          <p className="text-xs text-muted-foreground flex flex-wrap gap-x-2">
-                            <span>{format(new Date(bonus.date), 'dd MMM yyyy', { locale: ru })}</span>
-                            {bonus.role && <span>· {bonus.role}</span>}
-                            {bonus.hiddenFromEmployee && <span className="text-amber-700">· 🙈 скрыт от сотрудника</span>}
-                            {bonus.paidAt && <span className="text-emerald-700">· выплачено {format(new Date(bonus.paidAt), 'dd.MM.yyyy', { locale: ru })}</span>}
+
+              <div data-testid="bonus-project-sources" className="divide-y divide-border">
+                {employee.sources.map((source) => {
+                  const formulaWarning = source.projectTeamPercentTotal > 100.001
+                    || source.projectAllocatedAmount > source.projectBonusPoolAmount + 0.01;
+                  return (
+                    <article key={source.key} className="grid min-w-0 gap-3 p-4 xl:grid-cols-[minmax(240px,1.5fr)_minmax(170px,0.75fr)_repeat(4,minmax(110px,0.6fr))] xl:items-start">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-start gap-2">
+                          <h4 className="min-w-0 break-words text-sm font-bold leading-snug">{source.projectName}</h4>
+                          {!source.identityMatched && <Badge variant="destructive">ID не найден в сотрудниках</Badge>}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{source.companyName} · {source.season?.label || 'Без даты'}</p>
+                        <p className="mt-1 text-xs"><strong>{roleLabel(source.role)}</strong> · {numberFormat.format(source.percent)}%</p>
+                        <div className="mt-2"><SourceStatus source={source} /></div>
+                        {formulaWarning && (
+                          <p className="mt-2 text-xs font-semibold text-destructive">
+                            Контроль формулы: команда {numberFormat.format(source.projectTeamPercentTotal)}%; распределено {formatMoney(source.projectAllocatedAmount, source.currency)} из пула {formatMoney(source.projectBonusPoolAmount, source.currency)}.
                           </p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {getStatusBadge(bonus.status)}
-                          {canEditBonuses ? (
-                            <Input
-                              type="number"
-                              value={bonus.amount}
-                              onChange={(e) => {
-                                const v = Number(e.target.value);
-                                if (Number.isFinite(v) && v >= 0) reduceBonusAmount(bonus.projectId, bonus.employeeId, v);
-                              }}
-                              className="w-32 h-7 text-right text-sm"
-                              disabled={isPaid}
-                              title={isPaid ? 'Бонус уже выплачен — для коррекции снимите отметку выплаты' : 'Изменить сумму (CEO может сократить)'}
-                            />
-                          ) : (
-                            <span className="font-semibold text-sm">{(bonus.amount || 0).toLocaleString('ru-RU')} ₸</span>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      {canEditBonuses && (
-                        <div className="flex items-center gap-2 mt-2 flex-wrap text-xs">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-xs"
-                            onClick={() => toggleBonusVisibility(bonus.projectId, bonus.employeeId, bonus.hiddenFromEmployee)}
-                          >
-                            {bonus.hiddenFromEmployee ? '👁 Показать сотруднику' : '🙈 Скрыть от сотрудника'}
-                          </Button>
-                          {(bonus.history?.length || 0) > 0 && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs text-muted-foreground"
-                              onClick={() => setHistoryOpen((s) => ({ ...s, [bonus.id]: !s[bonus.id] }))}
-                            >
-                              {historyOpen[bonus.id] ? '▼' : '▶'} История ({bonus.history?.length})
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                      {historyOpen[bonus.id] && (bonus.history?.length || 0) > 0 && (
-                        <div className="mt-2 ml-1 border-l-2 border-muted pl-3 space-y-1">
-                          {(bonus.history || []).slice().reverse().map((h: BonusHistoryEntry, idx: number) => {
-                            const label = h.type === 'paid' ? '💰 выплата зафиксирована'
-                              : h.type === 'unmark_paid' ? '↩️ отметка выплаты снята'
-                              : h.type === 'hide' ? '🙈 скрыт от сотрудника'
-                              : h.type === 'show' ? '👁 показан сотруднику'
-                              : h.type === 'amount_change' ? `✏️ сумма ${Number(h.from || 0).toLocaleString('ru-RU')} → ${Number(h.to || 0).toLocaleString('ru-RU')} ₸`
-                              : h.type;
-                            return (
-                              <div key={idx} className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
-                                <span>{label}</span>
-                                <span>·</span>
-                                <span>{h.byName || h.by || 'CEO'}</span>
-                                <span>·</span>
-                                <span>{format(new Date(h.at), 'dd.MM.yyyy HH:mm', { locale: ru })}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                      <div className="rounded-lg bg-muted/35 p-3 text-xs">
+                        <p className="font-semibold">Контроль часов</p>
+                        <p className="mt-1 text-muted-foreground">Утверждено: <strong className="text-foreground">{formatHours(source.approvedHours)}</strong></p>
+                        <p className="text-muted-foreground">Ждёт: <strong className="text-foreground">{formatHours(source.pendingHours)}</strong></p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">Часы показываются для контроля и сейчас не являются множителем формулы.</p>
+                      </div>
+                      <div><p className="text-[11px] uppercase text-muted-foreground">Расчёт</p><p className="font-black">{formatMoney(source.plannedAmount, source.currency)}</p></div>
+                      <div><p className="text-[11px] uppercase text-muted-foreground">Утверждено</p><p className="font-black text-blue-600">{formatMoney(source.approvedAmount)}</p></div>
+                      <div><p className="text-[11px] uppercase text-muted-foreground">Выплачено</p><p className="font-black text-emerald-600">{formatMoney(source.paidAmount)}</p>{source.latestPaymentDate && <p className="text-[10px] text-muted-foreground">{formatDate(source.latestPaymentDate)}</p>}</div>
+                      <div><p className="text-[11px] uppercase text-muted-foreground">Осталось вне реестра</p><p className="font-black text-amber-600">{formatMoney(source.unregisteredAmount, source.currency)}</p></div>
+                    </article>
                   );
-                  })}
-                </div>
-              </Card>
-            )})
-          )}
-        </TabsContent>
-      </Tabs>
+                })}
+              </div>
+            </Card>
+          );
+        })}
+
+        {visibleEmployees.length > pageSize && (
+          <Card className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Сотрудники {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, visibleEmployees.length)} из {visibleEmployees.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Назад</Button>
+              <span className="min-w-16 text-center text-sm font-semibold">{safePage} из {pageCount}</span>
+              <Button variant="outline" disabled={safePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Далее</Button>
+            </div>
+          </Card>
+        )}
+      </section>
+
+      <Card className="border-dashed p-4 text-xs leading-relaxed text-muted-foreground">
+        <strong className="text-foreground">Как читать ведомость:</strong> «Рассчитано» — техническое распределение из карточки проекта; «Утверждено» и «Выплачено» — только финальный реестр. Несколько платёжных строк одного сотрудника по одному проекту считаются траншами. KZT и USD никогда не складываются в одну сумму.
+      </Card>
+
+      {printEmployee && <PrintSlip employee={printEmployee} onClose={() => setPrintEmployee(null)} />}
     </div>
   );
 }

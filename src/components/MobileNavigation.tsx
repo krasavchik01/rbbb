@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { CalendarCheck, Clock, FolderKanban, Users, Settings, Menu, LogOut, Bell } from 'lucide-react';
+import { CalendarCheck, Clock, FolderKanban, Users, Settings, Menu, LogOut, Bell, WalletCards } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +30,7 @@ const allNavItems: NavItem[] = [
   { to: '/attendance', icon: CalendarCheck, label: 'Посещаемость' },
   { to: '/notifications', icon: Bell, label: 'Уведомления' },
   { to: '/hr', icon: Users, label: 'HR', allowedRoles: ROLE_GROUPS.hrManagement },
+  { to: '/bonuses', icon: WalletCards, label: 'Бонусная ведомость', allowedRoles: ROLE_GROUPS.executive },
   { to: '/settings', icon: Settings, label: 'Настройки', allowedRoles: ROLE_GROUPS.admin },
 ];
 

@@ -278,7 +278,9 @@ export function buildProjectCommandCenterModel(project: any): ProjectCommandCent
       contractFileCount,
     },
     finance,
-    businessSeason: businessSeasonForDate(startDate ?? endDate),
+    // The operational season is determined by completion: end date first,
+    // with the start date used only when completion has not been entered.
+    businessSeason: businessSeasonForDate(endDate ?? startDate),
     stagePeriods,
     warnings: uniqueWarnings(warnings),
   };

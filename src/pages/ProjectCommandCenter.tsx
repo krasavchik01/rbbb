@@ -54,6 +54,7 @@ import {
   type BonusPaymentLedgerState,
   type BonusPaymentRow,
 } from '@/lib/bonusPayments';
+import { calculateExecutiveBonusFinances } from '@/lib/bonusLedger';
 import { calculateProjectFinances } from '@/types/project-v3';
 import { hasPermission, isUserRole, ROLE_LABELS } from '@/types/roles';
 import {
@@ -65,6 +66,12 @@ import {
 import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
+import {
+  BUSINESS_SEASON_NO_DATE,
+  countProjectBusinessSeasons,
+  projectBusinessSeasonDates,
+  projectBusinessSeasonValueFromProject,
+} from '@/lib/businessSeason';
 import {
   canonicalTeamMarkerPatch,
   dedupeCanonicalTeamMembers,
@@ -498,37 +505,7 @@ function hoursPairKey(employeeId: string, projectId: string): string {
 }
 
 function financeFor(project: any, team: CanonicalTeamMember[] = projectTeam(project)) {
-  const normalizedFinances = readProjectFinances(project);
-  try {
-    const calculationProject = projectForFinanceCalculation(project);
-    const participants = dedupeCanonicalTeamMembers([
-      Array.isArray(calculationProject?.team) ? calculationProject.team : [],
-      team,
-    ]);
-    return calculateProjectFinances({
-      ...calculationProject,
-      team: participants,
-      finances: {
-        ...normalizedFinances,
-        amountWithoutVAT: projectAmount(project),
-      },
-    });
-  } catch {
-    const amount = projectAmount(project);
-    return {
-      amountWithoutVAT: amount,
-      preExpenseAmount: 0,
-      totalContractorsAmount: 0,
-      bonusBase: amount,
-      bonusPercent: 10,
-      totalBonusAmount: amount * 0.1,
-      totalPaidBonuses: 0,
-      totalCosts: amount * 0.1,
-      grossProfit: amount,
-      profitMargin: amount > 0 ? 100 : 0,
-      teamBonuses: {},
-    };
-  }
+  return calculateExecutiveBonusFinances(project, team);
 }
 
 function exportTeamList(team: any[], finances: any, includeBonuses: boolean): string {
@@ -1002,40 +979,17 @@ function rowDateRanges(row: any): DateRange[] {
   return projectRange ? [projectRange] : [];
 }
 
-function businessSeasonRange(year: number): DateRange {
-  return {
-    start: new Date(year - 1, 9, 1),
-    end: new Date(year, 8, 30),
-  };
-}
-
-function businessSeasonYear(date: Date): number {
-  return date.getMonth() >= 9 ? date.getFullYear() + 1 : date.getFullYear();
-}
-
 function businessSeasonLabel(year: number): string {
   return `Сезон ${year} · октябрь ${year - 1} — сентябрь ${year}`;
 }
 
-function rowBusinessSeasonYears(row: any): number[] {
-  const years = new Set<number>();
-  for (const range of rowDateRanges(row)) {
-    const cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-    const end = new Date(range.end.getFullYear(), range.end.getMonth(), 1);
-    while (cursor.getTime() <= end.getTime()) {
-      years.add(businessSeasonYear(cursor));
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-  }
-  return [...years].sort((a, b) => b - a);
+function rowBusinessSeasonValue(row: any) {
+  return projectBusinessSeasonValueFromProject(row.project);
 }
 
 function rowMatchesBusinessSeason(row: any, value: BusinessSeasonFilter): boolean {
   if (value === 'all') return true;
-  const match = value.match(/^season:(20\d{2})$/);
-  if (!match) return true;
-  const season = businessSeasonRange(Number(match[1]));
-  return rowDateRanges(row).some((range) => rangesIntersect(range, season));
+  return rowBusinessSeasonValue(row) === value;
 }
 
 function projectOperationalState(row: any): Exclude<ProjectViewFilter, 'all'> {
@@ -1166,7 +1120,11 @@ function rowMatchesColumnFilters(
   const leaderText = team.filter((member: any) => isLeaderRole(teamRole(member))).map(teamName).join(' ');
   const periodText = (row.periods || []).map((period: AuditPeriod) => `${period.name} ${periodLabel(period)} ${auditPeriodTypeLabel(period.type)} ${period.startDate || ''} ${period.endDate || ''} ${period.deadline || ''}`).join(' ');
   const stageText = (notes?.stages || []).map((stage: any) => `${stage.name || ''} ${stage.title || ''} ${stage.stageAmountWithoutVAT || ''}`).join(' ');
-  const seasonText = rowBusinessSeasonYears(row).map((year) => `${year} ${businessSeasonLabel(year)}`).join(' ');
+  const seasonValue = rowBusinessSeasonValue(row);
+  const seasonYear = seasonValue.match(/^season:(20\d{2})$/)?.[1];
+  const seasonText = seasonYear
+    ? `${seasonYear} ${businessSeasonLabel(Number(seasonYear))}`
+    : 'Без даты';
   const contractText = `${commandModel.contract.number || ''} ${commandModel.contract.date || ''} ${commandModel.contract.serviceStartDate || ''} ${commandModel.contract.serviceEndDate || ''}`;
   const statusText = `${row.status} ${row.readiness?.label || ''} ${(row.readiness?.issues || []).join(' ')} ${row.deadlineState?.label || ''}`;
   const completenessText = `${statusText} ${commandModel.warnings.map((item) => `${item.code} ${item.label} ${item.severity}`).join(' ')}`;
@@ -1221,7 +1179,7 @@ function normalizeProjectViewFilter(value: string | null | undefined): ProjectVi
 }
 
 function normalizeBusinessSeasonFilter(value: string | null | undefined): BusinessSeasonFilter {
-  return value && /^season:20\d{2}$/.test(value) ? value : 'all';
+  return value === BUSINESS_SEASON_NO_DATE || (value && /^season:20\d{2}$/.test(value)) ? value : 'all';
 }
 
 function syncCommandCenterUrl(state: {
@@ -2333,19 +2291,24 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   }, [rows, appSettings.companies]);
 
   const businessSeasonOptions = useMemo(() => {
-    const counts = new Map<number, number>();
-    for (const row of rows) {
-      for (const year of rowBusinessSeasonYears(row)) {
-        counts.set(year, (counts.get(year) || 0) + 1);
-      }
-    }
-    return [...counts.entries()]
-      .sort(([left], [right]) => right - left)
-      .map(([year, count]) => ({
-        value: `season:${year}`,
+    const counts = countProjectBusinessSeasons(rows, (row) => projectBusinessSeasonDates(row.project));
+    const datedOptions = [...counts.entries()]
+      .filter(([value]) => value !== BUSINESS_SEASON_NO_DATE)
+      .map(([value, count]) => ({
+        value,
+        year: Number(value.slice('season:'.length)),
+        count,
+      }))
+      .sort((left, right) => right.year - left.year)
+      .map(({ value, year, count }) => ({
+        value,
         label: businessSeasonLabel(year),
         count,
       }));
+    const withoutDateCount = counts.get(BUSINESS_SEASON_NO_DATE) || 0;
+    return withoutDateCount > 0
+      ? [...datedOptions, { value: BUSINESS_SEASON_NO_DATE, label: 'Без даты', count: withoutDateCount }]
+      : datedOptions;
   }, [rows]);
 
   const selectedPartnerLabel = useMemo(() => {
@@ -2364,6 +2327,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     if (businessSeasonFilter === 'all') return '';
     const option = businessSeasonOptions.find((item) => item.value === businessSeasonFilter);
     if (option) return option.label;
+    if (businessSeasonFilter === BUSINESS_SEASON_NO_DATE) return 'Без даты';
     const match = businessSeasonFilter.match(/^season:(20\d{2})$/);
     return match ? businessSeasonLabel(Number(match[1])) : '';
   }, [businessSeasonFilter, businessSeasonOptions]);

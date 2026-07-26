@@ -24,6 +24,7 @@ const Tenders = lazy(() => import('@/pages/Tenders'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
+const Bonuses = lazy(() => import('@/pages/Bonuses'));
 // Audit и IFRS9 удалены из навигации по решению юзера (2026-05-21):
 // «усложнил с аудитом и процедурами МСФО, нагружает систему, убрать».
 // Файлы src/pages/Audit.tsx и src/pages/IFRS9.tsx сохранены на случай восстановления.
@@ -124,11 +125,19 @@ function App() {
               }
             />
             <Route path="/timesheet-approval" element={<Navigate to="/projects" replace />} />
-            {/* Team, approval and bonus work now lives in one canonical project ledger.
-                Preserve old bookmarks as safe redirects so legacy pages cannot overwrite
-                notes.team or create a second finance source. */}
+            {/* Team assignment and bonus adjustment remain in the canonical project ledger.
+                The executive bonus route below is a read-only reconciliation and print view. */}
             <Route path="/assign-partners" element={<Navigate to="/projects?view=working" replace />} />
-            <Route path="/bonuses" element={<Navigate to="/projects?view=ready_bonus" replace />} />
+            <Route
+              path="/bonuses"
+              element={
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.executive}>
+                  <Layout>
+                    <Bonuses />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/settings"
               element={

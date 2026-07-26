@@ -144,13 +144,14 @@ test.describe('executive demo: project to payment registry', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('CEO bonus route returns to the single project cockpit', async ({ page }) => {
+  test('CEO bonus route opens the protected employee bonus ledger', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/bonuses');
     await waitForDemoApp(page);
 
-    await expect(page).toHaveURL(/\/projects\?view=ready_bonus$/);
-    await expect(page.getByTestId('project-summary-shell')).toBeVisible();
+    await expect(page).toHaveURL(/\/bonuses$/);
+    await expect(page.getByTestId('bonus-dashboard')).toBeVisible();
+    await expect(page.getByTestId('bonus-employee-table')).toBeVisible();
     await expect(page.getByText('Предварительный расчёт · технические проценты')).toHaveCount(0);
     expect(network.productionMutations).toEqual([]);
     expect(network.unhandledRequests).toEqual([]);

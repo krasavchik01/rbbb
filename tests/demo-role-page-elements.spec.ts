@@ -5,9 +5,14 @@ import { ACTIVE_STATIC_ROUTES, PAGE_CATALOG, isKnownInternalHref } from '../scri
 import { loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
 const BASE_SIDEBAR = ['/projects', '/timesheets', '/attendance', '/notifications', '/settings'];
+const UNIFIED_PROJECT_ROUTES: Record<string, string> = {
+  '/assign-partners': '/projects',
+  '/project-approval': '/projects',
+};
 
 function expectedSidebar(role: UserRole) {
   const routes = [...BASE_SIDEBAR];
+  if (['ceo', 'admin'].includes(role)) routes.push('/bonuses');
   if (['hr', 'ceo', 'deputy_director', 'admin'].includes(role)) routes.push('/hr');
   if (role === 'procurement') routes.push('/create-project-procurement', '/tenders');
   if (role === 'admin') routes.push('/user-management', '/diagnostics');
@@ -83,10 +88,11 @@ test.describe('every role and active page surface', () => {
         await page.goto(route);
         await waitForDemoApp(page);
 
-        await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}(?:[?#].*)?$`));
+        const expectedRoute = UNIFIED_PROJECT_ROUTES[route] || route;
+        await expect(page).toHaveURL(new RegExp(`${expectedRoute.replace('/', '\\/')}(?:[?#].*)?$`));
         const surface = await pageSurface(page);
-        const catalog = PAGE_CATALOG[route as keyof typeof PAGE_CATALOG];
-        expect(catalog, `Missing page catalog entry for ${route}`).toBeTruthy();
+        const catalog = PAGE_CATALOG[expectedRoute as keyof typeof PAGE_CATALOG];
+        expect(catalog, `Missing page catalog entry for ${expectedRoute}`).toBeTruthy();
         expect(catalog.expectedText.some((token: string) => surface.text.toLowerCase().includes(token.toLowerCase()))).toBe(true);
         expect(surface.text).not.toContain('Вход в систему');
         expect(surface.text).not.toMatch(/404|not found/i);

@@ -9,6 +9,7 @@ import {
 } from './helpers/demo-fixtures';
 
 const SECOND_PROJECT_ID = 'demo-project-002';
+const UNDATED_PROJECT_ID = 'demo-project-undated';
 const DETACHED_BONUS_EMPLOYEE_ID = 'demo-detached-bonus';
 const EXTRA_EMPLOYEE = {
   id: 'demo-unassigned-accountant',
@@ -112,6 +113,34 @@ function addArchivedPeriodOutsideProjectDates(network: DemoNetworkJournal) {
   project!.notes = JSON.stringify(notes);
 }
 
+function addUndatedProject(network: DemoNetworkJournal) {
+  const undatedProject = JSON.parse(JSON.stringify(demoProject)) as any;
+  undatedProject.id = UNDATED_PROJECT_ID;
+  undatedProject.name = 'Проект без сроков';
+  undatedProject.start_date = '';
+  undatedProject.deadline = '';
+  const notes = JSON.parse(String(undatedProject.notes));
+  notes.name = undatedProject.name;
+  notes.start_date = '';
+  notes.deadline = '';
+  notes.contract = {
+    ...notes.contract,
+    serviceStartDate: '',
+    serviceEndDate: '',
+  };
+  // This archive date must not assign the project to a dated season.
+  notes.auditPeriods = [{
+    id: 'undated-project-archive',
+    name: 'Архив 2017',
+    startDate: '2017-01-01',
+    endDate: '2017-12-31',
+    deadline: '2017-12-31',
+    team: [],
+  }];
+  undatedProject.notes = JSON.stringify(notes);
+  network.tableRows.projects.push(undatedProject);
+}
+
 function addProtectedDetachedBonus(network: DemoNetworkJournal) {
   network.tableRows.employees.push({ ...DETACHED_BONUS_EMPLOYEE });
   const project = network.tableRows.projects.find((item) => item.id === DEMO_PROJECT_ID);
@@ -208,6 +237,7 @@ test.describe('single-row project command center contract', () => {
     const network = await loginAsDemoRole(page, 'ceo');
     addSecondProjectWithSameBusinessFields(network);
     addArchivedPeriodOutsideProjectDates(network);
+    addUndatedProject(network);
     await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
     await waitForDemoApp(page);
@@ -215,7 +245,7 @@ test.describe('single-row project command center contract', () => {
     const shell = page.getByTestId('project-summary-shell');
     await expect(shell).toBeVisible();
     const visibleRows = shell.locator('tr[data-project-id]');
-    await expect(visibleRows).toHaveCount(2);
+    await expect(visibleRows).toHaveCount(3);
     await expect(shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`)).toHaveCount(1);
     await expect(shell.locator(`tr[data-project-id="${SECOND_PROJECT_ID}"]`)).toHaveCount(1);
 
@@ -226,10 +256,25 @@ test.describe('single-row project command center contract', () => {
 
     const seasonFilter = filters.getByRole('combobox', { name: 'Бизнес-сезон', exact: true });
     await seasonFilter.click();
+    const seasonOptions = await page.getByRole('option').allTextContents();
+    const assignedProjectCount = seasonOptions.reduce((total, label) => {
+      if (/^Все бизнес-сезоны/.test(label)) return total;
+      return total + Number(label.match(/·\s*(\d+)$/)?.[1] || 0);
+    }, 0);
+    expect(assignedProjectCount).toBe(3);
+    await expect(page.getByRole('option', { name: /Сезон 2027 .*· 1$/ })).toBeVisible();
+    await expect(page.getByRole('option', { name: /Сезон 2024 .*· 1$/ })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Без даты · 1', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: /Сезон 2026/ })).toHaveCount(0);
     await page.getByRole('option', { name: /Сезон 2024/ }).click();
     await expect(shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`)).toHaveCount(0);
     await expect(shell.locator(`tr[data-project-id="${SECOND_PROJECT_ID}"]`)).toHaveCount(1);
+    await expect(shell.locator(`tr[data-project-id="${UNDATED_PROJECT_ID}"]`)).toHaveCount(0);
     await expect(page).toHaveURL(/season=season%3A2024/);
+    await seasonFilter.click();
+    await page.getByRole('option', { name: 'Без даты · 1', exact: true }).click();
+    await expect(shell.locator('tr[data-project-id]')).toHaveCount(1);
+    await expect(shell.locator(`tr[data-project-id="${UNDATED_PROJECT_ID}"]`)).toHaveCount(1);
     await seasonFilter.click();
     await page.getByRole('option', { name: 'Все бизнес-сезоны', exact: true }).click();
 

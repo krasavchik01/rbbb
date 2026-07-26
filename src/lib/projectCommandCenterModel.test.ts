@@ -10,6 +10,19 @@ describe('businessSeasonForDate', () => {
 });
 
 describe('buildProjectCommandCenterModel', () => {
+  it('uses the contract end date as the single business season anchor', () => {
+    const model = buildProjectCommandCenterModel({
+      id: 'cross-season-project',
+      name: 'Длинный проект',
+      contract: {
+        serviceStartDate: '2023-09-22',
+        serviceEndDate: '2029-10-17',
+      },
+    });
+
+    expect(model.businessSeason?.key).toBe('2029/30');
+  });
+
   it('keeps contract subject, service, stage and linked period as distinct visible fields', () => {
     const model = buildProjectCommandCenterModel({
       id: 'p-1',
