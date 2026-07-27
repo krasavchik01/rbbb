@@ -96,6 +96,37 @@ async function enrichUserWithAccess(user: User): Promise<User> {
   }
 }
 
+// A saved browser session can outlive an employee role correction in the
+// database. Refresh the authoritative employee role before restoring access
+// so a procurement user does not remain stuck with a stale manager role.
+async function refreshUserFromEmployeeRecord(user: User): Promise<User> {
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('employees')
+        .select('id,email,name,role,level')
+        .eq('id', user.id)
+        .maybeSingle(),
+      ACCESS_LOOKUP_TIMEOUT_MS,
+      'Employee role lookup',
+    );
+    if (error || !data) return user;
+    return normalizeAuthUser({
+      ...user,
+      id: data.id || user.id,
+      email: data.email || user.email,
+      name: data.name || user.name,
+      role: normalizeUserRole(
+        (data.role as string | null | undefined) || user.role,
+        data.level as string | null | undefined,
+      ),
+    });
+  } catch (error) {
+    console.warn('Unable to refresh saved employee role:', error);
+    return user;
+  }
+}
+
 function normalizeAuthUser(user: User): User {
   return {
     ...user,
@@ -124,9 +155,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (savedUser) {
       try {
         const parsed = normalizeAuthUser(JSON.parse(savedUser));
-        // Загружаем доступ к компаниям из Supabase
-        void enrichUserWithAccess(parsed)
-          .then((enriched) => setUser(enriched))
+        // Refresh the role first: localStorage may contain a role from before
+        // an administrator corrected the employee record in the database.
+        void refreshUserFromEmployeeRecord(parsed)
+          .then((refreshed) => enrichUserWithAccess(refreshed))
+          .then((enriched) => {
+            const { allowedCompanyIds: _, ...baseUser } = enriched;
+            safeStorageSet(USER_STORAGE_KEY, JSON.stringify(baseUser));
+            setUser(enriched);
+          })
           .catch((error) => {
             console.error('Error restoring saved user access:', error);
             setUser(parsed);
@@ -249,7 +286,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return false;
     }
 
-    const normalizedTarget = normalizeAuthUser(targetUser);
+    const normalizedTarget = await refreshUserFromEmployeeRecord(normalizeAuthUser(targetUser));
     const enrichedTarget = await enrichUserWithAccess(normalizedTarget);
     const baseAdmin = normalizeAuthUser(adminUser);
     const { allowedCompanyIds: _targetAllowed, ...targetBase } = enrichedTarget;

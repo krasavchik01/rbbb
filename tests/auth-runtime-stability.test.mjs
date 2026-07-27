@@ -11,6 +11,9 @@ test('auth restoration tolerates restricted browser storage and stalled access q
   assert.match(auth, /function safeStorageRemove/);
   assert.match(auth, /ACCESS_LOOKUP_TIMEOUT_MS = 10_000/);
   assert.match(auth, /withTimeout\([\s\S]*getUserAllowedCompanyIds/);
+  assert.match(auth, /refreshUserFromEmployeeRecord/);
+  assert.match(auth, /from\('employees'\)[\s\S]*select\('id,email,name,role,level/);
+  assert.match(auth, /const normalizedTarget = await refreshUserFromEmployeeRecord/);
   assert.doesNotMatch(auth, /(?<!window\.)localStorage\.(?:getItem|setItem|removeItem)/);
 });
 
