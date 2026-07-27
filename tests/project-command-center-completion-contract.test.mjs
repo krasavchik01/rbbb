@@ -40,9 +40,11 @@ test('historical data integrity drawer is read-only and preview-first', () => {
 
 test('command center permissions are centralized for sensitive actions', () => {
   assert.match(pageSource, /projectCommandCenterCapabilities\(user\?\.role\)/);
+  assert.match(permissionsSource, /const PROJECT_DETAILS_EDITOR_ROLES = \['admin', 'procurement'\]/);
   assert.match(permissionsSource, /const MONEY_ROLES = \['admin', 'ceo', 'procurement'\]/);
   assert.match(permissionsSource, /canCloseProjects: isExecutive/);
-  assert.match(permissionsSource, /canEditPeriods: canManageTeam \|\| userRole === 'partner'/);
+  assert.match(permissionsSource, /canEditPeriods: canManageTeam \|\| userRole === 'partner' \|\| userRole === 'procurement'/);
+  assert.match(pageSource, /Редактировать проект/);
   assert.match(permissionsSource, /Only procurement, delegated deputy directors, CEO and admin can edit contract value/);
 });
 

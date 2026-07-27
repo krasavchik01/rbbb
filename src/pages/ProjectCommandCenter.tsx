@@ -1719,6 +1719,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     scope || (user?.role === 'ceo' || user?.role === 'admin' ? 'executive' : 'operations');
   const isExecutive = effectiveScope === 'executive';
   const capabilities = projectCommandCenterCapabilities(user?.role);
+  const canEditProjectDetails = capabilities.canEditProjectDetails;
   const canSeeTeam = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'team');
   const canSeeHours = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'hours');
   const canSeeContractMoney = canRoleViewProjectSection(
@@ -4146,6 +4147,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   {formatDate(row.startDate)} — {formatDate(row.deadline)} · изменить
                 </Button>
               )}
+              {canEditProjectDetails && (
+                <Button asChild type="button" size="sm" className="h-9 w-full justify-start text-xs">
+                  <Link to={`/project/${row.id}?edit=1`}>
+                    Редактировать проект
+                    <ExternalLink className="ml-auto h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              )}
             </div>
 
             {canSeeTeam && <div className="min-w-0 space-y-2">
@@ -4290,6 +4299,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               </div>
               <h1 className="mt-1 text-2xl font-semibold tracking-normal text-foreground">Свод</h1>
             </div>
+            {canEditProjectDetails && (
+              <Button asChild type="button" className="w-full sm:w-auto">
+                <Link to="/create-project-procurement">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Создать проект
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>

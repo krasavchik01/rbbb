@@ -24,6 +24,7 @@ import { PROJECT_ROLES, TEAM_ROLE_SLOTS } from "@/types/roles";
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
 import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
+import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPermissions';
 import { legacyProjectCompanyLabel } from "@/lib/userCompanyAccess";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -277,6 +278,7 @@ export default function ProjectWorkspace() {
   // Получаем проект из state (если передан при навигации)
   const projectFromState = (location.state as any)?.project;
   const openTeamAssignment = (location.state as any)?.openTeamAssignment;
+  const openProjectEditor = new URLSearchParams(location.search).get('edit') === '1';
 
   const [projectData, setProjectData] = useState<any | null>(null);
   const [project, setProject] = useState<any>(null);
@@ -305,7 +307,7 @@ export default function ProjectWorkspace() {
   const isCEO = user?.role === 'ceo';
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
-  const isProcurementOrAdmin = isProcurement || isAdmin;
+  const canEditProjectDetails = projectCommandCenterCapabilities(user?.role).canEditProjectDetails;
   const canSeeTeam = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'team');
   const canSeeHours = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'hours');
   const canSeeContractMoney = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'contractMoney');
@@ -437,6 +439,19 @@ export default function ProjectWorkspace() {
       navigate(`/projects?q=${encodeURIComponent(project.name || '')}`, { replace: true });
     }
   }, [openTeamAssignment, project, canEditTeam, navigate]);
+
+  useEffect(() => {
+    if (!openProjectEditor || !project || !canEditProjectDetails) return;
+    setIsEditDialogOpen(true);
+    navigate(location.pathname, { replace: true, state: location.state });
+  }, [
+    openProjectEditor,
+    project,
+    canEditProjectDetails,
+    navigate,
+    location.pathname,
+    location.state,
+  ]);
 
   // Загрузка дополнительных соглашений из JSON проекта
   useEffect(() => {
@@ -604,7 +619,7 @@ export default function ProjectWorkspace() {
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap pl-11 sm:pl-0 flex-shrink-0">
           {/* Кнопка редактирования для закупщика и админа */}
-          {isProcurementOrAdmin && project && (
+          {canEditProjectDetails && project && (
             <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
               <Edit className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">Редактировать</span>
@@ -688,8 +703,8 @@ export default function ProjectWorkspace() {
             projectId={project?.id || id || ''}
             uploadedBy={user?.id || ''}
             initialFiles={normalizedFiles}
-            canUpload={isProcurementOrAdmin}
-            canDelete={() => isProcurementOrAdmin}
+            canUpload={canEditProjectDetails}
+            canDelete={() => canEditProjectDetails}
             onFilesChange={(files) => {
               setProject((current: any) => {
                 if (!current) return current;
@@ -718,7 +733,7 @@ export default function ProjectWorkspace() {
             companyId={project?.companyId || project?.notes?.companyId || ''}
             companyName={project?.companyName || project?.notes?.companyName || ''}
             projectFiles={normalizedFiles}
-            canEdit={isProcurementOrAdmin}
+            canEdit={canEditProjectDetails}
             onContractUpdate={async (updatedContract, uploadedFiles = []) => {
               if (project) {
                 const contractUpdate = buildContractUpdate(project, updatedContract, uploadedFiles);

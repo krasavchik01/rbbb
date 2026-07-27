@@ -201,6 +201,10 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
       const amount = parseFloat(amountWithoutVAT) || 0;
       const vat = parseFloat(vatRate) || 0;
       const vatAmount = amount * (vat / 100);
+      const prolongationEndDate = amendments.find(
+        amendment => amendment.type === 'prolongation' && amendment.newEndDate
+      )?.newEndDate;
+      const effectiveEndDate = prolongationEndDate || serviceEndDate;
 
       const updatedContract = {
         ...project.contract,
@@ -246,8 +250,8 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
         companyId: companyId || project.companyId,
         companyName: companies.find(c => c.id === (companyId || project.companyId))?.name || project.companyName,
         // Если была пролонгация - обновляем даты проекта
-        ...(amendments.some(a => a.type === 'prolongation' && a.newEndDate) && {
-          endDate: amendments.find(a => a.type === 'prolongation' && a.newEndDate)?.newEndDate
+        ...(prolongationEndDate && {
+          endDate: prolongationEndDate
         }),
         updated_at: new Date().toISOString()
       };
@@ -257,7 +261,23 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
       console.log('Допсоглашения:', amendments);
       console.log('Обновленный проект:', updatedProject);
 
-      const result = await supabaseDataStore.updateProject(project.id, updatedProject);
+      // Do not send the mapped project wholesale: it contains a stale `notes`
+      // snapshot whose old client/contract used to overwrite the edited values.
+      // Persist only the canonical fields changed by the procurement editor.
+      const result = await supabaseDataStore.updateProject(project.id, {
+        client: updatedProject.client,
+        contract: updatedProject.contract,
+        finances: updatedProject.finances,
+        type: updatedProject.type,
+        companyId: updatedProject.companyId,
+        companyName: updatedProject.companyName,
+        amountWithoutVAT: amount,
+        currency,
+        startDate: serviceStartDate,
+        start_date: serviceStartDate,
+        deadline: effectiveEndDate,
+        endDate: effectiveEndDate,
+      });
 
       if (result === null) {
         throw new Error("Не удалось сохранить в базе данных. Проверьте подключение или обратитесь к администратору.");
@@ -268,7 +288,7 @@ export function ProjectEditProcurement({ project, isOpen, onClose, onSave }: Pro
         description: "Изменения сохранены"
       });
 
-      onSave(updatedProject);
+      onSave(result as unknown as ProjectV3);
       onClose();
     } catch (error: any) {
       console.error("❌ ОШИБКА СОХРАНЕНИЯ:", error);

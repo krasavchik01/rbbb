@@ -1,6 +1,7 @@
 export interface ProjectCommandCenterCapabilities {
   canSeeContractMoney: boolean;
   canSeeBonusSummary: boolean;
+  canEditProjectDetails: boolean;
   canManageTeam: boolean;
   canCloseProjects: boolean;
   canDeleteProjects: boolean;
@@ -15,6 +16,7 @@ export interface ProjectCommandCenterCapabilities {
 
 const EXECUTIVE_ROLES = ['ceo', 'admin'];
 const DELEGATED_ROLES = ['admin', 'ceo', 'deputy_director'];
+const PROJECT_DETAILS_EDITOR_ROLES = ['admin', 'procurement'];
 const MONEY_ROLES = ['admin', 'ceo', 'procurement'];
 const BONUS_SUMMARY_ROLES = ['admin', 'ceo'];
 
@@ -27,6 +29,7 @@ export function projectCommandCenterCapabilities(role?: string | null): ProjectC
   return {
     canSeeContractMoney,
     canSeeBonusSummary: BONUS_SUMMARY_ROLES.includes(userRole),
+    canEditProjectDetails: PROJECT_DETAILS_EDITOR_ROLES.includes(userRole),
     canManageTeam,
     canCloseProjects: isExecutive,
     canDeleteProjects: isExecutive,
@@ -36,7 +39,7 @@ export function projectCommandCenterCapabilities(role?: string | null): ProjectC
     canBulkAssignLeader: isDelegated,
     canManageProjectStatus: isDelegated,
     canManageContractors: isDelegated,
-    canEditPeriods: canManageTeam || userRole === 'partner',
+    canEditPeriods: canManageTeam || userRole === 'partner' || userRole === 'procurement',
   };
 }
 
