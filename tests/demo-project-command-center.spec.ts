@@ -32,6 +32,36 @@ test.describe('CEO command center completion', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
+  test('CEO filters the unified summary by contract amount and uploaded contract file', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'ceo');
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    const filters = page.getByTestId('project-primary-filters');
+    const row = page.getByTestId('project-summary-shell').locator(`tr[data-project-id="${demoProject.id}"]`);
+    const amountFrom = filters.getByLabel('Сумма договора от', { exact: true });
+    const amountTo = filters.getByLabel('Сумма договора до', { exact: true });
+    await expect(amountFrom).toBeVisible();
+    await expect(amountTo).toBeVisible();
+
+    await amountFrom.fill('47000000');
+    await expect(row).toBeVisible();
+    await amountTo.fill('47000000');
+    await expect(row).toHaveCount(0);
+    await amountTo.fill('');
+
+    const contractFilter = filters.getByRole('combobox', { name: 'Наличие договора', exact: true });
+    await contractFilter.click();
+    await page.getByRole('option', { name: 'Договор загружен', exact: true }).click();
+    await expect(row).toBeVisible();
+
+    await contractFilter.click();
+    await page.getByRole('option', { name: 'Договор не загружен', exact: true }).click();
+    await expect(row).toHaveCount(0);
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('CEO downloads the legacy partner workbook with ИТОГО and partner sheets', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/projects');

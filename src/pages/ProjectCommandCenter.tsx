@@ -114,6 +114,7 @@ type PartnerFilter = 'all' | 'unassigned' | string;
 type CompanyFilter = 'all' | 'missing' | string;
 type YearFilter = 'all' | string;
 type BusinessSeasonFilter = 'all' | string;
+type ContractFileFilter = 'all' | 'uploaded' | 'missing';
 type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
 type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
 type ProjectDateDraft = { startDate: string; deadline: string };
@@ -992,6 +993,26 @@ function rowMatchesBusinessSeason(row: any, value: BusinessSeasonFilter): boolea
   return rowBusinessSeasonValue(row) === value;
 }
 
+function optionalMoneyFilterValue(value: string): number | null {
+  const raw = String(value || '').trim();
+  if (!raw || !/[0-9]/.test(raw)) return null;
+  const parsed = parseMoney(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function rowMatchesAmountRange(row: any, fromValue: string, toValue: string): boolean {
+  const from = optionalMoneyFilterValue(fromValue);
+  const to = optionalMoneyFilterValue(toValue);
+  if (from === null && to === null) return true;
+  const amount = Number(row?.amount || 0);
+  if (from !== null && to !== null) {
+    const min = Math.min(from, to);
+    const max = Math.max(from, to);
+    return amount >= min && amount <= max;
+  }
+  return from === null ? amount <= (to as number) : amount >= from;
+}
+
 function projectOperationalState(row: any): Exclude<ProjectViewFilter, 'all'> {
   if (row?.readiness?.level === 'closed') return 'closed';
   if (row?.status === 'pending_payment_approval') return 'ready_bonus';
@@ -1187,6 +1208,9 @@ function syncCommandCenterUrl(state: {
   columnFilters: ColumnFilterState;
   viewFilter: ProjectViewFilter;
   businessSeasonFilter: BusinessSeasonFilter;
+  amountFromFilter: string;
+  amountToFilter: string;
+  contractFileFilter: ContractFileFilter;
   deadlineFilter: ProjectDeadlineFilter;
   periodFilter: ProjectPeriodFilter;
   auditPeriodTypeFilter: AuditPeriodTypeFilter;
@@ -1202,6 +1226,9 @@ function syncCommandCenterUrl(state: {
   setOrDelete('q', state.search);
   setOrDelete('view', state.viewFilter, 'all');
   setOrDelete('season', state.businessSeasonFilter, 'all');
+  setOrDelete('amountFrom', state.amountFromFilter);
+  setOrDelete('amountTo', state.amountToFilter);
+  setOrDelete('contractFile', state.contractFileFilter, 'all');
   setOrDelete('deadline', state.deadlineFilter, 'all');
   setOrDelete('periods', state.periodFilter, 'all');
   setOrDelete('periodType', state.auditPeriodTypeFilter, 'all');
@@ -1657,6 +1684,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       ? 'all'
       : normalizeBusinessSeasonFilter(new URLSearchParams(window.location.search).get('season'))
   ));
+  const [amountFromFilter, setAmountFromFilter] = useState(() => (
+    typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('amountFrom') || ''
+  ));
+  const [amountToFilter, setAmountToFilter] = useState(() => (
+    typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('amountTo') || ''
+  ));
+  const [contractFileFilter, setContractFileFilter] = useState<ContractFileFilter>(() => {
+    if (typeof window === 'undefined') return 'all';
+    const value = new URLSearchParams(window.location.search).get('contractFile');
+    return value === 'uploaded' || value === 'missing' ? value : 'all';
+  });
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
   const [deadlineFilter, setDeadlineFilter] = useState<ProjectDeadlineFilter>(() => (typeof window === 'undefined' ? 'all' : (new URLSearchParams(window.location.search).get('deadline') as ProjectDeadlineFilter)) || 'all');
@@ -1872,8 +1910,8 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       urlSyncReadyRef.current = true;
       return;
     }
-    syncCommandCenterUrl({ search, columnFilters, viewFilter, businessSeasonFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy });
-  }, [search, columnFilters, viewFilter, businessSeasonFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
+    syncCommandCenterUrl({ search, columnFilters, viewFilter, businessSeasonFilter, amountFromFilter, amountToFilter, contractFileFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy });
+  }, [search, columnFilters, viewFilter, businessSeasonFilter, amountFromFilter, amountToFilter, contractFileFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy]);
 
   useEffect(() => {
     if (projectsLoading && projects.length === 0) return;
@@ -2014,6 +2052,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         teamColumns: teamByRole(team),
         teamColumnMembers: teamMembersByRole(realTeam),
         hasContract,
+        hasContractFile: contractFiles.length > 0,
         contract,
         contractFiles,
         projectIds: [project.id],
@@ -2082,6 +2121,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         baseReadiness,
         readiness,
         hasContract,
+        hasContractFile: groupRows.some((row) => row.hasContractFile),
         startDate,
         deadline,
         deadlineState: deadlineInfo(deadline, status),
@@ -2382,6 +2422,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       }
       if (!rowMatchesDateFilter(row, yearFilter)) return false;
       if (!rowMatchesBusinessSeason(row, businessSeasonFilter)) return false;
+      if (!rowMatchesAmountRange(row, amountFromFilter, amountToFilter)) return false;
+      if (contractFileFilter === 'uploaded' && !row.hasContractFile) return false;
+      if (contractFileFilter === 'missing' && row.hasContractFile) return false;
       if (exactRange && !rowDateRanges(row).some((range) => rangesIntersect(range, exactRange))) return false;
       if (viewFilter !== 'all' && projectOperationalState(row) !== viewFilter) return false;
       if (deadlineFilter === 'overdue' && row.deadlineState.tone !== 'overdue') return false;
@@ -2401,7 +2444,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (canSeeHours && sortBy === 'hours_desc') return b.hours.approved + b.hours.pending - (a.hours.approved + a.hours.pending);
       return 0;
     });
-  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours]);
+  }, [rows, search, companyFilter, companyOptions, partnerFilter, yearFilter, businessSeasonFilter, amountFromFilter, amountToFilter, contractFileFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters, canSeeContractMoney, canSeeBonusSummary, canSeeTeam, canSeeHours]);
 
   const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize));
   const safeTablePage = Math.min(tablePage, tablePageCount);
@@ -2414,7 +2457,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   useEffect(() => {
     setTablePage(1);
-  }, [search, companyFilter, partnerFilter, yearFilter, businessSeasonFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters]);
+  }, [search, companyFilter, partnerFilter, yearFilter, businessSeasonFilter, amountFromFilter, amountToFilter, contractFileFilter, dateFromFilter, dateToFilter, viewFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy, columnFilters]);
 
   useEffect(() => {
     setTablePage((current) => Math.min(current, tablePageCount));
@@ -2438,6 +2481,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       || (canSeeTeam && partnerFilter !== 'all')
       || yearFilter !== 'all'
       || businessSeasonFilter !== 'all'
+      || amountFromFilter
+      || amountToFilter
+      || contractFileFilter !== 'all'
       || dateFromFilter
       || dateToFilter
       || viewFilter !== 'all'
@@ -2453,6 +2499,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setPartnerFilter('all');
     setYearFilter('all');
     setBusinessSeasonFilter('all');
+    setAmountFromFilter('');
+    setAmountToFilter('');
+    setContractFileFilter('all');
     setDateFromFilter('');
     setDateToFilter('');
     setViewFilter('all');
@@ -4380,6 +4429,43 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   ))}
                 </SelectContent>
               </Select>
+              </ProjectFilterField>
+              {canSeeContractMoney && <ProjectFilterField label="Сумма договора">
+                <div className="grid grid-cols-1 gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    aria-label="Сумма договора от"
+                    placeholder="От"
+                    value={amountFromFilter}
+                    onChange={(event) => setAmountFromFilter(event.target.value)}
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    aria-label="Сумма договора до"
+                    placeholder="До"
+                    value={amountToFilter}
+                    onChange={(event) => setAmountToFilter(event.target.value)}
+                  />
+                </div>
+                <div className="mt-1 text-[11px] text-muted-foreground">Без НДС · ₸</div>
+              </ProjectFilterField>}
+              <ProjectFilterField label="Файл договора">
+                <Select value={contractFileFilter} onValueChange={(value) => setContractFileFilter(value as ContractFileFilter)}>
+                  <SelectTrigger className="w-full" aria-label="Наличие договора">
+                    <SelectValue placeholder="Наличие договора" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все проекты</SelectItem>
+                    <SelectItem value="uploaded">Договор загружен</SelectItem>
+                    <SelectItem value="missing">Договор не загружен</SelectItem>
+                  </SelectContent>
+                </Select>
               </ProjectFilterField>
               <ProjectFilterField label="Дата с">
               <Input
