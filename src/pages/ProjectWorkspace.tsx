@@ -268,7 +268,7 @@ export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects, updateProject } = useProjects();
+  const { projects, updateProject, replaceProject } = useProjects();
   const { tasks: allTasks } = useTasks();
   const { employees } = useEmployees();
   const { toast } = useToast();
@@ -746,7 +746,12 @@ export default function ProjectWorkspace() {
 
                 // Сохраняем в Supabase
                 try {
-                  const savedProject = await supabaseDataStore.updateProject(project.id || id, {
+                  // Use the shared projects hook so the unified /projects
+                  // registry receives the same fresh contract amount in
+                  // the current session. Writing directly to Supabase here
+                  // left the workspace correct while the summary kept its
+                  // stale zero-value snapshot until a full reload.
+                  const savedProject = await updateProject(project.id || id || '', {
                     contract: contractUpdate.contract,
                     finances: contractUpdate.finances,
                     amountWithoutVAT: contractUpdate.amountWithoutVAT,
@@ -786,7 +791,7 @@ export default function ProjectWorkspace() {
                 });
 
                 try {
-                  await supabaseDataStore.updateProject(project.id || id, {
+                  await updateProject(project.id || id || '', {
                     ...(settings.type && { type: settings.type }),
                     ...(settings.companyId && { companyId: settings.companyId }),
                     ...(settings.companyName && { companyName: settings.companyName }),
@@ -1364,6 +1369,10 @@ export default function ProjectWorkspace() {
           onClose={() => setIsEditDialogOpen(false)}
           onSave={(updatedProject) => {
             setProject(updatedProject);
+            // The editor already persisted the canonical fields. Refresh the
+            // shared in-memory registry without a second database write so
+            // the unified /projects summary immediately shows the new amount.
+            replaceProject(updatedProject as any);
             setIsEditDialogOpen(false);
           }}
         />

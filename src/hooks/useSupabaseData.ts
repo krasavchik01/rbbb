@@ -256,6 +256,14 @@ export function useProjects() {
     }
   }, []);
 
+  // Update the in-memory registry after a screen that has already persisted
+  // a project through another canonical path (for example the workspace
+  // contract editor). This avoids issuing a second database write solely to
+  // refresh /projects.
+  const replaceProject = useCallback((project: Project) => {
+    setAllProjects((prev) => prev.map((item) => item.id === project.id ? project : item));
+  }, []);
+
   const deleteProjects = useCallback(async (ids: Iterable<string>) => {
     try {
       const result = await supabaseDataStore.deleteProjects(ids);
@@ -276,6 +284,7 @@ export function useProjects() {
     error,
     createProject,
     updateProject,
+    replaceProject,
     deleteProject,
     deleteProjects,
     refresh: loadProjects,
