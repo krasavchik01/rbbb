@@ -177,9 +177,10 @@ export function useProjects() {
   const { user } = useAuth();
   const [appSettings] = useAppSettings();
 
-  const loadProjects = useCallback(async () => {
+  const loadProjects = useCallback(async (options: { silent?: boolean } = {}) => {
+    const silent = options.silent === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const data = await supabaseDataStore.getProjects();
       setAllProjects(data);
@@ -188,7 +189,7 @@ export function useProjects() {
       console.error('❌ useProjects: Error loading projects:', err);
       setError(err.message || 'Ошибка загрузки проектов');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -217,6 +218,23 @@ export function useProjects() {
 
   useEffect(() => {
     loadProjects();
+  }, [loadProjects]);
+
+  // Project amounts can be edited by procurement in another tab or account.
+  // Refresh silently when the user returns to the app so /projects never
+  // keeps an old zero-value snapshot after the database has been updated.
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void loadProjects({ silent: true });
+      }
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [loadProjects]);
 
   const createProject = useCallback(async (project: any) => {
