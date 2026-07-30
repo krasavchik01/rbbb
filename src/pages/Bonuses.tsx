@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -253,7 +254,7 @@ function PrintSlip({ employee, onClose }: { employee: EmployeeBonusLedger; onClo
     ? 'К выдаче по текущему реестру'
     : 'Подтверждено как выплаченное';
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 p-3 sm:p-8 print:static print:bg-white print:p-0">
+    <div className="bonus-print-overlay fixed inset-0 z-[100] overflow-y-auto bg-black/60 p-3 sm:p-8 print:static print:bg-white print:p-0">
       <div
         data-testid="bonus-print-slip"
         className="bonus-print-slip mx-auto max-w-4xl bg-white p-5 text-slate-950 shadow-2xl sm:p-10 print:max-w-none print:shadow-none"
@@ -320,7 +321,7 @@ function PrintSlip({ employee, onClose }: { employee: EmployeeBonusLedger; onClo
           {signatureAmountLabel}: <strong className="text-lg">{formatMoney(signatureAmount)}</strong>
         </div>
 
-        <div className="mt-14 grid gap-10 text-sm sm:grid-cols-2">
+        <div className="bonus-print-signatures mt-14 grid gap-10 text-sm sm:grid-cols-2">
           <div>
             <p className="mb-8 font-semibold">Сумму {formatMoney(signatureAmount)} получил(а): ____________________</p>
             <p>Подпись сотрудника: ____________________</p>
@@ -520,24 +521,54 @@ export default function Bonuses() {
 
   useEffect(() => {
     if (!printEmployee) return;
+    document.body.classList.add('bonus-print-mode');
     const frame = window.requestAnimationFrame(() => window.print());
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.classList.remove('bonus-print-mode');
+    };
   }, [printEmployee]);
 
   return (
     <div data-testid="bonus-dashboard" className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 overflow-x-hidden px-3 pb-24 pt-3 sm:px-5 md:px-7 md:pb-8">
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          .bonus-print-slip, .bonus-print-slip * { visibility: visible !important; }
+          html, body {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          body.bonus-print-mode > *:not(.bonus-print-overlay) {
+            display: none !important;
+          }
+          body.bonus-print-mode > .bonus-print-overlay {
+            display: block !important;
+            position: static !important;
+            inset: auto !important;
+            width: 100% !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
           .bonus-print-slip {
             display: block !important;
-            position: absolute !important;
-            inset: 0 !important;
+            position: static !important;
             width: 100% !important;
+            max-width: none !important;
+            min-height: 0 !important;
+            overflow: visible !important;
             margin: 0 !important;
-            padding: 18mm !important;
+            padding: 12mm !important;
             box-shadow: none !important;
+          }
+          .bonus-print-slip thead { display: table-header-group; }
+          .bonus-print-slip tr,
+          .bonus-print-signatures {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
           @page { size: A4 portrait; margin: 0; }
         }
@@ -924,7 +955,10 @@ export default function Bonuses() {
         <strong className="text-foreground">Как читать ведомость:</strong> «Рассчитано» — техническое распределение из карточки проекта; «Утверждено» и «Выплачено» — только финальный реестр. Несколько платёжных строк одного сотрудника по одному проекту считаются траншами. KZT и USD никогда не складываются в одну сумму.
       </Card>
 
-      {printEmployee && <PrintSlip employee={printEmployee} onClose={() => setPrintEmployee(null)} />}
+      {printEmployee && createPortal(
+        <PrintSlip employee={printEmployee} onClose={() => setPrintEmployee(null)} />,
+        document.body,
+      )}
     </div>
   );
 }

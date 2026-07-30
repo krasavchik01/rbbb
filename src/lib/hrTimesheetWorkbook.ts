@@ -54,13 +54,19 @@ export function buildMonthCalendar(year: number, month: number): MonthCalendar {
   };
 }
 
-type EmployeeSummary = { hours: number; days: number };
+type EmployeeSummary = {
+  hours: number;
+  days: number;
+  vacationDays?: number;
+  vacationWorkingDays?: number;
+};
 type ProjectSummary = { name: string; hours: number; company?: string };
 
 export interface HrTimesheetWorkbookInput {
   month: MonthCalendar;
   employees: Array<{ id: string; name?: string; email?: string }>;
   matrix: Map<string, Map<string, number>>;
+  dayCodes?: Map<string, Map<string, string>>;
   employeeSummary: Map<string, EmployeeSummary>;
   projects: ProjectSummary[];
 }
@@ -69,9 +75,9 @@ export function createHrTimesheetWorkbook(
   XLSX: typeof XLSXNs,
   input: HrTimesheetWorkbookInput,
 ) {
-  const { month, employees, matrix, employeeSummary, projects } = input;
+  const { month, employees, matrix, dayCodes = new Map(), employeeSummary, projects } = input;
   const workbook = XLSX.utils.book_new();
-  const finalColumnIndex = month.calendarDays + 3;
+  const finalColumnIndex = month.calendarDays + 4;
   const finalColumn = XLSX.utils.encode_col(finalColumnIndex);
   const rows: any[][] = [
     ['ТАБЕЛЬ УЧЁТА РАБОЧЕГО ВРЕМЕНИ'],
@@ -83,25 +89,30 @@ export function createHrTimesheetWorkbook(
       `Норма часов: ${month.normHours}`,
     ],
     [],
-    ['Обозначения: Р — рабочий день; В — выходной; число — отработанные часы; пустая ячейка — часы не внесены'],
+    ['Обозначения: Р — рабочий день; В — выходной; ОТ — отпуск; число — отработанные часы; пустая ячейка — часы не внесены'],
     [],
-    ['Сотрудник', ...month.days.map((day) => day.day), 'Итого', 'Норма', 'Отклонение'],
-    ['День недели', ...month.days.map((day) => day.weekday), '', '', ''],
-    ['Тип дня', ...month.days.map((day) => day.isWeekend ? 'В' : 'Р'), '', '', ''],
+    ['Сотрудник', ...month.days.map((day) => day.day), 'Итого', 'Отпуск, дн.', 'Норма к отработке', 'Отклонение'],
+    ['День недели', ...month.days.map((day) => day.weekday), '', '', '', ''],
+    ['Тип дня', ...month.days.map((day) => day.isWeekend ? 'В' : 'Р'), '', '', '', ''],
   ];
 
   for (const employee of employees) {
     const employeeMatrix = matrix.get(String(employee.id)) || new Map<string, number>();
+    const employeeDayCodes = dayCodes.get(String(employee.id)) || new Map<string, string>();
     const summary = employeeSummary.get(String(employee.id)) || { hours: 0, days: 0 };
+    const adjustedNorm = Math.max(0, month.normHours - (summary.vacationWorkingDays || 0) * 8);
     rows.push([
       employee.name || employee.email || 'Без имени',
       ...month.days.map((day) => {
+        const code = employeeDayCodes.get(day.date);
+        if (code) return code;
         const value = Number(employeeMatrix.get(day.date) || 0);
         return value > 0 ? Number(value.toFixed(1)) : '';
       }),
       Number(summary.hours.toFixed(1)),
-      month.normHours,
-      Number((summary.hours - month.normHours).toFixed(1)),
+      summary.vacationDays || 0,
+      adjustedNorm,
+      Number((summary.hours - adjustedNorm).toFixed(1)),
     ]);
   }
 
@@ -119,7 +130,8 @@ export function createHrTimesheetWorkbook(
     { wch: 30 },
     ...month.days.map(() => ({ wch: 5 })),
     { wch: 10 },
-    { wch: 10 },
+    { wch: 13 },
+    { wch: 20 },
     { wch: 12 },
   ];
   sheet['!rows'] = [{ hpt: 28 }, { hpt: 22 }, { hpt: 20 }, {}, { hpt: 20 }, {}, { hpt: 24 }, { hpt: 20 }, { hpt: 28 }];
@@ -133,13 +145,17 @@ export function createHrTimesheetWorkbook(
   for (let index = 0; index < employees.length; index += 1) {
     const rowNumber = firstEmployeeRow + index;
     const totalAddress = `${XLSX.utils.encode_col(month.calendarDays + 1)}${rowNumber}`;
-    const normAddress = `${XLSX.utils.encode_col(month.calendarDays + 2)}${rowNumber}`;
-    const deltaAddress = `${XLSX.utils.encode_col(month.calendarDays + 3)}${rowNumber}`;
+    const vacationAddress = `${XLSX.utils.encode_col(month.calendarDays + 2)}${rowNumber}`;
+    const normAddress = `${XLSX.utils.encode_col(month.calendarDays + 3)}${rowNumber}`;
+    const deltaAddress = `${XLSX.utils.encode_col(month.calendarDays + 4)}${rowNumber}`;
     const firstDay = `B${rowNumber}`;
     const lastDay = `${XLSX.utils.encode_col(month.calendarDays)}${rowNumber}`;
     sheet[totalAddress] = { ...(sheet[totalAddress] || {}), t: 'n', f: `SUM(${firstDay}:${lastDay})`, v: employeeSummary.get(String(employees[index].id))?.hours || 0 };
-    sheet[normAddress] = { ...(sheet[normAddress] || {}), t: 'n', v: month.normHours };
-    sheet[deltaAddress] = { ...(sheet[deltaAddress] || {}), t: 'n', f: `${totalAddress}-${normAddress}`, v: (employeeSummary.get(String(employees[index].id))?.hours || 0) - month.normHours };
+    const summary = employeeSummary.get(String(employees[index].id));
+    const adjustedNorm = Math.max(0, month.normHours - (summary?.vacationWorkingDays || 0) * 8);
+    sheet[vacationAddress] = { ...(sheet[vacationAddress] || {}), t: 'n', v: summary?.vacationDays || 0 };
+    sheet[normAddress] = { ...(sheet[normAddress] || {}), t: 'n', v: adjustedNorm };
+    sheet[deltaAddress] = { ...(sheet[deltaAddress] || {}), t: 'n', f: `${totalAddress}-${normAddress}`, v: (summary?.hours || 0) - adjustedNorm };
   }
 
   XLSX.utils.book_append_sheet(workbook, sheet, `Табель ${month.label}`.slice(0, 31));
@@ -148,26 +164,29 @@ export function createHrTimesheetWorkbook(
     ['СВОДКА ПО СОТРУДНИКАМ'],
     [month.periodLabel],
     [],
-    ['Сотрудник', 'Часов', 'Дней с часами', 'Средний день', 'Норма', 'Отклонение'],
+    ['Сотрудник', 'Часов', 'Дней с часами', 'Отпуск, календ. дн.', 'Отпуск, раб. дн.', 'Средний день', 'Норма к отработке', 'Отклонение'],
   ];
   for (const employee of employees) {
     const summary = employeeSummary.get(String(employee.id)) || { hours: 0, days: 0 };
+    const adjustedNorm = Math.max(0, month.normHours - (summary.vacationWorkingDays || 0) * 8);
     summaryRows.push([
       employee.name || employee.email || 'Без имени',
       Number(summary.hours.toFixed(1)),
       summary.days,
+      summary.vacationDays || 0,
+      summary.vacationWorkingDays || 0,
       summary.days > 0 ? Number((summary.hours / summary.days).toFixed(1)) : 0,
-      month.normHours,
-      Number((summary.hours - month.normHours).toFixed(1)),
+      adjustedNorm,
+      Number((summary.hours - adjustedNorm).toFixed(1)),
     ]);
   }
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
   summarySheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
   ];
-  summarySheet['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }];
-  summarySheet['!autofilter'] = { ref: `A4:F${Math.max(4, summaryRows.length)}` };
+  summarySheet['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 14 }, { wch: 19 }, { wch: 17 }, { wch: 14 }, { wch: 20 }, { wch: 14 }];
+  summarySheet['!autofilter'] = { ref: `A4:H${Math.max(4, summaryRows.length)}` };
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Сводка');
 
   const projectRows: any[][] = [

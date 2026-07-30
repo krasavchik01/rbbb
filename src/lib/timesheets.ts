@@ -18,6 +18,11 @@ import { getEffectivePartnerId } from '@/lib/auditPeriods';
 
 export type TimesheetSource = 'manual' | 'import' | 'survey';
 export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+export type TimesheetEntryType = 'work' | 'vacation';
+
+export const VACATION_LABEL = 'Отпуск';
+export const VACATION_TIMESHEET_CODE = 'ОТ';
+const VACATION_SECTION_MARKER = '__vacation__';
 
 export interface TimesheetEntry {
   id: string;
@@ -28,6 +33,7 @@ export interface TimesheetEntry {
   auditPeriodId?: string;
   workDate: string;            // ISO date (YYYY-MM-DD)
   hours: number;
+  entryType: TimesheetEntryType;
   section?: string;
   position?: string;
   location?: string;
@@ -59,6 +65,7 @@ export interface TimesheetEntryDraft {
   auditPeriodId?: string;
   workDate: string;
   hours: number;
+  entryType?: TimesheetEntryType;
   section?: string;
   position?: string;
   location?: string;
@@ -75,6 +82,11 @@ export interface TimesheetEntryDraft {
 // ─── Row ↔ object mappers ───────────────────────────────────────────────────
 
 function rowToEntry(row: any): TimesheetEntry {
+  const entryType: TimesheetEntryType = row.project_id == null
+    && String(row.project_name || '').trim().toLocaleLowerCase('ru') === VACATION_LABEL.toLocaleLowerCase('ru')
+    && row.section === VACATION_SECTION_MARKER
+    ? 'vacation'
+    : 'work';
   return {
     id: row.id,
     employeeId: row.employee_id,
@@ -83,7 +95,8 @@ function rowToEntry(row: any): TimesheetEntry {
     projectName: row.project_name,
     workDate: row.work_date,
     hours: Number(row.hours) || 0,
-    section: row.section ?? undefined,
+    entryType,
+    section: entryType === 'vacation' ? undefined : row.section ?? undefined,
     position: row.position ?? undefined,
     location: row.location ?? undefined,
     city: row.city ?? undefined,
@@ -104,14 +117,15 @@ function rowToEntry(row: any): TimesheetEntry {
 }
 
 function draftToRow(d: TimesheetEntryDraft) {
+  const isVacation = d.entryType === 'vacation';
   return {
     employee_id: d.employeeId,
     employee_name: d.employeeName,
-    project_id: d.projectId,
-    project_name: d.projectName,
+    project_id: isVacation ? null : d.projectId,
+    project_name: isVacation ? VACATION_LABEL : d.projectName,
     work_date: d.workDate,
-    hours: d.hours,
-    section: d.section ?? null,
+    hours: isVacation ? 0 : d.hours,
+    section: isVacation ? VACATION_SECTION_MARKER : d.section ?? null,
     position: d.position ?? null,
     location: d.location ?? null,
     city: d.city ?? null,
@@ -339,6 +353,12 @@ export async function updateEntry(
   if (patch.reviewedByName !== undefined) row.reviewed_by_name = patch.reviewedByName ?? null;
   if (patch.reviewedAt !== undefined) row.reviewed_at = patch.reviewedAt ?? null;
   if (patch.reviewerNotes !== undefined) row.reviewer_notes = patch.reviewerNotes ?? null;
+  if (patch.entryType === 'vacation') {
+    row.project_id = null;
+    row.project_name = VACATION_LABEL;
+    row.hours = 0;
+    row.section = VACATION_SECTION_MARKER;
+  }
 
   const { data, error } = await supabase
     .from('timesheet_entries')

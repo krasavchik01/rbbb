@@ -19,10 +19,13 @@ import { supabaseDataStore } from '@/lib/supabaseDataStore';
 import {
   listTimesheets,
   createEntry,
+  bulkInsert,
   updateEntry,
   deleteEntry,
   approveEntries,
   rejectEntries,
+  VACATION_LABEL,
+  VACATION_TIMESHEET_CODE,
   type TimesheetEntry as DbTimesheetEntry,
 } from '@/lib/timesheets';
 import {
@@ -56,6 +59,7 @@ interface TimesheetEntry {
   projectName?: string;
   date: string;
   hours: number;
+  entryType: 'work' | 'vacation';
   description: string;
   section?: string;
   status: 'draft' | 'submitted' | 'approved' | 'rejected';
@@ -402,13 +406,13 @@ export default function Timesheets() {
   const [editingTimesheet, setEditingTimesheet] = useState<TimesheetEntry | null>(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
   
-  // Форма. isAdminWork=true → проект не нужен, в БД сохраняем
-  // project_id=null + project_name='Административная работа' (тот же маркер
-  // что и в xlsx-импорте для админ-строк, см. project_timesheet_format).
+  // Проект, административная работа или отпуск. Отпуск хранится отдельным
+  // типом записи без проектных часов и поэтому не попадает в бонусы.
   const [formData, setFormData] = useState({
     projectId: '',
-    isAdminWork: false,
+    workType: 'project' as 'project' | 'admin' | 'vacation',
     date: new Date().toISOString().split('T')[0],
+    dateTo: new Date().toISOString().split('T')[0],
     hours: '8',
     description: '',
     section: '',
@@ -474,6 +478,7 @@ export default function Timesheets() {
         projectName: resolveTimesheetProjectName(e.projectName, project),
         date: e.workDate,
         hours: e.hours,
+        entryType: e.entryType,
         description: e.notes || '',
         section: e.section,
         status: e.status as TimesheetEntry['status'],
@@ -534,43 +539,58 @@ export default function Timesheets() {
   // Сохранение тайм-щита
   const saveTimesheet = async () => {
     if (!user) return;
+    const isVacation = formData.workType === 'vacation';
+    const isAdminWork = formData.workType === 'admin';
 
     // Для админ-работы проект не нужен — это часы офисной работы без
     // привязки к конкретному проекту (см. project_timesheet_format).
-    if (!formData.isAdminWork && !formData.projectId) {
+    if (!isVacation && !isAdminWork && !formData.projectId) {
       toast({ title: 'Ошибка', description: 'Выберите проект или отметьте «Административная работа»', variant: 'destructive' });
       return;
     }
 
-    if (!formData.hours || parseFloat(formData.hours) <= 0) {
+    if (!isVacation && (!formData.hours || parseFloat(formData.hours) <= 0)) {
       toast({ title: 'Ошибка', description: 'Укажите количество часов', variant: 'destructive' });
       return;
     }
 
-    const projectName = formData.isAdminWork
+    const projectName = isVacation
+      ? VACATION_LABEL
+      : isAdminWork
       ? ADMIN_WORK_LABEL
       : getProjectName(allProjects.find((p: any) => p.id === formData.projectId));
-    const projectId = formData.isAdminWork ? null : formData.projectId;
-    const hours = parseFloat(formData.hours);
-    const description = formData.description || (formData.isAdminWork ? 'Офисная работа без проекта' : 'Работа над проектом');
+    const projectId = isVacation || isAdminWork ? null : formData.projectId;
+    const hours = isVacation ? 0 : parseFloat(formData.hours);
+    const description = formData.description || (isVacation
+      ? 'Ежегодный оплачиваемый отпуск'
+      : isAdminWork ? 'Офисная работа без проекта' : 'Работа над проектом');
+    const vacationDates: string[] = [];
+    if (isVacation) {
+      const from = formData.date;
+      const to = formData.dateTo || formData.date;
+      if (to < from) {
+        toast({ title: 'Ошибка', description: 'Дата окончания отпуска раньше даты начала', variant: 'destructive' });
+        return;
+      }
+      const cursor = new Date(`${from}T00:00:00Z`);
+      const last = new Date(`${to}T00:00:00Z`);
+      while (cursor <= last) {
+        vacationDates.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    }
+    const entryDates = isVacation ? vacationDates : [formData.date];
 
-    const duplicates = findBlockingTimesheetDuplicates(
-      timesheets,
-      {
+    const duplicates = entryDates.flatMap((date) => findBlockingTimesheetDuplicates(timesheets, {
         employeeId: user.id,
         projectId,
         projectName,
-        date: formData.date,
-      },
-      editingTimesheet?.id,
-    );
+        date,
+      }, editingTimesheet?.id));
     if (duplicates.length > 0) {
-      const existingHours = duplicates.reduce((sum, entry) => sum + (Number(entry.hours) || 0), 0);
       toast({
-        title: 'Часы уже есть',
-        description:
-          `${projectName} за ${formData.date}: уже ${existingHours.toFixed(1)} ч. ` +
-          'Не создаю дубль, чтобы не получить 16 часов вместо 8. Откройте существующую запись или обратитесь к проверяющему.',
+        title: isVacation ? 'Отпуск уже отмечен' : 'Часы уже есть',
+        description: `${projectName}: запись за ${duplicates[0].date} уже существует. Дубли не созданы.`,
         variant: 'destructive',
       });
       return;
@@ -582,8 +602,9 @@ export default function Timesheets() {
         projectName,
         workDate: formData.date,
         hours,
+        entryType: isVacation ? 'vacation' : 'work',
         notes: description,
-        section: formData.section || undefined,
+        section: formData.section || '',
       });
       if (!updated) {
         toast({ title: 'Ошибка', description: 'Не удалось обновить запись', variant: 'destructive' });
@@ -591,6 +612,25 @@ export default function Timesheets() {
       }
       const uiEntry = toUiEntry(updated);
       setTimesheets((prev) => prev.map((entry) => (entry.id === uiEntry.id ? uiEntry : entry)));
+    } else if (isVacation) {
+      const inserted = await bulkInsert(entryDates.map((workDate) => ({
+        employeeId: user.id,
+        employeeName: user.name,
+        projectId: null,
+        projectName: VACATION_LABEL,
+        workDate,
+        hours: 0,
+        entryType: 'vacation' as const,
+        notes: description,
+        source: 'manual' as const,
+        status: 'submitted' as const,
+        createdBy: user.id,
+      })));
+      if (inserted !== entryDates.length) {
+        toast({ title: 'Ошибка', description: 'Не удалось сохранить период отпуска', variant: 'destructive' });
+        return;
+      }
+      await reload();
     } else {
       const created = await createEntry({
         employeeId: user.id,
@@ -599,6 +639,7 @@ export default function Timesheets() {
         projectName,
         workDate: formData.date,
         hours,
+        entryType: 'work',
         notes: description,
         source: 'manual',
         status: 'draft',
@@ -613,13 +654,21 @@ export default function Timesheets() {
       setTimesheets((prev) => [uiEntry, ...prev]);
     }
 
-    toast({ title: 'Успешно', description: editingTimesheet ? 'Тайм-щит обновлен' : 'Тайм-щит создан' });
+    toast({
+      title: 'Успешно',
+      description: editingTimesheet
+        ? 'Тайм-щит обновлен'
+        : isVacation
+          ? `Отпуск за ${entryDates.length} календ. дн. отправлен на проверку`
+          : 'Тайм-щит создан',
+    });
     setShowAddDialog(false);
     setEditingTimesheet(null);
     setFormData({
       projectId: '',
-      isAdminWork: false,
+      workType: 'project',
       date: new Date().toISOString().split('T')[0],
+      dateTo: new Date().toISOString().split('T')[0],
       hours: '8',
       description: '',
       section: '',
@@ -636,9 +685,11 @@ export default function Timesheets() {
     setEditingTimesheet(timesheet);
     setFormData({
       projectId: timesheet.projectId || '',
-      // Запись без projectId или с явным маркером — это админ-работа
-      isAdminWork: !timesheet.projectId || timesheet.projectName === ADMIN_WORK_LABEL,
+      workType: timesheet.entryType === 'vacation'
+        ? 'vacation'
+        : (!timesheet.projectId || timesheet.projectName === ADMIN_WORK_LABEL) ? 'admin' : 'project',
       date: timesheet.date,
+      dateTo: timesheet.date,
       hours: timesheet.hours.toString(),
       description: timesheet.description,
       section: (timesheet as any).section || '',
@@ -719,8 +770,9 @@ export default function Timesheets() {
     setEditingTimesheet(null);
     setFormData({
       projectId: '',
-      isAdminWork: false,
+      workType: 'project',
       date,
+      dateTo: date,
       hours: '8',
       description: '',
       section: '',
@@ -792,27 +844,48 @@ export default function Timesheets() {
                 <DialogTitle>{editingTimesheet ? 'Редактировать тайм-щит' : 'Новый тайм-щит'}</DialogTitle>
               </DialogHeader>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
-                {/* Тип работы: проект ИЛИ административная (в офисе, без проекта) */}
-                <label className="flex items-start gap-3 p-3 rounded-lg border bg-amber-50/40 dark:bg-amber-900/10 cursor-pointer hover:bg-amber-50/70 dark:hover:bg-amber-900/20 transition">
-                  <input
-                    type="checkbox"
-                    checked={formData.isAdminWork}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      isAdminWork: e.target.checked,
-                      projectId: e.target.checked ? '' : formData.projectId,
-                    })}
-                    className="mt-0.5 w-4 h-4 rounded border-gray-300"
-                  />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">Административная работа</div>
-                    <div className="text-xs text-muted-foreground">
-                      Часы офисной работы без привязки к конкретному проекту — обучение, совещания, операционка
-                    </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Тип записи *</Label>
+                  <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Тип записи таймшита">
+                    {([
+                      ['project', 'Проект'],
+                      ['admin', 'Админ-работа'],
+                      ['vacation', 'Отпуск'],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={formData.workType === value}
+                        className={cn(
+                          'rounded-lg border px-2 py-2.5 text-xs font-semibold transition',
+                          formData.workType === value
+                            ? value === 'vacation'
+                              ? 'border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950/30 dark:text-violet-200'
+                              : 'border-primary bg-primary/10 text-primary'
+                            : 'bg-background hover:bg-muted/50',
+                        )}
+                        onClick={() => setFormData({
+                          ...formData,
+                          workType: value,
+                          projectId: value === 'project' ? formData.projectId : '',
+                          hours: value === 'vacation' ? '0' : (formData.hours === '0' ? '8' : formData.hours),
+                          dateTo: value === 'vacation' ? (formData.dateTo || formData.date) : formData.date,
+                        })}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                </label>
+                  {formData.workType === 'admin' && (
+                    <p className="text-xs text-muted-foreground">Обучение, совещания и операционная работа без проекта.</p>
+                  )}
+                  {formData.workType === 'vacation' && (
+                    <p className="text-xs text-violet-700 dark:text-violet-300">Период попадёт в табель кодом «ОТ» и не добавит проектные часы или бонусы.</p>
+                  )}
+                </div>
 
-                {!formData.isAdminWork && (
+                {formData.workType === 'project' && (
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Проект *</Label>
                     <ProjectCombobox
@@ -827,15 +900,33 @@ export default function Timesheets() {
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Дата *</Label>
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      {formData.workType === 'vacation' ? 'Отпуск с *' : 'Дата *'}
+                    </Label>
                     <Input
                       type="date"
                       value={formData.date}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        date: e.target.value,
+                        dateTo: formData.workType === 'vacation' && formData.dateTo < e.target.value ? e.target.value : formData.dateTo,
+                      })}
                       className="bg-muted/40 border-0 focus-visible:ring-1"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  {formData.workType === 'vacation' ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Отпуск по *</Label>
+                      <Input
+                        type="date"
+                        min={formData.date}
+                        value={formData.dateTo}
+                        onChange={(e) => setFormData({ ...formData, dateTo: e.target.value })}
+                        className="bg-muted/40 border-0 focus-visible:ring-1"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Часы *</Label>
                     <Input
                       type="number"
@@ -847,9 +938,10 @@ export default function Timesheets() {
                       placeholder="8.0"
                       className="bg-muted/40 border-0 focus-visible:ring-1"
                     />
-                  </div>
+                    </div>
+                  )}
                 </div>
-                {!formData.isAdminWork && (
+                {formData.workType === 'project' && (
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Секция аудита <span className="text-muted-foreground/60">— что именно делал на проекте</span>
@@ -862,14 +954,16 @@ export default function Timesheets() {
                 )}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Описание {formData.isAdminWork && <span className="text-amber-600 ml-1">— что именно делал в офисе</span>}
+                    Комментарий {formData.workType === 'admin' && <span className="text-amber-600 ml-1">— что именно делал в офисе</span>}
                   </Label>
                   <Textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder={formData.isAdminWork
-                      ? 'Например: «совещание по бюджету», «обучение новых сотрудников», «работа с документами»'
-                      : 'Опишите выполненную работу...'}
+                    placeholder={formData.workType === 'vacation'
+                      ? 'При необходимости укажите приказ или примечание'
+                      : formData.workType === 'admin'
+                        ? 'Например: «совещание по бюджету», «обучение новых сотрудников», «работа с документами»'
+                        : 'Опишите выполненную работу...'}
                     rows={3}
                     className="bg-muted/40 border-0 focus-visible:ring-1 resize-none"
                   />
@@ -952,7 +1046,7 @@ export default function Timesheets() {
                     <div>
                       <h3 className="font-semibold text-sm">Записи за {format(new Date(selectedCalendarDate), 'dd MMMM yyyy', { locale: ru })}</h3>
                       <p className="text-xs text-muted-foreground">
-                        Уже есть {selectedDayEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0).toFixed(1)} ч. по проектам — не создавайте дубль поверх импорта.
+                        Записей: {selectedDayEntries.length} · рабочих часов: {selectedDayEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0).toFixed(1)}.
                       </p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => openNewTimesheetDialog(selectedCalendarDate)}>
@@ -972,7 +1066,9 @@ export default function Timesheets() {
                           <div className="mt-1">{getStatusBadge(entry.status)}</div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="font-bold text-primary">{(entry.hours || 0).toFixed(1)} ч</div>
+                          <div className={cn('font-bold', entry.entryType === 'vacation' ? 'text-violet-600' : 'text-primary')}>
+                            {entry.entryType === 'vacation' ? VACATION_TIMESHEET_CODE : `${(entry.hours || 0).toFixed(1)} ч`}
+                          </div>
                           {entry.status === 'draft' && (
                             <Button variant="ghost" size="sm" className="h-7 mt-1" onClick={() => handleEdit(entry)}>
                               Изменить
@@ -1097,7 +1193,11 @@ export default function Timesheets() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <div className="text-right mr-1">
-                      <p className="font-bold text-lg leading-tight text-primary">{(timesheet.hours || 0).toFixed(1)}<span className="text-xs font-normal text-muted-foreground ml-0.5">ч</span></p>
+                      <p className={cn('font-bold text-lg leading-tight', timesheet.entryType === 'vacation' ? 'text-violet-600' : 'text-primary')}>
+                        {timesheet.entryType === 'vacation'
+                          ? VACATION_TIMESHEET_CODE
+                          : <>{(timesheet.hours || 0).toFixed(1)}<span className="text-xs font-normal text-muted-foreground ml-0.5">ч</span></>}
+                      </p>
                     </div>
                     {(isOwner || canApprove) && (
                       <div className="flex gap-1">
@@ -1268,9 +1368,12 @@ function MonthCalendar({
           const projectLabels = Array.from(
             new Set(dayEntries.map((entry) => entry.projectName || ADMIN_WORK_LABEL)),
           ).slice(0, 2);
-          const hasAdmin = dayEntries.some((e) => !e.projectId || e.projectName === ADMIN_WORK_LABEL);
+          const hasVacation = dayEntries.some((e) => e.entryType === 'vacation');
+          const hasAdmin = dayEntries.some((e) => e.entryType !== 'vacation' && (!e.projectId || e.projectName === ADMIN_WORK_LABEL));
           const hasProject = dayEntries.some((e) => e.projectId);
-          const tone = dayHours > 0
+          const tone = hasVacation
+            ? 'bg-violet-100 hover:bg-violet-200 text-violet-900 dark:bg-violet-900/30 dark:hover:bg-violet-900/50 dark:text-violet-100'
+            : dayHours > 0
             ? hasProject
               ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-100'
               : 'bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-100'
@@ -1291,6 +1394,9 @@ function MonthCalendar({
                   <div className="text-[10px] mt-0.5 leading-none font-bold">
                     {dayHours % 1 === 0 ? dayHours.toFixed(0) : dayHours.toFixed(1)}ч
                   </div>
+                )}
+                {hasVacation && (
+                  <div className="mt-0.5 text-[10px] font-black leading-none">{VACATION_TIMESHEET_CODE}</div>
                 )}
                 {projectLabels.length > 0 && (
                   <div className="mt-1 w-full space-y-0.5 px-0.5">
@@ -1321,6 +1427,9 @@ function MonthCalendar({
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded bg-amber-100 dark:bg-amber-900/30 inline-block" /> Админ-работа
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-violet-100 dark:bg-violet-900/30 inline-block" /> Отпуск (ОТ)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded border border-dashed border-muted-foreground/40 inline-block" /> Пустой день

@@ -39,7 +39,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
-import { listTimesheets, type TimesheetEntry } from '@/lib/timesheets';
+import { listTimesheets, VACATION_TIMESHEET_CODE, type TimesheetEntry } from '@/lib/timesheets';
 import { buildMonthCalendar, createHrTimesheetWorkbook } from '@/lib/hrTimesheetWorkbook';
 import {
   Bar,
@@ -158,6 +158,7 @@ export default function TimesheetAnalyticsTab() {
       const monthEntries = await listTimesheets({
         workDateFrom: month.from,
         workDateTo: month.to,
+        status: 'approved',
       });
       setEntries(monthEntries);
 
@@ -170,6 +171,7 @@ export default function TimesheetAnalyticsTab() {
       const trend = await listTimesheets({
         workDateFrom: trendFrom,
         workDateTo: month.to,
+        status: 'approved',
       });
       setTrendEntries(trend);
     } finally {
@@ -199,7 +201,10 @@ export default function TimesheetAnalyticsTab() {
   // Σ часов по сотруднику за месяц.
   const hoursByEmployee = useMemo(() => {
     const m = new Map<string, number>();
-    for (const e of entries) m.set(e.employeeId, (m.get(e.employeeId) || 0) + e.hours);
+    for (const e of entries) {
+      if (e.entryType === 'vacation') continue;
+      m.set(e.employeeId, (m.get(e.employeeId) || 0) + e.hours);
+    }
     return m;
   }, [entries]);
 
@@ -207,6 +212,7 @@ export default function TimesheetAnalyticsTab() {
   const daysByEmployee = useMemo(() => {
     const m = new Map<string, Set<string>>();
     for (const e of entries) {
+      if (e.entryType === 'vacation' || e.hours <= 0) continue;
       let s = m.get(e.employeeId);
       if (!s) { s = new Set(); m.set(e.employeeId, s); }
       s.add(e.workDate);
@@ -218,6 +224,7 @@ export default function TimesheetAnalyticsTab() {
   const hoursByProject = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of entries) {
+      if (e.entryType === 'vacation') continue;
       const key = e.projectId || `__noproj__:${e.projectName}`;
       m.set(key, (m.get(key) || 0) + e.hours);
     }
@@ -228,6 +235,7 @@ export default function TimesheetAnalyticsTab() {
   const matrix = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const e of entries) {
+      if (e.entryType === 'vacation') continue;
       let row = m.get(e.employeeId);
       if (!row) { row = new Map(); m.set(e.employeeId, row); }
       row.set(e.workDate, (row.get(e.workDate) || 0) + e.hours);
@@ -239,6 +247,7 @@ export default function TimesheetAnalyticsTab() {
   const cellBreakdown = useMemo(() => {
     const m = new Map<string, Map<string, number>>(); // 'empId|date' -> projName -> hours
     for (const e of entries) {
+      if (e.entryType === 'vacation') continue;
       const key = `${e.employeeId}|${e.workDate}`;
       let row = m.get(key);
       if (!row) { row = new Map(); m.set(key, row); }
@@ -248,12 +257,40 @@ export default function TimesheetAnalyticsTab() {
     return m;
   }, [entries]);
 
+  const vacationDayCodes = useMemo(() => {
+    const result = new Map<string, Map<string, string>>();
+    for (const entry of entries) {
+      if (entry.entryType !== 'vacation') continue;
+      let employeeCodes = result.get(entry.employeeId);
+      if (!employeeCodes) {
+        employeeCodes = new Map<string, string>();
+        result.set(entry.employeeId, employeeCodes);
+      }
+      employeeCodes.set(entry.workDate, VACATION_TIMESHEET_CODE);
+    }
+    return result;
+  }, [entries]);
+
+  const vacationByEmployee = useMemo(() => {
+    const result = new Map<string, { calendarDays: number; workingDays: number }>();
+    for (const [employeeId, codes] of vacationDayCodes) {
+      let workingDays = 0;
+      for (const date of codes.keys()) {
+        const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+        if (day !== 0 && day !== 6) workingDays += 1;
+      }
+      result.set(employeeId, { calendarDays: codes.size, workingDays });
+    }
+    return result;
+  }, [vacationDayCodes]);
+
   // ── derived: charts data ──
 
   // Часы по месяцам (для тренда — 12 мес).
   const hoursByMonthData = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of trendEntries) {
+      if (e.entryType === 'vacation') continue;
       const ym = (e.workDate || '').slice(0, 7);
       m.set(ym, (m.get(ym) || 0) + e.hours);
     }
@@ -275,6 +312,7 @@ export default function TimesheetAnalyticsTab() {
   const hoursByCompanyData = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of entries) {
+      if (e.entryType === 'vacation') continue;
       const proj = e.projectId ? projectById.get(e.projectId) : null;
       const company = proj ? getCompanyOfProject(proj) : 'Без компании';
       m.set(company, (m.get(company) || 0) + e.hours);
@@ -320,7 +358,9 @@ export default function TimesheetAnalyticsTab() {
   const activeProjects = hoursByProject.size;
   const totalDays = useMemo(() => {
     const days = new Set<string>();
-    for (const e of entries) days.add(`${e.employeeId}|${e.workDate}`);
+    for (const e of entries) {
+      if (e.entryType !== 'vacation' && e.hours > 0) days.add(`${e.employeeId}|${e.workDate}`);
+    }
     return days.size;
   }, [entries]);
   const avgDay = totalDays > 0 ? totalHours / totalDays : 0;
@@ -370,12 +410,15 @@ export default function TimesheetAnalyticsTab() {
         {
           hours: hoursByEmployee.get(employee.id) || 0,
           days: daysByEmployee.get(employee.id)?.size || 0,
+          vacationDays: vacationByEmployee.get(employee.id)?.calendarDays || 0,
+          vacationWorkingDays: vacationByEmployee.get(employee.id)?.workingDays || 0,
         },
       ]));
       const wb = createHrTimesheetWorkbook(XLSX, {
         month: monthCalendar,
         employees: visibleEmployees,
         matrix,
+        dayCodes: vacationDayCodes,
         employeeSummary,
         projects: allProjectsSorted,
       });
@@ -386,7 +429,7 @@ export default function TimesheetAnalyticsTab() {
       setBusyExport(false);
     }
   }, [
-    visibleEmployees, matrix, hoursByEmployee, daysByEmployee,
+    visibleEmployees, matrix, vacationDayCodes, vacationByEmployee, hoursByEmployee, daysByEmployee,
     hoursByProject, projectById, month, monthCalendar,
   ]);
 
@@ -435,10 +478,15 @@ export default function TimesheetAnalyticsTab() {
       </Card>
 
       {/* KPI карточки */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KPICard icon={<Clock className="w-5 h-5 text-primary" />} value={`${totalHours.toFixed(1)} ч`} label="Всего часов за месяц" />
         <KPICard icon={<Users className="w-5 h-5 text-emerald-600" />} value={String(activeEmployees)} label="Активных сотрудников" />
         <KPICard icon={<FolderOpen className="w-5 h-5 text-amber-600" />} value={String(activeProjects)} label="Проектов с активностью" />
+        <KPICard
+          icon={<Clock className="w-5 h-5 text-violet-600" />}
+          value={String(Array.from(vacationByEmployee.values()).reduce((sum, item) => sum + item.calendarDays, 0))}
+          label="Дней отпуска (ОТ)"
+        />
         <KPICard
           icon={<Clock className="w-5 h-5 text-blue-600" />}
           value={`${avgDay.toFixed(1)} ч`}
@@ -688,6 +736,7 @@ export default function TimesheetAnalyticsTab() {
               <Legend2 color="bg-emerald-100 dark:bg-emerald-900/30" label="4–8 ч" />
               <Legend2 color="bg-emerald-200 dark:bg-emerald-800/40" label="8–10 ч" />
               <Legend2 color="bg-blue-200 dark:bg-blue-800/40" label="10+ ч" />
+              <Legend2 color="bg-violet-100 dark:bg-violet-900/30" label="ОТ — отпуск" />
               <Legend2 color="bg-muted/40" label="вых." />
             </div>
           </div>
@@ -712,14 +761,18 @@ export default function TimesheetAnalyticsTab() {
                       </th>
                     ))}
                     <th className="p-2 text-right min-w-[60px]">Σ</th>
+                    <th className="p-2 text-right min-w-[54px]">ОТ</th>
                     <th className="p-2 text-right min-w-[60px]">Δ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleEmployees.map((emp) => {
                     const empMatrix = matrix.get(emp.id) || new Map<string, number>();
+                    const empVacationCodes = vacationDayCodes.get(emp.id) || new Map<string, string>();
+                    const vacation = vacationByEmployee.get(emp.id) || { calendarDays: 0, workingDays: 0 };
                     const total = hoursByEmployee.get(emp.id) || 0;
-                    const diff = total - norm;
+                    const adjustedNorm = Math.max(0, norm - vacation.workingDays * 8);
+                    const diff = total - adjustedNorm;
                     return (
                       <tr key={emp.id} className="border-b hover:bg-accent/30">
                         <td className="sticky left-0 bg-background z-10 p-2 truncate max-w-[200px]">
@@ -733,13 +786,17 @@ export default function TimesheetAnalyticsTab() {
                         </td>
                         {daysOfMonth.map((d) => {
                           const hours = empMatrix.get(d.date) || 0;
+                          const dayCode = empVacationCodes.get(d.date);
                           const klass = cellClass(hours, d.isWeekend);
                           const breakdown = cellBreakdown.get(`${emp.id}|${d.date}`);
                           const cellContent = (
-                            <div className={`text-center font-medium text-[11px] py-1 ${klass} cursor-pointer rounded-sm`}>
-                              {hours > 0 ? hours.toFixed(hours % 1 === 0 ? 0 : 1) : ''}
+                            <div className={`text-center font-medium text-[11px] py-1 ${dayCode ? 'bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-100' : klass} cursor-pointer rounded-sm`}>
+                              {dayCode || (hours > 0 ? hours.toFixed(hours % 1 === 0 ? 0 : 1) : '')}
                             </div>
                           );
+                          if (dayCode) {
+                            return <td key={d.day} className="p-0.5" title="Отпуск">{cellContent}</td>;
+                          }
                           if (hours <= 0) {
                             return <td key={d.day} className="p-0.5">{cellContent}</td>;
                           }
@@ -770,6 +827,9 @@ export default function TimesheetAnalyticsTab() {
                           );
                         })}
                         <td className="p-2 text-right font-semibold">{total.toFixed(1)}</td>
+                        <td className="p-2 text-right font-semibold text-violet-600" title={`${vacation.workingDays} рабочих дней`}>
+                          {vacation.calendarDays || '—'}
+                        </td>
                         <td
                           className={`p-2 text-right font-semibold ${
                             diff >= 0 ? 'text-emerald-600' : 'text-red-600'
@@ -948,7 +1008,9 @@ function EmployeeDrilldown({
                       <td className="p-2 font-mono">{format(parseISO(e.workDate), 'dd MMM', { locale: ru })}</td>
                       <td className="p-2 truncate max-w-[280px]" title={e.projectName}>{e.projectName}</td>
                       <td className="p-2 text-muted-foreground">{e.section || '—'}</td>
-                      <td className="p-2 text-right font-mono">{e.hours.toFixed(1)}</td>
+                      <td className={e.entryType === 'vacation' ? 'p-2 text-right font-bold text-violet-600' : 'p-2 text-right font-mono'}>
+                        {e.entryType === 'vacation' ? VACATION_TIMESHEET_CODE : e.hours.toFixed(1)}
+                      </td>
                     </tr>
                   ))}
               </tbody>

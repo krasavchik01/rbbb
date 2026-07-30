@@ -21,7 +21,14 @@ describe('HR timesheet workbook', () => {
         { id: 'e2', name: 'Сотрудник без часов' },
       ],
       matrix: new Map([['e1', new Map([['2026-07-01', 8]])]]),
-      employeeSummary: new Map([['e1', { hours: 8, days: 1 }]]),
+      dayCodes: new Map([['e2', new Map([
+        ['2026-07-01', 'ОТ'],
+        ['2026-07-02', 'ОТ'],
+      ])]]),
+      employeeSummary: new Map([
+        ['e1', { hours: 8, days: 1 }],
+        ['e2', { hours: 0, days: 0, vacationDays: 2, vacationWorkingDays: 2 }],
+      ]),
       projects: [],
     });
 
@@ -31,6 +38,11 @@ describe('HR timesheet workbook', () => {
     expect(sheet.A7.v).toBe('Сотрудник');
     expect(sheet.A10.v).toBe('Сотрудник с часами');
     expect(sheet.A11.v).toBe('Сотрудник без часов');
+    expect(sheet.B11.v).toBe('ОТ');
+    expect(sheet.AH11.v).toBe(2);
+    expect(sheet.AI11.v).toBe(168);
+    expect(sheet.AJ11.v).toBe(-168);
+    expect(sheet['!printArea']).toBe('A1:AJ11');
     expect(sheet['!merges']).toContainEqual(expect.objectContaining({ s: { r: 0, c: 0 } }));
   });
 });
