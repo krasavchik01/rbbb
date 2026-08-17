@@ -44,6 +44,8 @@ import {
   FileSignature,
   Files,
   Download,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
@@ -148,8 +150,14 @@ export function ContractEditor({
   const [contractFiles, setContractFiles] = useState<File[]>([]);
   const [originalFiles, setOriginalFiles] = useState<File[]>([]);
   const [amendmentFile, setAmendmentFile] = useState<File | null>(null);
+  const [activeFileAction, setActiveFileAction] = useState<string | null>(null);
 
-  const openProjectFile = async (file: any, fallbackName = 'Файл') => {
+  const openProjectFile = async (
+    file: any,
+    fallbackName = 'Файл',
+    mode: 'open' | 'download' = 'open',
+    fileKey = fallbackName,
+  ) => {
     const rawUrl = contractFileUrl(file);
     const fileName = file?.fileName || file?.name || fallbackName;
 
@@ -162,33 +170,52 @@ export function ContractEditor({
       return;
     }
 
+    const actionKey = `${mode}:${fileKey}`;
+    const previewWindow = mode === 'open' ? window.open('about:blank', '_blank') : null;
+    if (previewWindow) previewWindow.opener = null;
+    setActiveFileAction(actionKey);
     try {
+      let resolvedUrl = rawUrl;
       if (isSeafileReference(file, rawUrl)) {
         const storagePath = normalizeSeafileDownloadPath(file?.storagePath || rawUrl);
         const downloadUrl = await supabaseDataStore.getSeafileDownloadUrl(storagePath);
         if (!downloadUrl) throw new Error('Не удалось получить ссылку на файл из Seafile');
-        openDownloadUrl(downloadUrl, fileName);
-        return;
+        resolvedUrl = downloadUrl;
       }
+      resolvedUrl = new URL(resolvedUrl, window.location.origin).href;
 
-      openDownloadUrl(rawUrl, fileName);
+      if (mode === 'download') {
+        openDownloadUrl(resolvedUrl, fileName);
+      } else if (previewWindow) {
+        previewWindow.location.href = resolvedUrl;
+      } else {
+        window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (error: any) {
+      previewWindow?.close();
       console.error('Ошибка скачивания файла договора:', error);
       toast({
         title: 'Ошибка',
-        description: error?.message || 'Не удалось скачать файл',
+        description: error?.message || (mode === 'open' ? 'Не удалось открыть файл' : 'Не удалось скачать файл'),
         variant: 'destructive',
       });
+    } finally {
+      setActiveFileAction(null);
     }
   };
 
-  const openAmendmentFile = async (fileUrl: string, fileName: string) => {
+  const openAmendmentFile = async (
+    fileUrl: string,
+    fileName: string,
+    mode: 'open' | 'download',
+    fileKey: string,
+  ) => {
     await openProjectFile({
       fileName,
       publicUrl: fileUrl,
       storagePath: fileUrl,
       isSeafile: String(fileUrl || '').startsWith('seafile://'),
-    }, fileName);
+    }, fileName, mode, fileKey);
   };
 
   useEffect(() => {
@@ -682,18 +709,42 @@ export function ContractEditor({
                       visibleContractFiles.map((file: any, idx: number) => {
                         const url = contractFileUrl(file);
                         const label = file.fileName || file.name || `Файл ${idx + 1}`;
+                        const fileKey = String(file.id || file.storagePath || `${label}:${idx}`);
                         return url ? (
-                        <button
-                          key={file.id || idx}
-                          type="button"
-                          className="border-0 bg-transparent p-0"
-                          onClick={() => void openProjectFile(file, label)}
-                        >
-                          <Badge variant="outline" className="cursor-pointer hover:bg-primary/10">
+                        <div key={fileKey} className="flex max-w-full items-center gap-1 rounded-md border bg-muted/20 px-2 py-1">
+                          <Badge variant="outline" className="max-w-[260px] truncate" title={label}>
                             <FileText className="w-3 h-3 mr-1" />
                             {label}
                           </Badge>
-                        </button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={activeFileAction === `open:${fileKey}`}
+                            onClick={() => void openProjectFile(file, label, 'open', fileKey)}
+                            aria-label={`Открыть документ: ${label}`}
+                            title="Открыть документ"
+                          >
+                            {activeFileAction === `open:${fileKey}`
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Eye className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={activeFileAction === `download:${fileKey}`}
+                            onClick={() => void openProjectFile(file, label, 'download', fileKey)}
+                            aria-label={`Скачать документ: ${label}`}
+                            title="Скачать документ"
+                          >
+                            {activeFileAction === `download:${fileKey}`
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Download className="h-3.5 w-3.5" />}
+                          </Button>
+                        </div>
                         ) : (
                           <Badge key={file.id || label || idx} variant="outline">
                             <FileText className="w-3 h-3 mr-1" />
@@ -763,7 +814,10 @@ export function ContractEditor({
             </div>
           ) : (
             <div className="space-y-3">
-              {amendments.map((amendment) => (
+              {amendments.map((amendment) => {
+                const amendmentFileName = `Доп. соглашение ${amendment.number || ''}`.trim();
+                const amendmentFileKey = `amendment:${amendment.id}`;
+                return (
                 <div
                   key={amendment.id}
                   className="p-4 bg-muted/30 rounded-lg border flex items-center justify-between"
@@ -779,17 +833,44 @@ export function ContractEditor({
                   </div>
                   <div className="flex items-center gap-2">
                     {amendment.fileUrl && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => void openAmendmentFile(
-                          amendment.fileUrl || '',
-                          `Доп. соглашение ${amendment.number || ''}`.trim(),
-                        )}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={activeFileAction === `open:${amendmentFileKey}`}
+                          onClick={() => void openAmendmentFile(
+                            amendment.fileUrl || '',
+                            amendmentFileName,
+                            'open',
+                            amendmentFileKey,
+                          )}
+                          aria-label={`Открыть документ: ${amendmentFileName}`}
+                          title="Открыть документ"
+                        >
+                          {activeFileAction === `open:${amendmentFileKey}`
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Eye className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={activeFileAction === `download:${amendmentFileKey}`}
+                          onClick={() => void openAmendmentFile(
+                            amendment.fileUrl || '',
+                            amendmentFileName,
+                            'download',
+                            amendmentFileKey,
+                          )}
+                          aria-label={`Скачать документ: ${amendmentFileName}`}
+                          title="Скачать документ"
+                        >
+                          {activeFileAction === `download:${amendmentFileKey}`
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Download className="w-4 h-4" />}
+                        </Button>
+                      </>
                     )}
                     {canEdit && (
                       <Button
@@ -803,7 +884,8 @@ export function ContractEditor({
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

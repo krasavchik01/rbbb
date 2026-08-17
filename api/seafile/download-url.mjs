@@ -5,6 +5,7 @@ import {
   getSeafileDownloadUrl,
   isSafeSeafilePath,
   normalizeSeafilePath,
+  toSeafileBrowserUrl,
 } from '../_seafile-utils.mjs';
 
 export default async function handler(req, res) {
@@ -28,7 +29,8 @@ export default async function handler(req, res) {
     await assertCanAccessSeafilePath(req, storagePath, { mode: 'read' });
 
     const config = getSeafileConfig();
-    const url = await getSeafileDownloadUrl(config, storagePath);
+    const directUrl = await getSeafileDownloadUrl(config, storagePath);
+    const url = toSeafileBrowserUrl(config, directUrl);
     return res.status(200).json({ success: true, url });
   } catch (error) {
     console.error('Seafile download-url error:', error);

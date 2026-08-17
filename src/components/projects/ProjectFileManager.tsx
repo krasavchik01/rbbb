@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import {
   File,
   Download,
+  Eye,
+  Loader2,
   Trash2,
   Upload
 } from "lucide-react";
@@ -38,6 +40,7 @@ export function ProjectFileManager({
   const { toast } = useToast();
   const [files, setFiles] = useState<ProjectFile[]>(() => dedupeProjectFiles(initialFiles) as ProjectFile[]);
   const [isUploading, setIsUploading] = useState(false);
+  const [activeFileAction, setActiveFileAction] = useState<string | null>(null);
 
   // Обновляем файлы когда приходят initialFiles
   useEffect(() => {
@@ -107,67 +110,82 @@ export function ProjectFileManager({
     }
   };
 
+  const resolveFileUrl = async (file: ProjectFile) => {
+    let url = (file as any).publicUrl;
+
+    if ((file as any).isSeafile || (url && url.startsWith('seafile://'))) {
+      const downloadUrl = await supabaseDataStore.getSeafileDownloadUrl(file.storagePath);
+      if (downloadUrl) {
+        url = downloadUrl;
+      } else {
+        throw new Error('Не удалось получить ссылку на файл из Seafile');
+      }
+    } else if (!url && file.storagePath) {
+      try {
+        let bucketName = 'project-files';
+        if (file.storagePath.includes('contracts/')) bucketName = 'contracts';
+        else if (file.storagePath.includes('documents/')) bucketName = 'documents';
+
+        const { data, error } = await supabase.storage
+          .from(bucketName)
+          .createSignedUrl(file.storagePath, 3600);
+
+        if (error) throw error;
+        url = data.signedUrl;
+      } catch (error) {
+        console.error('Ошибка получения signed URL:', error);
+        url = file.storagePath;
+      }
+    }
+
+    if (!url || url.startsWith('seafile://')) {
+      throw new Error('URL файла не найден');
+    }
+    return url;
+  };
+
+  const fileActionKey = (file: ProjectFile, action: 'open' | 'download') =>
+    `${action}:${file.id || file.storagePath || file.fileName}`;
+
+  const handleOpenFile = async (file: ProjectFile) => {
+    const key = fileActionKey(file, 'open');
+    const previewWindow = window.open('about:blank', '_blank');
+    if (previewWindow) previewWindow.opener = null;
+    setActiveFileAction(key);
+    try {
+      const url = new URL(await resolveFileUrl(file), window.location.origin).href;
+      if (previewWindow) {
+        previewWindow.location.href = url;
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error: any) {
+      previewWindow?.close();
+      console.error('Ошибка открытия файла:', error);
+      toast({
+        title: "Ошибка",
+        description: error?.message || "Не удалось открыть файл",
+        variant: "destructive",
+      });
+    } finally {
+      setActiveFileAction(null);
+    }
+  };
+
   // Скачивание файла
   const handleDownloadFile = async (file: ProjectFile) => {
+    const key = fileActionKey(file, 'download');
+    setActiveFileAction(key);
     try {
-      let url = (file as any).publicUrl;
-
-      // Если это файл из Seafile
-      if ((file as any).isSeafile || (url && url.startsWith('seafile://'))) {
-        try {
-          const downloadUrl = await supabaseDataStore.getSeafileDownloadUrl(file.storagePath);
-          if (downloadUrl) {
-            url = downloadUrl;
-          } else {
-            throw new Error('Не удалось получить ссылку на файл из Seafile');
-          }
-        } catch (error) {
-          console.error('Ошибка получения ссылки Seafile:', error);
-          toast({
-            title: "Ошибка конфигурации Seafile",
-            description: "Невозможно скачать файл",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-      // Если публичного URL нет или он локальный, но файла локально нет, 
-      // пробуем получить signed URL из Supabase Storage (наследие старой системы)
-      else if (!url && file.storagePath) {
-        try {
-          // Определяем бакет по пути или категории
-          let bucketName = 'project-files';
-          if (file.storagePath.includes('contracts/')) bucketName = 'contracts';
-          else if (file.storagePath.includes('documents/')) bucketName = 'documents';
-
-          const { data, error } = await supabase.storage
-            .from(bucketName)
-            .createSignedUrl(file.storagePath, 3600); // URL действителен 1 час
-
-          if (error) throw error;
-          url = data.signedUrl;
-        } catch (error) {
-          console.error('Ошибка получения signed URL:', error);
-          url = file.storagePath;
-        }
-      }
-
-      if (url && !url.startsWith('seafile://')) {
-        // Создаем временную ссылку для скачивания
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.fileName;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        toast({
-          title: "Ошибка",
-          description: "URL файла не найден",
-          variant: "destructive",
-        });
-      }
+      const url = new URL(await resolveFileUrl(file), window.location.origin).href;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.fileName;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (error: any) {
       console.error('Ошибка скачивания файла:', error);
       toast({
@@ -175,7 +193,14 @@ export function ProjectFileManager({
         description: error?.message || "Не удалось скачать файл",
         variant: "destructive",
       });
+    } finally {
+      setActiveFileAction(null);
     }
+  };
+
+  const canPreviewFile = (file: ProjectFile) => {
+    const value = `${file.fileType || ''} ${file.fileName || ''}`.toLowerCase();
+    return /pdf|image|\.png|\.jpe?g|\.webp|\.gif/.test(value);
   };
 
   // Загружаем файлы при монтировании
@@ -328,14 +353,31 @@ export function ProjectFileManager({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canPreviewFile(file) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenFile(file)}
+                      disabled={activeFileAction === fileActionKey(file, 'open')}
+                      aria-label={`Открыть файл: ${file.fileName}`}
+                      title="Открыть документ"
+                    >
+                      {activeFileAction === fileActionKey(file, 'open')
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Eye className="w-4 h-4" />}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDownloadFile(file)}
+                    disabled={activeFileAction === fileActionKey(file, 'download')}
                     aria-label={`Скачать файл: ${file.fileName}`}
                     title="Скачать файл"
                   >
-                    <Download className="w-4 h-4" />
+                    {activeFileAction === fileActionKey(file, 'download')
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Download className="w-4 h-4" />}
                   </Button>
                   {canDelete(file) && (
                     <Button

@@ -318,7 +318,7 @@ app.get('/api/seafile/download-url', async (req, res) => {
 
   try {
     const encodedPath = encodeURIComponent(storagePath);
-    const response = await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}`, {
+    const response = await fetch(`${seafileUrl}/api2/repos/${repoId}/file/?p=${encodedPath}&reuse=1`, {
       headers: { Authorization: `Token ${seafileToken}` },
     });
     if (!response.ok) {

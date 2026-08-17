@@ -113,6 +113,7 @@ test.describe('executive demo: project to payment registry', () => {
 
     await expect(page.getByLabel('📁 Файлы').getByText('Договор_DEMO-2026-001.pdf')).toBeVisible();
     await expect(page.getByText(/242\.5 KB.*other.*15\.01\.2026/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Открыть файл/ })).toBeVisible();
     const downloadButton = page.getByRole('button', { name: /Скачать файл/ });
     await expect(downloadButton).toBeVisible();
     await downloadButton.click();

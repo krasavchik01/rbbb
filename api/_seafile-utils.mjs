@@ -94,7 +94,10 @@ export async function getSeafileUploadUrl(config) {
 
 export async function getSeafileDownloadUrl(config, storagePath) {
   const path = normalizeSeafilePath(storagePath);
-  const response = await fetch(`${config.seafileUrl}/api2/repos/${config.repoId}/file/?p=${encodeURIComponent(path)}`, {
+  // PDF viewers and antivirus scanners make several range requests. Seafile
+  // download links are single-use by default, so the second request used to
+  // fail with 403 and Chrome displayed "Could not load PDF document".
+  const response = await fetch(`${config.seafileUrl}/api2/repos/${config.repoId}/file/?p=${encodeURIComponent(path)}&reuse=1`, {
     headers: { Authorization: `Token ${config.seafileToken}` },
   });
   if (!response.ok) {
@@ -103,6 +106,24 @@ export async function getSeafileDownloadUrl(config, storagePath) {
 
   const raw = await response.text();
   return raw.replace(/"/g, '');
+}
+
+export function toSeafileBrowserUrl(config, downloadUrl) {
+  try {
+    const target = new URL(String(downloadUrl || ''));
+    const configured = new URL(String(config?.seafileUrl || DEFAULT_SEAFILE_URL));
+    const defaultOrigin = new URL(DEFAULT_SEAFILE_URL).origin;
+
+    // The app already exposes this same-origin streaming proxy in Vite and
+    // Vercel. Keeping the signed path behind the app origin makes the HTML
+    // download attribute reliable and avoids cross-origin PDF behaviour.
+    if (target.origin === configured.origin && configured.origin === defaultOrigin) {
+      return `/seafile-proxy${target.pathname}${target.search}${target.hash}`;
+    }
+  } catch {
+    // Keep the original URL for non-standard/custom Seafile installations.
+  }
+  return String(downloadUrl || '');
 }
 
 export async function listSeafileDir(config, dirPath) {

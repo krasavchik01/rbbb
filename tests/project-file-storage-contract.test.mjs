@@ -23,7 +23,8 @@ test('project file manager opens Seafile files through backend download-url prox
 test('contract tab opens Seafile contract and amendment links through backend download-url proxy', () => {
   assert.match(contractEditorSource, /supabaseDataStore\.getSeafileDownloadUrl\(storagePath\)/);
   assert.match(contractEditorSource, /openAmendmentFile/);
-  assert.match(contractEditorSource, /openProjectFile\(file, label\)/);
+  assert.match(contractEditorSource, /openProjectFile\(file, label, 'open', fileKey\)/);
+  assert.match(contractEditorSource, /openProjectFile\(file, label, 'download', fileKey\)/);
 });
 
 test('command center opens Seafile contract files through the authenticated proxy instead of raw links', () => {

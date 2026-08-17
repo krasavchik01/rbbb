@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ChevronDown, ChevronRight, Download, ExternalLink, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Download, ExternalLink, Eye, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1791,12 +1791,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canEditContractAmount = canSeeContractMoney;
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
 
-  const openContractFile = async (file: any, label: string, key: string) => {
+  const openContractFile = async (
+    file: any,
+    label: string,
+    key: string,
+    mode: 'open' | 'download' = 'open',
+  ) => {
     const rawUrl = contractFileUrl(file);
     const storagePath = String(file?.storagePath || file?.path || (rawUrl.startsWith('seafile://') ? rawUrl.replace(/^seafile:\/\//, '') : ''));
     const directUrl = rawUrl && !rawUrl.startsWith('seafile://') ? rawUrl : '';
     const isSeafileFile = Boolean(file?.isSeafile) || rawUrl.startsWith('seafile://');
-    setOpeningFileKey(key);
+    const actionKey = `${mode}:${key}`;
+    const previewWindow = mode === 'open' ? window.open('about:blank', '_blank') : null;
+    if (previewWindow) previewWindow.opener = null;
+    setOpeningFileKey(actionKey);
     try {
       const url = isSeafileFile && storagePath
         ? await supabaseDataStore.getSeafileDownloadUrl(storagePath)
@@ -1805,8 +1813,23 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       if (!safeUrl || safeUrl.startsWith('seafile://')) {
         throw new Error(`Нет рабочей ссылки. В карточке сохранён только источник: ${storagePath || rawUrl || label}`);
       }
-      window.open(safeUrl, '_blank', 'noopener,noreferrer');
+      const browserUrl = new URL(safeUrl, window.location.origin).href;
+      if (mode === 'download') {
+        const anchor = document.createElement('a');
+        anchor.href = browserUrl;
+        anchor.download = label;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+      } else if (previewWindow) {
+        previewWindow.location.href = browserUrl;
+      } else {
+        window.open(browserUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (error: any) {
+      previewWindow?.close();
       toast({
         title: 'Договор не привязан к рабочему хранилищу',
         description: error?.message || `Файл «${label}» есть в карточке, но безопасная ссылка не получена`,
@@ -5632,17 +5655,32 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                                           const fileKey = `${row.id}:${file?.id || label}-${index}`;
                                           return url ? (
                                             <div key={fileKey} className="flex max-w-full flex-col gap-1 rounded-md border bg-muted/20 p-2">
-                                              <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-auto min-h-8 justify-start whitespace-normal text-left"
-                                                disabled={openingFileKey === fileKey}
-                                                onClick={() => void openContractFile(file, label, fileKey)}
-                                              >
-                                                {openingFileKey === fileKey ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1 h-3.5 w-3.5" />}
-                                                Скачать договор: {label}
-                                              </Button>
+                                              <div className="flex flex-wrap gap-1">
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="h-auto min-h-8 justify-start whitespace-normal text-left"
+                                                  disabled={openingFileKey === `open:${fileKey}`}
+                                                  onClick={() => void openContractFile(file, label, fileKey, 'open')}
+                                                >
+                                                  {openingFileKey === `open:${fileKey}` ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Eye className="mr-1 h-3.5 w-3.5" />}
+                                                  Открыть договор: {label}
+                                                </Button>
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-auto min-h-8"
+                                                  disabled={openingFileKey === `download:${fileKey}`}
+                                                  onClick={() => void openContractFile(file, label, fileKey, 'download')}
+                                                  aria-label={`Скачать договор: ${label}`}
+                                                  title="Скачать договор"
+                                                >
+                                                  {openingFileKey === `download:${fileKey}` ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1 h-3.5 w-3.5" />}
+                                                  Скачать
+                                                </Button>
+                                              </div>
                                               {sourcePath && <div className="max-w-[360px] truncate text-[11px] text-muted-foreground" title={sourcePath}>Источник: {sourcePath}</div>}
                                             </div>
                                           ) : (

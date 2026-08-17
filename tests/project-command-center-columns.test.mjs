@@ -31,7 +31,7 @@ test('command center column filter key list covers requested Excel-like fields',
   }
   assert.match(pageSource, /const EMPTY_COLUMN_FILTERS = COMMAND_CENTER_COLUMN_FILTER_KEYS\.reduce/);
   assert.match(pageSource, /readInitialColumnFilters\(\)/);
-  assert.match(pageSource, /syncCommandCenterUrl\(\{ search, columnFilters, viewFilter, businessSeasonFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy \}\)/);
+  assert.match(pageSource, /syncCommandCenterUrl\(\{ search, columnFilters, viewFilter, businessSeasonFilter, amountFromFilter, amountToFilter, contractFileFilter, deadlineFilter, periodFilter, auditPeriodTypeFilter, sortBy \}\)/);
 });
 
 test('column filters compose as OR inside one column and AND across columns', () => {

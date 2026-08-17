@@ -171,11 +171,13 @@ test('seafile download-url proxy requires authenticated user context', async () 
 test('seafile download-url proxy calls Seafile with server-side token', async () => {
   let seenAuthorization = '';
   let seenPath = '';
+  let seenReuse = '';
 
   const fakeSeafile = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     seenAuthorization = req.headers.authorization || '';
     seenPath = url.searchParams.get('p') || '';
+    seenReuse = url.searchParams.get('reuse') || '';
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('"https://files.example/download/secret.txt"');
   });
@@ -199,6 +201,7 @@ test('seafile download-url proxy calls Seafile with server-side token', async ()
     assert.deepEqual(await response.json(), { url: 'https://files.example/download/secret.txt' });
     assert.equal(seenAuthorization, 'Token server-only-token');
     assert.equal(seenPath, '/project-a/secret.txt');
+    assert.equal(seenReuse, '1');
   } finally {
     await ctx.stop();
     await new Promise((resolve, reject) => {
