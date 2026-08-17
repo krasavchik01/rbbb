@@ -19,27 +19,43 @@ test.describe('Project summary access settings', () => {
     const ceoBonus = page.getByRole('checkbox', { name: 'Генеральный директор (CEO): Бонусы' });
     const adminBonus = page.getByRole('checkbox', { name: 'Администратор: Бонусы' });
     const deputyBonus = page.getByRole('checkbox', { name: 'Заместитель генерального директора: Бонусы' });
+    const ceoAccounting = page.getByRole('checkbox', { name: 'Генеральный директор (CEO): Бухгалтерский кабинет' });
+    const accountantAccounting = page.getByRole('checkbox', { name: 'Бухгалтер: Бухгалтерский кабинет' });
 
     await expect(ceoBonus).toBeChecked();
     await expect(adminBonus).toBeChecked();
     await expect(deputyBonus).not.toBeChecked();
+    await expect(ceoAccounting).toBeChecked();
+    await expect(accountantAccounting).toBeChecked();
 
     await expect(deputyBonus).toBeDisabled();
     const deputyHours = page.getByRole('checkbox', { name: 'Заместитель генерального директора: Таймшиты' });
     await expect(deputyHours).toBeChecked();
     await deputyHours.click();
+    await ceoAccounting.click();
     await page.getByTestId('save-project-access').click();
     await expect.poll(() => appSettingsPatches(network).length).toBe(1);
 
     const patch = JSON.parse(appSettingsPatches(network)[0].body || '{}');
     expect(patch.projectAccess.bonuses).toEqual(['ceo', 'admin']);
     expect(patch.projectAccess.hours).not.toContain('deputy_director');
+    expect(patch.projectAccess.accounting).not.toContain('ceo');
+    expect(patch.projectAccess.accounting).toContain('accountant');
 
     await page.reload();
     await waitForDemoApp(page);
     await expect(page.getByTestId('project-access-management')).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Заместитель генерального директора: Бонусы' })).not.toBeChecked();
     await expect(page.getByRole('checkbox', { name: 'Заместитель генерального директора: Таймшиты' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Генеральный директор (CEO): Бухгалтерский кабинет' })).not.toBeChecked();
+
+    await page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('user') || '{}');
+      localStorage.setItem('user', JSON.stringify({ ...saved, id: 'qa-ceo', role: 'ceo', email: 'ceo@example.invalid' }));
+    });
+    await page.goto('/accounting');
+    await expect(page).toHaveURL(/\/projects(?:[?#].*)?$/);
+    await expect(page.getByText('Бухгалтерия', { exact: true })).toHaveCount(0);
     expect(network.productionMutations).toEqual([]);
   });
 

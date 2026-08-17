@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabaseDataStore, type Project } from '@/lib/supabaseDataStore';
 import { projectContract, projectContractFiles, projectNotes } from '@/lib/contractData';
 import { effectiveProjectTeam } from '@/lib/projectLegacyCompatibility';
+import { projectForAccountingWorkspace } from '@/lib/accountingAccess';
 import { sendEmail } from '@/lib/emailService';
 import {
   ACCOUNTING_DOCUMENT_STATUS_LABELS,
@@ -231,7 +232,7 @@ export default function Accounting() {
   const [file, setFile] = useState<File | null>(null);
   const [savingKey, setSavingKey] = useState('');
 
-  const rows = useMemo<AccountingRow[]>(() => projects.map((project) => {
+  const rows = useMemo<AccountingRow[]>(() => projects.map(projectForAccountingWorkspace).map((project) => {
     const contract = projectContract(project);
     return {
       project,

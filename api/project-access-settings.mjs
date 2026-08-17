@@ -19,6 +19,7 @@ const DEFAULT_ACCESS = {
   hours: USER_ROLES,
   contractMoney: ['ceo', 'admin', 'deputy_director', 'procurement', 'accountant'],
   bonuses: ['ceo', 'admin'],
+  accounting: ['accountant', 'ceo', 'admin'],
 };
 
 function normalizeRoles(value, fallback, allowed = ALLOWED_ROLES) {
@@ -33,6 +34,7 @@ function normalizeProjectAccess(value) {
     hours: normalizeRoles(source.hours, DEFAULT_ACCESS.hours),
     contractMoney: normalizeRoles(source.contractMoney, DEFAULT_ACCESS.contractMoney),
     bonuses: normalizeRoles(source.bonuses, DEFAULT_ACCESS.bonuses, BONUS_ROLES),
+    accounting: normalizeRoles(source.accounting, DEFAULT_ACCESS.accounting),
   };
 }
 

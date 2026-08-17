@@ -31,6 +31,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types/roles';
 import { getUnreadCount } from '@/lib/notifications';
 import { ROLE_GROUPS } from '@/lib/roleAccess';
+import { useAppSettings } from '@/lib/appSettings';
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 
 interface MenuItem {
   title: string;
@@ -86,6 +88,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
   const { user, checkPermission, hasAnyRole, logout } = useAuth();
+  const [appSettings] = useAppSettings();
   const collapsed = state === 'collapsed';
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -104,6 +107,7 @@ export function AppSidebar() {
   if (!user) return null;
 
   const canShow = (item: MenuItem): boolean => {
+    if (item.url === '/accounting' && !canRoleViewProjectSection(appSettings.projectAccess, user.role, 'accounting')) return false;
     if (item.permission && !checkPermission(item.permission)) return false;
     if (item.allowedRoles && !hasAnyRole(item.allowedRoles)) return false;
     if (item.excludeRoles?.includes(user.role)) return false;

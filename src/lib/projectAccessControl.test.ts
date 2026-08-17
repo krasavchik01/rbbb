@@ -17,6 +17,7 @@ describe('projectAccessControl', () => {
     expect(access.hours).toEqual(USER_ROLES);
     expect(access.contractMoney).toEqual(['ceo', 'admin', 'deputy_director', 'procurement', 'accountant']);
     expect(access.bonuses).toEqual(['ceo', 'admin']);
+    expect(access.accounting).toEqual(['accountant', 'ceo', 'admin']);
 
     expect(canRoleViewProjectSection(access, 'ceo', 'bonuses')).toBe(true);
     expect(canRoleViewProjectSection(access, 'admin', 'bonuses')).toBe(true);
@@ -34,6 +35,7 @@ describe('projectAccessControl', () => {
     expect(access.team).toEqual(['partner']);
     expect(access.hours).toEqual(DEFAULT_PROJECT_ACCESS_CONTROL.hours);
     expect(access.contractMoney).toEqual(DEFAULT_PROJECT_ACCESS_CONTROL.contractMoney);
+    expect(access.accounting).toEqual(DEFAULT_PROJECT_ACCESS_CONTROL.accounting);
   });
 
   it('rejects unknown roles and malformed settings without throwing', () => {
@@ -67,6 +69,7 @@ describe('projectAccessControl', () => {
       hours: 'all',
       contractMoney: ['procurement', 'invalid'],
       bonuses: ['admin', 'deputy_director'],
+      accounting: ['accountant', 'partner', 'invalid'],
     } as unknown as ProjectAccessControl;
 
     const access = normalizeProjectAccessControl(malformed);
@@ -76,6 +79,17 @@ describe('projectAccessControl', () => {
       hours: DEFAULT_PROJECT_ACCESS_CONTROL.hours,
       contractMoney: ['procurement'],
       bonuses: ['admin'],
+      accounting: ['accountant', 'partner'],
     });
+  });
+
+  it('lets the admin grant or revoke accounting workspace visibility by role', () => {
+    const original = normalizeProjectAccessControl(DEFAULT_PROJECT_ACCESS_CONTROL);
+    const withoutCeo = setProjectRoleVisibility(original, 'ceo', 'accounting', false);
+    const withPartner = setProjectRoleVisibility(withoutCeo, 'partner', 'accounting', true);
+
+    expect(canRoleViewProjectSection(withoutCeo, 'ceo', 'accounting')).toBe(false);
+    expect(canRoleViewProjectSection(withPartner, 'partner', 'accounting')).toBe(true);
+    expect(canRoleViewProjectSection(withPartner, 'accountant', 'accounting')).toBe(true);
   });
 });

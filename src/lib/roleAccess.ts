@@ -5,9 +5,9 @@ export const ROLE_GROUPS = {
   operational: USER_ROLES.filter((role) => role !== 'accountant'),
   admin: ['admin'],
   executive: ['ceo', 'admin'],
-  // Accountant owns this workspace; CEO and admin may open the same view for oversight.
-  // This does not grant the accountant any executive route in the opposite direction.
-  accounting: ['accountant', 'ceo', 'admin'],
+  // The actual accounting permission is managed dynamically by projectAccess.accounting.
+  accounting: USER_ROLES,
+  accountingDefault: ['accountant', 'ceo', 'admin'],
   management: ['ceo', 'deputy_director', 'admin'],
   hrManagement: ['hr', 'ceo', 'deputy_director', 'admin'],
   procurement: ['procurement'],
@@ -25,7 +25,7 @@ export const ROUTE_ACCESS = {
   '/analytics': ROLE_GROUPS.executive,
   '/assign-partners': ROLE_GROUPS.management,
   '/bonuses': ROLE_GROUPS.executive,
-  '/accounting': ROLE_GROUPS.accounting,
+  '/accounting': ROLE_GROUPS.accountingDefault,
   '/settings': ROLE_GROUPS.operational,
   '/user-management': ROLE_GROUPS.admin,
   '/create-project-procurement': ROLE_GROUPS.procurementAdmin,

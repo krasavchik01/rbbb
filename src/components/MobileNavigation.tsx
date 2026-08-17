@@ -15,6 +15,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { useState, useMemo } from 'react';
 import { ROLE_GROUPS } from '@/lib/roleAccess';
 import type { UserRole } from '@/types/roles';
+import { useAppSettings } from '@/lib/appSettings';
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 
 interface NavItem {
   to: string;
@@ -44,11 +46,15 @@ function canShowNavItem(item: NavItem, userRole?: UserRole): boolean {
 export const MobileNavigation = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const [appSettings] = useAppSettings();
 
   // Фильтруем пункты меню по роли пользователя
   const navItems = useMemo(() => {
-    return allNavItems.filter((item) => canShowNavItem(item, user?.role));
-  }, [user?.role]);
+    return allNavItems.filter((item) => (
+      canShowNavItem(item, user?.role)
+      && (item.to !== '/accounting' || canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'accounting'))
+    ));
+  }, [appSettings.projectAccess, user?.role]);
 
   // Четыре пункта — осознанный mobile предел: длинные подписи не слипаются на 360–390px.
   // Остальные разделы доступны из меню в шапке.

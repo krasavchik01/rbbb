@@ -9,6 +9,8 @@ import { AIErrorBoundary } from '@/components/AIErrorBoundary';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
 import { ROLE_GROUPS, homeRouteForRole } from '@/lib/roleAccess';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppSettings } from '@/lib/appSettings';
+import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import Projects from '@/pages/Projects';
 const Index = lazy(() => import('@/pages/Index'));
 const HR = lazy(() => import('@/pages/HR'));
@@ -65,6 +67,21 @@ function IndexRoute() {
 function RoleHomeRedirect() {
   const { user } = useAuth();
   return <Navigate to={homeRouteForRole(user?.role)} replace />;
+}
+
+function AccountingWorkspaceRoute() {
+  const { user } = useAuth();
+  const [appSettings, , settingsLoading] = useAppSettings();
+
+  if (settingsLoading) {
+    return <div className="p-4">Загрузка прав доступа…</div>;
+  }
+
+  if (!canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'accounting')) {
+    return <Navigate to={user?.role === 'accountant' ? '/notifications' : homeRouteForRole(user?.role)} replace />;
+  }
+
+  return <Layout><Accounting /></Layout>;
 }
 
 function App() {
@@ -149,9 +166,7 @@ function App() {
               path="/accounting"
               element={
                 <ProtectedRoute allowedRoles={ROLE_GROUPS.accounting}>
-                  <Layout>
-                    <Accounting />
-                  </Layout>
+                  <AccountingWorkspaceRoute />
                 </ProtectedRoute>
               }
             />

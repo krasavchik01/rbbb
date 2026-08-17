@@ -51,6 +51,20 @@ describe('ProjectAccessManagement', () => {
     expect(deputyBonus).toContain('data-state="unchecked"');
   });
 
+  it('shows accountant, CEO and admin as the default accounting viewers', () => {
+    const html = renderAccessManagement();
+    const accountant = openingTagFor(html, `aria-label="${ROLE_LABELS.accountant}: Бухгалтерский кабинет"`);
+    const ceo = openingTagFor(html, `aria-label="${ROLE_LABELS.ceo}: Бухгалтерский кабинет"`);
+    const admin = openingTagFor(html, `aria-label="${ROLE_LABELS.admin}: Бухгалтерский кабинет"`);
+    const partner = openingTagFor(html, `aria-label="${ROLE_LABELS.partner}: Бухгалтерский кабинет"`);
+
+    expect(accountant).toContain('data-state="checked"');
+    expect(ceo).toContain('data-state="checked"');
+    expect(admin).toContain('data-state="checked"');
+    expect(partner).toContain('data-state="unchecked"');
+    expect(partner).not.toContain('disabled=""');
+  });
+
   it('refuses a custom bonus grant outside CEO and admin without mutating the defaults', () => {
     const custom = setProjectRoleVisibility(
       DEFAULT_PROJECT_ACCESS_CONTROL,

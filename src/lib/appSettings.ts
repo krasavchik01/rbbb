@@ -351,9 +351,9 @@ export function invalidateAppSettingsCache(): void {
 // Хук для использования настроек в React компонентах
 import { useState, useEffect } from 'react';
 
-export function useAppSettings(): [AppSettings, (settings: Partial<AppSettings>) => Promise<void>] {
+export function useAppSettings(): [AppSettings, (settings: Partial<AppSettings>) => Promise<void>, boolean] {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Загружаем настройки при монтировании
@@ -387,5 +387,5 @@ export function useAppSettings(): [AppSettings, (settings: Partial<AppSettings>)
     await saveAppSettings(newSettings);
   };
 
-  return [settings, updateSettings];
+  return [settings, updateSettings, isLoading];
 }

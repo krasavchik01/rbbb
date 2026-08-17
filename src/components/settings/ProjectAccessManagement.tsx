@@ -38,16 +38,16 @@ export function ProjectAccessManagement({ value, saving = false, onSave }: Proje
   };
 
   return (
-    <section className="space-y-4" aria-label="Управление видимостью единого свода" data-testid="project-access-management">
+    <section className="space-y-4" aria-label="Управление доступами по ролям" data-testid="project-access-management">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <ShieldCheck className="h-5 w-5 text-primary" />
-            Кто что видит в едином своде
+            Доступы по ролям
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
-            Каждая галочка действует для всей роли. По умолчанию бонусы видят только CEO и администратор,
-            а менять суммы может только CEO.
+            Каждая галочка действует для всей роли. Здесь можно отдельно включить бухгалтерский кабинет,
+            элементы свода и финансовую информацию. Бонусы защищены и доступны только CEO и администратору.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -96,8 +96,8 @@ export function ProjectAccessManagement({ value, saving = false, onSave }: Proje
       </div>
 
       <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-        Снятая галочка полностью убирает соответствующий блок из интерфейса роли и из её Excel-выгрузки.
-        Доступ к самим проектам по компаниям настраивается ниже отдельно.
+        Снятая галочка убирает соответствующий блок или раздел из интерфейса роли и закрывает прямой адрес.
+        Доступ к проектам по компаниям настраивается ниже отдельно.
       </div>
     </section>
   );

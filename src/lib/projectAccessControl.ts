@@ -21,6 +21,11 @@ export const PROJECT_VISIBILITY_SECTIONS = [
     label: 'Бонусы',
     description: 'Бонусный пул, точные суммы сотрудников и реестр выплат.',
   },
+  {
+    key: 'accounting',
+    label: 'Бухгалтерский кабинет',
+    description: 'Договоры, счета, АВР, оплаты, задолженность и бухгалтерские контакты.',
+  },
 ] as const;
 
 export type ProjectVisibilitySection = (typeof PROJECT_VISIBILITY_SECTIONS)[number]['key'];
@@ -34,6 +39,7 @@ export const DEFAULT_PROJECT_ACCESS_CONTROL: ProjectAccessControl = {
   hours: [...USER_ROLES],
   contractMoney: ['ceo', 'admin', 'deputy_director', 'procurement', 'accountant'],
   bonuses: ['ceo', 'admin'],
+  accounting: ['accountant', 'ceo', 'admin'],
 };
 
 function normalizeRoles(
@@ -65,6 +71,7 @@ export function normalizeProjectAccessControl(value: unknown): ProjectAccessCont
       DEFAULT_PROJECT_ACCESS_CONTROL.bonuses,
       BONUS_VISIBILITY_ROLES,
     ),
+    accounting: normalizeRoles(source.accounting, DEFAULT_PROJECT_ACCESS_CONTROL.accounting),
   };
 }
 
