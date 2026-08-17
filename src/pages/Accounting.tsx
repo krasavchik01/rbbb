@@ -90,6 +90,8 @@ const STATUS_COLORS: Record<AccountingProjectStatus, string> = {
   needs_avr: 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200',
   awaiting_signature: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200',
   complete: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
+  closed_attention: 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200',
+  closed_complete: 'border-emerald-400 bg-emerald-100 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-100',
 };
 
 const DEADLINE_COLORS: Record<AccountingDeadlineUrgency, string> = {
@@ -285,7 +287,10 @@ export default function Accounting() {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (companyFilter !== 'all' && row.companyName !== companyFilter) return false;
-      if (statusFilter !== 'all' && row.summary.status !== statusFilter) return false;
+      if (statusFilter !== 'all') {
+        const isLinkedClosedStatus = statusFilter === 'closed_attention' || statusFilter === 'closed_complete';
+        if (isLinkedClosedStatus ? row.summary.status !== statusFilter : row.summary.accountingStatus !== statusFilter) return false;
+      }
       if (!matchesDeadlineFilter(row.summary.deadlineUrgency, deadlineFilter)) return false;
       if (!query) return true;
       const contact = row.summary.ledger.contact || {};
@@ -555,6 +560,8 @@ export default function Accounting() {
       'Контрольный срок': row.summary.nextActionDeadline,
       'Осталось дней': row.summary.daysUntilNextAction ?? '',
       'Контроль срока': deadlineText(row.summary.deadlineUrgency, row.summary.daysUntilNextAction),
+      'Статус проекта': row.summary.projectClosed ? 'Закрыт' : 'В работе',
+      'Статус бухгалтерии': ACCOUNTING_STATUS_LABELS[row.summary.accountingStatus],
       'Валюта': row.summary.currency,
       'Стоимость проекта': row.summary.contractAmount,
       'Счета №': row.summary.invoices.map((item) => item.number).filter(Boolean).join(', '),
@@ -604,7 +611,7 @@ export default function Accounting() {
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><ReceiptText className="h-4 w-4" /> Финансовые документы и оплаты</div>
           <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">Бухгалтерский кабинет</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Один проект — одна строка. Только договоры, счета, АВР, фактические оплаты, задолженность и необходимые бухгалтерии контакты.</p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Один проект — одна строка. Статус связан со сводом; долги, счета и неподписанные АВР остаются под контролем даже после закрытия проекта.</p>
         </div>
         <Button variant="outline" onClick={exportExcel} disabled={filteredRows.length === 0}><Download className="mr-2 h-4 w-4" />Скачать Excel</Button>
       </div>

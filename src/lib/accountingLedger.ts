@@ -1,9 +1,10 @@
 import { parseMoney, projectAmountWithoutVAT, projectContract, projectNotes } from '@/lib/contractData';
+import { getProjectWorkflowStatus, isProjectClosed } from '@/lib/projectWorkflow';
 
 export type AccountingDocumentType = 'invoice' | 'avr';
 export type AccountingDocumentStatus = 'draft' | 'issued' | 'sent' | 'signed' | 'cancelled';
 export type AccountingPaymentKind = 'advance' | 'interim' | 'final' | 'other';
-export type AccountingProjectStatus =
+export type AccountingOperationalStatus =
   | 'needs_contract'
   | 'needs_invoice'
   | 'awaiting_payment'
@@ -11,6 +12,7 @@ export type AccountingProjectStatus =
   | 'needs_avr'
   | 'awaiting_signature'
   | 'complete';
+export type AccountingProjectStatus = AccountingOperationalStatus | 'closed_attention' | 'closed_complete';
 export type AccountingDeadlineUrgency = 'overdue' | 'today' | 'week' | 'month' | 'later' | 'missing' | 'complete';
 
 export interface AccountingFile {
@@ -81,6 +83,10 @@ export interface AccountingProjectSummary {
   overpaymentAmount: number;
   overdueAmount: number;
   status: AccountingProjectStatus;
+  accountingStatus: AccountingOperationalStatus;
+  projectWorkflowStatus: string;
+  projectClosed: boolean;
+  hasOutstandingAccounting: boolean;
   nextActionLabel: string;
   nextActionDeadline: string;
   daysUntilNextAction: number | null;
@@ -265,14 +271,20 @@ export function calculateAccountingProject(
   const overdueAmount = receivableAmount > 0 && overdueInvoices.length > 0 ? receivableAmount : 0;
   const contract = projectContract(project);
 
-  let status: AccountingProjectStatus;
-  if (!contract?.number || contractAmount <= 0) status = 'needs_contract';
-  else if (invoiceAmount <= 0) status = 'needs_invoice';
-  else if (overdueAmount > 0) status = 'overdue';
-  else if (receivableAmount > 0) status = 'awaiting_payment';
-  else if (avrAmount <= 0) status = 'needs_avr';
-  else if (avrs.some((avr) => avr.status !== 'signed')) status = 'awaiting_signature';
-  else status = 'complete';
+  let accountingStatus: AccountingOperationalStatus;
+  if (!contract?.number || contractAmount <= 0) accountingStatus = 'needs_contract';
+  else if (invoiceAmount <= 0) accountingStatus = 'needs_invoice';
+  else if (overdueAmount > 0) accountingStatus = 'overdue';
+  else if (receivableAmount > 0) accountingStatus = 'awaiting_payment';
+  else if (avrAmount <= 0) accountingStatus = 'needs_avr';
+  else if (avrs.some((avr) => avr.status !== 'signed')) accountingStatus = 'awaiting_signature';
+  else accountingStatus = 'complete';
+  const projectWorkflowStatus = getProjectWorkflowStatus(project);
+  const projectClosed = isProjectClosed(project);
+  const hasOutstandingAccounting = accountingStatus !== 'complete';
+  const status: AccountingProjectStatus = projectClosed
+    ? hasOutstandingAccounting ? 'closed_attention' : 'closed_complete'
+    : accountingStatus;
 
   const projectStartDate = isoDate(contract?.serviceStartDate || project?.start_date || project?.startDate || contract?.date);
   const projectEndDate = isoDate(contract?.serviceEndDate || project?.deadline);
@@ -284,7 +296,7 @@ export function calculateAccountingProject(
     .filter((avr) => avr.status !== 'signed' && avr.dueDate)
     .map((avr) => avr.dueDate || '')
     .sort()[0] || '';
-  const nextActionLabel: Record<AccountingProjectStatus, string> = {
+  const nextActionLabel: Record<AccountingOperationalStatus, string> = {
     needs_contract: 'Добавить договор и сумму',
     needs_invoice: 'Выставить счёт',
     awaiting_payment: 'Получить оплату',
@@ -293,16 +305,16 @@ export function calculateAccountingProject(
     awaiting_signature: 'Получить подписанный АВР',
     complete: 'Документы закрыты',
   };
-  const nextActionDeadline = status === 'awaiting_payment' || status === 'overdue'
+  const nextActionDeadline = accountingStatus === 'awaiting_payment' || accountingStatus === 'overdue'
     ? unpaidInvoiceDeadline
-    : status === 'awaiting_signature'
+    : accountingStatus === 'awaiting_signature'
       ? unsignedAvrDeadline
-      : status === 'needs_avr'
+      : accountingStatus === 'needs_avr'
         ? projectEndDate
-        : status === 'needs_contract' || status === 'needs_invoice'
+        : accountingStatus === 'needs_contract' || accountingStatus === 'needs_invoice'
           ? projectStartDate || projectEndDate
           : '';
-  const deadline = accountingDeadlineUrgency(nextActionDeadline, today, status === 'complete');
+  const deadline = accountingDeadlineUrgency(nextActionDeadline, today, accountingStatus === 'complete');
 
   return {
     projectId: text(project?.id),
@@ -315,7 +327,11 @@ export function calculateAccountingProject(
     overpaymentAmount,
     overdueAmount,
     status,
-    nextActionLabel: nextActionLabel[status],
+    accountingStatus,
+    projectWorkflowStatus,
+    projectClosed,
+    hasOutstandingAccounting,
+    nextActionLabel: nextActionLabel[accountingStatus],
     nextActionDeadline,
     daysUntilNextAction: deadline.days,
     deadlineUrgency: deadline.urgency,
@@ -385,6 +401,8 @@ export const ACCOUNTING_STATUS_LABELS: Record<AccountingProjectStatus, string> =
   needs_avr: 'Нужно оформить АВР',
   awaiting_signature: 'Ждём подписанный АВР',
   complete: 'Документы закрыты',
+  closed_attention: 'Проект закрыт · бухгалтерия требует действий',
+  closed_complete: 'Проект и бухгалтерия закрыты',
 };
 
 export const ACCOUNTING_DOCUMENT_STATUS_LABELS: Record<AccountingDocumentStatus, string> = {

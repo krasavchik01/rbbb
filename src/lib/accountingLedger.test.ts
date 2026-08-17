@@ -102,6 +102,9 @@ describe('accounting ledger', () => {
       status: 'signed',
     });
     expect(calculateAccountingProject(project(withSignedAvr), '2026-08-06').status).toBe('complete');
+    const fullyClosed = project(withSignedAvr);
+    (fullyClosed as any).status = 'completed';
+    expect(calculateAccountingProject(fullyClosed, '2026-08-06').status).toBe('closed_complete');
   });
 
   it('keeps currencies separate at project level', () => {
@@ -110,5 +113,19 @@ describe('accounting ledger', () => {
     const summary = calculateAccountingProject(value);
     expect(summary.currency).toBe('USD');
     expect(summary.invoiceAmount).toBe(15_000);
+  });
+
+  it('links a closed summary project to accounting without hiding outstanding debt', () => {
+    const value = project({ version: 1, documents: [invoice()], payments: [] });
+    (value as any).status = 'completed';
+    const summary = calculateAccountingProject(value, '2026-08-17');
+
+    expect(summary.projectClosed).toBe(true);
+    expect(summary.projectWorkflowStatus).toBe('completed');
+    expect(summary.accountingStatus).toBe('overdue');
+    expect(summary.status).toBe('closed_attention');
+    expect(summary.hasOutstandingAccounting).toBe(true);
+    expect(summary.receivableAmount).toBe(800_000);
+    expect(summary.nextActionLabel).toBe('Получить просроченную оплату');
   });
 });

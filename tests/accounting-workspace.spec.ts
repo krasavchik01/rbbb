@@ -112,4 +112,21 @@ test.describe('accounting workspace', () => {
     await expect(page.getByLabel('Получить подписанный АВР до')).toBeVisible();
     await expect(page.getByLabel('Получить подписанный АВР до')).not.toHaveValue('');
   });
+
+  test('a project closed in the summary is closed in accounting but outstanding debt remains visible', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'accountant');
+    const project = network.tableRows.projects[0];
+    addAccountingFixture(project);
+    const notes = JSON.parse(String(project.notes || '{}'));
+    notes.status = 'completed';
+    project.notes = JSON.stringify(notes);
+    project.status = 'completed';
+
+    await page.goto('/accounting');
+    await waitForDemoApp(page);
+
+    await expect(page.getByText('Проект закрыт · бухгалтерия требует действий').first()).toBeVisible();
+    await expect(page.getByText('Получить просроченную оплату').first()).toBeVisible();
+    await expect(page.getByText(/28\s*млн\s*₸/).first()).toBeVisible();
+  });
 });

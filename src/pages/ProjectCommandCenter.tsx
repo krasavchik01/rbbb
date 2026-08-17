@@ -63,6 +63,7 @@ import {
   projectStatusOptionsForRole,
   type ManagedProjectStatus,
 } from '@/lib/projectStatusActions';
+import { getProjectWorkflowStatus } from '@/lib/projectWorkflow';
 import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
@@ -175,9 +176,7 @@ const TEAM_COLUMNS = [
 ] as const;
 
 function projectStatus(project: any): string {
-  const notes = readProjectNotes(project);
-  if (project?.status === 'completed' || project?.status === 'closed') return 'completed';
-  return notes?.status || project?.status || 'new';
+  return getProjectWorkflowStatus(project);
 }
 
 function projectTeam(project: any): CanonicalTeamMember[] {

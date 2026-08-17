@@ -5,7 +5,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
-import { mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
+import { getProjectWorkflowStatus, mapWorkflowStatusToSupabaseStatus } from '@/lib/projectWorkflow';
 import { apiDelete, apiGet, apiPost, apiPostFormData } from '@/lib/api';
 import { dedupeProjectFiles } from '@/lib/contractData';
 import {
@@ -140,12 +140,7 @@ export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
   const contract = recordValue(notes.contract);
   const client = recordValue(notes.client);
   const finances = notes.finances;
-  const notesStatus = typeof notes.status === 'string' ? notes.status : undefined;
-  const status: ProjectUiStatus = notesStatus
-    ? notesStatus as ProjectUiStatus
-    : proj.status === 'completed'
-      ? 'completed'
-      : 'В работе';
+  const status = getProjectWorkflowStatus({ status: proj.status, notes }) as ProjectUiStatus;
   const notesName = typeof notes.name === 'string' ? notes.name : undefined;
   const clientName = typeof notes.clientName === 'string'
     ? notes.clientName

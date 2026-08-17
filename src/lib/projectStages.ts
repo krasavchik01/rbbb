@@ -1,3 +1,5 @@
+import { isProjectClosed } from '@/lib/projectWorkflow';
+
 export type ProjectStage =
   | 'procurement_added'
   | 'awaiting_team'
@@ -42,7 +44,7 @@ export function getProjectStage(project: any): ProjectStage {
   const notesStatus = String(notes?.status || '').toLowerCase();
   const team = getProjectTeam(project);
 
-  if (['completed', 'closed', 'завершён', 'завершен'].includes(status) || ['completed', 'closed'].includes(notesStatus)) {
+  if (isProjectClosed(project)) {
     return 'completed';
   }
 

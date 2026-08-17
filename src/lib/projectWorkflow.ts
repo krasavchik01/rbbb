@@ -12,6 +12,7 @@ export const PROJECT_WORKFLOW_LABELS: Record<string, string> = {
   ready_to_complete: "Готов к закрытию",
   pending_payment_approval: "Ожидает CEO",
   completed: "Завершен",
+  closed: "Завершен",
   cancelled: "Отменен",
   active: "В работе",
 };
@@ -21,16 +22,31 @@ export function isTaskDoneStatus(status?: string | null) {
 }
 
 export function getProjectWorkflowStatus(project: any): string {
-  return project?.notes?.status || project?.status || "approved";
+  let notes = project?.notes;
+  if (typeof notes === 'string') {
+    try { notes = JSON.parse(notes); } catch { notes = {}; }
+  }
+  const directStatus = String(project?.status || '').trim().toLowerCase();
+  const notesStatus = String(notes?.status || '').trim().toLowerCase();
+  const closedStatuses = ['completed', 'closed', 'завершён', 'завершен', 'закрыт', 'закрыто'];
+  if (closedStatuses.includes(directStatus) || closedStatuses.includes(notesStatus)) return 'completed';
+  return notesStatus || directStatus || "approved";
+}
+
+export function isProjectClosed(project: any): boolean {
+  return getProjectWorkflowStatus(project) === 'completed';
 }
 
 export function getProjectStatusLabel(status?: string | null): string {
   if (!status) return PROJECT_WORKFLOW_LABELS.approved;
+  if (["closed", "завершён", "завершен", "закрыт", "закрыто"].includes(status.toLowerCase())) {
+    return PROJECT_WORKFLOW_LABELS.completed;
+  }
   return PROJECT_WORKFLOW_LABELS[status] || status;
 }
 
 export function mapWorkflowStatusToSupabaseStatus(status?: string | null): SupabaseProjectStatus {
-  if (status === "completed") return "completed";
+  if (status && ["completed", "closed", "завершён", "завершен", "закрыт", "закрыто"].includes(status.toLowerCase())) return "completed";
   if (status === "in_progress" || status === "pending_payment_approval" || status === "ready_to_complete") {
     return "in_progress";
   }
@@ -45,7 +61,7 @@ export function deriveProjectStatusFromTasks(
     return tasks.length > 0 ? "in_progress" : "approved";
   }
 
-  if (["new", "pending_approval", "cancelled", "completed"].includes(currentStatus)) {
+  if (["new", "pending_approval", "cancelled", "completed", "closed"].includes(currentStatus)) {
     return currentStatus;
   }
 
