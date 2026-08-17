@@ -210,7 +210,7 @@ export function useProjects() {
       ));
     }
 
-    const canViewAllProjects = user && ['ceo', 'admin', 'deputy_director', 'procurement'].includes(user.role);
+    const canViewAllProjects = user && ['ceo', 'admin', 'deputy_director', 'procurement', 'accountant'].includes(user.role);
     if (canViewAllProjects) return allProjects;
 
     return allProjects.filter((p) => projectHasTeamMember(p, user));

@@ -11,6 +11,7 @@ import {
   Clock,
   CalendarCheck,
   WalletCards,
+  ReceiptText,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -51,6 +52,12 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
       { title: 'Посещаемость', url: '/attendance', icon: CalendarCheck },
       { title: 'Уведомления', url: '/notifications', icon: Bell },
       { title: 'Настройки', url: '/settings', icon: Settings },
+    ],
+  },
+  {
+    label: 'Финансы',
+    items: [
+      { title: 'Бухгалтерия', url: '/accounting', icon: ReceiptText, allowedRoles: ROLE_GROUPS.accounting },
     ],
   },
   {

@@ -75,6 +75,7 @@ export interface CanonicalProjectNotes extends UnknownRecord {
   client?: UnknownRecord;
   files?: CanonicalProjectFile[];
   tasks?: unknown[];
+  accounting?: UnknownRecord;
 }
 
 export type ProjectNotesParseResult =

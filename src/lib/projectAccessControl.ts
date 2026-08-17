@@ -32,7 +32,7 @@ export const BONUS_VISIBILITY_ROLES: readonly UserRole[] = ['ceo', 'admin'];
 export const DEFAULT_PROJECT_ACCESS_CONTROL: ProjectAccessControl = {
   team: [...USER_ROLES],
   hours: [...USER_ROLES],
-  contractMoney: ['ceo', 'admin', 'deputy_director', 'procurement'],
+  contractMoney: ['ceo', 'admin', 'deputy_director', 'procurement', 'accountant'],
   bonuses: ['ceo', 'admin'],
 };
 

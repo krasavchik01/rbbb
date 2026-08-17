@@ -1788,7 +1788,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canManageContractors = capabilities.canManageContractors && canSeeContractMoney;
   const statusOptions = projectStatusOptionsForRole(user?.role);
   const canEditPeriods = capabilities.canEditPeriods;
-  const canEditContractAmount = canSeeContractMoney;
+  const canEditContractAmount = capabilities.canSeeContractMoney;
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
 
   const openContractFile = async (

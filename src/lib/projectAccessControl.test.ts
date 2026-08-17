@@ -15,7 +15,7 @@ describe('projectAccessControl', () => {
 
     expect(access.team).toEqual(USER_ROLES);
     expect(access.hours).toEqual(USER_ROLES);
-    expect(access.contractMoney).toEqual(['ceo', 'admin', 'deputy_director', 'procurement']);
+    expect(access.contractMoney).toEqual(['ceo', 'admin', 'deputy_director', 'procurement', 'accountant']);
     expect(access.bonuses).toEqual(['ceo', 'admin']);
 
     expect(canRoleViewProjectSection(access, 'ceo', 'bonuses')).toBe(true);

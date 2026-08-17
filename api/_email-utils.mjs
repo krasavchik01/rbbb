@@ -14,7 +14,7 @@ const SERVICE_ROLE_KEY =
   '';
 
 const ADMIN_ROLES = new Set(['admin']);
-const MAIL_SEND_ROLES = new Set(['admin', 'ceo', 'deputy_director', 'hr', 'procurement']);
+const MAIL_SEND_ROLES = new Set(['admin', 'ceo', 'deputy_director', 'hr', 'procurement', 'accountant']);
 
 export function setCors(res, methods = 'GET,POST,OPTIONS') {
   res.setHeader('Access-Control-Allow-Credentials', true);

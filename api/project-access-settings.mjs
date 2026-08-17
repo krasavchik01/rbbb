@@ -17,7 +17,7 @@ const BONUS_ROLES = new Set(['ceo', 'admin']);
 const DEFAULT_ACCESS = {
   team: USER_ROLES,
   hours: USER_ROLES,
-  contractMoney: ['ceo', 'admin', 'deputy_director', 'procurement'],
+  contractMoney: ['ceo', 'admin', 'deputy_director', 'procurement', 'accountant'],
   bonuses: ['ceo', 'admin'],
 };
 

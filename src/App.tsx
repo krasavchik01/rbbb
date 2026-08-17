@@ -25,6 +25,7 @@ const Attendance = lazy(() => import('@/pages/Attendance'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const SMTPSettings = lazy(() => import('@/pages/SMTPSettings'));
 const Bonuses = lazy(() => import('@/pages/Bonuses'));
+const Accounting = lazy(() => import('@/pages/Accounting'));
 // Audit и IFRS9 удалены из навигации по решению юзера (2026-05-21):
 // «усложнил с аудитом и процедурами МСФО, нагружает систему, убрать».
 // Файлы src/pages/Audit.tsx и src/pages/IFRS9.tsx сохранены на случай восстановления.
@@ -134,6 +135,16 @@ function App() {
                 <ProtectedRoute allowedRoles={ROLE_GROUPS.executive}>
                   <Layout>
                     <Bonuses />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounting"
+              element={
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.accounting}>
+                  <Layout>
+                    <Accounting />
                   </Layout>
                 </ProtectedRoute>
               }

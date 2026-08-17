@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { CalendarCheck, Clock, FolderKanban, Users, Settings, Menu, LogOut, Bell, WalletCards } from 'lucide-react';
+import { CalendarCheck, Clock, FolderKanban, Users, Settings, Menu, LogOut, Bell, WalletCards, ReceiptText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +29,7 @@ const allNavItems: NavItem[] = [
   { to: '/timesheets', icon: Clock, label: 'Таймшиты' },
   { to: '/attendance', icon: CalendarCheck, label: 'Посещаемость' },
   { to: '/notifications', icon: Bell, label: 'Уведомления' },
+  { to: '/accounting', icon: ReceiptText, label: 'Бухгалтерия', allowedRoles: ROLE_GROUPS.accounting },
   { to: '/hr', icon: Users, label: 'HR', allowedRoles: ROLE_GROUPS.hrManagement },
   { to: '/bonuses', icon: WalletCards, label: 'Бонусная ведомость', allowedRoles: ROLE_GROUPS.executive },
   { to: '/settings', icon: Settings, label: 'Настройки', allowedRoles: ROLE_GROUPS.admin },
@@ -51,7 +52,9 @@ export const MobileNavigation = () => {
 
   // Четыре пункта — осознанный mobile предел: длинные подписи не слипаются на 360–390px.
   // Остальные разделы доступны из меню в шапке.
-  const bottomNavItems = navItems.slice(0, 4);
+  const bottomNavItems = user?.role === 'accountant'
+    ? navItems.filter((item) => ['/accounting', '/projects', '/notifications'].includes(item.to)).slice(0, 4)
+    : navItems.slice(0, 4);
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 safe-area-bottom">
