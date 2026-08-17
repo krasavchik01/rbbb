@@ -33,6 +33,19 @@ function addAccountingFixture(project: any) {
 }
 
 test.describe('accounting workspace', () => {
+  for (const executiveRole of ['ceo', 'admin'] as const) {
+    test(`${executiveRole} can inspect the accountant view and return to the full summary`, async ({ page }) => {
+      await loginAsDemoRole(page, executiveRole);
+
+      await page.goto('/accounting');
+      await expect(page.getByRole('heading', { name: 'Бухгалтерский кабинет' })).toBeVisible();
+
+      await page.goto('/projects');
+      await expect(page).toHaveURL(/\/projects(?:[?#].*)?$/);
+      await expect(page.getByText('Бонусная ведомость')).toBeVisible();
+    });
+  }
+
   test('accountant is isolated from the executive summary and bonus routes', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'accountant');
     const projectId = String(network.tableRows.projects[0].id);

@@ -5,7 +5,9 @@ export const ROLE_GROUPS = {
   operational: USER_ROLES.filter((role) => role !== 'accountant'),
   admin: ['admin'],
   executive: ['ceo', 'admin'],
-  accounting: ['accountant'],
+  // Accountant owns this workspace; CEO and admin may open the same view for oversight.
+  // This does not grant the accountant any executive route in the opposite direction.
+  accounting: ['accountant', 'ceo', 'admin'],
   management: ['ceo', 'deputy_director', 'admin'],
   hrManagement: ['hr', 'ceo', 'deputy_director', 'admin'],
   procurement: ['procurement'],
