@@ -7,7 +7,8 @@ import Layout from '@/components/Layout';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AIErrorBoundary } from '@/components/AIErrorBoundary';
 import { WidgetErrorBoundary } from '@/components/WidgetErrorBoundary';
-import { ROLE_GROUPS } from '@/lib/roleAccess';
+import { ROLE_GROUPS, homeRouteForRole } from '@/lib/roleAccess';
+import { useAuth } from '@/contexts/AuthContext';
 import Projects from '@/pages/Projects';
 const Index = lazy(() => import('@/pages/Index'));
 const HR = lazy(() => import('@/pages/HR'));
@@ -61,6 +62,11 @@ function IndexRoute() {
   return <Index />;
 }
 
+function RoleHomeRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={homeRouteForRole(user?.role)} replace />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -73,12 +79,12 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/dashboard" element={<Navigate to="/projects" replace />} />
+            <Route path="/dashboard" element={<ProtectedRoute><RoleHomeRedirect /></ProtectedRoute>} />
             <Route path="/project-command-center" element={<Navigate to="/projects" replace />} />
             <Route
               path="/projects"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.operational}>
                   <Layout>
                     <Projects />
                   </Layout>
@@ -118,7 +124,7 @@ function App() {
             <Route
               path="/timesheets"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.operational}>
                   <Layout>
                     <Timesheets />
                   </Layout>
@@ -152,7 +158,7 @@ function App() {
             <Route
               path="/settings"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.operational}>
                   <Layout>
                     <Settings />
                   </Layout>
@@ -171,7 +177,7 @@ function App() {
             <Route
               path="/attendance"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.operational}>
                   <Layout>
                     <Attendance />
                   </Layout>
@@ -216,7 +222,7 @@ function App() {
             <Route
               path="/project/:id"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.operational}>
                   <Layout>
                     <ProjectWorkspace />
                   </Layout>

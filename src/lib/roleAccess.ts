@@ -2,9 +2,10 @@ import { USER_ROLES, type UserRole } from '@/types/roles';
 
 export const ROLE_GROUPS = {
   all: USER_ROLES,
+  operational: USER_ROLES.filter((role) => role !== 'accountant'),
   admin: ['admin'],
   executive: ['ceo', 'admin'],
-  accounting: ['accountant', 'ceo', 'admin'],
+  accounting: ['accountant'],
   management: ['ceo', 'deputy_director', 'admin'],
   hrManagement: ['hr', 'ceo', 'deputy_director', 'admin'],
   procurement: ['procurement'],
@@ -13,9 +14,9 @@ export const ROLE_GROUPS = {
 } satisfies Record<string, readonly UserRole[]>;
 
 export const ROUTE_ACCESS = {
-  '/projects': ROLE_GROUPS.all,
-  '/timesheets': ROLE_GROUPS.all,
-  '/attendance': ROLE_GROUPS.all,
+  '/projects': ROLE_GROUPS.operational,
+  '/timesheets': ROLE_GROUPS.operational,
+  '/attendance': ROLE_GROUPS.operational,
   '/notifications': ROLE_GROUPS.all,
   '/hr': ROLE_GROUPS.hrManagement,
   '/employees': ROLE_GROUPS.hrManagement,
@@ -23,7 +24,7 @@ export const ROUTE_ACCESS = {
   '/assign-partners': ROLE_GROUPS.management,
   '/bonuses': ROLE_GROUPS.executive,
   '/accounting': ROLE_GROUPS.accounting,
-  '/settings': ROLE_GROUPS.all,
+  '/settings': ROLE_GROUPS.operational,
   '/user-management': ROLE_GROUPS.admin,
   '/create-project-procurement': ROLE_GROUPS.procurementAdmin,
   '/project-approval': ROLE_GROUPS.management,
@@ -39,4 +40,8 @@ export const ROUTE_ACCESS = {
 export function roleCanAccessRoute(role: UserRole, path: keyof typeof ROUTE_ACCESS): boolean {
   const allowedRoles: readonly UserRole[] = ROUTE_ACCESS[path];
   return allowedRoles.includes(role);
+}
+
+export function homeRouteForRole(role: UserRole | null | undefined): '/accounting' | '/projects' {
+  return role === 'accountant' ? '/accounting' : '/projects';
 }

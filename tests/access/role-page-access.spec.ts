@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ROUTE_ACCESS } from '../../src/lib/roleAccess';
+import { homeRouteForRole } from '../../src/lib/roleAccess';
 import { USER_ROLES, type UserRole } from '../../src/types/roles';
 
 type Role = UserRole;
@@ -74,11 +75,14 @@ test.describe('production-safe role route access matrix', () => {
 
           const allowed = routeInfo.allowed.includes(role);
           if (allowed) {
-            const expectedPath = routeInfo.expectedPath || routeInfo.path;
+            const expectedPath = routeInfo.path === '/dashboard'
+              ? homeRouteForRole(role)
+              : routeInfo.expectedPath || routeInfo.path;
             await expect(page).toHaveURL(new RegExp(`${expectedPath.replace('/', '\\/')}(?:[?#].*)?$`));
             await expect(page.locator('body')).not.toContainText('Вход в систему');
           } else {
-            await expect(page).toHaveURL(/\/projects(?:[?#].*)?$/);
+            const homePath = homeRouteForRole(role).replace('/', '\\/');
+            await expect(page).toHaveURL(new RegExp(`${homePath}(?:[?#].*)?$`));
           }
         });
       }

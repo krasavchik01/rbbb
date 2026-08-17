@@ -47,11 +47,11 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
   {
     label: 'Работа',
     items: [
-      { title: 'Свод', url: '/projects', icon: FolderOpen },
-      { title: 'Таймшиты', url: '/timesheets', icon: Clock },
-      { title: 'Посещаемость', url: '/attendance', icon: CalendarCheck },
+      { title: 'Свод', url: '/projects', icon: FolderOpen, excludeRoles: ['accountant'] },
+      { title: 'Таймшиты', url: '/timesheets', icon: Clock, excludeRoles: ['accountant'] },
+      { title: 'Посещаемость', url: '/attendance', icon: CalendarCheck, excludeRoles: ['accountant'] },
       { title: 'Уведомления', url: '/notifications', icon: Bell },
-      { title: 'Настройки', url: '/settings', icon: Settings },
+      { title: 'Настройки', url: '/settings', icon: Settings, excludeRoles: ['accountant'] },
     ],
   },
   {

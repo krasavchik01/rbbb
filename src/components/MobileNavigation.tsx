@@ -25,9 +25,9 @@ interface NavItem {
 }
 
 const allNavItems: NavItem[] = [
-  { to: '/projects', icon: FolderKanban, label: 'Свод' },
-  { to: '/timesheets', icon: Clock, label: 'Таймшиты' },
-  { to: '/attendance', icon: CalendarCheck, label: 'Посещаемость' },
+  { to: '/projects', icon: FolderKanban, label: 'Свод', excludeRoles: ['accountant'] },
+  { to: '/timesheets', icon: Clock, label: 'Таймшиты', excludeRoles: ['accountant'] },
+  { to: '/attendance', icon: CalendarCheck, label: 'Посещаемость', excludeRoles: ['accountant'] },
   { to: '/notifications', icon: Bell, label: 'Уведомления' },
   { to: '/accounting', icon: ReceiptText, label: 'Бухгалтерия', allowedRoles: ROLE_GROUPS.accounting },
   { to: '/hr', icon: Users, label: 'HR', allowedRoles: ROLE_GROUPS.hrManagement },
@@ -53,7 +53,7 @@ export const MobileNavigation = () => {
   // Четыре пункта — осознанный mobile предел: длинные подписи не слипаются на 360–390px.
   // Остальные разделы доступны из меню в шапке.
   const bottomNavItems = user?.role === 'accountant'
-    ? navItems.filter((item) => ['/accounting', '/projects', '/notifications'].includes(item.to)).slice(0, 4)
+    ? navItems.filter((item) => ['/accounting', '/notifications'].includes(item.to)).slice(0, 4)
     : navItems.slice(0, 4);
 
   return (

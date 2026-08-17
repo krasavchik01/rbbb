@@ -15,6 +15,7 @@ import { useAppSettings } from '@/lib/appSettings';
 import { projectIsVisibleWithinCompanyScope } from '@/lib/userCompanyAccess';
 import { findCompanyByAnyValue } from '@/types/companies';
 import { effectiveProjectTeam } from '@/lib/projectLegacyCompatibility';
+import { projectForAccountingWorkspace } from '@/lib/accountingAccess';
 
 // Хук для сотрудников
 export function useEmployees() {
@@ -195,6 +196,10 @@ export function useProjects() {
 
   // Фильтрация по allowedCompanyIds пользователя
   const projects = useMemo(() => {
+    const roleScopedProjects = user?.role === 'accountant'
+      ? allProjects.map(projectForAccountingWorkspace)
+      : allProjects;
+
     if (user?.allowedCompanyIds && user.allowedCompanyIds.length > 0) {
       const companies = appSettings.companies || [];
       const allowedNames = user.allowedCompanyIds
@@ -204,16 +209,16 @@ export function useProjects() {
         })
         .filter(Boolean) as string[];
 
-      if (allowedNames.length === 0) return allProjects;
-      return allProjects.filter((project) => (
+      if (allowedNames.length === 0) return roleScopedProjects;
+      return roleScopedProjects.filter((project) => (
         projectIsVisibleWithinCompanyScope(project, allowedNames, user.role)
       ));
     }
 
     const canViewAllProjects = user && ['ceo', 'admin', 'deputy_director', 'procurement', 'accountant'].includes(user.role);
-    if (canViewAllProjects) return allProjects;
+    if (canViewAllProjects) return roleScopedProjects;
 
-    return allProjects.filter((p) => projectHasTeamMember(p, user));
+    return roleScopedProjects.filter((p) => projectHasTeamMember(p, user));
   }, [allProjects, user?.allowedCompanyIds, user?.id, user?.role, appSettings.companies]);
 
   useEffect(() => {

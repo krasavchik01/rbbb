@@ -33,13 +33,27 @@ function addAccountingFixture(project: any) {
 }
 
 test.describe('accounting workspace', () => {
+  test('accountant is isolated from the executive summary and bonus routes', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'accountant');
+    const projectId = String(network.tableRows.projects[0].id);
+
+    for (const restrictedPath of ['/projects', '/bonuses', `/project/${projectId}`, '/timesheets', '/attendance', '/settings']) {
+      await page.goto(restrictedPath);
+      await expect(page).toHaveURL(/\/accounting(?:[?#].*)?$/);
+    }
+
+    await expect(page.getByRole('heading', { name: 'Бухгалтерский кабинет' })).toBeVisible();
+    await expect(page.getByText('Бонусная ведомость')).toHaveCount(0);
+    await expect(page.getByText('Свод', { exact: true })).toHaveCount(0);
+  });
+
   test('accountant sees the full register and can record a partial payment', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'accountant');
     addAccountingFixture(network.tableRows.projects[0]);
     await page.goto('/accounting');
     await waitForDemoApp(page);
 
-    await expect(page.getByRole('heading', { name: 'Бухгалтерия' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Бухгалтерский кабинет' })).toBeVisible();
     await expect(page.getByText('Оплачено по факту').first()).toBeVisible();
     await expect(page.getByText(/28\s*млн\s*₸/).first()).toBeVisible();
     await expect(page.getByText('Просроченная оплата').first()).toBeVisible();
@@ -64,7 +78,7 @@ test.describe('accounting workspace', () => {
     await page.goto('/accounting');
     await waitForDemoApp(page);
 
-    await expect(page.getByRole('heading', { name: 'Бухгалтерия' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Бухгалтерский кабинет' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Счёт' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'АВР' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Оплата' }).first()).toBeVisible();

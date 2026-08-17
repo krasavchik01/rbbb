@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { homeRouteForRole } from '@/lib/roleAccess';
 import { Loader2, Eye, EyeOff, LogIn, Sparkles, UserPlus, Building2, Users, FolderKanban, BarChart3 } from 'lucide-react';
 
 const Index = () => {
@@ -19,7 +20,7 @@ const Index = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/projects');
+      navigate(homeRouteForRole(user.role));
     }
   }, [user, navigate]);
 
@@ -31,7 +32,7 @@ const Index = () => {
     try {
       const success = await login(email, password);
       if (success) {
-        navigate('/projects');
+        navigate('/');
       } else {
         setError('Неверный email или пароль');
       }

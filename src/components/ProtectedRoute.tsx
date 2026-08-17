@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { homeRouteForRole } from '@/lib/roleAccess';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,11 +21,11 @@ export function ProtectedRoute({ children, adminOnly, allowedRoles }: ProtectedR
   }
 
   if (adminOnly && user?.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={homeRouteForRole(user?.role)} replace />;
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={homeRouteForRole(user.role)} replace />;
   }
 
   return <React.Fragment>{children}</React.Fragment>;

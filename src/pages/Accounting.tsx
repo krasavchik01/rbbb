@@ -1,5 +1,4 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
-import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import {
   AlertCircle,
@@ -8,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
-  ExternalLink,
   FileCheck2,
   FileText,
   Loader2,
@@ -22,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { supabaseDataStore, type Project } from '@/lib/supabaseDataStore';
-import { projectContract, projectNotes } from '@/lib/contractData';
+import { projectContract, projectContractFiles, projectNotes } from '@/lib/contractData';
 import { effectiveProjectTeam } from '@/lib/projectLegacyCompatibility';
 import { sendEmail } from '@/lib/emailService';
 import {
@@ -546,8 +544,8 @@ export default function Accounting() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><ReceiptText className="h-4 w-4" /> Финансовые документы и оплаты</div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">Бухгалтерия</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Один проект — одна строка. Счета, АВР, фактические оплаты и задолженность находятся здесь, без команд, таймшитов и бонусов.</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">Бухгалтерский кабинет</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Один проект — одна строка. Только договоры, счета, АВР, фактические оплаты, задолженность и необходимые бухгалтерии контакты.</p>
         </div>
         <Button variant="outline" onClick={exportExcel} disabled={filteredRows.length === 0}><Download className="mr-2 h-4 w-4" />Скачать Excel</Button>
       </div>
@@ -669,12 +667,13 @@ function AccountingDetails({
       : [];
   const finances = (row.project as any).finances || notes.finances || {};
   const contractors = Array.isArray(finances.contractors) ? finances.contractors : [];
+  const contractFiles = projectContractFiles(row.project);
   return (
     <div className="space-y-4">
       <div className="grid gap-3 lg:grid-cols-3">
         <div className="rounded-xl border bg-background p-4"><div className="text-xs uppercase text-muted-foreground">Договор</div><div className="mt-1 font-semibold">№ {row.contractNumber}</div><div className="text-sm text-muted-foreground">от {formatDate(row.contractDate)}</div><div className="mt-2 text-lg font-bold">{formatMoney(row.summary.contractAmount, row.summary.currency)}</div>{amendments.length > 0 && <div className="mt-2 text-xs text-muted-foreground">Дополнительных соглашений: <b className="text-foreground">{amendments.length}</b>{amendments.slice(0, 2).map((item: any, index: number) => <div key={item?.id || index}>№ {item?.number || 'б/н'}{item?.date ? ` от ${formatDate(item.date)}` : ''}{Number(item?.amount || item?.amountWithoutVAT || 0) > 0 ? ` · ${formatMoney(Number(item.amount || item.amountWithoutVAT), row.summary.currency)}` : ''}</div>)}</div>}</div>
         <div className="rounded-xl border bg-background p-4"><div className="text-xs uppercase text-muted-foreground">Контроль оплаты</div><div className="mt-2 flex justify-between text-sm"><span>Оплачено</span><b className="text-emerald-600">{formatMoney(row.summary.paidAmount, row.summary.currency)}</b></div><div className="mt-1 flex justify-between text-sm"><span>Дебиторка</span><b className={row.summary.receivableAmount ? 'text-red-600' : 'text-emerald-600'}>{formatMoney(row.summary.receivableAmount, row.summary.currency)}</b></div><div className="mt-1 flex justify-between text-sm"><span>Остаток договора</span><b>{formatMoney(row.summary.contractBalanceAmount, row.summary.currency)}</b></div></div>
-        <div className="rounded-xl border bg-background p-4"><div className="text-xs uppercase text-muted-foreground">Проект</div><div className="mt-2 text-sm">Руководитель: <b>{row.leaderName}</b></div><div className="mt-1 text-sm">Срок: <b>{formatDate(row.deadline)}</b></div>{contractors.length > 0 && <div className="mt-2 text-xs text-muted-foreground">ГПХ / субподряд: <b className="text-foreground">{contractors.map((item: any) => item?.name || item?.label).filter(Boolean).join(', ') || `${contractors.length} записей`}</b></div>}<Button asChild variant="link" className="mt-2 h-auto p-0"><Link to={`/project/${row.project.id}`}>Открыть договор и файлы <ExternalLink className="ml-1 h-3.5 w-3.5" /></Link></Button></div>
+        <div className="rounded-xl border bg-background p-4"><div className="text-xs uppercase text-muted-foreground">Проект</div><div className="mt-2 text-sm">Руководитель: <b>{row.leaderName}</b></div><div className="mt-1 text-sm">Срок: <b>{formatDate(row.deadline)}</b></div>{contractors.length > 0 && <div className="mt-2 text-xs text-muted-foreground">ГПХ / субподряд: <b className="text-foreground">{contractors.map((item: any) => item?.name || item?.label).filter(Boolean).join(', ') || `${contractors.length} записей`}</b></div>}<div className="mt-3 flex flex-wrap gap-1.5">{contractFiles.length === 0 ? <span className="text-xs text-muted-foreground">Файл договора не загружен</span> : contractFiles.map((file: any, index: number) => <Button key={file?.id || file?.storagePath || index} size="sm" variant="outline" onClick={() => onOpenFile(file as AccountingFile)}><Download className="mr-1 h-3.5 w-3.5" />{file?.fileName || file?.name || 'Договор'}</Button>)}</div></div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
