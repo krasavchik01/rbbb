@@ -49,7 +49,7 @@ const getPublicAppBase = (): string => {
     // Browser-only helper; keep server-side rendering safe.
   }
 
-  return 'https://rbbb.vercel.app';
+  return 'https://hub.rbpartners.kz';
 };
 
 const getStoredUserId = (): string => {
@@ -160,10 +160,10 @@ export const requestPasswordResetEmail = async (
 };
 
 export const getWelcomeEmailTemplate = (employeeName: string, email: string, password: string): EmailTemplate => ({
-  subject: 'Добро пожаловать в SUITE-A',
+  subject: 'Добро пожаловать в HUB',
   html: `
     <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#111827;line-height:1.5">
-      <h2 style="margin:0 0 16px">Добро пожаловать в SUITE-A</h2>
+      <h2 style="margin:0 0 16px">Добро пожаловать в HUB</h2>
       <p>Здравствуйте, ${employeeName}.</p>
       <p>Ваш аккаунт создан. Используйте эти данные для первого входа:</p>
       <div style="background:#f3f4f6;border-radius:10px;padding:16px;margin:20px 0">
@@ -171,7 +171,7 @@ export const getWelcomeEmailTemplate = (employeeName: string, email: string, pas
         <p style="margin:0"><strong>Пароль:</strong> ${password}</p>
       </div>
       <p>После входа пароль можно сменить в настройках безопасности.</p>
-      <p><a href="${getPublicAppBase()}" style="color:#0284c7">Открыть SUITE-A</a></p>
+      <p><a href="${getPublicAppBase()}" style="color:#0284c7">Открыть HUB</a></p>
     </div>
   `,
   text: [

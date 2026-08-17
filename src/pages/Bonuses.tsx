@@ -267,7 +267,7 @@ function PrintSlip({ employee, onClose }: { employee: EmployeeBonusLedger; onClo
         </div>
 
         <div className="border-b-2 border-slate-900 pb-5 text-center">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">SUITE-A · RB Partners</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">HUB · RB Partners</p>
           <h1 className="mt-2 text-2xl font-black">Ведомость выплаты бонуса</h1>
           <p className="mt-1 text-sm text-slate-600">Персональная расшифровка по проектам</p>
         </div>

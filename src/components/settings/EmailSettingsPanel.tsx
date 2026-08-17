@@ -25,7 +25,7 @@ const emptyConfig: SMTPConfig = {
   user: '',
   password: '',
   from: '',
-  fromName: 'SUITE-A',
+  fromName: 'HUB',
 };
 
 function getCurrentUserEmail(): string {
@@ -292,7 +292,7 @@ export function EmailSettingsPanel() {
             <Label htmlFor="smtp-from-name">Имя отправителя</Label>
             <Input
               id="smtp-from-name"
-              placeholder="SUITE-A"
+              placeholder="HUB"
               value={config.fromName}
               onChange={(event) => updateConfig({ fromName: event.target.value })}
             />

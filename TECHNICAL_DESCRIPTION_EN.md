@@ -1,14 +1,14 @@
 # SOFTWARE TECHNICAL SPECIFICATION
-## "SUITE-A" (v1.0.2)
+## "HUB" (v1.0.2)
 
 ### 1. GENERAL INFORMATION
-**Name:** SUITE-A  
+**Name:** HUB
 **Version:** 1.0.2  
 **Developer and Copyright Holder:** Aidos Tazhbenov  
 **Release Year:** 2026
 
 ### 2. PURPOSE OF THE SOFTWARE
-"SUITE-A" is a comprehensive ERP/BPM platform designed to automate business processes for professional services groups (audit, consulting, valuation).
+"HUB" is a comprehensive ERP/BPM platform designed to automate business processes for professional services groups (audit, consulting, valuation).
 
 The system provides a full project management lifecycle — from initial request and approval to final bonus calculation and reporting, utilizing a granular role-based access model.
 

@@ -75,7 +75,7 @@ export function AppHeader() {
           </Button>
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="text-base md:text-lg font-semibold truncate max-w-[130px] md:max-w-none text-muted-foreground hidden md:block">
-              SUITE-A
+              HUB
             </h1>
             {pageTitle && (
               <>
@@ -87,7 +87,7 @@ export function AppHeader() {
             )}
             {!pageTitle && (
               <span className="text-sm md:text-lg font-semibold text-foreground md:hidden">
-                SUITE-A
+                HUB
               </span>
             )}
           </div>

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS email_settings (
   username TEXT NOT NULL DEFAULT '',
   password TEXT NOT NULL DEFAULT '',
   from_email TEXT NOT NULL DEFAULT '',
-  from_name TEXT NOT NULL DEFAULT 'SUITE-A',
+  from_name TEXT NOT NULL DEFAULT 'HUB',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

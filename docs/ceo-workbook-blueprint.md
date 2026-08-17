@@ -1,4 +1,4 @@
-# CEO Workbook Blueprint — legacy Excel → SUITE-A
+# CEO Workbook Blueprint — legacy Excel → HUB
 
 > Source reviewed: `Таблица Шолпанай.xlsx` (read-only).  
 > The source contains operationally sensitive client, employee and financial data and is **not** copied into this repository.
@@ -47,7 +47,7 @@ GPH amount
 Status
 ```
 
-Some sheets have legacy variations in staff-role columns and multiple GPH columns. SUITE-A must normalize those into canonical role/team records rather than reproduce those column variants.
+Some sheets have legacy variations in staff-role columns and multiple GPH columns. HUB must normalize those into canonical role/team records rather than reproduce those column variants.
 
 ### Visible CEO matrix
 
@@ -134,7 +134,7 @@ Excel keeps the **full causal chain in one horizontal row**:
 project → amount → bonus pool → assigned people → each payment → costs → remaining income
 ```
 
-That is the key UX quality we must preserve, but SUITE-A must surpass it by adding:
+That is the key UX quality we must preserve, but HUB must surpass it by adding:
 
 - contract evidence and secure file opening;
 - company, client, subject, service, stage and linked period as distinct objects;
@@ -145,7 +145,7 @@ That is the key UX quality we must preserve, but SUITE-A must surpass it by addi
 - validation instead of silent formula/column errors;
 - one source of truth instead of dozens of hidden manual tabs.
 
-## Non-negotiable SUITE-A CEO view
+## Non-negotiable HUB CEO view
 
 ### Portfolio row / desktop smart table
 
@@ -189,7 +189,7 @@ Bonus allocation/contract-cost reconciliation issues
 
 ## Data model mapping
 
-| Legacy workbook | Canonical SUITE-A source |
+| Legacy workbook | Canonical HUB source |
 |---|---|
 | Project/client name | project + partner/client entity |
 | Contract number/date/subject/deadline/amount | `projects.notes.contract` + canonical contract read model |

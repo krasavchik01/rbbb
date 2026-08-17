@@ -1,6 +1,6 @@
 {
-  "name": "SUITE-A",
-  "short_name": "SUITE-A",
+  "name": "HUB",
+  "short_name": "HUB",
   "description": "Система управления проектами и персоналом",
   "start_url": "/",
   "display": "standalone",

@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     if (!config) throw new Error('SMTP settings are not configured');
     const history = Array.isArray(envelope.deadlineReminderHistory) ? envelope.deadlineReminderHistory : [];
     const sentKeys = new Set(history.map((entry) => entry?.key).filter(Boolean));
-    const appUrl = String(process.env.PUBLIC_APP_URL || 'https://rbbb.vercel.app').replace(/\/+$/, '');
+    const appUrl = String(process.env.PUBLIC_APP_URL || 'https://hub.rbpartners.kz').replace(/\/+$/, '');
     let sent = 0;
 
     for (const project of projects || []) {

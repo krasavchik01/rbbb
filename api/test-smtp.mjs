@@ -37,9 +37,9 @@ export default async function handler(req, res) {
     if (testRecipient) {
       delivery = await sendMail(config, {
         to: testRecipient,
-        subject: 'SUITE-A: SMTP test',
-        text: 'SMTP подключение работает. Это тестовое письмо из настроек SUITE-A.',
-        html: '<p>SMTP подключение работает.</p><p>Это тестовое письмо из настроек SUITE-A.</p>',
+        subject: 'HUB: SMTP test',
+        text: 'SMTP подключение работает. Это тестовое письмо из настроек HUB.',
+        html: '<p>SMTP подключение работает.</p><p>Это тестовое письмо из настроек HUB.</p>',
       });
     }
 

@@ -3,7 +3,7 @@ chcp 65001 > nul
 cls
 echo.
 echo ================================================
-echo    🚀 SUITE-A - Full Stack Start
+echo    🚀 HUB - Full Stack Start
 echo ================================================
 echo.
 echo 1. Launching Backend Server (Port 3000)...

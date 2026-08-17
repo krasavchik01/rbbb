@@ -2,7 +2,7 @@
 
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
-**Goal:** Сделать проектный процесс Suite-A/RBBB простым, визуальным и управляемым: закупки создают проект, замдир назначает команду, команда работает и ведёт часы, проект закрывается, а CEO видит всю воронку стадий и узкие места.
+**Goal:** Сделать проектный процесс HUB/RBBB простым, визуальным и управляемым: закупки создают проект, замдир назначает команду, команда работает и ведёт часы, проект закрывается, а CEO видит всю воронку стадий и узкие места.
 
 **Architecture:** Ввести единый слой стадий проекта поверх существующих `status` и `notes.status`, чтобы не ломать текущие сценарии. На главном `Dashboard.tsx` для CEO/замдиректора добавить визуальную дорожную карту/воронку стадий с живыми счётчиками и быстрыми переходами. В `Projects-simple.tsx` и карточке проекта показывать понятный следующий шаг.
 
@@ -276,7 +276,7 @@ git push
 
 **Production verification:**
 1. Check Vercel deployment is READY.
-2. Open `https://rbbb.vercel.app/`.
+2. Open `https://hub.rbpartners.kz/`.
 3. Confirm Dashboard loads with no console errors.
 4. Confirm roadmap widget counts render.
 5. Confirm clicking stage cards routes to the right project list.

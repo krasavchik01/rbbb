@@ -119,7 +119,7 @@ export function envEmailConfig() {
     user,
     password,
     from: process.env.SMTP_FROM || process.env.MAIL_FROM || user,
-    fromName: process.env.SMTP_FROM_NAME || process.env.MAIL_FROM_NAME || 'SUITE-A',
+    fromName: process.env.SMTP_FROM_NAME || process.env.MAIL_FROM_NAME || 'HUB',
     source: 'env',
   };
 }
@@ -133,7 +133,7 @@ export function rowToConfig(row) {
     user: row.username || '',
     password: row.password || '',
     from: row.from_email || row.username || '',
-    fromName: row.from_name || 'SUITE-A',
+    fromName: row.from_name || 'HUB',
     source: 'database',
   };
 }
@@ -215,7 +215,7 @@ function envelopeEmailToConfig(email) {
     user: email.user || '',
     password,
     from: email.from || email.user || '',
-    fromName: email.fromName || 'SUITE-A',
+    fromName: email.fromName || 'HUB',
     source: 'database',
   };
 }
@@ -298,7 +298,7 @@ export function normalizeEmailConfig(input, existing = null) {
     user: String(input?.user || existing?.user || '').trim(),
     password,
     from: String(input?.from || input?.user || existing?.from || existing?.user || '').trim(),
-    fromName: String(input?.fromName || existing?.fromName || 'SUITE-A').trim(),
+    fromName: String(input?.fromName || existing?.fromName || 'HUB').trim(),
   };
 }
 

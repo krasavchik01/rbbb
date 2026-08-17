@@ -150,12 +150,12 @@ export function AppSidebar() {
         <div className="p-4 md:p-6 border-b border-glass-border">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 md:w-8 md:h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-base md:text-lg font-bold text-primary-foreground">SA</span>
+              <span className="text-base md:text-lg font-bold text-primary-foreground">H</span>
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <h1 className="text-base md:text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
-                  SUITE-A
+                  HUB
                 </h1>
                 <p className="text-xs text-muted-foreground hidden md:block">Group Management Platform</p>
               </div>

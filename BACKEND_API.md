@@ -1,6 +1,6 @@
 # Backend API Reference
 
-This document describes all available API endpoints in the SUITE-A backend.
+This document describes all available API endpoints in the HUB backend.
 
 ## Authentication
 

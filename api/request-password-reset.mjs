@@ -42,7 +42,7 @@ function getRecoveryTokenHash(data) {
   }
 }
 
-const FALLBACK_APP_URL = 'https://rbbb.vercel.app';
+const FALLBACK_APP_URL = 'https://hub.rbpartners.kz';
 
 function cleanUrl(value) {
   const text = String(value || '').trim();
@@ -108,9 +108,9 @@ function forceRedirectInActionLink(actionLink, redirectTo) {
 
 function buildResetEmail({ appUrl, actionLink }) {
   return {
-    subject: 'Восстановление пароля SUITE-A',
+    subject: 'Восстановление пароля HUB',
     text: [
-      'Вы запросили восстановление пароля в SUITE-A.',
+      'Вы запросили восстановление пароля в HUB.',
       '',
       'Откройте ссылку и задайте новый пароль:',
       actionLink,
@@ -119,7 +119,7 @@ function buildResetEmail({ appUrl, actionLink }) {
     ].join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#111827;line-height:1.5">
-        <h2 style="margin:0 0 16px">Восстановление пароля SUITE-A</h2>
+        <h2 style="margin:0 0 16px">Восстановление пароля HUB</h2>
         <p>Вы запросили восстановление пароля.</p>
         <p style="margin:24px 0">
           <a href="${actionLink}" style="display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">
@@ -129,7 +129,7 @@ function buildResetEmail({ appUrl, actionLink }) {
         <p style="font-size:13px;color:#6b7280">Если кнопка не открывается, скопируйте ссылку:</p>
         <p style="font-size:13px;word-break:break-all;color:#374151">${actionLink}</p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0" />
-        <p style="font-size:12px;color:#6b7280">SUITE-A: ${appUrl}</p>
+        <p style="font-size:12px;color:#6b7280">HUB: ${appUrl}</p>
       </div>
     `,
   };

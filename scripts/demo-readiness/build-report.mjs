@@ -27,7 +27,7 @@ const report = {
   productionStatus: 'deployed_and_smoke_verified',
   productionInspection: {
     inspectedAt: generatedAt,
-    url: 'https://rbbb.vercel.app/',
+    url: 'https://hub.rbpartners.kz/',
     httpStatus: 200,
     deploymentId: 'dpl_Bz4WhbY8d5VnERKowymuiQHs7bRS',
     deploymentCreatedAt: '2026-07-13T16:06:34+05:00',
@@ -121,7 +121,7 @@ const md = `# RBBB — готовность к демонстрации гене
 
 Текущая ветка опубликована в production. Публичный вход и регистрация проверены в реальном браузере; все ключевые маршруты отвечают HTTP 200, ошибок консоли не обнаружено.
 
-Production-проверка: \`https://rbbb.vercel.app/\` обслуживается deployment \`${report.productionInspection.deploymentId}\` от 13.07.2026 с bundle \`${report.productionInspection.deployedAsset}\`. Маршруты \`/\`, \`/projects\`, \`/hr\`, \`/bonuses\` и \`/project/demo-project-001\` отвечают HTTP 200.
+Production-проверка: \`https://hub.rbpartners.kz/\` обслуживается deployment \`${report.productionInspection.deploymentId}\` от 13.07.2026 с bundle \`${report.productionInspection.deployedAsset}\`. Маршруты \`/\`, \`/projects\`, \`/hr\`, \`/bonuses\` и \`/project/demo-project-001\` отвечают HTTP 200.
 
 ## Что доказано автоматикой
 
