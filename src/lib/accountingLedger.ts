@@ -11,6 +11,7 @@ export type AccountingProjectStatus =
   | 'needs_avr'
   | 'awaiting_signature'
   | 'complete';
+export type AccountingDeadlineUrgency = 'overdue' | 'today' | 'week' | 'month' | 'later' | 'missing' | 'complete';
 
 export interface AccountingFile {
   id?: string;
@@ -80,6 +81,10 @@ export interface AccountingProjectSummary {
   overpaymentAmount: number;
   overdueAmount: number;
   status: AccountingProjectStatus;
+  nextActionLabel: string;
+  nextActionDeadline: string;
+  daysUntilNextAction: number | null;
+  deadlineUrgency: AccountingDeadlineUrgency;
   currency: string;
   invoices: AccountingDocument[];
   avrs: AccountingDocument[];
@@ -111,6 +116,29 @@ function isoTimestamp(value: unknown): string {
   if (!raw) return '';
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function calendarDaysBetween(from: string, to: string): number | null {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return Math.round((end - start) / 86_400_000);
+}
+
+export function accountingDeadlineUrgency(
+  deadline: string,
+  today = new Date().toISOString().slice(0, 10),
+  complete = false,
+): { days: number | null; urgency: AccountingDeadlineUrgency } {
+  if (complete) return { days: null, urgency: 'complete' };
+  if (!deadline) return { days: null, urgency: 'missing' };
+  const days = calendarDaysBetween(today, deadline);
+  if (days === null) return { days: null, urgency: 'missing' };
+  if (days < 0) return { days, urgency: 'overdue' };
+  if (days === 0) return { days, urgency: 'today' };
+  if (days <= 7) return { days, urgency: 'week' };
+  if (days <= 30) return { days, urgency: 'month' };
+  return { days, urgency: 'later' };
 }
 
 function normalizeFile(value: unknown): AccountingFile | undefined {
@@ -246,6 +274,36 @@ export function calculateAccountingProject(
   else if (avrs.some((avr) => avr.status !== 'signed')) status = 'awaiting_signature';
   else status = 'complete';
 
+  const projectStartDate = isoDate(contract?.serviceStartDate || project?.start_date || project?.startDate || contract?.date);
+  const projectEndDate = isoDate(contract?.serviceEndDate || project?.deadline);
+  const unpaidInvoiceDeadline = invoices
+    .filter((invoice) => invoice.status !== 'draft' && invoice.dueDate)
+    .map((invoice) => invoice.dueDate || '')
+    .sort()[0] || '';
+  const unsignedAvrDeadline = avrs
+    .filter((avr) => avr.status !== 'signed' && avr.dueDate)
+    .map((avr) => avr.dueDate || '')
+    .sort()[0] || '';
+  const nextActionLabel: Record<AccountingProjectStatus, string> = {
+    needs_contract: 'Добавить договор и сумму',
+    needs_invoice: 'Выставить счёт',
+    awaiting_payment: 'Получить оплату',
+    overdue: 'Получить просроченную оплату',
+    needs_avr: 'Оформить АВР',
+    awaiting_signature: 'Получить подписанный АВР',
+    complete: 'Документы закрыты',
+  };
+  const nextActionDeadline = status === 'awaiting_payment' || status === 'overdue'
+    ? unpaidInvoiceDeadline
+    : status === 'awaiting_signature'
+      ? unsignedAvrDeadline
+      : status === 'needs_avr'
+        ? projectEndDate
+        : status === 'needs_contract' || status === 'needs_invoice'
+          ? projectStartDate || projectEndDate
+          : '';
+  const deadline = accountingDeadlineUrgency(nextActionDeadline, today, status === 'complete');
+
   return {
     projectId: text(project?.id),
     contractAmount,
@@ -257,6 +315,10 @@ export function calculateAccountingProject(
     overpaymentAmount,
     overdueAmount,
     status,
+    nextActionLabel: nextActionLabel[status],
+    nextActionDeadline,
+    daysUntilNextAction: deadline.days,
+    deadlineUrgency: deadline.urgency,
     currency: text(contract?.currency || project?.currency) || 'KZT',
     invoices,
     avrs,

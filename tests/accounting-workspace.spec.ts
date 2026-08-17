@@ -70,6 +70,8 @@ test.describe('accounting workspace', () => {
     await expect(page.getByText('Оплачено по факту').first()).toBeVisible();
     await expect(page.getByText(/28\s*млн\s*₸/).first()).toBeVisible();
     await expect(page.getByText('Просроченная оплата').first()).toBeVisible();
+    await expect(page.getByText('Получить просроченную оплату').first()).toBeVisible();
+    await expect(page.getByText(/Просрочено на \d+ дн\./).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Оплата' }).first().click();
     await page.getByLabel('Сумма').fill('5000000');
@@ -95,8 +97,19 @@ test.describe('accounting workspace', () => {
     await expect(page.getByRole('button', { name: 'Счёт' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'АВР' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Оплата' }).first()).toBeVisible();
+    await expect(page.getByText('Следующее действие').first()).toBeVisible();
 
     const screenshotPath = process.env.ACCOUNTING_MOBILE_SCREENSHOT;
     if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true });
+  });
+
+  test('AVR creation requires a visible signature return deadline', async ({ page }) => {
+    await loginAsDemoRole(page, 'accountant');
+    await page.goto('/accounting');
+    await waitForDemoApp(page);
+
+    await page.getByRole('button', { name: 'АВР' }).first().click();
+    await expect(page.getByLabel('Получить подписанный АВР до')).toBeVisible();
+    await expect(page.getByLabel('Получить подписанный АВР до')).not.toHaveValue('');
   });
 });

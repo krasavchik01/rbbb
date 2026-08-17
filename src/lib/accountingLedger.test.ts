@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addAccountingPayment,
+  accountingDeadlineUrgency,
   calculateAccountingProject,
   normalizeAccountingLedger,
   upsertAccountingDocument,
@@ -31,6 +32,14 @@ function invoice(overrides: Partial<AccountingDocument> = {}): AccountingDocumen
 }
 
 describe('accounting ledger', () => {
+  it('classifies accounting deadlines into clear urgency bands', () => {
+    expect(accountingDeadlineUrgency('2026-08-16', '2026-08-17')).toEqual({ days: -1, urgency: 'overdue' });
+    expect(accountingDeadlineUrgency('2026-08-17', '2026-08-17')).toEqual({ days: 0, urgency: 'today' });
+    expect(accountingDeadlineUrgency('2026-08-24', '2026-08-17')).toEqual({ days: 7, urgency: 'week' });
+    expect(accountingDeadlineUrgency('2026-09-16', '2026-08-17')).toEqual({ days: 30, urgency: 'month' });
+    expect(accountingDeadlineUrgency('', '2026-08-17')).toEqual({ days: null, urgency: 'missing' });
+  });
+
   it('normalizes malformed legacy values without allowing negative money', () => {
     const ledger = normalizeAccountingLedger({
       documents: [{ id: 'i', type: 'invoice', amount: '-100', status: 'unknown' }],
@@ -61,6 +70,10 @@ describe('accounting ledger', () => {
     expect(summary.contractBalanceAmount).toBe(700_000);
     expect(summary.overdueAmount).toBe(500_000);
     expect(summary.status).toBe('overdue');
+    expect(summary.nextActionLabel).toBe('Получить просроченную оплату');
+    expect(summary.nextActionDeadline).toBe('2026-08-10');
+    expect(summary.daysUntilNextAction).toBe(-7);
+    expect(summary.deadlineUrgency).toBe('overdue');
   });
 
   it('requires an AVR after invoices are fully paid and closes only after signature', () => {

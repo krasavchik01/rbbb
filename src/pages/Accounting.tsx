@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import {
   AlertCircle,
   Banknote,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -29,6 +30,7 @@ import {
   ACCOUNTING_PAYMENT_KIND_LABELS,
   ACCOUNTING_STATUS_LABELS,
   addAccountingPayment,
+  accountingDeadlineUrgency,
   calculateAccountingProject,
   projectAccountingLedger,
   updateAccountingContact,
@@ -37,6 +39,7 @@ import {
   type AccountingDocument,
   type AccountingDocumentStatus,
   type AccountingDocumentType,
+  type AccountingDeadlineUrgency,
   type AccountingFile,
   type AccountingPayment,
   type AccountingPaymentKind,
@@ -77,6 +80,7 @@ type AccountingRow = {
   deadline: string;
   leaderName: string;
 };
+type DeadlineFilter = 'all' | 'overdue' | 'today' | 'week' | 'month' | 'missing';
 
 const STATUS_COLORS: Record<AccountingProjectStatus, string> = {
   needs_contract: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
@@ -86,6 +90,25 @@ const STATUS_COLORS: Record<AccountingProjectStatus, string> = {
   needs_avr: 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200',
   awaiting_signature: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200',
   complete: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
+};
+
+const DEADLINE_COLORS: Record<AccountingDeadlineUrgency, string> = {
+  overdue: 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200',
+  today: 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200',
+  week: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-200',
+  month: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200',
+  later: 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
+  missing: 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-200',
+  complete: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
+};
+
+const DEADLINE_FILTER_LABELS: Record<DeadlineFilter, string> = {
+  all: 'Все сроки',
+  overdue: 'Просрочено',
+  today: 'Сделать сегодня',
+  week: 'От 1 до 7 дней',
+  month: 'От 8 до 30 дней',
+  missing: 'Срок не задан',
 };
 
 function makeId(prefix: string): string {
@@ -109,6 +132,27 @@ function formatDate(value?: string): string {
   if (!value) return '—';
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('ru-RU').format(date);
+}
+
+function deadlineText(urgency: AccountingDeadlineUrgency, days: number | null): string {
+  if (urgency === 'complete') return 'Закрыто';
+  if (urgency === 'missing' || days === null) return 'Срок не задан';
+  if (urgency === 'today') return 'Сделать сегодня';
+  if (urgency === 'overdue') return `Просрочено на ${Math.abs(days)} дн.`;
+  return `Осталось ${days} дн.`;
+}
+
+function matchesDeadlineFilter(urgency: AccountingDeadlineUrgency, filter: DeadlineFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'overdue') return urgency === 'overdue';
+  if (filter === 'today') return urgency === 'today';
+  if (filter === 'week') return urgency === 'week';
+  if (filter === 'month') return urgency === 'month';
+  return urgency === 'missing';
+}
+
+function DeadlineBadge({ urgency, days }: { urgency: AccountingDeadlineUrgency; days: number | null }) {
+  return <Badge variant="outline" className={`whitespace-nowrap ${DEADLINE_COLORS[urgency]}`}><CalendarClock className="mr-1 h-3.5 w-3.5" />{deadlineText(urgency, days)}</Badge>;
 }
 
 function formatMoney(value: number, currency = 'KZT'): string {
@@ -209,6 +253,7 @@ export default function Accounting() {
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | AccountingProjectStatus>('all');
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('all');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [entry, setEntry] = useState<{ kind: EntryKind; row: AccountingRow } | null>(null);
   const [amount, setAmount] = useState('');
@@ -241,6 +286,7 @@ export default function Accounting() {
     return rows.filter((row) => {
       if (companyFilter !== 'all' && row.companyName !== companyFilter) return false;
       if (statusFilter !== 'all' && row.summary.status !== statusFilter) return false;
+      if (!matchesDeadlineFilter(row.summary.deadlineUrgency, deadlineFilter)) return false;
       if (!query) return true;
       const contact = row.summary.ledger.contact || {};
       return [
@@ -252,8 +298,23 @@ export default function Accounting() {
         contact.phone,
         contact.email,
       ].some((value) => String(value || '').toLowerCase().includes(query));
+    }).sort((left, right) => {
+      const rank: Record<AccountingDeadlineUrgency, number> = { overdue: 0, today: 1, week: 2, month: 3, later: 4, missing: 5, complete: 6 };
+      const urgency = rank[left.summary.deadlineUrgency] - rank[right.summary.deadlineUrgency];
+      if (urgency !== 0) return urgency;
+      const leftDays = left.summary.daysUntilNextAction ?? Number.MAX_SAFE_INTEGER;
+      const rightDays = right.summary.daysUntilNextAction ?? Number.MAX_SAFE_INTEGER;
+      return leftDays - rightDays || left.clientName.localeCompare(right.clientName, 'ru');
     });
-  }, [rows, search, companyFilter, statusFilter]);
+  }, [rows, search, companyFilter, statusFilter, deadlineFilter]);
+
+  const deadlineCounts = useMemo(() => ({
+    overdue: rows.filter((row) => row.summary.deadlineUrgency === 'overdue').length,
+    today: rows.filter((row) => row.summary.deadlineUrgency === 'today').length,
+    week: rows.filter((row) => row.summary.deadlineUrgency === 'week').length,
+    month: rows.filter((row) => row.summary.deadlineUrgency === 'month').length,
+    missing: rows.filter((row) => row.summary.deadlineUrgency === 'missing').length,
+  }), [rows]);
 
   const totalsByCurrency = useMemo(() => {
     const result: Record<string, { contract: number; invoiced: number; paid: number; receivable: number; overdue: number }> = {};
@@ -282,7 +343,7 @@ export default function Accounting() {
     setAmount(String(Math.max(0, row.summary.contractAmount - already) || ''));
     setNumber('');
     setEntryDate(today());
-    setDueDate(dateAfter(14));
+    setDueDate(dateAfter(kind === 'avr' ? 7 : 14));
     setPaymentKind(row.summary.paidAmount > 0 ? 'interim' : 'advance');
     setReference('');
     setNotes('');
@@ -302,6 +363,10 @@ export default function Accounting() {
     }
     if (entry.kind !== 'payment' && !number.trim()) {
       toast({ title: entry.kind === 'invoice' ? 'Укажите номер счёта' : 'Укажите номер АВР', variant: 'destructive' });
+      return;
+    }
+    if (entry.kind !== 'payment' && !dueDate) {
+      toast({ title: 'Укажите контрольный срок', description: entry.kind === 'invoice' ? 'До какой даты ожидается оплата.' : 'До какой даты нужно получить подписанный АВР.', variant: 'destructive' });
       return;
     }
 
@@ -333,7 +398,7 @@ export default function Accounting() {
               type: entry.kind,
               number: number.trim(),
               issueDate: entryDate,
-              dueDate: entry.kind === 'invoice' ? dueDate || undefined : undefined,
+              dueDate: dueDate || undefined,
               amount: parsedAmount,
               status: 'issued',
               notes: notes.trim() || undefined,
@@ -486,6 +551,10 @@ export default function Accounting() {
       'Договор №': row.contractNumber === '—' ? '' : row.contractNumber,
       'Дата договора': row.contractDate,
       'Срок проекта': row.deadline,
+      'Следующее действие': row.summary.nextActionLabel,
+      'Контрольный срок': row.summary.nextActionDeadline,
+      'Осталось дней': row.summary.daysUntilNextAction ?? '',
+      'Контроль срока': deadlineText(row.summary.deadlineUrgency, row.summary.daysUntilNextAction),
       'Валюта': row.summary.currency,
       'Стоимость проекта': row.summary.contractAmount,
       'Счета №': row.summary.invoices.map((item) => item.number).filter(Boolean).join(', '),
@@ -505,7 +574,7 @@ export default function Accounting() {
     const workbook = XLSX.utils.book_new();
     const appendSheet = (name: string, data: typeof exportRows) => {
       const sheet = XLSX.utils.json_to_sheet(data);
-      sheet['!cols'] = [5, 24, 38, 20, 14, 14, 10, 18, 24, 18, 18, 22, 20, 22, 18, 24, 24, 24, 18, 28, 34]
+      sheet['!cols'] = [5, 24, 38, 20, 14, 14, 28, 16, 14, 22, 10, 18, 24, 18, 18, 22, 20, 22, 18, 24, 24, 24, 18, 28, 34]
         .map((width) => ({ wch: width }));
       XLSX.utils.book_append_sheet(workbook, sheet, name.slice(0, 31));
     };
@@ -565,11 +634,27 @@ export default function Accounting() {
         </div>
       )}
 
+      <Card className="border-amber-200/80 dark:border-amber-900/70">
+        <CardContent className="p-4">
+          <div className="mb-3 flex items-center gap-2"><CalendarClock className="h-5 w-5 text-amber-600" /><div><div className="font-semibold">Контроль бухгалтерских сроков</div><div className="text-xs text-muted-foreground">Просроченные задачи всегда показываются первыми.</div></div></div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            {[
+              { filter: 'overdue' as const, label: 'Просрочено', value: deadlineCounts.overdue, color: 'text-red-600' },
+              { filter: 'today' as const, label: 'Сегодня', value: deadlineCounts.today, color: 'text-red-600' },
+              { filter: 'week' as const, label: 'До 7 дней', value: deadlineCounts.week, color: 'text-orange-600' },
+              { filter: 'month' as const, label: 'До 30 дней', value: deadlineCounts.month, color: 'text-amber-600' },
+              { filter: 'missing' as const, label: 'Без срока', value: deadlineCounts.missing, color: 'text-violet-600' },
+            ].map((item) => <button key={item.label} type="button" onClick={() => setDeadlineFilter(item.filter)} className={`rounded-lg border p-3 text-left transition hover:bg-muted ${deadlineFilter === item.filter ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'bg-background'}`}><div className="text-xs text-muted-foreground">{item.label}</div><div className={`mt-1 text-2xl font-bold tabular-nums ${item.color}`}>{item.value}</div></button>)}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-[minmax(260px,1fr)_260px_260px_auto]">
+        <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_220px_220px_220px_auto]">
           <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Заказчик, договор, руководитель, контакт…" /></div>
           <Select value={companyFilter} onValueChange={setCompanyFilter}><SelectTrigger><SelectValue placeholder="Все компании" /></SelectTrigger><SelectContent><SelectItem value="all">Все наши компании</SelectItem>{companies.map((company) => <SelectItem key={company} value={company}>{company}</SelectItem>)}</SelectContent></Select>
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}><SelectTrigger><SelectValue placeholder="Все состояния" /></SelectTrigger><SelectContent><SelectItem value="all">Все состояния</SelectItem>{Object.entries(ACCOUNTING_STATUS_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
+          <Select value={deadlineFilter} onValueChange={(value) => setDeadlineFilter(value as DeadlineFilter)}><SelectTrigger><SelectValue placeholder="Все сроки" /></SelectTrigger><SelectContent>{Object.entries(DEADLINE_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
           <div className="flex items-center justify-end whitespace-nowrap text-sm text-muted-foreground">{filteredRows.length} из {rows.length}</div>
         </CardContent>
       </Card>
@@ -578,7 +663,7 @@ export default function Accounting() {
         <div>
           <table className="w-full table-fixed text-sm">
             <thead className="bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="w-10 px-2 py-3"></th><th className="w-[24%] px-2 py-3">Проект, компания и договор</th><th className="w-[11%] px-2 py-3 text-right">Стоимость</th><th className="w-[11%] px-2 py-3 text-right">Выставлено</th><th className="w-[11%] px-2 py-3 text-right">Оплачено</th><th className="w-[12%] px-2 py-3 text-right">Долг</th><th className="w-[15%] px-2 py-3">Статус</th><th className="w-[16%] px-2 py-3 text-right">Действия</th></tr>
+              <tr><th className="w-10 px-2 py-3"></th><th className="w-[23%] px-2 py-3">Проект, компания и договор</th><th className="w-[10%] px-2 py-3 text-right">Стоимость</th><th className="w-[10%] px-2 py-3 text-right">Выставлено</th><th className="w-[10%] px-2 py-3 text-right">Оплачено</th><th className="w-[11%] px-2 py-3 text-right">Долг</th><th className="w-[22%] px-2 py-3">Что сделать и до какого срока</th><th className="w-[14%] px-2 py-3 text-right">Действия</th></tr>
             </thead>
             <tbody className="divide-y">
               {filteredRows.map((row) => {
@@ -591,7 +676,7 @@ export default function Accounting() {
                     <td className="px-2 py-4 text-right"><div className="font-medium tabular-nums" title={formatMoney(row.summary.invoiceAmount, row.summary.currency)}>{formatCompactMoney(row.summary.invoiceAmount, row.summary.currency)}</div><div className="text-xs text-muted-foreground">{row.summary.invoices.length} сч.</div></td>
                     <td className="px-2 py-4 text-right"><div className="font-semibold tabular-nums text-emerald-600" title={formatMoney(row.summary.paidAmount, row.summary.currency)}>{formatCompactMoney(row.summary.paidAmount, row.summary.currency)}</div><div className="text-xs text-muted-foreground">{row.summary.payments.length} плат.</div></td>
                     <td className="px-2 py-4 text-right"><div className={`font-bold tabular-nums ${row.summary.receivableAmount > 0 ? 'text-red-600' : 'text-emerald-600'}`} title={formatMoney(row.summary.receivableAmount, row.summary.currency)}>{formatCompactMoney(row.summary.receivableAmount, row.summary.currency)}</div><div className="mt-1 text-[11px] text-muted-foreground" title={formatMoney(row.summary.contractBalanceAmount, row.summary.currency)}>договор: {formatCompactMoney(row.summary.contractBalanceAmount, row.summary.currency)}</div></td>
-                    <td className="px-2 py-4"><Badge variant="outline" className={`whitespace-normal text-left leading-tight ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge>{row.deadline && <div className="mt-2 text-xs text-muted-foreground">срок {formatDate(row.deadline)}</div>}</td>
+                    <td className="px-2 py-4"><div className="font-semibold leading-tight">{row.summary.nextActionLabel}</div><div className="mt-2"><DeadlineBadge urgency={row.summary.deadlineUrgency} days={row.summary.daysUntilNextAction} /></div>{row.summary.nextActionDeadline && <div className="mt-1 text-xs font-medium">до {formatDate(row.summary.nextActionDeadline)}</div>}<Badge variant="outline" className={`mt-2 whitespace-normal text-left text-[11px] leading-tight ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge>{row.deadline && <div className="mt-2 text-[11px] text-muted-foreground">Срок проекта: {formatDate(row.deadline)}</div>}</td>
                     <td className="px-2 py-4"><div className="ml-auto grid max-w-[128px] gap-1"><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'invoice')}><ReceiptText className="mr-1 h-3.5 w-3.5" />Счёт</Button><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'avr')}><Send className="mr-1 h-3.5 w-3.5" />АВР</Button><Button size="sm" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'payment')}><Banknote className="mr-1 h-3.5 w-3.5" />Оплата</Button></div></td>
                   </tr>,
                   isExpanded && <tr key={`${row.project.id}:details`}><td colSpan={8} className="bg-muted/20 p-4"><AccountingDetails row={row} savingKey={savingKey} onStatus={updateDocumentStatus} onSendEmail={sendDocumentEmail} onRemove={removeRecord} onOpenFile={openFile} onSaveContact={saveContact} /></td></tr>,
@@ -605,7 +690,7 @@ export default function Accounting() {
       <div className="space-y-3 md:hidden">
         {filteredRows.map((row) => {
           const isExpanded = Boolean(expanded[row.project.id]);
-          return <Card key={row.project.id}><CardContent className="p-4"><button type="button" className="w-full text-left" onClick={() => setExpanded((value) => ({ ...value, [row.project.id]: !isExpanded }))}><div className="flex items-start justify-between gap-2"><div><div className="font-semibold">{row.clientName}</div><div className="mt-1 text-xs text-muted-foreground">{row.companyName} · № {row.contractNumber}</div></div>{isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}</div><Badge variant="outline" className={`mt-3 ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">Стоимость</div><b>{formatMoney(row.summary.contractAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Выставлено</div><b>{formatMoney(row.summary.invoiceAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Оплачено</div><b className="text-emerald-600">{formatMoney(row.summary.paidAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Задолженность</div><b className={row.summary.receivableAmount ? 'text-red-600' : 'text-emerald-600'}>{formatMoney(row.summary.receivableAmount, row.summary.currency)}</b></div></div></button><div className="mt-4 grid grid-cols-3 gap-2"><Button size="sm" variant="outline" onClick={() => openEntry(row, 'invoice')}>Счёт</Button><Button size="sm" variant="outline" onClick={() => openEntry(row, 'avr')}>АВР</Button><Button size="sm" onClick={() => openEntry(row, 'payment')}>Оплата</Button></div>{isExpanded && <div className="mt-4 border-t pt-4"><AccountingDetails row={row} savingKey={savingKey} onStatus={updateDocumentStatus} onSendEmail={sendDocumentEmail} onRemove={removeRecord} onOpenFile={openFile} onSaveContact={saveContact} /></div>}</CardContent></Card>;
+          return <Card key={row.project.id}><CardContent className="p-4"><button type="button" className="w-full text-left" onClick={() => setExpanded((value) => ({ ...value, [row.project.id]: !isExpanded }))}><div className="flex items-start justify-between gap-2"><div><div className="font-semibold">{row.clientName}</div><div className="mt-1 text-xs text-muted-foreground">{row.companyName} · № {row.contractNumber}</div></div>{isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}</div><div className="mt-3 rounded-lg border bg-muted/30 p-3"><div className="text-xs uppercase tracking-wide text-muted-foreground">Следующее действие</div><div className="mt-1 font-semibold">{row.summary.nextActionLabel}</div><div className="mt-2 flex flex-wrap items-center gap-2"><DeadlineBadge urgency={row.summary.deadlineUrgency} days={row.summary.daysUntilNextAction} />{row.summary.nextActionDeadline && <span className="text-sm font-medium">до {formatDate(row.summary.nextActionDeadline)}</span>}</div>{row.deadline && <div className="mt-2 text-xs text-muted-foreground">Срок проекта: {formatDate(row.deadline)}</div>}</div><Badge variant="outline" className={`mt-3 ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">Стоимость</div><b>{formatMoney(row.summary.contractAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Выставлено</div><b>{formatMoney(row.summary.invoiceAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Оплачено</div><b className="text-emerald-600">{formatMoney(row.summary.paidAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Задолженность</div><b className={row.summary.receivableAmount ? 'text-red-600' : 'text-emerald-600'}>{formatMoney(row.summary.receivableAmount, row.summary.currency)}</b></div></div></button><div className="mt-4 grid grid-cols-3 gap-2"><Button size="sm" variant="outline" onClick={() => openEntry(row, 'invoice')}>Счёт</Button><Button size="sm" variant="outline" onClick={() => openEntry(row, 'avr')}>АВР</Button><Button size="sm" onClick={() => openEntry(row, 'payment')}>Оплата</Button></div>{isExpanded && <div className="mt-4 border-t pt-4"><AccountingDetails row={row} savingKey={savingKey} onStatus={updateDocumentStatus} onSendEmail={sendDocumentEmail} onRemove={removeRecord} onOpenFile={openFile} onSaveContact={saveContact} /></div>}</CardContent></Card>;
         })}
       </div>
 
@@ -617,7 +702,7 @@ export default function Accounting() {
           <div className="grid gap-4 py-2">
             {entry?.kind !== 'payment' && <div className="grid gap-2"><Label htmlFor="entry-number">{entry?.kind === 'invoice' ? 'Номер счёта' : 'Номер АВР'}</Label><Input id="entry-number" value={number} onChange={(event) => setNumber(event.target.value)} placeholder={entry?.kind === 'invoice' ? 'СФ-123' : 'АВР-123'} /></div>}
             <div className="grid grid-cols-2 gap-3"><div className="grid gap-2"><Label htmlFor="entry-date">Дата</Label><Input id="entry-date" type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} /></div><div className="grid gap-2"><Label htmlFor="entry-amount">Сумма</Label><Input id="entry-amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" /></div></div>
-            {entry?.kind === 'invoice' && <div className="grid gap-2"><Label htmlFor="due-date">Оплатить до</Label><Input id="due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></div>}
+            {entry?.kind !== 'payment' && <div className="grid gap-2"><Label htmlFor="due-date">{entry?.kind === 'invoice' ? 'Оплатить до' : 'Получить подписанный АВР до'}</Label><Input id="due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></div>}
             {entry?.kind === 'payment' && <div className="grid gap-2"><Label>Тип оплаты</Label><Select value={paymentKind} onValueChange={(value) => setPaymentKind(value as AccountingPaymentKind)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(ACCOUNTING_PAYMENT_KIND_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>}
             {entry?.kind === 'payment' && <div className="grid gap-2"><Label htmlFor="payment-reference">Номер платёжного поручения / назначение</Label><Input id="payment-reference" value={reference} onChange={(event) => setReference(event.target.value)} placeholder="ПП №…, оплата по договору…" /></div>}
             <div className="grid gap-2"><Label htmlFor="entry-file">Файл {entry?.kind === 'payment' ? 'платёжного документа' : entry?.kind === 'invoice' ? 'счёта' : 'АВР'} (необязательно)</Label><Input id="entry-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] || null)} /></div>
@@ -667,7 +752,7 @@ function AccountingDetails({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border bg-background p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><FileCheck2 className="h-4 w-4" />Счета и АВР</div>{documents.length === 0 ? <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">Документы ещё не добавлены.</div> : <div className="space-y-2">{documents.map((document) => <div key={document.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-medium">{document.type === 'invoice' ? 'Счёт' : 'АВР'} № {document.number || 'без номера'}</div><div className="text-xs text-muted-foreground">{formatDate(document.issueDate)} · {formatMoney(document.amount, row.summary.currency)}{document.dueDate ? ` · оплатить до ${formatDate(document.dueDate)}` : ''}</div></div><Badge variant="outline">{ACCOUNTING_DOCUMENT_STATUS_LABELS[document.status]}</Badge></div><div className="mt-2 flex flex-wrap gap-1.5">{document.file && <Button size="sm" variant="ghost" onClick={() => onOpenFile(document.file)}><Download className="mr-1 h-3.5 w-3.5" />{document.file.fileName || 'Файл'}</Button>}{document.file && row.summary.ledger.contact?.email && document.status !== 'sent' && document.status !== 'signed' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onSendEmail(row, document)}><Send className="mr-1 h-3.5 w-3.5" />Отправить email</Button>}{document.status === 'draft' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'issued')}>Выставлен</Button>}{document.status === 'issued' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'sent')}>Уже отправлен</Button>}{document.type === 'avr' && document.status === 'sent' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'signed')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Подписан</Button>}<Button size="sm" variant="ghost" className="text-destructive" disabled={Boolean(savingKey)} onClick={() => onRemove(row, 'document', document.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>{document.notes && <div className="mt-2 text-xs text-muted-foreground">{document.notes}</div>}</div>)}</div>}</div>
+        <div className="rounded-xl border bg-background p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><FileCheck2 className="h-4 w-4" />Счета и АВР</div>{documents.length === 0 ? <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">Документы ещё не добавлены.</div> : <div className="space-y-2">{documents.map((document) => { const documentDeadline = accountingDeadlineUrgency(document.dueDate || '', today(), document.status === 'signed' || document.status === 'cancelled'); return <div key={document.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-medium">{document.type === 'invoice' ? 'Счёт' : 'АВР'} № {document.number || 'без номера'}</div><div className="text-xs text-muted-foreground">{formatDate(document.issueDate)} · {formatMoney(document.amount, row.summary.currency)}{document.dueDate ? ` · ${document.type === 'invoice' ? 'оплатить' : 'подписать'} до ${formatDate(document.dueDate)}` : ''}</div><div className="mt-1"><DeadlineBadge urgency={documentDeadline.urgency} days={documentDeadline.days} /></div></div><Badge variant="outline">{ACCOUNTING_DOCUMENT_STATUS_LABELS[document.status]}</Badge></div><div className="mt-2 flex flex-wrap gap-1.5">{document.file && <Button size="sm" variant="ghost" onClick={() => onOpenFile(document.file)}><Download className="mr-1 h-3.5 w-3.5" />{document.file.fileName || 'Файл'}</Button>}{document.file && row.summary.ledger.contact?.email && document.status !== 'sent' && document.status !== 'signed' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onSendEmail(row, document)}><Send className="mr-1 h-3.5 w-3.5" />Отправить email</Button>}{document.status === 'draft' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'issued')}>Выставлен</Button>}{document.status === 'issued' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'sent')}>Уже отправлен</Button>}{document.type === 'avr' && document.status === 'sent' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'signed')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Подписан</Button>}<Button size="sm" variant="ghost" className="text-destructive" disabled={Boolean(savingKey)} onClick={() => onRemove(row, 'document', document.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>{document.notes && <div className="mt-2 text-xs text-muted-foreground">{document.notes}</div>}</div>; })}</div>}</div>
         <div className="rounded-xl border bg-background p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><Banknote className="h-4 w-4" />Фактические оплаты</div>{payments.length === 0 ? <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">Оплаты ещё не внесены.</div> : <div className="space-y-2">{payments.map((payment: AccountingPayment) => <div key={payment.id} className="flex items-start justify-between gap-3 rounded-lg border p-3"><div><div className="font-semibold text-emerald-600">+ {formatMoney(payment.amount, row.summary.currency)}</div><div className="text-xs text-muted-foreground">{formatDate(payment.date)} · {ACCOUNTING_PAYMENT_KIND_LABELS[payment.kind]}</div>{payment.reference && <div className="mt-1 text-xs">{payment.reference}</div>}{payment.file && <Button size="sm" variant="ghost" className="mt-1 h-7 px-1" onClick={() => onOpenFile(payment.file)}><Download className="mr-1 h-3.5 w-3.5" />Документ</Button>}</div><Button size="sm" variant="ghost" className="text-destructive" disabled={Boolean(savingKey)} onClick={() => onRemove(row, 'payment', payment.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>)}</div>}</div>
       </div>
       <ContactEditor row={row} saving={savingKey === `${row.project.id}:contact`} onSave={onSaveContact} />
