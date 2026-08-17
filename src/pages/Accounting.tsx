@@ -64,6 +64,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { projectCompanyName } from '@/types/companies';
 
 type EntryKind = AccountingDocumentType | 'payment';
 type AccountingRow = {
@@ -128,18 +129,6 @@ function formatCompactMoney(value: number, currency = 'KZT'): string {
   if (Math.abs(amount) >= 1_000_000) return `${format(amount / 1_000_000)} млн ${symbol}`;
   if (Math.abs(amount) >= 1_000) return `${format(amount / 1_000)} тыс. ${symbol}`;
   return `${format(amount)} ${symbol}`;
-}
-
-function companyName(project: any): string {
-  const notes = projectNotes(project);
-  return String(
-    notes.ourCompany
-    || notes.companyName
-    || project.ourCompany
-    || project.companyName
-    || project.company
-    || 'Компания не указана',
-  ).trim();
 }
 
 function clientName(project: any): string {
@@ -238,7 +227,7 @@ export default function Accounting() {
       project,
       summary: calculateAccountingProject(project),
       clientName: clientName(project),
-      companyName: companyName(project),
+      companyName: projectCompanyName(project),
       contractNumber: String(contract?.number || '—'),
       contractDate: String(contract?.date || ''),
       deadline: String(contract?.serviceEndDate || project.deadline || ''),

@@ -6,6 +6,7 @@ import {
   projectForFinanceCalculation,
 } from '@/lib/projectLegacyCompatibility';
 import { calculateProjectFinances } from '@/types/project-v3';
+import { projectCompanyName } from '@/types/companies';
 
 export interface BonusSeason {
   key: string;
@@ -161,20 +162,6 @@ function projectId(project: any): string {
 
 function projectName(project: any): string {
   return text(project?.name, project?.notes?.name, project?.clientName, project?.notes?.clientName, 'Без названия');
-}
-
-function companyName(project: any): string {
-  return text(
-    project?.ourCompany?.name,
-    project?.ourCompany,
-    project?.companyName,
-    project?.company?.name,
-    project?.company,
-    project?.notes?.ourCompany?.name,
-    project?.notes?.ourCompany,
-    project?.notes?.companyName,
-    'Компания не указана',
-  );
 }
 
 function projectCurrency(project: any): string {
@@ -495,7 +482,7 @@ export function buildBonusLedger({
         key,
         projectId: id,
         projectName: projectName(project),
-        companyName: companyName(project),
+        companyName: projectCompanyName(project),
         currency,
         employeeId,
         employeeName: employeeDisplayName(employee) || teamMemberName(member) || text(bonus?.employeeName, 'Неизвестный сотрудник'),
@@ -547,7 +534,7 @@ export function buildBonusLedger({
       key,
       projectId: id,
       projectName: projectName(project),
-      companyName: companyName(project),
+      companyName: projectCompanyName(project),
       currency: paymentCurrency.get(key) || projectCurrency(project),
       employeeId,
       employeeName: employeeDisplayName(employee) || teamMemberName(member) || 'Неизвестный сотрудник',

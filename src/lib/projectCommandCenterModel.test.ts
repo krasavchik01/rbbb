@@ -48,7 +48,7 @@ describe('buildProjectCommandCenterModel', () => {
       },
     });
 
-    expect(model.companyName).toBe('RB Partners');
+    expect(model.companyName).toBe('ТОО RB Partners IT Audit');
     expect(model.clientName).toBe('ТОО «Клиент»');
     expect(model.serviceLabel).toBe('Финансовый аудит');
     expect(model.contract.subject).toBe('Аудит финансовой отчётности за 6 месяцев 2024 года');

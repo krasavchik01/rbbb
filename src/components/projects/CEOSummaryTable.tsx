@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PROJECT_ROLES } from '@/types/roles';
+import { projectCompanyName } from '@/types/companies';
 import {
   ChevronDown,
   ChevronUp,
@@ -401,10 +402,7 @@ export function CEOSummaryTable({
       // Если у проекта есть свой finances.bonusPercent — он уже учтён в r,
       // но мы хотим, чтобы override из этого UI имел приоритет. Поэтому
       // если CEO выставил override.bonusPercent — пересчитываем.
-      const company =
-        getCompanyDisplayName(project?.companyName || project?.company || project?.ourCompany || '') ||
-        project?.companyName ||
-        '—';
+      const company = projectCompanyName(project, undefined, '—');
       const amt = getProjectAmount(project);
       return {
         ...r,

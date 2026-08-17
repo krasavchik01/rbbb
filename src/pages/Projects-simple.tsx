@@ -39,6 +39,7 @@ import { useTasks } from "@/hooks/useTasks";
 import { ProjectCurrency, ProjectStage, CURRENCY_SYMBOLS } from "@/types/project-v3";
 import { getProjectStage, getProjectStageLabel, type ProjectStage as RoadmapProjectStage } from "@/lib/projectStages";
 import { getAuditPeriods, getDisplayAuditPeriods, groupProjectsByAuditRoot, type AuditPeriod, type AuditPeriodType } from "@/lib/auditPeriods";
+import { projectCompanyName as canonicalProjectCompanyName } from "@/types/companies";
 
 // Простые типы
 interface SimpleProject {
@@ -553,23 +554,6 @@ export default function Projects() {
     return Array.from(years).sort((a, b) => Number(b) - Number(a));
   }, [realProjects]);
 
-  // Маппинг компаний для красивого отображения
-  const companyDisplayMap: Record<string, string> = {
-    'MAK': 'ТОО МАК',
-    'МАК': 'ТОО МАК',
-    'ТОО МАК': 'ТОО МАК',
-    'МКФ': 'ТОО МКФ',
-    'ТОО МКФ': 'ТОО МКФ',
-    'ЧК': 'Частная компания',
-    'Parker Consulting & Appraisal': 'Parker Consulting & Appraisal',
-    'Parker Russell': 'Parker Russell',
-    'RB Partners': 'RB Partners',
-    'RB Partners IT Audit': 'RB Partners IT Audit',
-    'Russell Bedford': 'Russell Bedford',
-    'Anderson KZ': 'Anderson KZ',
-    'Андерсон КЗ': 'Anderson KZ',
-  };
-
   const availableCompanies = useMemo(() => {
     const companies = new Set<string>();
     realProjects.forEach(project => {
@@ -581,16 +565,14 @@ export default function Projects() {
       }
     });
     return Array.from(companies).sort((a, b) => {
-      const displayA = companyDisplayMap[a] || a;
-      const displayB = companyDisplayMap[b] || b;
-      return displayA.localeCompare(displayB, 'ru');
+      return a.localeCompare(b, 'ru');
     });
   }, [realProjects]);
 
-  // Функция для получения красивого названия компании
+  // Единое каноническое название из общего справочника компаний.
   const getCompanyDisplayName = useCallback((company: string): string => {
-    return companyDisplayMap[company] || company;
-  }, []);
+    return canonicalProjectCompanyName({ companyName: company }, appSettings.companies, company);
+  }, [appSettings.companies]);
 
   // Агрессивная функция получения суммы БЕЗ НДС - проверяет ВСЕ возможные места
   const getProjectAmount = useCallback((project: any): { amount: number | null; currency: string } => {
@@ -1572,7 +1554,7 @@ export default function Projects() {
     const projectId = project.id || project.notes?.id;
     const projectName = project.name || project.client?.name || 'Без названия';
     const projectStatus = project.status || 'new';
-    const projectCompany = project.companyName || project.company || project.ourCompany || 'Не указана';
+    const projectCompany = projectCompanyName(project) || 'Не указана';
     const projectCompletion = project.completionPercent || project.completion || 0;
     const projectDeadline = project.contract?.serviceEndDate || project.deadline || new Date().toISOString();
     const projectTeam = project.team?.length || 1;
@@ -2984,7 +2966,7 @@ export default function Projects() {
                         </td>
 
                         <td className="px-2 py-2 max-w-[120px]">
-                          <span className="text-xs truncate block" title={project.companyName || project.company || project.ourCompany || ''}>{project.companyName || project.company || project.ourCompany || '—'}</span>
+                          <span className="text-xs truncate block" title={projectCompanyName(project)}>{projectCompanyName(project) || '—'}</span>
                         </td>
 
                         {/* ФИНАНСЫ (без НДС + с НДС в одной ячейке) */}
@@ -3507,12 +3489,5 @@ export default function Projects() {
 }
 
 function projectCompanyName(project: any): string {
-  const values = [
-    project?.companyName,
-    project?.ourCompany,
-    project?.company,
-    project?.notes?.companyName,
-    project?.notes?.ourCompany,
-  ];
-  return values.find((value) => typeof value === 'string' && value.trim()) || '';
+  return canonicalProjectCompanyName(project, undefined, '');
 }

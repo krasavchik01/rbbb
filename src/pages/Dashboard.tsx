@@ -18,6 +18,7 @@ import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import { supabase } from '@/integrations/supabase/client';
 import { buildDashboardMetrics } from '@/lib/dashboardMetrics';
 import { buildProjectStageMetrics } from '@/lib/projectStages';
+import { projectCompanyName } from '@/types/companies';
 import {
   TrendingUp,
   Users,
@@ -325,7 +326,7 @@ export default function Dashboard() {
     // Применяем фильтр по ТОО МАК (если галочка не стоит, показываем только ТОО МАК)
     if (!showOtherCompanies) {
       return baseProjects.filter((p: any) => {
-        const companyName = p.client?.name || p.clientName || p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || p.client || '';
+        const companyName = projectCompanyName(p, undefined, '');
         return typeof companyName === 'string' && companyName.toLowerCase().includes('мак');
       });
     }
@@ -398,7 +399,7 @@ export default function Dashboard() {
 
     // Проекты по компаниям (клиентам или внутренним)
     const projectsByCompany = userProjects.reduce((acc: any, p: any) => {
-      const company = p.client?.name || p.clientName || p.companyName || p.ourCompany || p.company || p.notes?.companyName || p.notes?.ourCompany || p.client || 'Не указана';
+      const company = projectCompanyName(p);
       acc[company] = (acc[company] || 0) + 1;
       return acc;
     }, {});
@@ -581,7 +582,7 @@ export default function Dashboard() {
           statusLabel = 'Завершён';
           statusColor = 'text-blue-700 bg-blue-500/15';
         }
-        const company = notes?.companyName || notes?.ourCompany || notes?.client?.name || p.companyName || p.ourCompany || '—';
+        const company = projectCompanyName(p, undefined, '—');
         const createdAt = p.created_at ? new Date(p.created_at) : null;
         const daysAgo = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / 86400000) : null;
         return {

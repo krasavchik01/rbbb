@@ -4,6 +4,7 @@
 
 import type * as XLSXNs from 'xlsx';
 import { supabaseDataStore } from '@/lib/supabaseDataStore';
+import { findCompanyByAnyValue, projectCompanyName } from '@/types/companies';
 
 // xlsx грузим динамически — это самый тяжёлый пакет в проекте (~425 KB).
 // Без этого xlsx-chunk подтягивался вместе со страницей /projects, даже когда
@@ -106,7 +107,7 @@ export async function exportProjectsToExcel(projects: any[], filename: string = 
       'Сумма (без НДС)': amount,
       'Сумма': amount, // Дублируем для обратной совместимости
       'Валюта': project.currency || 'KZT',
-      'Наша компания': project.companyName || project.ourCompany || '',
+      'Наша компания': projectCompanyName(project, undefined, ''),
       'Консорциум?': project.isConsortium ? 'Да' : 'Нет',
       'Доли консорциума': project.isConsortium && project.consortiumMembers
         ? project.consortiumMembers.map((m: any) => `${m.companyName}: ${m.sharePercentage}%`).join('; ')
@@ -483,9 +484,10 @@ export async function importProjectsFromExcel(file: File): Promise<{ projects: a
                   amountConsortium = Number(amountRawConsortium) || 0;
                 }
                 const amount = amountConsortium;
+                const canonicalCompany = findCompanyByAnyValue(companyName);
                 return {
-                  companyId: `company-${companyName}`,
-                  companyName,
+                  companyId: canonicalCompany?.id || '',
+                  companyName: canonicalCompany?.name || companyName,
                   sharePercentage,
                   shareAmount: (amount * sharePercentage) / 100,
                 };
@@ -598,6 +600,7 @@ export async function importProjectsFromExcel(file: File): Promise<{ projects: a
             const contractDateISO = excelDateToISO(contractDateRaw) || new Date().toISOString().split('T')[0];
             const serviceEndDateISO = excelDateToISO(serviceEndDateRaw) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
             const serviceStartDateISO = new Date().toISOString().split('T')[0]; // Начало = сегодня
+            const importedCompany = findCompanyByAnyValue(row['Наша компания']);
 
             const project = {
               id: `proj_import_${Date.now()}_${index}`,
@@ -606,9 +609,9 @@ export async function importProjectsFromExcel(file: File): Promise<{ projects: a
               type: 'audit' as const,
               
               isConsortium,
-              companyId: isConsortium ? undefined : 'comp-rb-a',
-              companyName: row['Наша компания'] || '',
-              ourCompany: row['Наша компания'] || '',
+              companyId: isConsortium ? undefined : importedCompany?.id,
+              companyName: isConsortium ? 'Консорциум' : (importedCompany?.name || row['Наша компания'] || ''),
+              ourCompany: isConsortium ? 'Консорциум' : (importedCompany?.name || row['Наша компания'] || ''),
               consortiumMembers,
               
               // status удален - он будет в notes

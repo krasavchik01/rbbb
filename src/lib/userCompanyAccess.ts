@@ -2,7 +2,14 @@
 // Хранится в Supabase таблице user_company_access
 
 import { supabase } from '@/integrations/supabase/client';
-import { findCompanyByAnyValue, normalizeCompanyId, normalizeCompanyKey } from '@/types/companies';
+import {
+  findCompanyByAnyValue,
+  normalizeCompanyId,
+  normalizeCompanyKey,
+  projectCompanyCandidates,
+  projectCompanyName,
+  resolveProjectCompany,
+} from '@/types/companies';
 
 export interface UserCompanyAccessMap {
   [userId: string]: string[]; // массив ID компаний из appSettings.companies
@@ -104,30 +111,9 @@ export function projectMatchesAllowedCompanies(
   project: any,
   allowedNames: string[]
 ): boolean {
-  // notes может быть строкой (raw Supabase) или объектом (после маппинга)
-  let notes = project.notes;
-  if (typeof notes === 'string') {
-    try { notes = JSON.parse(notes); } catch { notes = null; }
-  }
-
-  // Извлекаем название компании из проекта (разные поля)
-  const rawName: string =
-    notes?.companyId ||
-    notes?.companyName ||
-    notes?.ourCompany ||
-    notes?.company ||
-    project.companyId ||
-    notes?.client?.name ||
-    project.client?.name ||
-    project.clientName ||
-    project.companyName ||
-    project.ourCompany ||
-    project.company ||
-    project.client ||
-    '';
-
-  if (!rawName || typeof rawName !== 'string') return false;
-
+  const company = resolveProjectCompany(project);
+  const rawName = company?.name || projectCompanyName(project, undefined, '');
+  if (!rawName) return false;
   const normalized = normalizeCompanyName(rawName);
   return allowedNames.some(allowed => {
     const normalizedAllowed = normalizeCompanyName(allowed);
@@ -141,45 +127,11 @@ export function projectMatchesAllowedCompanies(
  * запись из очереди назначения компании.
  */
 export function projectHasMissingCompanyIdentity(project: any): boolean {
-  let notes = project?.notes;
-  if (typeof notes === 'string') {
-    try { notes = JSON.parse(notes); } catch { notes = null; }
-  }
-
-  const companyIdentity = [
-    notes?.companyId,
-    notes?.companyName,
-    notes?.ourCompany,
-    notes?.company,
-    project?.companyId,
-    project?.companyName,
-    project?.ourCompany,
-    project?.company,
-  ].find((value) => typeof value === 'string' && value.trim().length > 0);
-
-  return !companyIdentity;
+  return projectCompanyCandidates(project).length === 0;
 }
 
 export function legacyProjectCompanyLabel(project: any): string | null {
-  let notes = project?.notes;
-  if (typeof notes === 'string') {
-    try { notes = JSON.parse(notes); } catch { notes = null; }
-  }
-
-  const companyIdentity = [
-    notes?.companyId,
-    notes?.companyName,
-    notes?.ourCompany,
-    notes?.company,
-    project?.companyId,
-    project?.companyName,
-    project?.ourCompany,
-    project?.company,
-  ].find((value) => typeof value === 'string' && value.trim().length > 0);
-
-  return String(companyIdentity || '').trim().toLowerCase() === 'comp-rb-a'
-    ? 'ТОО МАК'
-    : null;
+  return resolveProjectCompany(project)?.name || null;
 }
 
 /**

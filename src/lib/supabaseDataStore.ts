@@ -19,6 +19,7 @@ import type {
   CanonicalProjectNotes,
   CanonicalTeamMember,
 } from '@/types/project-domain';
+import { resolveProjectCompany } from '@/types/companies';
 
 // Типы из Supabase
 type SupabaseEmployee = Database['public']['Tables']['employees']['Row'];
@@ -77,6 +78,7 @@ export interface Project extends Omit<SupabaseProject, 'notes' | 'status'> {
   completionPercent?: number;
   completion?: number;
   companyName?: string;
+  companyId?: string;
   company?: string;
   currency?: string;
   files?: any[];
@@ -148,9 +150,11 @@ export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
   const clientName = typeof notes.clientName === 'string'
     ? notes.clientName
     : typeof client.name === 'string' ? client.name : undefined;
-  const companyName = typeof notes.companyName === 'string'
+  const rawCompanyName = typeof notes.companyName === 'string'
     ? notes.companyName
     : typeof notes.ourCompany === 'string' ? notes.ourCompany : undefined;
+  const canonicalCompany = resolveProjectCompany({ notes });
+  const companyName = canonicalCompany?.name || rawCompanyName;
 
   return {
     ...proj,
@@ -170,7 +174,8 @@ export function mapSupabaseProjectRow(proj: SupabaseProject): Project {
       || Number(notes.amountWithoutVAT)
       || Number(notes.amount)
       || 0,
-    ourCompany: typeof notes.ourCompany === 'string' ? notes.ourCompany : companyName,
+    ourCompany: companyName,
+    companyId: canonicalCompany?.id || (typeof notes.companyId === 'string' ? notes.companyId : undefined),
     companyName,
     company: companyName,
     currency: typeof contract.currency === 'string'

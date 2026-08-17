@@ -25,7 +25,7 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
 import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPermissions';
-import { legacyProjectCompanyLabel } from "@/lib/userCompanyAccess";
+import { projectCompanyId, projectCompanyName } from "@/types/companies";
 
 import { supabase } from "@/integrations/supabase/client";
 import { notifyReadyForPartnerApproval, notifyProjectReadyForCeoBonuses, notifyTeamAssembled, notifyTeamMemberAdded } from "@/lib/projectNotifications";
@@ -340,23 +340,11 @@ export default function ProjectWorkspace() {
     [appSettings.companies],
   );
   const currentProjectCompany = useMemo(() => {
-    const notes = typeof project?.notes === 'string'
-      ? (() => { try { return JSON.parse(project.notes); } catch { return {}; } })()
-      : project?.notes || {};
     return {
-      id: String(project?.companyId || notes?.companyId || ''),
-      name: String(
-        project?.companyName
-        || project?.ourCompany
-        || project?.company
-        || notes?.companyName
-        || notes?.ourCompany
-        || notes?.company
-        || legacyProjectCompanyLabel(project)
-        || '',
-      ),
+      id: projectCompanyId(project, activeCompanies),
+      name: projectCompanyName(project, activeCompanies, ''),
     };
-  }, [project]);
+  }, [activeCompanies, project]);
 
   useEffect(() => {
     const matched = activeCompanies.find((company) => (

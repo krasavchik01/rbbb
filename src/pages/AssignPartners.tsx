@@ -33,6 +33,7 @@ import {
   type TeamMember,
 } from '@/lib/projectTeam';
 import { PROJECT_ROLES, type UserRole } from '@/types/roles';
+import { projectCompanyName } from '@/types/companies';
 import {
   Briefcase,
   Search,
@@ -225,7 +226,7 @@ export default function AssignPartners() {
   const companyOptions = useMemo(() => {
     const set = new Set<string>();
     for (const p of projects as any[]) {
-      const c = p.companyName || p.notes?.companyName || p.notes?.ourCompany;
+      const c = projectCompanyName(p, undefined, '');
       if (c) set.add(c);
     }
     return Array.from(set).sort();
@@ -250,7 +251,7 @@ export default function AssignPartners() {
           if (!partner || partner.assignedBy !== user?.id) return false;
         }
         if (filterCompany !== 'all') {
-          const c = project.companyName || project.notes?.companyName || project.notes?.ourCompany;
+          const c = projectCompanyName(project, undefined, '');
           if (c !== filterCompany) return false;
         }
         if (q) {

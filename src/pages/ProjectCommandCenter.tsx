@@ -28,9 +28,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEmployees, useProjects } from '@/hooks/useSupabaseData';
 import { useAppSettings } from '@/lib/appSettings';
+import { projectCompanyName } from '@/types/companies';
 import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import {
-  legacyProjectCompanyLabel,
   projectHasMissingCompanyIdentity,
   projectMatchesAllowedCompanies,
 } from '@/lib/userCompanyAccess';
@@ -198,20 +198,7 @@ function projectClient(project: any): string {
 }
 
 function projectCompany(project: any): string {
-  const notes = readProjectNotes(project);
-  const value = project?.companyName || project?.ourCompany || project?.company || notes?.companyName || notes?.ourCompany || notes?.company;
-  if (value) return value;
-  const legacyCompany = legacyProjectCompanyLabel(project);
-  if (legacyCompany) return legacyCompany;
-  return (
-    project?.companyName ||
-    project?.ourCompany ||
-    project?.company ||
-    project?.notes?.companyName ||
-    project?.notes?.ourCompany ||
-    project?.notes?.company ||
-    'Не указана'
-  );
+  return projectCompanyName(project, undefined, 'Не указана');
 }
 
 function projectType(project: any): string {

@@ -1,6 +1,7 @@
 import { getAuditPeriods, type AuditPeriod } from '@/lib/auditPeriods';
 import { projectContract, projectFiles, projectNotes } from '@/lib/contractData';
 import { calculateProjectFinances, PROJECT_TYPE_LABELS, type ContractInfo, type ProjectType, type ProjectStage } from '@/types/project-v3';
+import { projectCompanyName } from '@/types/companies';
 
 export type ProjectDataWarningCode =
   | 'missing_company'
@@ -110,13 +111,6 @@ export function businessSeasonForDate(value: unknown): BusinessSeason | null {
     startDate: `${startYear}-10-01`,
     endDate: `${endYear}-09-30`,
   };
-}
-
-function firstCompanyName(project: any, notes: Record<string, any>): string | null {
-  return text(
-    project?.companyName ?? project?.ourCompany?.name ?? project?.ourCompany ?? project?.company?.name ?? project?.company ??
-    notes.companyName ?? notes.ourCompany?.name ?? notes.ourCompany ?? notes.company?.name ?? notes.company,
-  );
 }
 
 function firstClientName(project: any, notes: Record<string, any>): string | null {
@@ -232,7 +226,7 @@ export function buildProjectCommandCenterModel(project: any): ProjectCommandCent
     };
   });
 
-  const companyName = firstCompanyName(project, notes);
+  const companyName = projectCompanyName(project, undefined, '') || null;
   const clientName = firstClientName(project, notes);
   const serviceType = text(project?.type ?? notes.type) as ProjectType | null;
   const serviceLabel = serviceType && PROJECT_TYPE_LABELS[serviceType] ? PROJECT_TYPE_LABELS[serviceType] : text(project?.serviceType ?? notes.serviceType);

@@ -131,9 +131,15 @@ const COMPANY_ID_ALIASES: Record<string, string> = {
   'тоо_мак': 'mak',
   'тоомак': 'mak',
 
-  aplus: 'academy',
-  'a+partners': 'academy',
-  'a_partners': 'academy',
+  aplus: 'mak',
+  'a+partners': 'mak',
+  'a_partners': 'mak',
+  'rb a+partners': 'mak',
+  'rb_a+partners': 'mak',
+  'rb a partners': 'mak',
+  'rb_a_partners': 'mak',
+  'rb aplus': 'mak',
+  rb_aplus: 'mak',
   'rb-academy': 'academy',
   rb_academy: 'academy',
   'rb academy': 'academy',
@@ -233,6 +239,87 @@ export function findCompanyByAnyValue(value: unknown, companies: Company[] = DEF
     ].flatMap(aliasCandidates);
     return keys.some((key) => companyKeys.includes(key));
   });
+}
+
+function projectNotes(project: any): Record<string, any> {
+  const raw = project?.notes;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string' || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function companyValueCandidates(value: unknown): unknown[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [value];
+  const record = value as Record<string, unknown>;
+  return [record.id, record.companyId, record.name, record.companyName, record.fullName, record.inn];
+}
+
+/**
+ * Returns only "our company" values in one authoritative order. Client fields
+ * are intentionally excluded: the customer must never become the executor.
+ */
+export function projectCompanyCandidates(project: any): unknown[] {
+  const notes = projectNotes(project);
+  return [
+    notes.companyId,
+    project?.companyId,
+    notes.ourCompany,
+    project?.ourCompany,
+    notes.companyName,
+    project?.companyName,
+    notes.company,
+    project?.company,
+  ].flatMap(companyValueCandidates).filter((value) => String(value ?? '').trim());
+}
+
+function projectCompanyDisplayCandidates(project: any): unknown[] {
+  const notes = projectNotes(project);
+  return [
+    notes.ourCompany,
+    project?.ourCompany,
+    notes.companyName,
+    project?.companyName,
+    notes.company,
+    project?.company,
+    notes.companyId,
+    project?.companyId,
+  ].flatMap(companyValueCandidates).filter((value) => String(value ?? '').trim());
+}
+
+/** The single canonical project-company resolver used by every HUB screen. */
+export function resolveProjectCompany(
+  project: any,
+  companies: Company[] = DEFAULT_COMPANIES,
+): Company | undefined {
+  const catalog = normalizeCompanies(companies);
+  for (const candidate of projectCompanyCandidates(project)) {
+    const company = findCompanyByAnyValue(candidate, catalog);
+    if (company) return company;
+  }
+  return undefined;
+}
+
+export function projectCompanyId(
+  project: any,
+  companies: Company[] = DEFAULT_COMPANIES,
+): string {
+  return resolveProjectCompany(project, companies)?.id || '';
+}
+
+export function projectCompanyName(
+  project: any,
+  companies: Company[] = DEFAULT_COMPANIES,
+  fallback = 'Компания не указана',
+): string {
+  const canonical = resolveProjectCompany(project, companies);
+  if (canonical) return canonical.name;
+  const raw = projectCompanyDisplayCandidates(project)[0];
+  return String(raw ?? '').trim() || fallback;
 }
 
 export function normalizeCompany(company: Company): Company {
