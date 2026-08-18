@@ -3063,7 +3063,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const reason = !canEditBonusDraft
       ? isImpersonating
         ? 'В режиме проверки роли денежные изменения отключены. Вернитесь в свою учётную запись CEO.'
-        : 'Изменять бонусный расчёт может только генеральный директор.'
+        : 'Изменять бонусный расчёт могут только генеральный директор и администратор.'
       : ids.length > 1
       ? 'Свод объединяет несколько записей. Сначала выберите каноническую запись проекта.'
       : paymentRegistryLoading
@@ -3391,11 +3391,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
-  const setMemberBonusPercent = async (row: (typeof rows)[number], member: any, nextPercent: number): Promise<boolean> => {
+  const resetMemberBonusToFormula = async (row: (typeof rows)[number], member: any): Promise<boolean> => {
     const memberId = teamMemberId(member);
     if (!memberId || !beginBonusMutation(row)) return false;
 
-    const bonusPercent = Math.max(0, Math.min(100, nextPercent));
     setSavingProjectId(`${row.id}:${memberId}`);
     try {
       await updateProject(row.id, (currentProject: any) => {
@@ -3405,7 +3404,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         const currentMember = calculationTeam.find((item: CanonicalTeamMember) => (
           teamMemberId(item) === memberId && teamRole(item) === teamRole(member)
         ));
-        const currentFormulaPercent = Math.max(0, Math.min(100, Number(currentMember?.bonusPercent ?? bonusPercent) || 0));
+        const currentFormulaPercent = Math.max(0, Math.min(100, Number(currentMember?.bonusPercent ?? roleDefaultPercent(teamRole(member))) || 0));
         const existingFinances = {
           ...(currentNotes.finances || {}),
           ...(currentProject?.finances || {}),
@@ -3460,6 +3459,82 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
   };
 
+  const setMemberBonusPercent = async (row: (typeof rows)[number], member: any, nextPercent: number): Promise<boolean> => {
+    const memberId = teamMemberId(member);
+    if (!memberId || !Number.isFinite(nextPercent) || !beginBonusMutation(row)) return false;
+
+    const percent = Number(Math.max(0, Math.min(100, nextPercent)).toFixed(2));
+    setSavingProjectId(`${row.id}:${memberId}`);
+    try {
+      await updateProject(row.id, (currentProject: any) => {
+        const currentNotes = readProjectNotes(currentProject);
+        const existingFinances = {
+          ...(currentNotes.finances || {}),
+          ...(currentProject?.finances || {}),
+        };
+        const calculatedFinances = calculateProjectFinances(projectForFinanceCalculation(currentProject));
+        const bonusPool = Number(
+          existingFinances.bonusPoolOverrideAmount
+          ?? calculatedFinances.totalBonusAmount
+          ?? existingFinances.totalBonusAmount
+          ?? 0,
+        ) || 0;
+        const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
+        const previousPercent = Number(previousBonus.percent ?? member?.bonusPercent ?? 0) || 0;
+        const amount = Math.max(0, Math.round(bonusPool * (percent / 100)));
+        const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
+        const teamBonuses = {
+          ...(existingFinances.teamBonuses || {}),
+          [memberId]: {
+            ...previousBonus,
+            role: teamRole(member),
+            percent,
+            amount,
+            manuallyAdjusted: true,
+            history: [
+              ...history,
+              {
+                type: 'percent_change',
+                by: user?.id,
+                byName: user?.name,
+                at: new Date().toISOString(),
+                from: previousPercent,
+                to: percent,
+              },
+            ].slice(-20),
+          },
+        };
+        const totalAssigned = Object.values(teamBonuses).reduce((sum: number, item: any) => sum + (Number(item?.amount) || 0), 0);
+        const totalContractorsAmount = Number(existingFinances.totalContractorsAmount || 0) || 0;
+        const preExpenseAmount = Number(existingFinances.preExpenseAmount || 0) || 0;
+        const currentAmount = projectAmount(currentProject);
+        const grossProfit = currentAmount - totalAssigned - totalContractorsAmount - preExpenseAmount;
+        return { finances: {
+          ...existingFinances,
+          amountWithoutVAT: currentAmount,
+          totalBonusAmount: bonusPool,
+          teamBonuses,
+          totalPaidBonuses: totalAssigned,
+          totalCosts: totalAssigned + totalContractorsAmount + preExpenseAmount,
+          grossProfit,
+          profitMargin: currentAmount > 0 ? (grossProfit / currentAmount) * 100 : 0,
+        } };
+      });
+      toast({ title: 'Процент бонуса сохранён', description: `${teamName(member)}: ${percent.toFixed(1)}% · ${money.format(Math.round((Number(row.finances.totalBonusAmount || 0) || 0) * (percent / 100)))} ₸` });
+      return true;
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось сохранить процент бонуса',
+        description: error?.message || 'Попробуйте ещё раз',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      endBonusMutation(row.id);
+      setSavingProjectId(null);
+    }
+  };
+
   const setMemberBonusAmount = async (row: (typeof rows)[number], member: any, nextAmount: number): Promise<boolean> => {
     const memberId = teamMemberId(member);
     if (!memberId || !Number.isFinite(nextAmount) || !beginBonusMutation(row)) return false;
@@ -3473,7 +3548,13 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           ...(currentNotes.finances || {}),
           ...(currentProject?.finances || {}),
         };
-        const bonusPool = Number(existingFinances.totalBonusAmount || 0) || 0;
+        const calculatedFinances = calculateProjectFinances(projectForFinanceCalculation(currentProject));
+        const bonusPool = Number(
+          existingFinances.bonusPoolOverrideAmount
+          ?? calculatedFinances.totalBonusAmount
+          ?? existingFinances.totalBonusAmount
+          ?? 0,
+        ) || 0;
         const previousBonus = existingFinances.teamBonuses?.[memberId] || {};
         const previousAmount = Number(previousBonus.amount || 0) || 0;
         const history = Array.isArray(previousBonus.history) ? previousBonus.history : [];
@@ -3508,6 +3589,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         return { finances: {
           ...existingFinances,
           amountWithoutVAT: currentAmount,
+          totalBonusAmount: bonusPool,
           teamBonuses,
           totalPaidBonuses: totalAssigned,
           totalCosts: totalAssigned + totalContractorsAmount + preExpenseAmount,
@@ -4007,7 +4089,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const bonusLockedReason = !canEditBonusDraft
       ? isImpersonating
         ? 'Режим проверки роли: денежные изменения отключены.'
-        : 'Изменение бонусов доступно только генеральному директору.'
+        : 'Изменение бонусов доступно только генеральному директору и администратору.'
       : groupedBonusRow
       ? `Объединено записей: ${rowProjectIds.length}. Сначала выберите каноническую запись.`
       : paymentRegistryLoading
@@ -4317,11 +4399,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           const source = memberSourceById.get(employeeId);
           return source ? setMemberBonusAmount(row, source, amount) : Promise.resolve(false);
         }}
+        onEmployeePercentCommit={(employeeId, percent) => {
+          const source = memberSourceById.get(employeeId);
+          return source ? setMemberBonusPercent(row, source, percent) : Promise.resolve(false);
+        }}
         onResetEmployeeFormula={(employeeId) => {
           const source = memberSourceById.get(employeeId);
           if (!source) return Promise.resolve(false);
-          const formulaPercent = Number(source.bonusPercent ?? roleDefaultPercent(teamRole(source))) || 0;
-          return setMemberBonusPercent(row, source, formulaPercent);
+          return resetMemberBonusToFormula(row, source);
         }}
       />
     );
@@ -5069,7 +5154,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                     }
                   }
                   const compactBonusLockReason = !canEditBonusDraft
-                    ? 'Изменять бонусы может только генеральный директор'
+                    ? 'Изменять бонусы могут только генеральный директор и администратор'
                     : row.finances.bonusPoolManuallyAdjusted === true
                       ? 'Пул задан точной суммой. Откройте свод проекта, чтобы изменить сумму или вернуть формулу'
                       : groupedBonusRow || paymentRegistryLoading || paymentRegistryError || paymentLedger.rowCount > 0

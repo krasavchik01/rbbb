@@ -45,5 +45,7 @@ test('team and hours visibility also gates table columns, search and filters', (
 });
 
 test('employee bonuses remain visible independently from the ordinary team section', () => {
-  assert.match(inlineDetailSource, /\{\(showTeam \|\| showBonuses\) && <TeamMemberLedger/);
+  assert.match(inlineDetailSource, /showBonuses && bonuses \?/);
+  assert.match(inlineDetailSource, /bonusEmployees=\{bonuses\.employees\}/);
+  assert.match(inlineDetailSource, /showTeam && <TeamMemberLedger/);
 });

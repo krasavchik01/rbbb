@@ -386,7 +386,7 @@ export const PERMISSIONS = {
   COMPLETE_PROJECT: ['partner', 'admin'],
   
   // Финансы
-  CHANGE_BONUS_MANUALLY: ['ceo'],
+  CHANGE_BONUS_MANUALLY: ['ceo', 'admin'],
   APPROVE_PAYMENTS: ['ceo'],
   VIEW_PROFIT: ['ceo', 'admin'],
   

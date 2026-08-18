@@ -14,7 +14,7 @@ const TEAM_LEDGER_EXPECTATIONS = [
     name: 'Демо Партнёр',
     role: 'Партнер',
     hours: '0.0 ч',
-    inputValue: '840000',
+    inputValue: '840 000',
     money: /840\s*000\s*₸/,
   },
   {
@@ -22,7 +22,7 @@ const TEAM_LEDGER_EXPECTATIONS = [
     name: 'Демо Менеджер',
     role: 'Менеджер 1',
     hours: '6.0 ч',
-    inputValue: '336000',
+    inputValue: '336 000',
     money: /336\s*000\s*₸/,
   },
   {
@@ -30,7 +30,7 @@ const TEAM_LEDGER_EXPECTATIONS = [
     name: 'Демо Ассистент',
     role: 'Ассистент 1',
     hours: '8.0 ч',
-    inputValue: '100800',
+    inputValue: '100 800',
     money: /100\s*800\s*₸/,
   },
 ] as const;
@@ -93,7 +93,7 @@ test.describe('CEO inline project bonuses', () => {
       await expect(member).toContainText(employee.name);
       await expect(member).toContainText(employee.role);
       await expect(member).toContainText(employee.hours);
-      await expect(member.locator('input')).toHaveValue(employee.inputValue);
+      await expect(member.getByTestId(`employee-bonus-${employee.id}-input`)).toHaveValue(employee.inputValue);
     }
     const rowGeometry = await memberRows.evaluateAll((elements) => elements.map((element) => {
       const rect = element.getBoundingClientRect();
@@ -107,27 +107,51 @@ test.describe('CEO inline project bonuses', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
+  test('tabs keep bonuses readable and move team administration out of the long bonus list', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'ceo');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+    const detail = await openDemoProjectInline(page);
+    const bonusTab = detail.getByTestId('project-tab-bonuses');
+    const teamTab = detail.getByTestId('project-tab-team');
+
+    await expect(bonusTab).toHaveAttribute('aria-selected', 'true');
+    await expect(detail.getByTestId('project-tab-panel-bonuses')).toBeVisible();
+    await expect(detail.getByTestId('project-tab-panel-team')).toHaveCount(0);
+
+    await teamTab.click();
+    await expect(teamTab).toHaveAttribute('aria-selected', 'true');
+    await expect(detail.getByTestId('project-tab-panel-team')).toBeVisible();
+    await expect(detail.getByTestId('project-tab-panel-bonuses')).toHaveCount(0);
+    await expect(detail.getByText('Партнёр и руководитель', { exact: true })).toBeVisible();
+
+    await bonusTab.click();
+    await expect(detail.getByTestId('project-bonus-editor')).toBeVisible();
+    expect(network.mutationRequests).toEqual([]);
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('employee plus changes only that employee and persists after reload', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.goto('/projects');
     await waitForDemoApp(page);
     let detail = await openDemoProjectInline(page);
 
-    const partnerInput = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DEMO_EMPLOYEE_IDS.partner}`).locator('input');
-    const managerInput = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DEMO_EMPLOYEE_IDS.manager}`).locator('input');
-    let assistantInput = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DEMO_EMPLOYEE_IDS.assistant}`).locator('input');
-    await expect(partnerInput).toHaveValue('840000');
-    await expect(managerInput).toHaveValue('336000');
-    await expect(assistantInput).toHaveValue('100800');
+    const partnerInput = detail.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.partner}-input`);
+    const managerInput = detail.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.manager}-input`);
+    let assistantInput = detail.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.assistant}-input`);
+    await expect(partnerInput).toHaveValue('840 000');
+    await expect(managerInput).toHaveValue('336 000');
+    await expect(assistantInput).toHaveValue('100 800');
 
     await detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DEMO_EMPLOYEE_IDS.assistant}`)
       .getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.assistant}-plus`)
       .click();
 
     await expect.poll(() => projectPatchRequests(network).length).toBe(1);
-    await expect(assistantInput).toHaveValue('110800');
-    await expect(partnerInput).toHaveValue('840000');
-    await expect(managerInput).toHaveValue('336000');
+    await expect(assistantInput).toHaveValue('110 800');
+    await expect(partnerInput).toHaveValue('840 000');
+    await expect(managerInput).toHaveValue('336 000');
 
     const patch = projectPatch(network);
     expect(new URL(patch.request.url).searchParams.get('id')).toBe(`eq.${DEMO_PROJECT_ID}`);
@@ -142,8 +166,8 @@ test.describe('CEO inline project bonuses', () => {
     await page.reload();
     await waitForDemoApp(page);
     detail = await openDemoProjectInline(page);
-    assistantInput = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DEMO_EMPLOYEE_IDS.assistant}`).locator('input');
-    await expect(assistantInput).toHaveValue('110800');
+    assistantInput = detail.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.assistant}-input`);
+    await expect(assistantInput).toHaveValue('110 800');
     await expect(detail).toContainText(/1\s*286\s*800\s*₸/);
     expect(projectPatchRequests(network)).toHaveLength(1);
     expect(network.productionMutations).toEqual([]);
@@ -155,7 +179,7 @@ test.describe('CEO inline project bonuses', () => {
     await waitForDemoApp(page);
     const detail = await openDemoProjectInline(page);
     const assistant = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DEMO_EMPLOYEE_IDS.assistant}`);
-    const input = assistant.locator('input');
+    const input = assistant.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.assistant}-input`);
 
     await input.fill('120800');
     await page.getByRole('button', {
@@ -164,13 +188,39 @@ test.describe('CEO inline project bonuses', () => {
     }).click();
 
     await expect.poll(() => projectPatchRequests(network).length).toBe(1);
-    await expect(input).toHaveValue('130800');
+    await expect(input).toHaveValue('130 800');
     const patch = projectPatch(network);
     expect(patch.notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.assistant]).toMatchObject({
       amount: 130_800,
       manuallyAdjusted: true,
     });
     expect(projectPatchRequests(network)).toHaveLength(1);
+    expect(network.productionMutations).toEqual([]);
+  });
+
+  test('employee percent is directly editable and immediately recalculates the exact amount', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'ceo');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+    const detail = await openDemoProjectInline(page);
+    const percentInput = detail.getByTestId(`employee-bonus-percent-${DEMO_EMPLOYEE_IDS.assistant}-input`);
+    const amountInput = detail.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.assistant}-input`);
+
+    await expect(percentInput).toHaveValue('3.0');
+    await expect(amountInput).toHaveValue('100 800');
+    await percentInput.fill('5');
+    await percentInput.press('Enter');
+
+    await expect.poll(() => projectPatchRequests(network).length).toBe(1);
+    const patch = projectPatch(network);
+    expect(patch.notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.assistant]).toMatchObject({
+      percent: 5,
+      amount: 168_000,
+      manuallyAdjusted: true,
+    });
+    expect(patch.notes.finances.totalPaidBonuses).toBe(1_344_000);
+    await expect(percentInput).toHaveValue('5.0');
+    await expect(amountInput).toHaveValue('168 000');
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -215,12 +265,12 @@ test.describe('CEO inline project bonuses', () => {
     let detail = await openDemoProjectInline(page);
 
     let pool = detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`);
-    let poolInput = pool.locator('input');
-    await expect(poolInput).toHaveValue('3360000');
+    let poolInput = pool.getByTestId('project-bonus-pool-input');
+    await expect(poolInput).toHaveValue('3 360 000');
     await pool.getByTestId('project-bonus-pool-plus').click();
 
     await expect.poll(() => projectPatchRequests(network).length).toBe(1);
-    await expect(poolInput).toHaveValue('3410000');
+    await expect(poolInput).toHaveValue('3 410 000');
     const patch = projectPatch(network);
     expect(new URL(patch.request.url).searchParams.get('id')).toBe(`eq.${DEMO_PROJECT_ID}`);
     expect(patch.notes.finances).toMatchObject({
@@ -233,8 +283,8 @@ test.describe('CEO inline project bonuses', () => {
     await waitForDemoApp(page);
     detail = await openDemoProjectInline(page);
     pool = detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`);
-    poolInput = pool.locator('input');
-    await expect(poolInput).toHaveValue('3410000');
+    poolInput = pool.getByTestId('project-bonus-pool-input');
+    await expect(poolInput).toHaveValue('3 410 000');
     expect(projectPatchRequests(network)).toHaveLength(1);
     expect(network.productionMutations).toEqual([]);
   });
@@ -299,17 +349,15 @@ test.describe('CEO inline project bonuses', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('admin can inspect the CEO picture but only the real CEO can change money', async ({ page }) => {
+  test('admin can edit the same clear bonus controls as CEO', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'admin');
     await page.goto('/projects');
     await waitForDemoApp(page);
     const detail = await openDemoProjectInline(page);
 
-    await expect(detail).toContainText('Изменение бонусов доступно только генеральному директору');
     const bonuses = detail.getByTestId('project-bonus-editor');
-    await expect(bonuses).toContainText('Только просмотр');
-    await expect(bonuses.locator('input, button')).toHaveCount(0);
-    await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toHaveCount(0);
+    await expect(bonuses).not.toContainText('Только просмотр');
+    await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toBeVisible();
     const teamLedger = detail.getByTestId('project-team-ledger');
     await expect(teamLedger.locator('[data-team-member-row="true"]')).toHaveCount(TEAM_LEDGER_EXPECTATIONS.length);
     for (const employee of TEAM_LEDGER_EXPECTATIONS) {
@@ -318,10 +366,15 @@ test.describe('CEO inline project bonuses', () => {
       await expect(member).toContainText(employee.name);
       await expect(member).toContainText(employee.role);
       await expect(member).toContainText(employee.hours);
-      await expect(member).toContainText(employee.money);
-      await expect(member.locator('input, button')).toHaveCount(0);
+      await expect(member.getByTestId(`employee-bonus-${employee.id}-input`)).toHaveValue(employee.inputValue);
+      await expect(member.getByTestId(`employee-bonus-percent-${employee.id}-input`)).toBeVisible();
     }
-    expect(projectPatchRequests(network)).toHaveLength(0);
+    await detail.getByTestId(`employee-bonus-${DEMO_EMPLOYEE_IDS.assistant}-plus`).click();
+    await expect.poll(() => projectPatchRequests(network).length).toBe(1);
+    expect(projectPatch(network).notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.assistant]).toMatchObject({
+      amount: 110_800,
+      manuallyAdjusted: true,
+    });
     expect(network.productionMutations).toEqual([]);
   });
 
