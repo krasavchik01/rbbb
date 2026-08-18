@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
   procurement: 'Закупки',
   admin: 'Админы',
   admin_staff: 'Админы',
+  admin_assistant: 'Помощники админа',
   ceo: 'CEO',
   deputy_director: 'Зам. директора',
 };

@@ -10,10 +10,11 @@ const USER_ROLES = [
   'project_leader', 'manager_1', 'manager_2', 'manager_3', 'supervisor_3',
   'supervisor_2', 'supervisor_1', 'tax_specialist_1', 'tax_specialist_2',
   'assistant_3', 'assistant_2', 'assistant_1', 'contractor', 'academy', 'hr',
-  'accountant', 'admin_staff', 'admin',
+  'accountant', 'admin_staff', 'admin_assistant', 'admin',
 ];
 const ALLOWED_ROLES = new Set(USER_ROLES);
 const BONUS_ROLES = new Set(['ceo', 'admin']);
+const NON_CRITICAL_FINANCE_ROLES = new Set(USER_ROLES.filter((role) => role !== 'admin_assistant'));
 const DEFAULT_ACCESS = {
   team: USER_ROLES,
   hours: USER_ROLES,
@@ -32,9 +33,9 @@ function normalizeProjectAccess(value) {
   return {
     team: normalizeRoles(source.team, DEFAULT_ACCESS.team),
     hours: normalizeRoles(source.hours, DEFAULT_ACCESS.hours),
-    contractMoney: normalizeRoles(source.contractMoney, DEFAULT_ACCESS.contractMoney),
+    contractMoney: normalizeRoles(source.contractMoney, DEFAULT_ACCESS.contractMoney, NON_CRITICAL_FINANCE_ROLES),
     bonuses: normalizeRoles(source.bonuses, DEFAULT_ACCESS.bonuses, BONUS_ROLES),
-    accounting: normalizeRoles(source.accounting, DEFAULT_ACCESS.accounting),
+    accounting: normalizeRoles(source.accounting, DEFAULT_ACCESS.accounting, NON_CRITICAL_FINANCE_ROLES),
   };
 }
 

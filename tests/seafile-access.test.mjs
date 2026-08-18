@@ -135,6 +135,28 @@ test('project team member cannot write Seafile project files', async () => {
   );
 });
 
+test('admin assistant cannot inherit critical file access from a project team assignment', async () => {
+  __setSeafileAccessSupabaseFactoryForTests(() => fakeSupabase({
+    employees: [{ id: 'helper-1', email: 'helper@example.com', name: 'Admin Helper', role: 'designer', level: '1' }],
+    projects: [{
+      id: 'project-a',
+      name: 'Project A',
+      partner_id: null,
+      manager_id: null,
+      notes: JSON.stringify({ team: [{ userId: 'helper-1', role: 'assistant_1' }] }),
+    }],
+  }));
+
+  await assert.rejects(
+    () => assertCanAccessSeafileOwner(
+      reqFor({ id: 'helper-1', role: 'admin_assistant', name: 'Admin Helper' }),
+      { projectId: 'project-a' },
+      { mode: 'read' },
+    ),
+    (error) => error?.statusCode === 403 && /critical project files/.test(error.message),
+  );
+});
+
 test('procurement can write Seafile project files by role', async () => {
   __setSeafileAccessSupabaseFactoryForTests(() => fakeSupabase({
     employees: [{ id: 'proc-1', email: 'proc@example.com', name: 'Procurement User', role: 'procurement', level: '1' }],

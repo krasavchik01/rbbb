@@ -26,8 +26,8 @@ const WORKING_STATUSES: ManagedProjectStatus[] = [
 ];
 
 export function projectStatusOptionsForRole(role?: UserRole | string | null) {
-  if (!role || !['ceo', 'admin', 'deputy_director'].includes(role)) return [];
-  const statuses = role === 'deputy_director'
+  if (!role || !['ceo', 'admin', 'admin_assistant', 'deputy_director'].includes(role)) return [];
+  const statuses = role === 'deputy_director' || role === 'admin_assistant'
     ? WORKING_STATUSES
     : [...WORKING_STATUSES, 'completed' as const];
   return statuses.map((value) => ({ value, label: MANAGED_PROJECT_STATUS_LABELS[value] }));

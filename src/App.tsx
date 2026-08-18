@@ -202,7 +202,7 @@ function App() {
             <Route
               path="/user-management"
               element={
-                <ProtectedRoute adminOnly>
+                <ProtectedRoute allowedRoles={ROLE_GROUPS.userOperations}>
                   <Layout>
                     <UserManagement />
                   </Layout>

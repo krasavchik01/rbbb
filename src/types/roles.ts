@@ -26,6 +26,7 @@ export type UserRole =
   | 'hr'                     // HR специалист
   | 'accountant'             // Бухгалтер
   | 'admin_staff'            // Административный персонал
+  | 'admin_assistant'        // Помощник администратора без критичных финансовых данных
   | 'admin';                 // Администратор системы
 
 // Названия ролей на русском
@@ -52,6 +53,7 @@ export const USER_ROLES: UserRole[] = [
   'hr',
   'accountant',
   'admin_staff',
+  'admin_assistant',
   'admin',
 ];
 
@@ -92,6 +94,11 @@ export function normalizeUserRole(
       return 'assistant_1';
     case 'it_admin':
       return 'admin';
+    case 'designer':
+      // The live database already has this non-privileged, currently unused
+      // enum value. It safely stores the restricted admin assistant role
+      // without inheriting legacy it_admin RLS privileges.
+      return 'admin_assistant';
     default:
       return fallback;
   }
@@ -118,6 +125,8 @@ export function getDbRoleForUserRole(role: UserRole): string {
       return 'employee';
     case 'project_leader':
       return 'project_manager';
+    case 'admin_assistant':
+      return 'designer';
     default:
       return role;
   }
@@ -149,6 +158,8 @@ export function getEmployeeDbRoleForUserRole(role: UserRole): string {
       return 'hr';
     case 'admin':
       return 'admin';
+    case 'admin_assistant':
+      return 'designer';
     case 'manager_1':
     case 'manager_2':
     case 'manager_3':
@@ -196,6 +207,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   hr: 'HR специалист',
   accountant: 'Бухгалтер',
   admin_staff: 'Административный персонал',
+  admin_assistant: 'Помощник администратора',
   admin: 'Администратор',
 };
 
@@ -384,7 +396,7 @@ export const PERMISSIONS = {
   VIEW_ALL_KPI: ['ceo', 'deputy_director', 'admin'],
   
   // Управление
-  MANAGE_USERS: ['ceo', 'hr', 'admin'],
+  MANAGE_USERS: ['ceo', 'hr', 'admin_assistant', 'admin'],
   MANAGE_COMPANIES: ['ceo', 'admin'],
   CHANGE_TEAM: ['deputy_director', 'partner', 'admin'],
   

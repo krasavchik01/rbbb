@@ -34,7 +34,7 @@ const REFRESH_MS = 30_000;
 // «Мои часы» не нужен (будет вечный ноль и засирать дашборд).
 const NON_EXECUTOR_ROLES = new Set([
   'ceo', 'deputy_director', 'company_director',
-  'procurement', 'hr', 'accountant', 'admin_staff', 'admin',
+  'procurement', 'hr', 'accountant', 'admin_staff', 'admin_assistant', 'admin',
 ]);
 
 // ─── Hook: периодически перезапускает callback ──────────────────────────────

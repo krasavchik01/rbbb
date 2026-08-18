@@ -79,7 +79,7 @@ const SECTIONS: { label: string; items: MenuItem[] }[] = [
   {
     label: 'Админ',
     items: [
-      { title: 'Пользователи', url: '/user-management', icon: UserCog, allowedRoles: ROLE_GROUPS.admin },
+      { title: 'Пользователи', url: '/user-management', icon: UserCog, allowedRoles: ROLE_GROUPS.userOperations },
       { title: 'Диагностика', url: '/diagnostics', icon: Activity, allowedRoles: ROLE_GROUPS.admin },
     ],
   },

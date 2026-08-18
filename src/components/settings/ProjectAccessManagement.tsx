@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DEFAULT_PROJECT_ACCESS_CONTROL,
-  BONUS_VISIBILITY_ROLES,
   PROJECT_VISIBILITY_SECTIONS,
+  isProjectRoleSectionLocked,
   normalizeProjectAccessControl,
   setProjectRoleVisibility,
   type ProjectAccessControl,
@@ -70,7 +70,7 @@ export function ProjectAccessManagement({ value, saving = false, onSave }: Proje
             <div className="grid gap-2 sm:grid-cols-2">
               {PROJECT_VISIBILITY_SECTIONS.map((section) => {
                 const checked = draft[section.key].includes(role);
-                const locked = section.key === 'bonuses' && !BONUS_VISIBILITY_ROLES.includes(role);
+                const locked = isProjectRoleSectionLocked(role, section.key);
                 return (
                   <label
                     key={section.key}
@@ -85,7 +85,7 @@ export function ProjectAccessManagement({ value, saving = false, onSave }: Proje
                     <span className="min-w-0">
                       <span className="block break-words text-sm font-medium">{section.label}</span>
                       <span className="mt-0.5 block break-words text-[11px] leading-4 text-muted-foreground">{section.description}</span>
-                      {locked && <span className="mt-0.5 block text-[10px] font-medium text-amber-700 dark:text-amber-300">Защищено: только CEO и администратор</span>}
+                      {locked && <span className="mt-0.5 block text-[10px] font-medium text-amber-700 dark:text-amber-300">Защищено политикой роли</span>}
                     </span>
                   </label>
                 );

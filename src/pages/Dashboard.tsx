@@ -940,7 +940,7 @@ export default function Dashboard() {
       {(() => {
         // «Мои часы» — только тем, кто реально работает на проектах
         // (не CEO/зам.дир/HR/закупки/админ — у них нет таймщитов).
-        const nonExecutor = new Set(['ceo', 'deputy_director', 'company_director', 'procurement', 'hr', 'accountant', 'admin_staff', 'admin']);
+        const nonExecutor = new Set(['ceo', 'deputy_director', 'company_director', 'procurement', 'hr', 'accountant', 'admin_staff', 'admin_assistant', 'admin']);
         const showMyHours = !!user?.role && !nonExecutor.has(user.role);
         // Апрув часов: только partner (свои проекты) + зам.дир (как fallback) + admin.
         const showApproval =

@@ -4,6 +4,7 @@ export const ROLE_GROUPS = {
   all: USER_ROLES,
   operational: USER_ROLES.filter((role) => role !== 'accountant'),
   admin: ['admin'],
+  userOperations: ['admin', 'admin_assistant'],
   executive: ['ceo', 'admin'],
   // The actual accounting permission is managed dynamically by projectAccess.accounting.
   accounting: USER_ROLES,
@@ -27,7 +28,7 @@ export const ROUTE_ACCESS = {
   '/bonuses': ROLE_GROUPS.executive,
   '/accounting': ROLE_GROUPS.accountingDefault,
   '/settings': ROLE_GROUPS.operational,
-  '/user-management': ROLE_GROUPS.admin,
+  '/user-management': ROLE_GROUPS.userOperations,
   '/create-project-procurement': ROLE_GROUPS.procurementAdmin,
   '/project-approval': ROLE_GROUPS.management,
   '/tenders': ROLE_GROUPS.procurement,

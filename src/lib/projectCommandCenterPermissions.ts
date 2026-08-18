@@ -15,8 +15,8 @@ export interface ProjectCommandCenterCapabilities {
 }
 
 const EXECUTIVE_ROLES = ['ceo', 'admin'];
-const DELEGATED_ROLES = ['admin', 'ceo', 'deputy_director'];
-const PROJECT_DETAILS_EDITOR_ROLES = ['admin', 'procurement'];
+const DELEGATED_ROLES = ['admin', 'admin_assistant', 'ceo', 'deputy_director'];
+const PROJECT_DETAILS_EDITOR_ROLES = ['admin', 'admin_assistant', 'procurement'];
 const MONEY_ROLES = ['admin', 'ceo', 'procurement'];
 const BONUS_SUMMARY_ROLES = ['admin', 'ceo'];
 

@@ -58,6 +58,7 @@ function normalizeRole(role, level) {
   const normalizedLevel = ['2', '3'].includes(String(level || '')) ? String(level) : '1';
 
   if (raw === 'it_admin') return 'admin';
+  if (raw === 'designer') return 'admin_assistant';
   if (raw === 'project_manager') return 'project_leader';
   if (raw === 'employee') return 'assistant_1';
   if (raw === 'assistant') return `assistant_${normalizedLevel}`;
@@ -295,6 +296,13 @@ export async function assertCanAccessSeafileOwner(req, owner, options = {}) {
   const mode = normalizeAccessMode(options);
   const user = await getRequestUser(req, supabase);
   assertAuthenticated(user);
+
+  // The restricted assistant role must not inherit file access through a
+  // stale project-team assignment: contracts and attachments may contain
+  // financial or other critical information.
+  if (normalizeRole(user?.role) === 'admin_assistant') {
+    throw httpError(403, 'No permission to access critical project files');
+  }
 
   if (mode === 'write') {
     if (userHasWriteAccessByRole(user)) {

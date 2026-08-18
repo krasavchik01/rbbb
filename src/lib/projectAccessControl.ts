@@ -33,6 +33,11 @@ export type ProjectVisibilitySection = (typeof PROJECT_VISIBILITY_SECTIONS)[numb
 export type ProjectAccessControl = Record<ProjectVisibilitySection, UserRole[]>;
 
 export const BONUS_VISIBILITY_ROLES: readonly UserRole[] = ['ceo', 'admin'];
+export const ADMIN_ASSISTANT_BLOCKED_SECTIONS: readonly ProjectVisibilitySection[] = [
+  'contractMoney',
+  'bonuses',
+  'accounting',
+];
 
 export const DEFAULT_PROJECT_ACCESS_CONTROL: ProjectAccessControl = {
   team: [...USER_ROLES],
@@ -65,13 +70,18 @@ export function normalizeProjectAccessControl(value: unknown): ProjectAccessCont
     contractMoney: normalizeRoles(
       source.contractMoney,
       DEFAULT_PROJECT_ACCESS_CONTROL.contractMoney,
+      USER_ROLES.filter((role) => role !== 'admin_assistant'),
     ),
     bonuses: normalizeRoles(
       source.bonuses,
       DEFAULT_PROJECT_ACCESS_CONTROL.bonuses,
       BONUS_VISIBILITY_ROLES,
     ),
-    accounting: normalizeRoles(source.accounting, DEFAULT_PROJECT_ACCESS_CONTROL.accounting),
+    accounting: normalizeRoles(
+      source.accounting,
+      DEFAULT_PROJECT_ACCESS_CONTROL.accounting,
+      USER_ROLES.filter((role) => role !== 'admin_assistant'),
+    ),
   };
 }
 
@@ -82,6 +92,7 @@ export function canRoleViewProjectSection(
 ): boolean {
   if (!isUserRole(role)) return false;
   if (section === 'bonuses' && !BONUS_VISIBILITY_ROLES.includes(role)) return false;
+  if (role === 'admin_assistant' && ADMIN_ASSISTANT_BLOCKED_SECTIONS.includes(section)) return false;
   const normalized = normalizeProjectAccessControl(access);
   return normalized[section].includes(role);
 }
@@ -94,6 +105,7 @@ export function setProjectRoleVisibility(
 ): ProjectAccessControl {
   const normalized = normalizeProjectAccessControl(access);
   if (section === 'bonuses' && !BONUS_VISIBILITY_ROLES.includes(role)) return normalized;
+  if (role === 'admin_assistant' && ADMIN_ASSISTANT_BLOCKED_SECTIONS.includes(section)) return normalized;
   const roles = normalized[section];
   return {
     ...normalized,
@@ -101,4 +113,12 @@ export function setProjectRoleVisibility(
       ? Array.from(new Set([...roles, role]))
       : roles.filter((item) => item !== role),
   };
+}
+
+export function isProjectRoleSectionLocked(
+  role: UserRole,
+  section: ProjectVisibilitySection,
+): boolean {
+  return (section === 'bonuses' && !BONUS_VISIBILITY_ROLES.includes(role))
+    || (role === 'admin_assistant' && ADMIN_ASSISTANT_BLOCKED_SECTIONS.includes(section));
 }

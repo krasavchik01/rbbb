@@ -16,6 +16,8 @@ import { UserRole, ROLE_LABELS, normalizeUserRole, getLevelForUserRole, getEmplo
 import { Database } from "@/integrations/supabase/types";
 import { useProjects } from "@/hooks/useProjects";
 import { useTasks } from "@/hooks/useTasks";
+import { useAuth } from "@/contexts/AuthContext";
+import { canAssignUserRole, canManageEmployeeAccount } from "@/lib/adminCapabilities";
 
 type DbAppRole = Database['public']['Enums']['app_role'];
 type DbEmployeeLevel = Database['public']['Enums']['employee_level'];
@@ -62,6 +64,7 @@ const ALL_ROLES: { value: UserRole; label: string; adminOnly?: boolean }[] = [
   { value: 'procurement', label: ROLE_LABELS.procurement, adminOnly: true },
   { value: 'partner', label: ROLE_LABELS.partner, adminOnly: true },
   { value: 'hr', label: ROLE_LABELS.hr, adminOnly: true },
+  { value: 'admin_assistant', label: ROLE_LABELS.admin_assistant, adminOnly: true },
   { value: 'admin', label: ROLE_LABELS.admin, adminOnly: true },
   // Рабочие роли
   { value: 'manager_1', label: ROLE_LABELS.manager_1 },
@@ -90,6 +93,8 @@ function getEmployeeRoleLabel(employee: Employee): string {
     hr: 'HR специалист',
     procurement: 'Отдел закупок',
     partner: 'Партнер',
+    admin_assistant: 'Помощник администратора',
+    designer: 'Помощник администратора',
     admin: 'Администратор',
     accountant: 'Бухгалтер',
     contractor: 'ГПХ (Подрядчик)',
@@ -148,6 +153,7 @@ function attendancePriority(row: AttendanceRow): number {
 
 
 export default function UserManagement() {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
@@ -171,6 +177,13 @@ export default function UserManagement() {
     password: "",
   });
   const { toast } = useToast();
+  const isAdminAssistant = user?.role === 'admin_assistant';
+  const assignableRoles = ALL_ROLES.filter((role) => canAssignUserRole(user?.role, role.value));
+
+  const mayManageEmployee = (employee: Employee): boolean => canManageEmployeeAccount(
+    user?.role,
+    normalizeUserRole(employee.role, employee.level),
+  );
 
   useEffect(() => {
     fetchEmployees();
@@ -253,6 +266,10 @@ export default function UserManagement() {
       setError("Заполните ФИО и Email");
       return;
     }
+    if (!canAssignUserRole(user?.role, formData.role)) {
+      setError('Эту роль может назначать только администратор.');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -283,7 +300,7 @@ export default function UserManagement() {
           options: {
             data: {
               name: formData.name.trim(),
-              role: formData.role,
+              role: dbRole,
             },
           },
         });
@@ -333,6 +350,14 @@ export default function UserManagement() {
       setError("Заполните ФИО");
       return;
     }
+    if (!mayManageEmployee(editingEmployee)) {
+      setError('Учётные записи с критичным доступом может изменять только администратор.');
+      return;
+    }
+    if (!canAssignUserRole(user?.role, formData.role)) {
+      setError('Эту роль может назначать только администратор.');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -380,6 +405,14 @@ export default function UserManagement() {
   };
 
   const handleDeleteEmployee = async (employee: Employee) => {
+    if (!mayManageEmployee(employee)) {
+      toast({
+        title: 'Действие недоступно',
+        description: 'Учётные записи с критичным доступом может удалять только администратор.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!confirm(`Удалить сотрудника ${employee.name}?`)) return;
 
     try {
@@ -420,6 +453,14 @@ export default function UserManagement() {
   };
 
   const openEditDialog = (employee: Employee) => {
+    if (!mayManageEmployee(employee)) {
+      toast({
+        title: 'Защищённая учётная запись',
+        description: 'Помощник администратора не может менять данные, роль или пароль этого пользователя.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setEditingEmployee(employee);
 
     // Пытаемся определить роль из БД роли и уровня
@@ -439,6 +480,8 @@ export default function UserManagement() {
       appRole = 'partner';
     } else if (dbRole === 'admin') {
       appRole = 'admin';
+    } else if (dbRole === 'admin_assistant' || dbRole === 'designer') {
+      appRole = 'admin_assistant';
     } else if (dbRole === 'accountant') {
       appRole = 'accountant';
     } else if (dbRole === 'contractor') {
@@ -474,6 +517,8 @@ export default function UserManagement() {
       'hr': 'HR специалист',
       'procurement': 'Отдел закупок',
       'partner': 'Партнер',
+      'admin_assistant': 'Помощник администратора',
+      'designer': 'Помощник администратора',
       'admin': 'Администратор',
       'accountant': 'Бухгалтер',
       'contractor': 'ГПХ (Подрядчик)',
@@ -588,7 +633,7 @@ export default function UserManagement() {
   }, [selectedEmployeeTasks]);
   const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" | "outline" => {
     if (role === 'ceo' || role === 'deputy_director') return 'destructive';
-    if (role === 'admin' || role === 'partner') return 'destructive';
+    if (role === 'admin' || role === 'admin_assistant' || role === 'designer' || role === 'partner') return 'destructive';
     if (role === 'hr' || role === 'procurement') return 'secondary';
     if (role === 'manager' || role === 'supervisor') return 'default';
     if (role === 'tax_specialist') return 'secondary';
@@ -663,7 +708,7 @@ export default function UserManagement() {
                     <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
                       Административные роли
                     </div>
-                    {ALL_ROLES.filter(r => r.adminOnly).map(role => (
+                    {assignableRoles.filter(r => r.adminOnly).map(role => (
                       <SelectItem key={role.value} value={role.value}>
                         <div className="flex items-center gap-2">
                           <Shield className="w-3 h-3 text-red-500" />
@@ -674,7 +719,7 @@ export default function UserManagement() {
                     <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted mt-1">
                       Рабочие роли
                     </div>
-                    {ALL_ROLES.filter(r => !r.adminOnly).map(role => (
+                    {assignableRoles.filter(r => !r.adminOnly).map(role => (
                       <SelectItem key={role.value} value={role.value}>
                         {role.label}
                       </SelectItem>
@@ -731,6 +776,15 @@ export default function UserManagement() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {isAdminAssistant && (
+        <Alert>
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            Режим помощника администратора: можно создавать сотрудников, менять обычные учётные записи и пароли. CEO, руководство, бухгалтерия, закупки, партнёры и администраторы защищены.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -829,22 +883,24 @@ export default function UserManagement() {
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    disabled={!mayManageEmployee(employee)}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       openEditDialog(employee);
                                     }}
-                                    title="Редактировать"
+                                    title={mayManageEmployee(employee) ? 'Редактировать и изменить пароль' : 'Защищённая учётная запись'}
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     variant="destructive"
                                     size="sm"
+                                    disabled={!mayManageEmployee(employee)}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleDeleteEmployee(employee);
                                     }}
-                                    title="Удалить"
+                                    title={mayManageEmployee(employee) ? 'Удалить' : 'Защищённая учётная запись'}
                                   >
                                     Удалить
                                   </Button>

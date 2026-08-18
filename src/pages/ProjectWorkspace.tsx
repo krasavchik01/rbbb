@@ -19,7 +19,7 @@ import { allProjectsHoursTotals, type ProjectHoursTotals } from "@/lib/timesheet
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDataSync } from "@/hooks/useProjectDataSync";
-import { PROJECT_ROLES, TEAM_ROLE_SLOTS } from "@/types/roles";
+import { PROJECT_ROLES, TEAM_ROLE_SLOTS, hasPermission } from "@/types/roles";
 
 import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
@@ -304,19 +304,27 @@ export default function ProjectWorkspace() {
   const isPM = user?.role === 'manager_1' || user?.role === 'manager_2' || user?.role === 'manager_3';
   const isDirector = user?.role === 'ceo' || user?.role === 'deputy_director';
   const isDeputy = user?.role === 'deputy_director';
-  const isCEO = user?.role === 'ceo';
   const isProcurement = user?.role === 'procurement';
   const isAdmin = user?.role === 'admin';
-  const canEditProjectDetails = projectCommandCenterCapabilities(user?.role).canEditProjectDetails;
+  const isAdminAssistant = user?.role === 'admin_assistant';
+  const capabilities = projectCommandCenterCapabilities(user?.role);
+  // The full workspace editor contains contract amounts and file operations.
+  // The assistant keeps its safe inline controls in /projects, not this
+  // procurement/financial editor.
+  const canEditProjectDetails = capabilities.canEditProjectDetails && !isAdminAssistant;
   const canSeeTeam = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'team');
   const canSeeHours = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'hours');
   const canSeeContractMoney = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'contractMoney');
   const canSeeBonuses = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'bonuses');
-  const canManageProjectCompany = isCEO || isAdmin || isDeputy;
+  const canManageProjectCompany = capabilities.canBulkAssignCompany;
   const projectStatus = project?.notes?.status || project?.status;
   // Единая команда проекта управляется CEO, администратором и замдиректора
   // на любой стадии проекта.
-  const canEditTeam = canSeeTeam && (isAdmin || isCEO || isDeputy);
+  const canEditTeam = canSeeTeam && capabilities.canManageTeam;
+  const canViewContractWorkspace = canSeeContractMoney || Boolean(
+    user && hasPermission(user.role, 'VIEW_CONTRACT'),
+  );
+  const canViewProjectFiles = !isAdminAssistant;
 
   const isCompleted = projectStatus === 'completed' || projectStatus === 'closed' || projectStatus === 'Завершён';
   const isInProgress = projectStatus === 'in_progress' || projectStatus === 'active' || projectStatus === 'В работе';
@@ -329,8 +337,8 @@ export default function ProjectWorkspace() {
   //   3) CEO в /bonuses одобряет выплату бонусов → completed.
   // Раньше PM и партнёр имели одну кнопку «Завершить» — это не соответствовало
   // ролевой модели фирмы, где партнёр в начале только видит, а в конце утверждает.
-  const canMarkReady = (isPM || isAdmin || isDeputy) && (isInProgress || projectStatus === 'approved' || projectStatus === 'planning');
-  const canApproveCompletion = (isPartner || isAdmin || isDeputy) && isReadyToComplete;
+  const canMarkReady = (isPM || isAdmin || isDeputy || isAdminAssistant) && (isInProgress || projectStatus === 'approved' || projectStatus === 'planning');
+  const canApproveCompletion = (isPartner || isAdmin || isDeputy || isAdminAssistant) && isReadyToComplete;
   // Директор/зам видят только общую информацию, без деталей методологии
   const normalizedContract = useMemo(() => readProjectContract(project), [project]);
   const normalizedFiles = useMemo(() => readProjectFiles(project), [project]);
@@ -671,11 +679,11 @@ export default function ProjectWorkspace() {
       />
 
       {/* Вкладки оставлены только для редактирования/детальных рабочих операций. Основная информация выше в своде. */}
-      <Tabs defaultValue="files" className="w-full">
+      <Tabs defaultValue={canViewProjectFiles ? 'files' : 'tasks'} className="w-full">
         <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           {!(isDirector || isAdmin || isProcurement) && <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">✅ Задачи</TabsTrigger>}
-          <TabsTrigger value="files" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📁 Файлы</TabsTrigger>
-          <TabsTrigger value="contract" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📜 Договор</TabsTrigger>
+          {canViewProjectFiles && <TabsTrigger value="files" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📁 Файлы</TabsTrigger>}
+          {canViewContractWorkspace && <TabsTrigger value="contract" className="text-xs sm:text-sm px-2 sm:px-3 py-1.5">📜 Договор</TabsTrigger>}
         </TabsList>
 
         {/* Вкладка задач */}
@@ -686,7 +694,7 @@ export default function ProjectWorkspace() {
         )}
 
         {/* Вкладка файлов */}
-        <TabsContent value="files" className="space-y-4 mt-4">
+        {canViewProjectFiles && <TabsContent value="files" className="space-y-4 mt-4">
           <ProjectFileManager
             projectId={project?.id || id || ''}
             uploadedBy={user?.id || ''}
@@ -709,10 +717,10 @@ export default function ProjectWorkspace() {
               });
             }}
           />
-        </TabsContent>
+        </TabsContent>}
 
         {/* Вкладка договора и доп соглашений */}
-        <TabsContent value="contract" className="space-y-4 mt-4">
+        {canViewContractWorkspace && <TabsContent value="contract" className="space-y-4 mt-4">
           <ContractEditor
             projectId={project?.id || id || ''}
             contract={normalizedContract}
@@ -850,7 +858,7 @@ export default function ProjectWorkspace() {
               }
             }}
           />
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       {/* Этапы аудита и паспорт проекта — УБРАНЫ */}
