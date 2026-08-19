@@ -302,6 +302,35 @@ async function fulfillApplicationApi(route: Route, journal: DemoNetworkJournal) 
     return;
   }
 
+  if (url.pathname.includes('/api/1c/sync')) {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        status: {
+          configured: true,
+          pullEnabled: true,
+          pushEnabled: true,
+          mode: 'pull_and_push',
+          lastSyncAt: '2026-08-18T09:30:00.000Z',
+          lastSuccessAt: '2026-08-18T09:30:00.000Z',
+          lastErrorAt: null,
+          lastError: '',
+          source: '1С Бухгалтерия RB',
+          received: 24,
+          matched: 23,
+          unmatchedCount: 1,
+          unmatchedSummary: { 'invoice:contract_not_found': 1 },
+          updatedProjects: 12,
+          unmatched: [],
+          history: [],
+        },
+      }),
+    });
+    return;
+  }
+
   if (url.pathname.includes('/api/seafile/list')) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: demoFiles }) });
     return;

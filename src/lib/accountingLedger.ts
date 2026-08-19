@@ -1,8 +1,8 @@
 import { parseMoney, projectAmountWithoutVAT, projectContract, projectNotes } from '@/lib/contractData';
 import { getProjectWorkflowStatus, isProjectClosed } from '@/lib/projectWorkflow';
 
-export type AccountingDocumentType = 'invoice' | 'avr';
-export type AccountingDocumentStatus = 'draft' | 'issued' | 'sent' | 'signed' | 'cancelled';
+export type AccountingDocumentType = 'invoice' | 'avr' | 'esf';
+export type AccountingDocumentStatus = 'draft' | 'issued' | 'sent' | 'signed' | 'registered' | 'cancelled';
 export type AccountingPaymentKind = 'advance' | 'interim' | 'final' | 'other';
 export type AccountingOperationalStatus =
   | 'needs_contract'
@@ -11,6 +11,8 @@ export type AccountingOperationalStatus =
   | 'overdue'
   | 'needs_avr'
   | 'awaiting_signature'
+  | 'needs_esf'
+  | 'awaiting_esf_registration'
   | 'complete';
 export type AccountingProjectStatus = AccountingOperationalStatus | 'closed_attention' | 'closed_complete';
 export type AccountingDeadlineUrgency = 'overdue' | 'today' | 'week' | 'month' | 'later' | 'missing' | 'complete';
@@ -42,6 +44,10 @@ export interface AccountingDocument {
   createdBy?: string;
   updatedAt?: string;
   updatedBy?: string;
+  source?: 'manual' | '1c' | string;
+  sourceDatabase?: string;
+  externalId?: string;
+  syncedAt?: string;
 }
 
 export interface AccountingPayment {
@@ -54,6 +60,10 @@ export interface AccountingPayment {
   file?: AccountingFile;
   createdAt: string;
   createdBy?: string;
+  source?: 'manual' | '1c' | string;
+  sourceDatabase?: string;
+  externalId?: string;
+  syncedAt?: string;
 }
 
 export interface AccountingContact {
@@ -64,10 +74,12 @@ export interface AccountingContact {
 }
 
 export interface ProjectAccountingLedger {
-  version: 1;
+  version: 1 | 2;
   documents: AccountingDocument[];
   payments: AccountingPayment[];
   contact?: AccountingContact;
+  requirements?: { esf?: boolean };
+  sync?: { source?: string; sourceDatabase?: string; lastSyncedAt?: string };
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -77,6 +89,7 @@ export interface AccountingProjectSummary {
   contractAmount: number;
   invoiceAmount: number;
   avrAmount: number;
+  esfAmount: number;
   paidAmount: number;
   receivableAmount: number;
   contractBalanceAmount: number;
@@ -94,6 +107,7 @@ export interface AccountingProjectSummary {
   currency: string;
   invoices: AccountingDocument[];
   avrs: AccountingDocument[];
+  esfs: AccountingDocument[];
   payments: AccountingPayment[];
   ledger: ProjectAccountingLedger;
 }
@@ -166,9 +180,9 @@ function normalizeFile(value: unknown): AccountingFile | undefined {
 function normalizeDocument(value: unknown, index: number): AccountingDocument | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
-  const type = source.type === 'avr' ? 'avr' : source.type === 'invoice' ? 'invoice' : null;
+  const type = source.type === 'avr' ? 'avr' : source.type === 'invoice' ? 'invoice' : source.type === 'esf' ? 'esf' : null;
   if (!type) return null;
-  const statusValues: AccountingDocumentStatus[] = ['draft', 'issued', 'sent', 'signed', 'cancelled'];
+  const statusValues: AccountingDocumentStatus[] = ['draft', 'issued', 'sent', 'signed', 'registered', 'cancelled'];
   const status = statusValues.includes(source.status as AccountingDocumentStatus)
     ? source.status as AccountingDocumentStatus
     : 'draft';
@@ -189,6 +203,10 @@ function normalizeDocument(value: unknown, index: number): AccountingDocument | 
     createdBy: text(source.createdBy) || undefined,
     updatedAt: isoTimestamp(source.updatedAt) || undefined,
     updatedBy: text(source.updatedBy) || undefined,
+    source: text(source.source) || undefined,
+    sourceDatabase: text(source.sourceDatabase) || undefined,
+    externalId: text(source.externalId) || undefined,
+    syncedAt: isoTimestamp(source.syncedAt) || undefined,
   };
 }
 
@@ -212,6 +230,10 @@ function normalizePayment(value: unknown, index: number): AccountingPayment | nu
     file: normalizeFile(source.file),
     createdAt,
     createdBy: text(source.createdBy) || undefined,
+    source: text(source.source) || undefined,
+    sourceDatabase: text(source.sourceDatabase) || undefined,
+    externalId: text(source.externalId) || undefined,
+    syncedAt: isoTimestamp(source.syncedAt) || undefined,
   };
 }
 
@@ -228,7 +250,7 @@ export function normalizeAccountingLedger(value: unknown): ProjectAccountingLedg
     notes: text(contactSource.notes) || undefined,
   };
   return {
-    version: 1,
+    version: source.version === 2 ? 2 : 1,
     documents: (Array.isArray(source.documents) ? source.documents : [])
       .map(normalizeDocument)
       .filter((item): item is AccountingDocument => Boolean(item)),
@@ -236,6 +258,16 @@ export function normalizeAccountingLedger(value: unknown): ProjectAccountingLedg
       .map(normalizePayment)
       .filter((item): item is AccountingPayment => Boolean(item)),
     contact: Object.values(contact).some(Boolean) ? contact : undefined,
+    requirements: source.requirements && typeof source.requirements === 'object' && !Array.isArray(source.requirements)
+      ? { esf: Boolean((source.requirements as Record<string, unknown>).esf) }
+      : undefined,
+    sync: source.sync && typeof source.sync === 'object' && !Array.isArray(source.sync)
+      ? {
+          source: text((source.sync as Record<string, unknown>).source) || undefined,
+          sourceDatabase: text((source.sync as Record<string, unknown>).sourceDatabase) || undefined,
+          lastSyncedAt: isoTimestamp((source.sync as Record<string, unknown>).lastSyncedAt) || undefined,
+        }
+      : undefined,
     updatedAt: isoTimestamp(source.updatedAt) || undefined,
     updatedBy: text(source.updatedBy) || undefined,
   };
@@ -257,9 +289,11 @@ export function calculateAccountingProject(
   const activeDocuments = ledger.documents.filter((document) => document.status !== 'cancelled');
   const invoices = activeDocuments.filter((document) => document.type === 'invoice');
   const avrs = activeDocuments.filter((document) => document.type === 'avr');
+  const esfs = activeDocuments.filter((document) => document.type === 'esf');
   const payments = ledger.payments;
   const invoiceAmount = invoices.reduce((sum, document) => sum + document.amount, 0);
   const avrAmount = avrs.reduce((sum, document) => sum + document.amount, 0);
+  const esfAmount = esfs.reduce((sum, document) => sum + document.amount, 0);
   const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const receivableAmount = Math.max(0, invoiceAmount - paidAmount);
   const overpaymentAmount = Math.max(0, paidAmount - invoiceAmount);
@@ -278,6 +312,8 @@ export function calculateAccountingProject(
   else if (receivableAmount > 0) accountingStatus = 'awaiting_payment';
   else if (avrAmount <= 0) accountingStatus = 'needs_avr';
   else if (avrs.some((avr) => avr.status !== 'signed')) accountingStatus = 'awaiting_signature';
+  else if (ledger.requirements?.esf && esfAmount <= 0) accountingStatus = 'needs_esf';
+  else if (ledger.requirements?.esf && esfs.some((esf) => esf.status !== 'registered')) accountingStatus = 'awaiting_esf_registration';
   else accountingStatus = 'complete';
   const projectWorkflowStatus = getProjectWorkflowStatus(project);
   const projectClosed = isProjectClosed(project);
@@ -296,6 +332,10 @@ export function calculateAccountingProject(
     .filter((avr) => avr.status !== 'signed' && avr.dueDate)
     .map((avr) => avr.dueDate || '')
     .sort()[0] || '';
+  const pendingEsfDeadline = esfs
+    .filter((esf) => esf.status !== 'registered' && esf.dueDate)
+    .map((esf) => esf.dueDate || '')
+    .sort()[0] || '';
   const nextActionLabel: Record<AccountingOperationalStatus, string> = {
     needs_contract: 'Добавить договор и сумму',
     needs_invoice: 'Выставить счёт',
@@ -303,12 +343,18 @@ export function calculateAccountingProject(
     overdue: 'Получить просроченную оплату',
     needs_avr: 'Оформить АВР',
     awaiting_signature: 'Получить подписанный АВР',
+    needs_esf: 'Выписать ЭСФ',
+    awaiting_esf_registration: 'Зарегистрировать ЭСФ',
     complete: 'Документы закрыты',
   };
   const nextActionDeadline = accountingStatus === 'awaiting_payment' || accountingStatus === 'overdue'
     ? unpaidInvoiceDeadline
     : accountingStatus === 'awaiting_signature'
       ? unsignedAvrDeadline
+      : accountingStatus === 'awaiting_esf_registration'
+        ? pendingEsfDeadline
+        : accountingStatus === 'needs_esf'
+          ? projectEndDate
       : accountingStatus === 'needs_avr'
         ? projectEndDate
         : accountingStatus === 'needs_contract' || accountingStatus === 'needs_invoice'
@@ -321,6 +367,7 @@ export function calculateAccountingProject(
     contractAmount,
     invoiceAmount,
     avrAmount,
+    esfAmount,
     paidAmount,
     receivableAmount,
     contractBalanceAmount,
@@ -338,6 +385,7 @@ export function calculateAccountingProject(
     currency: text(contract?.currency || project?.currency) || 'KZT',
     invoices,
     avrs,
+    esfs,
     payments,
     ledger,
   };
@@ -400,6 +448,8 @@ export const ACCOUNTING_STATUS_LABELS: Record<AccountingProjectStatus, string> =
   overdue: 'Просроченная оплата',
   needs_avr: 'Нужно оформить АВР',
   awaiting_signature: 'Ждём подписанный АВР',
+  needs_esf: 'Нужно выписать ЭСФ',
+  awaiting_esf_registration: 'Ждём регистрацию ЭСФ',
   complete: 'Документы закрыты',
   closed_attention: 'Проект закрыт · бухгалтерия требует действий',
   closed_complete: 'Проект и бухгалтерия закрыты',
@@ -410,6 +460,7 @@ export const ACCOUNTING_DOCUMENT_STATUS_LABELS: Record<AccountingDocumentStatus,
   issued: 'Выставлен',
   sent: 'Отправлен',
   signed: 'Подписан',
+  registered: 'Зарегистрирован',
   cancelled: 'Отменён',
 };
 

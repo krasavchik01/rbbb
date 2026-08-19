@@ -56,6 +56,9 @@ test.describe('accounting workspace', () => {
     }
 
     await expect(page.getByRole('heading', { name: 'Бухгалтерский кабинет' })).toBeVisible();
+    await expect(page.getByText('Обмен с 1С')).toBeVisible();
+    await expect(page.getByText('Подключение настроено')).toBeVisible();
+    await expect(page.getByText(/Счета: 1 · Договор не найден/)).toBeVisible();
     await expect(page.getByText('Бонусная ведомость')).toHaveCount(0);
     await expect(page.getByText('Свод', { exact: true })).toHaveCount(0);
   });
@@ -96,6 +99,7 @@ test.describe('accounting workspace', () => {
     await expect(page.getByRole('heading', { name: 'Бухгалтерский кабинет' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Счёт' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'АВР' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ЭСФ' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Оплата' }).first()).toBeVisible();
     await expect(page.getByText('Следующее действие').first()).toBeVisible();
 

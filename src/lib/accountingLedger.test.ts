@@ -107,6 +107,34 @@ describe('accounting ledger', () => {
     expect(calculateAccountingProject(fullyClosed, '2026-08-06').status).toBe('closed_complete');
   });
 
+  it('tracks required ESF after the signed AVR and closes after registration', () => {
+    const ledger = normalizeAccountingLedger({
+      version: 2,
+      requirements: { esf: true },
+      documents: [
+        invoice({ status: 'sent' }),
+        invoice({ id: 'avr-1', type: 'avr', number: 'АВР-1', status: 'signed' }),
+      ],
+      payments: [{ id: 'p', date: '2026-08-05', amount: 800_000, kind: 'final', createdAt: '2026-08-05T00:00:00.000Z' }],
+    });
+    expect(calculateAccountingProject(project(ledger), '2026-08-06').status).toBe('needs_esf');
+
+    const withEsf = upsertAccountingDocument(ledger, invoice({
+      id: 'esf-1',
+      type: 'esf',
+      number: 'ЭСФ-1',
+      status: 'sent',
+      dueDate: '2026-08-08',
+    }));
+    expect(calculateAccountingProject(project(withEsf), '2026-08-06').status).toBe('awaiting_esf_registration');
+
+    const registered = upsertAccountingDocument(withEsf, {
+      ...withEsf.documents.find((item) => item.id === 'esf-1')!,
+      status: 'registered',
+    });
+    expect(calculateAccountingProject(project(registered), '2026-08-06').status).toBe('complete');
+  });
+
   it('keeps currencies separate at project level', () => {
     const value = project({ version: 1, documents: [invoice({ amount: 15_000 })], payments: [] }, 15_000);
     value.contract.currency = 'USD';

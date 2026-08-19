@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import * as XLSX from 'xlsx';
 import {
   AlertCircle,
@@ -8,10 +8,12 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Database,
   FileCheck2,
   FileText,
   Loader2,
   ReceiptText,
+  RefreshCw,
   Search,
   Send,
   Trash2,
@@ -68,6 +70,13 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { projectCompanyName } from '@/types/companies';
+import {
+  getOneCSyncStatus,
+  createOneCIntegrationKey,
+  ONEC_UNMATCHED_REASON_LABELS,
+  pullOneCAccounting,
+  type OneCSyncStatus,
+} from '@/lib/oneCAccounting';
 
 type EntryKind = AccountingDocumentType | 'payment';
 type AccountingRow = {
@@ -89,6 +98,8 @@ const STATUS_COLORS: Record<AccountingProjectStatus, string> = {
   overdue: 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200',
   needs_avr: 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200',
   awaiting_signature: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200',
+  needs_esf: 'border-cyan-300 bg-cyan-50 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200',
+  awaiting_esf_registration: 'border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200',
   complete: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
   closed_attention: 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200',
   closed_complete: 'border-emerald-400 bg-emerald-100 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-100',
@@ -134,6 +145,20 @@ function formatDate(value?: string): string {
   if (!value) return '—';
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('ru-RU').format(date);
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return 'Ещё не запускалась';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
+
+function documentTypeLabel(type: AccountingDocumentType): string {
+  if (type === 'invoice') return 'Счёт';
+  if (type === 'avr') return 'АВР';
+  return 'ЭСФ';
 }
 
 function deadlineText(urgency: AccountingDeadlineUrgency, days: number | null): string {
@@ -267,6 +292,60 @@ export default function Accounting() {
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [savingKey, setSavingKey] = useState('');
+  const [oneCStatus, setOneCStatus] = useState<OneCSyncStatus | null>(null);
+  const [oneCStatusError, setOneCStatusError] = useState('');
+  const [oneCSyncing, setOneCSyncing] = useState(false);
+  const [oneCIntegrationKey, setOneCIntegrationKey] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    void getOneCSyncStatus()
+      .then((status) => {
+        if (!active) return;
+        setOneCStatus(status);
+        setOneCStatusError('');
+      })
+      .catch((statusError: Error) => {
+        if (!active) return;
+        setOneCStatusError(statusError.message || 'Нет данных о синхронизации');
+      });
+    return () => { active = false; };
+  }, []);
+
+  const runOneCSync = async () => {
+    setOneCSyncing(true);
+    try {
+      const status = await pullOneCAccounting();
+      setOneCStatus(status);
+      setOneCStatusError('');
+      toast({
+        title: 'Данные из 1С обновлены',
+        description: `Получено ${status.received}, сопоставлено ${status.matched}, требуют разбора ${status.unmatchedCount}.`,
+      });
+      window.setTimeout(() => window.location.reload(), 500);
+    } catch (syncError: any) {
+      const message = syncError?.message || 'Не удалось получить данные из 1С';
+      setOneCStatusError(message);
+      toast({ title: 'Синхронизация 1С не выполнена', description: message, variant: 'destructive' });
+    } finally {
+      setOneCSyncing(false);
+    }
+  };
+
+  const createIntegrationKey = async () => {
+    setOneCSyncing(true);
+    try {
+      const result = await createOneCIntegrationKey();
+      setOneCStatus(result.status);
+      setOneCIntegrationKey(result.integrationKey);
+      setOneCStatusError('');
+      toast({ title: 'Ключ обмена 1С создан', description: 'Скопируйте его сейчас: повторно HUB этот ключ не показывает.' });
+    } catch (keyError: any) {
+      toast({ title: 'Не удалось создать ключ 1С', description: keyError?.message, variant: 'destructive' });
+    } finally {
+      setOneCSyncing(false);
+    }
+  };
 
   const rows = useMemo<AccountingRow[]>(() => projects.map(projectForAccountingWorkspace).map((project) => {
     const contract = projectContract(project);
@@ -343,12 +422,14 @@ export default function Accounting() {
       ? row.summary.invoiceAmount
       : kind === 'avr'
         ? row.summary.avrAmount
+        : kind === 'esf'
+          ? row.summary.esfAmount
         : row.summary.paidAmount;
     setEntry({ row, kind });
     setAmount(String(Math.max(0, row.summary.contractAmount - already) || ''));
     setNumber('');
     setEntryDate(today());
-    setDueDate(dateAfter(kind === 'avr' ? 7 : 14));
+    setDueDate(dateAfter(kind === 'avr' ? 7 : kind === 'esf' ? 5 : 14));
     setPaymentKind(row.summary.paidAmount > 0 ? 'interim' : 'advance');
     setReference('');
     setNotes('');
@@ -367,11 +448,19 @@ export default function Accounting() {
       return;
     }
     if (entry.kind !== 'payment' && !number.trim()) {
-      toast({ title: entry.kind === 'invoice' ? 'Укажите номер счёта' : 'Укажите номер АВР', variant: 'destructive' });
+      toast({ title: `Укажите номер: ${documentTypeLabel(entry.kind)}`, variant: 'destructive' });
       return;
     }
     if (entry.kind !== 'payment' && !dueDate) {
-      toast({ title: 'Укажите контрольный срок', description: entry.kind === 'invoice' ? 'До какой даты ожидается оплата.' : 'До какой даты нужно получить подписанный АВР.', variant: 'destructive' });
+      toast({
+        title: 'Укажите контрольный срок',
+        description: entry.kind === 'invoice'
+          ? 'До какой даты ожидается оплата.'
+          : entry.kind === 'avr'
+            ? 'До какой даты нужно получить подписанный АВР.'
+            : 'До какой даты ЭСФ должна быть зарегистрирована.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -414,7 +503,7 @@ export default function Accounting() {
         return { notes: { ...current.notes, accounting: nextLedger } };
       });
       toast({
-        title: entry.kind === 'payment' ? 'Оплата учтена' : entry.kind === 'invoice' ? 'Счёт выставлен' : 'АВР добавлен',
+        title: entry.kind === 'payment' ? 'Оплата учтена' : `${documentTypeLabel(entry.kind)} добавлен`,
         description: `${entry.row.clientName} · ${formatMoney(parsedAmount, entry.row.summary.currency)}`,
       });
       setEntry(null);
@@ -428,6 +517,10 @@ export default function Accounting() {
 
   const updateDocumentStatus = async (row: AccountingRow, document: AccountingDocument, status: AccountingDocumentStatus) => {
     if (!user) return;
+    if (document.source === '1c') {
+      toast({ title: 'Документ ведётся в 1С', description: 'Измените статус в 1С — HUB получит его при следующей синхронизации.' });
+      return;
+    }
     const key = `${row.project.id}:${document.id}:${status}`;
     setSavingKey(key);
     try {
@@ -453,6 +546,13 @@ export default function Accounting() {
   };
 
   const removeRecord = async (row: AccountingRow, kind: 'document' | 'payment', id: string) => {
+    const sourceRecord = kind === 'document'
+      ? row.summary.ledger.documents.find((item) => item.id === id)
+      : row.summary.ledger.payments.find((item) => item.id === id);
+    if (sourceRecord?.source === '1c') {
+      toast({ title: 'Запись ведётся в 1С', description: 'Удалите или отмените её в 1С — HUB обновится автоматически.' });
+      return;
+    }
     if (!user || !window.confirm('Удалить ошибочную запись из бухгалтерского реестра?')) return;
     const key = `${row.project.id}:${id}:delete`;
     setSavingKey(key);
@@ -520,7 +620,12 @@ export default function Accounting() {
       toast({ title: 'Сначала прикрепите файл документа', variant: 'destructive' });
       return;
     }
-    const typeLabel = document.type === 'invoice' ? 'Счёт' : 'АВР';
+    const typeLabel = documentTypeLabel(document.type);
+    const documentDescription = document.type === 'invoice'
+      ? 'счёт на оплату'
+      : document.type === 'avr'
+        ? 'акт выполненных работ'
+        : 'электронный счёт-фактуру';
     if (!window.confirm(`Отправить ${typeLabel.toLowerCase()} № ${document.number} на ${recipient}?`)) return;
     const key = `${row.project.id}:${document.id}:email`;
     setSavingKey(key);
@@ -535,8 +640,8 @@ export default function Accounting() {
       const safeUrl = escapeHtml(fileUrl);
       const result = await sendEmail(recipient, {
         subject: `${typeLabel} № ${document.number} — ${row.companyName}`,
-        html: `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827"><p>Здравствуйте.</p><p>Направляем ${document.type === 'invoice' ? 'счёт на оплату' : 'акт выполненных работ'} <strong>№ ${safeNumber}</strong> по проекту «${safeClient}» на сумму <strong>${escapeHtml(formatMoney(document.amount, row.summary.currency))}</strong>.</p><p><a href="${safeUrl}" style="display:inline-block;padding:10px 16px;background:#0284c7;color:#fff;text-decoration:none;border-radius:8px">Скачать документ</a></p><p>С уважением,<br>${escapeHtml(row.companyName)}<br>HUB</p></div>`,
-        text: `Здравствуйте.\n\nНаправляем ${document.type === 'invoice' ? 'счёт на оплату' : 'акт выполненных работ'} № ${document.number} по проекту «${row.clientName}» на сумму ${formatMoney(document.amount, row.summary.currency)}.\n\nСкачать документ: ${fileUrl}\n\n${row.companyName}\nHUB`,
+        html: `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827"><p>Здравствуйте.</p><p>Направляем ${documentDescription} <strong>№ ${safeNumber}</strong> по проекту «${safeClient}» на сумму <strong>${escapeHtml(formatMoney(document.amount, row.summary.currency))}</strong>.</p><p><a href="${safeUrl}" style="display:inline-block;padding:10px 16px;background:#0284c7;color:#fff;text-decoration:none;border-radius:8px">Скачать документ</a></p><p>С уважением,<br>${escapeHtml(row.companyName)}<br>HUB</p></div>`,
+        text: `Здравствуйте.\n\nНаправляем ${documentDescription} № ${document.number} по проекту «${row.clientName}» на сумму ${formatMoney(document.amount, row.summary.currency)}.\n\nСкачать документ: ${fileUrl}\n\n${row.companyName}\nHUB`,
       });
       if (!result.success) throw new Error(result.message || 'Почтовый сервер не подтвердил отправку');
       await updateDocumentStatus(row, document, 'sent');
@@ -571,6 +676,10 @@ export default function Accounting() {
       'Остаток по договору': row.summary.contractBalanceAmount,
       'АВР №': row.summary.avrs.map((item) => item.number).filter(Boolean).join(', '),
       'Сумма АВР': row.summary.avrAmount,
+      'ЭСФ №': row.summary.esfs.map((item) => item.number).filter(Boolean).join(', '),
+      'Сумма ЭСФ': row.summary.esfAmount,
+      'Источник учёта': row.summary.ledger.sync?.source === '1c' ? `1С · ${row.summary.ledger.sync.sourceDatabase || ''}`.trim() : 'HUB',
+      'Последняя синхронизация 1С': row.summary.ledger.sync?.lastSyncedAt || '',
       'Статус': ACCOUNTING_STATUS_LABELS[row.summary.status],
       'Руководитель проекта': row.leaderName === '—' ? '' : row.leaderName,
       'Контакт заказчика': row.summary.ledger.contact?.name || '',
@@ -588,7 +697,7 @@ export default function Accounting() {
     appendSheet('Общий реестр', exportRows);
     for (const company of companies) {
       const data = exportRows.filter((item) => item['Наша компания'] === company);
-      if (data.length > 0) appendSheet(company.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31) || 'Компания', data);
+      if (data.length > 0) appendSheet(company.replace(/[\\/?*:]/g, ' ').split('[').join(' ').split(']').join(' ').slice(0, 31) || 'Компания', data);
     }
     XLSX.writeFile(workbook, `HUB_Бухгалтерия_${today()}.xlsx`);
   };
@@ -615,6 +724,57 @@ export default function Accounting() {
         </div>
         <Button variant="outline" onClick={exportExcel} disabled={filteredRows.length === 0}><Download className="mr-2 h-4 w-4" />Скачать Excel</Button>
       </div>
+
+      <Card className={oneCStatus?.lastError || oneCStatusError ? 'border-red-300 dark:border-red-900' : 'border-sky-200 dark:border-sky-900'}>
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-950 dark:text-sky-300"><Database className="h-5 w-5" /></div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="font-semibold">Обмен с 1С</div>
+                  <Badge variant="outline" className={oneCStatus?.configured ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
+                    {oneCStatus?.configured ? 'Подключение настроено' : 'Ожидает подключения'}
+                  </Badge>
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {oneCStatus?.lastSuccessAt
+                    ? `Последнее успешное обновление: ${formatDateTime(oneCStatus.lastSuccessAt)} · база ${oneCStatus.source || '1С'}`
+                    : 'После подключения оплаты, счета, АВР и ЭСФ будут обновляться здесь автоматически.'}
+                </div>
+                {(oneCStatus?.lastError || oneCStatusError) && <div className="mt-2 text-sm font-medium text-red-600">{oneCStatus?.lastError || oneCStatusError}</div>}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              {oneCStatus?.lastSuccessAt && <Badge variant="secondary">Получено: {oneCStatus.received}</Badge>}
+              {oneCStatus?.lastSuccessAt && <Badge variant="secondary">Сопоставлено: {oneCStatus.matched}</Badge>}
+              {Boolean(oneCStatus?.unmatchedCount) && <Badge variant="destructive">Разобрать: {oneCStatus?.unmatchedCount}</Badge>}
+              {user?.role === 'admin' && oneCStatus && !oneCStatus.pushEnabled && <Button variant="outline" onClick={createIntegrationKey} disabled={oneCSyncing}>Создать ключ 1С</Button>}
+              {oneCStatus?.pullEnabled ? (
+                <Button onClick={runOneCSync} disabled={oneCSyncing}>
+                  {oneCSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                  Синхронизировать 1С
+                </Button>
+              ) : (
+                <Button variant="outline" disabled><RefreshCw className="mr-2 h-4 w-4" />Автообмен из 1С</Button>
+              )}
+            </div>
+          </div>
+          {Boolean(oneCStatus?.unmatchedCount) && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+              <div className="font-medium text-amber-900 dark:text-amber-200">Записи 1С, которые HUB не смог связать с проектом</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.entries(oneCStatus?.unmatchedSummary || {}).map(([key, count]) => {
+                  const [kind, reason] = key.split(':');
+                  const kindLabel = kind === 'payment' ? 'Оплаты' : kind === 'invoice' ? 'Счета' : kind === 'avr' ? 'АВР' : 'ЭСФ';
+                  return <Badge key={key} variant="outline" className="border-amber-300 bg-background px-3 py-1.5 text-amber-900 dark:text-amber-200">{kindLabel}: {count} · {ONEC_UNMATCHED_REASON_LABELS[reason] || reason}</Badge>;
+                })}
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">Исправьте номер договора или БИН в HUB/1С и запустите синхронизацию повторно. Финансовые реквизиты несопоставленных записей не сохраняются в общедоступных настройках.</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         {[
@@ -684,7 +844,7 @@ export default function Accounting() {
                     <td className="px-2 py-4 text-right"><div className="font-semibold tabular-nums text-emerald-600" title={formatMoney(row.summary.paidAmount, row.summary.currency)}>{formatCompactMoney(row.summary.paidAmount, row.summary.currency)}</div><div className="text-xs text-muted-foreground">{row.summary.payments.length} плат.</div></td>
                     <td className="px-2 py-4 text-right"><div className={`font-bold tabular-nums ${row.summary.receivableAmount > 0 ? 'text-red-600' : 'text-emerald-600'}`} title={formatMoney(row.summary.receivableAmount, row.summary.currency)}>{formatCompactMoney(row.summary.receivableAmount, row.summary.currency)}</div><div className="mt-1 text-[11px] text-muted-foreground" title={formatMoney(row.summary.contractBalanceAmount, row.summary.currency)}>договор: {formatCompactMoney(row.summary.contractBalanceAmount, row.summary.currency)}</div></td>
                     <td className="px-2 py-4"><div className="font-semibold leading-tight">{row.summary.nextActionLabel}</div><div className="mt-2"><DeadlineBadge urgency={row.summary.deadlineUrgency} days={row.summary.daysUntilNextAction} /></div>{row.summary.nextActionDeadline && <div className="mt-1 text-xs font-medium">до {formatDate(row.summary.nextActionDeadline)}</div>}<Badge variant="outline" className={`mt-2 whitespace-normal text-left text-[11px] leading-tight ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge>{row.deadline && <div className="mt-2 text-[11px] text-muted-foreground">Срок проекта: {formatDate(row.deadline)}</div>}</td>
-                    <td className="px-2 py-4"><div className="ml-auto grid max-w-[128px] gap-1"><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'invoice')}><ReceiptText className="mr-1 h-3.5 w-3.5" />Счёт</Button><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'avr')}><Send className="mr-1 h-3.5 w-3.5" />АВР</Button><Button size="sm" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'payment')}><Banknote className="mr-1 h-3.5 w-3.5" />Оплата</Button></div></td>
+                    <td className="px-2 py-4"><div className="ml-auto grid max-w-[128px] gap-1"><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'invoice')}><ReceiptText className="mr-1 h-3.5 w-3.5" />Счёт</Button><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'avr')}><Send className="mr-1 h-3.5 w-3.5" />АВР</Button><Button size="sm" variant="outline" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'esf')}><FileCheck2 className="mr-1 h-3.5 w-3.5" />ЭСФ</Button><Button size="sm" className="h-7 justify-start px-2 text-xs" onClick={() => openEntry(row, 'payment')}><Banknote className="mr-1 h-3.5 w-3.5" />Оплата</Button></div></td>
                   </tr>,
                   isExpanded && <tr key={`${row.project.id}:details`}><td colSpan={8} className="bg-muted/20 p-4"><AccountingDetails row={row} savingKey={savingKey} onStatus={updateDocumentStatus} onSendEmail={sendDocumentEmail} onRemove={removeRecord} onOpenFile={openFile} onSaveContact={saveContact} /></td></tr>,
                 ];
@@ -697,7 +857,7 @@ export default function Accounting() {
       <div className="space-y-3 md:hidden">
         {filteredRows.map((row) => {
           const isExpanded = Boolean(expanded[row.project.id]);
-          return <Card key={row.project.id}><CardContent className="p-4"><button type="button" className="w-full text-left" onClick={() => setExpanded((value) => ({ ...value, [row.project.id]: !isExpanded }))}><div className="flex items-start justify-between gap-2"><div><div className="font-semibold">{row.clientName}</div><div className="mt-1 text-xs text-muted-foreground">{row.companyName} · № {row.contractNumber}</div></div>{isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}</div><div className="mt-3 rounded-lg border bg-muted/30 p-3"><div className="text-xs uppercase tracking-wide text-muted-foreground">Следующее действие</div><div className="mt-1 font-semibold">{row.summary.nextActionLabel}</div><div className="mt-2 flex flex-wrap items-center gap-2"><DeadlineBadge urgency={row.summary.deadlineUrgency} days={row.summary.daysUntilNextAction} />{row.summary.nextActionDeadline && <span className="text-sm font-medium">до {formatDate(row.summary.nextActionDeadline)}</span>}</div>{row.deadline && <div className="mt-2 text-xs text-muted-foreground">Срок проекта: {formatDate(row.deadline)}</div>}</div><Badge variant="outline" className={`mt-3 ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">Стоимость</div><b>{formatMoney(row.summary.contractAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Выставлено</div><b>{formatMoney(row.summary.invoiceAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Оплачено</div><b className="text-emerald-600">{formatMoney(row.summary.paidAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Задолженность</div><b className={row.summary.receivableAmount ? 'text-red-600' : 'text-emerald-600'}>{formatMoney(row.summary.receivableAmount, row.summary.currency)}</b></div></div></button><div className="mt-4 grid grid-cols-3 gap-2"><Button size="sm" variant="outline" onClick={() => openEntry(row, 'invoice')}>Счёт</Button><Button size="sm" variant="outline" onClick={() => openEntry(row, 'avr')}>АВР</Button><Button size="sm" onClick={() => openEntry(row, 'payment')}>Оплата</Button></div>{isExpanded && <div className="mt-4 border-t pt-4"><AccountingDetails row={row} savingKey={savingKey} onStatus={updateDocumentStatus} onSendEmail={sendDocumentEmail} onRemove={removeRecord} onOpenFile={openFile} onSaveContact={saveContact} /></div>}</CardContent></Card>;
+          return <Card key={row.project.id}><CardContent className="p-4"><button type="button" className="w-full text-left" onClick={() => setExpanded((value) => ({ ...value, [row.project.id]: !isExpanded }))}><div className="flex items-start justify-between gap-2"><div><div className="font-semibold">{row.clientName}</div><div className="mt-1 text-xs text-muted-foreground">{row.companyName} · № {row.contractNumber}</div></div>{isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}</div><div className="mt-3 rounded-lg border bg-muted/30 p-3"><div className="text-xs uppercase tracking-wide text-muted-foreground">Следующее действие</div><div className="mt-1 font-semibold">{row.summary.nextActionLabel}</div><div className="mt-2 flex flex-wrap items-center gap-2"><DeadlineBadge urgency={row.summary.deadlineUrgency} days={row.summary.daysUntilNextAction} />{row.summary.nextActionDeadline && <span className="text-sm font-medium">до {formatDate(row.summary.nextActionDeadline)}</span>}</div>{row.deadline && <div className="mt-2 text-xs text-muted-foreground">Срок проекта: {formatDate(row.deadline)}</div>}</div><Badge variant="outline" className={`mt-3 ${STATUS_COLORS[row.summary.status]}`}>{ACCOUNTING_STATUS_LABELS[row.summary.status]}</Badge><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">Стоимость</div><b>{formatMoney(row.summary.contractAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Выставлено</div><b>{formatMoney(row.summary.invoiceAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Оплачено</div><b className="text-emerald-600">{formatMoney(row.summary.paidAmount, row.summary.currency)}</b></div><div><div className="text-xs text-muted-foreground">Задолженность</div><b className={row.summary.receivableAmount ? 'text-red-600' : 'text-emerald-600'}>{formatMoney(row.summary.receivableAmount, row.summary.currency)}</b></div></div></button><div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" variant="outline" onClick={() => openEntry(row, 'invoice')}>Счёт</Button><Button size="sm" variant="outline" onClick={() => openEntry(row, 'avr')}>АВР</Button><Button size="sm" variant="outline" onClick={() => openEntry(row, 'esf')}>ЭСФ</Button><Button size="sm" onClick={() => openEntry(row, 'payment')}>Оплата</Button></div>{isExpanded && <div className="mt-4 border-t pt-4"><AccountingDetails row={row} savingKey={savingKey} onStatus={updateDocumentStatus} onSendEmail={sendDocumentEmail} onRemove={removeRecord} onOpenFile={openFile} onSaveContact={saveContact} /></div>}</CardContent></Card>;
         })}
       </div>
 
@@ -705,17 +865,40 @@ export default function Accounting() {
 
       <Dialog open={Boolean(entry)} onOpenChange={(open) => !open && setEntry(null)}>
         <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>{entry?.kind === 'payment' ? 'Добавить фактическую оплату' : entry?.kind === 'invoice' ? 'Выставить счёт' : 'Добавить АВР'}</DialogTitle><DialogDescription>{entry?.row.clientName} · {entry && formatMoney(entry.row.summary.contractAmount, entry.row.summary.currency)}</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{entry?.kind === 'payment' ? 'Добавить фактическую оплату' : entry ? `Добавить ${documentTypeLabel(entry.kind)}` : 'Добавить документ'}</DialogTitle><DialogDescription>{entry?.row.clientName} · {entry && formatMoney(entry.row.summary.contractAmount, entry.row.summary.currency)}</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-2">
-            {entry?.kind !== 'payment' && <div className="grid gap-2"><Label htmlFor="entry-number">{entry?.kind === 'invoice' ? 'Номер счёта' : 'Номер АВР'}</Label><Input id="entry-number" value={number} onChange={(event) => setNumber(event.target.value)} placeholder={entry?.kind === 'invoice' ? 'СФ-123' : 'АВР-123'} /></div>}
+            {entry?.kind !== 'payment' && <div className="grid gap-2"><Label htmlFor="entry-number">Номер: {entry ? documentTypeLabel(entry.kind) : 'документ'}</Label><Input id="entry-number" value={number} onChange={(event) => setNumber(event.target.value)} placeholder={entry?.kind === 'invoice' ? 'СЧ-123' : entry?.kind === 'avr' ? 'АВР-123' : 'ЭСФ-123'} /></div>}
             <div className="grid grid-cols-2 gap-3"><div className="grid gap-2"><Label htmlFor="entry-date">Дата</Label><Input id="entry-date" type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} /></div><div className="grid gap-2"><Label htmlFor="entry-amount">Сумма</Label><Input id="entry-amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" /></div></div>
-            {entry?.kind !== 'payment' && <div className="grid gap-2"><Label htmlFor="due-date">{entry?.kind === 'invoice' ? 'Оплатить до' : 'Получить подписанный АВР до'}</Label><Input id="due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></div>}
+            {entry?.kind !== 'payment' && <div className="grid gap-2"><Label htmlFor="due-date">{entry?.kind === 'invoice' ? 'Оплатить до' : entry?.kind === 'avr' ? 'Получить подписанный АВР до' : 'Зарегистрировать ЭСФ до'}</Label><Input id="due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></div>}
             {entry?.kind === 'payment' && <div className="grid gap-2"><Label>Тип оплаты</Label><Select value={paymentKind} onValueChange={(value) => setPaymentKind(value as AccountingPaymentKind)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(ACCOUNTING_PAYMENT_KIND_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>}
             {entry?.kind === 'payment' && <div className="grid gap-2"><Label htmlFor="payment-reference">Номер платёжного поручения / назначение</Label><Input id="payment-reference" value={reference} onChange={(event) => setReference(event.target.value)} placeholder="ПП №…, оплата по договору…" /></div>}
-            <div className="grid gap-2"><Label htmlFor="entry-file">Файл {entry?.kind === 'payment' ? 'платёжного документа' : entry?.kind === 'invoice' ? 'счёта' : 'АВР'} (необязательно)</Label><Input id="entry-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] || null)} /></div>
+            <div className="grid gap-2"><Label htmlFor="entry-file">Файл {entry?.kind === 'payment' ? 'платёжного документа' : entry ? documentTypeLabel(entry.kind) : 'документа'} (необязательно)</Label><Input id="entry-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] || null)} /></div>
             <div className="grid gap-2"><Label htmlFor="entry-notes">Примечание</Label><Textarea id="entry-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Что важно знать бухгалтерии" /></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setEntry(null)}>Отмена</Button><Button onClick={saveEntry} disabled={Boolean(savingKey)}>{savingKey && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{entry?.kind === 'payment' ? 'Учесть оплату' : entry?.kind === 'invoice' ? 'Выставить счёт' : 'Сохранить АВР'}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setEntry(null)}>Отмена</Button><Button onClick={saveEntry} disabled={Boolean(savingKey)}>{savingKey && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{entry?.kind === 'payment' ? 'Учесть оплату' : entry ? `Сохранить ${documentTypeLabel(entry.kind)}` : 'Сохранить'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(oneCIntegrationKey)} onOpenChange={(open) => !open && setOneCIntegrationKey('')}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Ключ обмена HUB ↔ 1С</DialogTitle>
+            <DialogDescription>Этот ключ показывается только один раз. Передайте его ответственному специалисту 1С по защищённому каналу.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <Label htmlFor="onec-integration-key">X-Hub-1C-Key</Label>
+            <Textarea id="onec-integration-key" readOnly value={oneCIntegrationKey} className="min-h-24 break-all font-mono text-sm" />
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+              Адрес приёма: <code>https://hub.rbpartners.kz/api/1c/sync</code>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOneCIntegrationKey('')}>Закрыть</Button>
+            <Button onClick={async () => {
+              await navigator.clipboard.writeText(oneCIntegrationKey);
+              toast({ title: 'Ключ скопирован' });
+            }}>Скопировать ключ</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -739,7 +922,7 @@ function AccountingDetails({
   onOpenFile: (file?: AccountingFile) => Promise<void>;
   onSaveContact: (row: AccountingRow, contact: AccountingContact) => Promise<void>;
 }) {
-  const documents = [...row.summary.invoices, ...row.summary.avrs].sort((a, b) => b.issueDate.localeCompare(a.issueDate));
+  const documents = [...row.summary.invoices, ...row.summary.avrs, ...row.summary.esfs].sort((a, b) => b.issueDate.localeCompare(a.issueDate));
   const payments = [...row.summary.payments].sort((a, b) => b.date.localeCompare(a.date));
   const notes = projectNotes(row.project);
   const amendments = Array.isArray((row.project as any).amendments)
@@ -759,7 +942,7 @@ function AccountingDetails({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border bg-background p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><FileCheck2 className="h-4 w-4" />Счета и АВР</div>{documents.length === 0 ? <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">Документы ещё не добавлены.</div> : <div className="space-y-2">{documents.map((document) => { const documentDeadline = accountingDeadlineUrgency(document.dueDate || '', today(), document.status === 'signed' || document.status === 'cancelled'); return <div key={document.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-medium">{document.type === 'invoice' ? 'Счёт' : 'АВР'} № {document.number || 'без номера'}</div><div className="text-xs text-muted-foreground">{formatDate(document.issueDate)} · {formatMoney(document.amount, row.summary.currency)}{document.dueDate ? ` · ${document.type === 'invoice' ? 'оплатить' : 'подписать'} до ${formatDate(document.dueDate)}` : ''}</div><div className="mt-1"><DeadlineBadge urgency={documentDeadline.urgency} days={documentDeadline.days} /></div></div><Badge variant="outline">{ACCOUNTING_DOCUMENT_STATUS_LABELS[document.status]}</Badge></div><div className="mt-2 flex flex-wrap gap-1.5">{document.file && <Button size="sm" variant="ghost" onClick={() => onOpenFile(document.file)}><Download className="mr-1 h-3.5 w-3.5" />{document.file.fileName || 'Файл'}</Button>}{document.file && row.summary.ledger.contact?.email && document.status !== 'sent' && document.status !== 'signed' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onSendEmail(row, document)}><Send className="mr-1 h-3.5 w-3.5" />Отправить email</Button>}{document.status === 'draft' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'issued')}>Выставлен</Button>}{document.status === 'issued' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'sent')}>Уже отправлен</Button>}{document.type === 'avr' && document.status === 'sent' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'signed')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Подписан</Button>}<Button size="sm" variant="ghost" className="text-destructive" disabled={Boolean(savingKey)} onClick={() => onRemove(row, 'document', document.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>{document.notes && <div className="mt-2 text-xs text-muted-foreground">{document.notes}</div>}</div>; })}</div>}</div>
+        <div className="rounded-xl border bg-background p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><FileCheck2 className="h-4 w-4" />Счета, АВР и ЭСФ</div>{documents.length === 0 ? <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">Документы ещё не добавлены.</div> : <div className="space-y-2">{documents.map((document) => { const documentDeadline = accountingDeadlineUrgency(document.dueDate || '', today(), document.status === 'signed' || document.status === 'registered' || document.status === 'cancelled'); return <div key={document.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><div className="font-medium">{documentTypeLabel(document.type)} № {document.number || 'без номера'}</div>{document.source === '1c' && <Badge variant="secondary" className="text-[10px]">из 1С</Badge>}</div><div className="text-xs text-muted-foreground">{formatDate(document.issueDate)} · {formatMoney(document.amount, row.summary.currency)}{document.dueDate ? ` · ${document.type === 'invoice' ? 'оплатить' : document.type === 'avr' ? 'подписать' : 'зарегистрировать'} до ${formatDate(document.dueDate)}` : ''}</div><div className="mt-1"><DeadlineBadge urgency={documentDeadline.urgency} days={documentDeadline.days} /></div></div><Badge variant="outline">{ACCOUNTING_DOCUMENT_STATUS_LABELS[document.status]}</Badge></div><div className="mt-2 flex flex-wrap gap-1.5">{document.file && <Button size="sm" variant="ghost" onClick={() => onOpenFile(document.file)}><Download className="mr-1 h-3.5 w-3.5" />{document.file.fileName || 'Файл'}</Button>}{document.file && row.summary.ledger.contact?.email && !['sent', 'signed', 'registered'].includes(document.status) && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onSendEmail(row, document)}><Send className="mr-1 h-3.5 w-3.5" />Отправить email</Button>}{document.status === 'draft' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'issued')}>Выставлен</Button>}{document.status === 'issued' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'sent')}>Уже отправлен</Button>}{document.type === 'avr' && document.status === 'sent' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'signed')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Подписан</Button>}{document.type === 'esf' && document.status === 'sent' && <Button size="sm" variant="outline" disabled={Boolean(savingKey)} onClick={() => onStatus(row, document, 'registered')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Зарегистрирован</Button>}<Button size="sm" variant="ghost" className="text-destructive" disabled={Boolean(savingKey)} onClick={() => onRemove(row, 'document', document.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>{document.notes && <div className="mt-2 text-xs text-muted-foreground">{document.notes}</div>}</div>; })}</div>}</div>
         <div className="rounded-xl border bg-background p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><Banknote className="h-4 w-4" />Фактические оплаты</div>{payments.length === 0 ? <div className="rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">Оплаты ещё не внесены.</div> : <div className="space-y-2">{payments.map((payment: AccountingPayment) => <div key={payment.id} className="flex items-start justify-between gap-3 rounded-lg border p-3"><div><div className="font-semibold text-emerald-600">+ {formatMoney(payment.amount, row.summary.currency)}</div><div className="text-xs text-muted-foreground">{formatDate(payment.date)} · {ACCOUNTING_PAYMENT_KIND_LABELS[payment.kind]}</div>{payment.reference && <div className="mt-1 text-xs">{payment.reference}</div>}{payment.file && <Button size="sm" variant="ghost" className="mt-1 h-7 px-1" onClick={() => onOpenFile(payment.file)}><Download className="mr-1 h-3.5 w-3.5" />Документ</Button>}</div><Button size="sm" variant="ghost" className="text-destructive" disabled={Boolean(savingKey)} onClick={() => onRemove(row, 'payment', payment.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>)}</div>}</div>
       </div>
       <ContactEditor row={row} saving={savingKey === `${row.project.id}:contact`} onSave={onSaveContact} />
