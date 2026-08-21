@@ -47,6 +47,22 @@ function getHeader(req, name) {
   return req.headers?.[lower] || req.headers?.[name] || '';
 }
 
+export function normalizeEmployeeRole(role, level) {
+  const raw = String(role || '').trim().toLowerCase();
+  const normalizedLevel = ['2', '3'].includes(String(level || '').trim())
+    ? String(level).trim()
+    : '1';
+  if (raw === 'it_admin') return 'admin';
+  if (raw === 'designer') return 'admin_assistant';
+  if (raw === 'project_manager') return 'project_leader';
+  if (raw === 'employee') return 'assistant_1';
+  if (raw === 'assistant') return `assistant_${normalizedLevel}`;
+  if (raw === 'manager') return `manager_${normalizedLevel}`;
+  if (raw === 'supervisor') return `supervisor_${normalizedLevel}`;
+  if (raw === 'tax_specialist') return `tax_specialist_${normalizedLevel}`;
+  return raw;
+}
+
 export async function getRequestUser(req, supabase) {
   const authorization = getHeader(req, 'authorization');
   const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
@@ -64,7 +80,12 @@ export async function getRequestUser(req, supabase) {
       return {
         id: employee?.id || authUser.id,
         email: authUser.email,
-        role: employee?.role || authUser.app_metadata?.role || authUser.user_metadata?.role || null,
+        // Authorization roles must come from the server-managed employee row.
+        // Supabase user_metadata is self-editable, and an auth account without
+        // an employee record must remain unprivileged on protected endpoints.
+        role: employee ? normalizeEmployeeRole(employee.role, employee.level) : '',
+        level: employee?.level || null,
+        authMethod: 'jwt',
       };
     }
   }
@@ -78,15 +99,26 @@ export async function getRequestUser(req, supabase) {
       .maybeSingle();
 
     if (employee) {
-      return { id: employee.id, email: employee.email, role: employee.role || null };
+      return {
+        id: employee.id,
+        email: employee.email,
+        role: normalizeEmployeeRole(employee.role, employee.level),
+        level: employee.level || null,
+        authMethod: 'legacy_header',
+      };
     }
   }
 
   return null;
 }
 
-export async function requireAdmin(req, supabase) {
+export async function requireAdmin(req, supabase, options = {}) {
   const user = await getRequestUser(req, supabase);
+  if (options.jwtOnly && user?.authMethod !== 'jwt') {
+    const error = new Error('A verified session is required to manage access settings');
+    error.statusCode = 401;
+    throw error;
+  }
   if (!user || !ADMIN_ROLES.has(String(user.role || ''))) {
     const error = new Error('Only admin can manage email settings');
     error.statusCode = 403;

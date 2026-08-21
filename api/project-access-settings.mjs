@@ -59,7 +59,7 @@ export default async function handler(req, res) {
 
   try {
     const supabase = getSupabaseAdmin();
-    await requireAdmin(req, supabase);
+    await requireAdmin(req, supabase, { jwtOnly: true });
     const projectAccess = normalizeProjectAccess(parseBody(req).projectAccess);
     const { data: row, error: readError } = await supabase
       .from('app_settings')

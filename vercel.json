@@ -3,6 +3,11 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "installCommand": "npm install --legacy-peer-deps",
+  "functions": {
+    "api/1c/sync.mjs": {
+      "maxDuration": 300
+    }
+  },
   "headers": [
     {
       "source": "/assets/(.*)",

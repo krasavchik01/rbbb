@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { getRequestUser, requireAdmin } from '../api/_email-utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -21,10 +22,84 @@ test('bonus visibility is hard-limited to CEO and admin even if settings are tam
 });
 
 test('admin access writes use a verified server endpoint and RLS removes the broad update policy', () => {
-  assert.match(apiSource, /await requireAdmin\(req, supabase\)/);
+  assert.match(apiSource, /await requireAdmin\(req, supabase, \{ jwtOnly: true \}\)/);
   assert.match(apiSource, /const BONUS_ROLES = new Set\(\['ceo', 'admin'\]\)/);
   assert.match(migrationSource, /DROP POLICY IF EXISTS "Allow authenticated users to update app_settings"/);
   assert.match(migrationSource, /employee\.role::text = 'admin'/);
+});
+
+function authSupabase({ authUser = null, employee = null } = {}) {
+  return {
+    auth: {
+      async getUser() {
+        return { data: { user: authUser } };
+      },
+    },
+    from(table) {
+      assert.equal(table, 'employees');
+      return {
+        select() { return this; },
+        ilike() { return this; },
+        eq() { return this; },
+        async maybeSingle() { return { data: employee }; },
+      };
+    },
+  };
+}
+
+test('self-editable auth metadata cannot grant a privileged role without an employee row', async () => {
+  const supabase = authSupabase({
+    authUser: {
+      id: 'auth-only',
+      email: 'auth-only@example.invalid',
+      app_metadata: { role: 'admin', level: '3' },
+      user_metadata: { role: 'admin', level: '3' },
+    },
+  });
+
+  const user = await getRequestUser(
+    { headers: { authorization: 'Bearer valid-token' } },
+    supabase,
+  );
+
+  assert.equal(user.authMethod, 'jwt');
+  assert.equal(user.role, '');
+  assert.equal(user.level, null);
+});
+
+test('project access mutation rejects a spoofable legacy admin header but accepts a JWT employee admin', async () => {
+  const employee = {
+    id: 'admin-id',
+    email: 'admin@example.invalid',
+    role: 'admin',
+    level: '1',
+  };
+
+  await assert.rejects(
+    requireAdmin(
+      { headers: { 'x-suite-user-id': 'admin-id' } },
+      authSupabase({ employee }),
+      { jwtOnly: true },
+    ),
+    (error) => error.statusCode === 401,
+  );
+
+  const legacyUser = await requireAdmin(
+    { headers: { 'x-suite-user-id': 'admin-id' } },
+    authSupabase({ employee }),
+  );
+  assert.equal(legacyUser.authMethod, 'legacy_header');
+
+  const user = await requireAdmin(
+    { headers: { authorization: 'Bearer valid-token' } },
+    authSupabase({
+      authUser: { id: 'auth-admin', email: 'admin@example.invalid' },
+      employee,
+    }),
+    { jwtOnly: true },
+  );
+  assert.equal(user.role, 'admin');
+  assert.equal(user.authMethod, 'jwt');
 });
 
 test('restricted roles cannot infer bonus differences from filters or finance totals', () => {

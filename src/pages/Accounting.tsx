@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import * as XLSX from 'xlsx';
 import {
   AlertCircle,
@@ -73,10 +73,18 @@ import { projectCompanyName } from '@/types/companies';
 import {
   getOneCSyncStatus,
   createOneCIntegrationKey,
+  ONEC_REJECTED_REASON_LABELS,
   ONEC_UNMATCHED_REASON_LABELS,
   pullOneCAccounting,
   type OneCSyncStatus,
 } from '@/lib/oneCAccounting';
+import {
+  filterOneCAccountingInbox,
+  loadOneCAccountingInbox,
+  ONE_C_INBOX_KIND_LABELS,
+  summarizeOneCAccountingInbox,
+  type OneCAccountingInboxRecord,
+} from '@/lib/oneCAccountingInbox';
 
 type EntryKind = AccountingDocumentType | 'payment';
 type AccountingRow = {
@@ -202,6 +210,106 @@ function formatCompactMoney(value: number, currency = 'KZT'): string {
   return `${format(amount)} ${symbol}`;
 }
 
+function formatAmountBreakdown(amounts: Record<string, number>): string {
+  const entries = Object.entries(amounts).sort(([left], [right]) => (
+    left === 'KZT' ? -1 : right === 'KZT' ? 1 : left.localeCompare(right)
+  ));
+  if (entries.length === 0) return formatCompactMoney(0, 'KZT');
+  return entries.map(([currency, value]) => formatCompactMoney(value, currency)).join(' · ');
+}
+
+function OneCInboxCard({
+  records,
+  loading,
+  refreshing,
+  available,
+  error,
+  truncated,
+  onRefresh,
+}: {
+  records: OneCAccountingInboxRecord[];
+  loading: boolean;
+  refreshing: boolean;
+  available: boolean;
+  error: string;
+  truncated: boolean;
+  onRefresh: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(100);
+  const summary = useMemo(() => summarizeOneCAccountingInbox(records), [records]);
+  const filtered = useMemo(() => filterOneCAccountingInbox(records, query), [records, query]);
+  const visible = filtered.slice(0, visibleLimit);
+  const reasons = Object.entries(summary.byReason).sort(([, left], [, right]) => right.count - left.count);
+
+  useEffect(() => {
+    setVisibleLimit(100);
+  }, [query]);
+
+  if (!loading && !available && !error) return null;
+  if (loading) {
+    return <Card className="border-amber-200/80 dark:border-amber-900/70"><CardContent className="flex items-center gap-3 p-4"><Loader2 className="h-5 w-5 animate-spin text-amber-600" /><div><div className="font-semibold">Не привязано к проектам</div><div className="text-xs text-muted-foreground">Загружаю записи 1С, которые нужно разобрать…</div></div></CardContent></Card>;
+  }
+  if (error && !available && records.length === 0) {
+    return <Card className="border-red-300 dark:border-red-900"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /><div><div className="font-semibold">Не удалось загрузить реестр разбора 1С</div><div className="text-sm text-muted-foreground">{error}</div></div></div><Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}><RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />Повторить</Button></CardContent></Card>;
+  }
+
+  return (
+    <Card className="overflow-hidden border-amber-200/80 dark:border-amber-900/70">
+      <CardContent className="p-0">
+        <div className="border-b bg-amber-50/50 p-4 dark:bg-amber-950/10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300"><AlertCircle className="h-5 w-5" /></div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2"><div className="font-semibold">Не привязано к проектам</div><Badge variant={summary.count > 0 ? 'destructive' : 'secondary'}>{summary.count}</Badge></div>
+                <div className="mt-1 text-sm text-muted-foreground">{summary.count > 0 ? 'Эти записи уже пришли из 1С, но HUB не нашёл для них однозначный проект.' : 'Все принятые записи 1С привязаны к проектам.'}</div>
+              </div>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+          </div>
+
+          {error && <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/70 p-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Не удалось обновить реестр: {error}. Показаны последние успешно загруженные данные.</span></div>}
+          {truncated && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Реестр ограничен 10 000 записями. В 1С есть ещё записи на разборе; уточните поиск или устраните несопоставленные договоры.</span></div>}
+
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {(['invoice', 'avr', 'esf', 'payment'] as const).map((recordKind) => {
+              const item = summary.byKind[recordKind];
+              return <div key={recordKind} className="rounded-lg border bg-background p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{ONE_C_INBOX_KIND_LABELS[recordKind]}</span><b className="tabular-nums">{item.count}</b></div><div className="mt-1 truncate text-xs font-medium tabular-nums" title={formatAmountBreakdown(item.amountsByCurrency)}>{formatAmountBreakdown(item.amountsByCurrency)}</div></div>;
+            })}
+          </div>
+
+          {reasons.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{reasons.map(([reason, item]) => <Badge key={reason} variant="outline" className="border-amber-300 bg-background px-2.5 py-1 text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[reason] || reason}: {item.count}</Badge>)}</div>}
+        </div>
+
+        {summary.count > 0 && (
+          <>
+            <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative min-w-0 flex-1 sm:max-w-xl"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Контрагент, БИН, договор или номер документа…" /></div>
+              <div className="whitespace-nowrap text-sm text-muted-foreground">{filtered.length} из {records.length}</div>
+            </div>
+
+            <div className="hidden max-h-[440px] overflow-auto md:block">
+              <table className="w-full min-w-[940px] text-sm">
+                <thead className="sticky top-0 z-10 bg-muted/95 text-left text-xs uppercase tracking-wide text-muted-foreground backdrop-blur"><tr><th className="px-3 py-2.5">Документ</th><th className="px-3 py-2.5">Контрагент</th><th className="px-3 py-2.5">Договор</th><th className="px-3 py-2.5">Наша компания</th><th className="px-3 py-2.5 text-right">Сумма</th><th className="px-3 py-2.5">Почему не привязано</th></tr></thead>
+                <tbody className="divide-y">{visible.map((record) => <tr key={record.id} className="align-top hover:bg-muted/30"><td className="px-3 py-3"><div className="flex items-center gap-2"><Badge variant="outline">{ONE_C_INBOX_KIND_LABELS[record.kind]}</Badge><span className="font-semibold">№ {record.documentNumber || 'б/н'}</span></div><div className="mt-1 text-xs text-muted-foreground">{formatDate(record.documentDate)}</div></td><td className="px-3 py-3"><div className="font-medium">{record.counterpartyName || 'Не указан'}</div>{record.counterpartyBin && <div className="mt-1 text-xs text-muted-foreground">БИН {record.counterpartyBin}</div>}</td><td className="px-3 py-3"><div className="font-medium">{record.contractNumber || '—'}</div>{record.matchCandidates.length > 0 && <div className="mt-1 text-xs text-muted-foreground">Кандидатов: {record.matchCandidates.length}</div>}</td><td className="px-3 py-3"><div>{record.organizationName || '—'}</div>{record.organizationBin && <div className="mt-1 text-xs text-muted-foreground">БИН {record.organizationBin}</div>}</td><td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums">{formatMoney(record.amount, record.currency)}</td><td className="px-3 py-3"><Badge variant="outline" className="max-w-[260px] whitespace-normal border-amber-300 text-left text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[record.matchReason] || record.matchReason}</Badge></td></tr>)}</tbody>
+              </table>
+            </div>
+
+            <div className="max-h-[520px] space-y-2 overflow-auto p-3 md:hidden">{visible.map((record) => <div key={record.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{ONE_C_INBOX_KIND_LABELS[record.kind]} № {record.documentNumber || 'б/н'}</div><div className="text-xs text-muted-foreground">{formatDate(record.documentDate)}</div></div><div className="whitespace-nowrap font-bold tabular-nums">{formatCompactMoney(record.amount, record.currency)}</div></div><div className="mt-3 text-sm font-medium">{record.counterpartyName || 'Контрагент не указан'}</div><div className="mt-1 text-xs text-muted-foreground">Догов: {record.contractNumber || 'не указан'}</div><Badge variant="outline" className="mt-2 whitespace-normal border-amber-300 text-left text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[record.matchReason] || record.matchReason}</Badge></div>)}</div>
+
+            {filtered.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">По этому запросу записей нет.</div>}
+            {filtered.length > visible.length && <div className="flex flex-col gap-2 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"><span>Показано {visible.length} из {filtered.length}</span><Button type="button" size="sm" variant="outline" onClick={() => setVisibleLimit((value) => Math.min(value + 100, filtered.length))}>Показать ещё {Math.min(100, filtered.length - visible.length)}</Button></div>}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function clientName(project: any): string {
   const notes = projectNotes(project);
   const client = project.client || notes.client || {};
@@ -296,21 +404,100 @@ export default function Accounting() {
   const [oneCStatusError, setOneCStatusError] = useState('');
   const [oneCSyncing, setOneCSyncing] = useState(false);
   const [oneCIntegrationKey, setOneCIntegrationKey] = useState('');
+  const [oneCInboxRecords, setOneCInboxRecords] = useState<OneCAccountingInboxRecord[]>([]);
+  const [oneCInboxLoading, setOneCInboxLoading] = useState(true);
+  const [oneCInboxRefreshing, setOneCInboxRefreshing] = useState(false);
+  const [oneCInboxAvailable, setOneCInboxAvailable] = useState(false);
+  const [oneCInboxError, setOneCInboxError] = useState('');
+  const [oneCInboxTruncated, setOneCInboxTruncated] = useState(false);
+  const oneCDataMountedRef = useRef(false);
+  const oneCStatusRequestRef = useRef(0);
+  const oneCInboxRequestRef = useRef(0);
+
+  const refreshOneCStatus = useCallback(async () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const requestId = ++oneCStatusRequestRef.current;
+    try {
+      const status = await getOneCSyncStatus();
+      if (!oneCDataMountedRef.current || requestId !== oneCStatusRequestRef.current) return;
+      setOneCStatus(status);
+      setOneCStatusError('');
+    } catch (statusError) {
+      if (!oneCDataMountedRef.current || requestId !== oneCStatusRequestRef.current) return;
+      setOneCStatusError(statusError instanceof Error ? statusError.message : 'Нет данных о синхронизации');
+    }
+  }, []);
+
+  const refreshOneCInbox = useCallback(async (initial = false) => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const requestId = ++oneCInboxRequestRef.current;
+    if (initial) setOneCInboxLoading(true);
+    else setOneCInboxRefreshing(true);
+    try {
+      const result = await loadOneCAccountingInbox();
+      if (!oneCDataMountedRef.current || requestId !== oneCInboxRequestRef.current) return;
+      setOneCInboxRecords(result.records);
+      setOneCInboxAvailable(result.available);
+      setOneCInboxTruncated(result.truncated);
+      setOneCInboxError('');
+    } catch (inboxError) {
+      if (!oneCDataMountedRef.current || requestId !== oneCInboxRequestRef.current) return;
+      setOneCInboxError(inboxError instanceof Error ? inboxError.message : 'Нет данных о несопоставленных записях');
+    } finally {
+      if (oneCDataMountedRef.current && requestId === oneCInboxRequestRef.current) {
+        setOneCInboxLoading(false);
+        setOneCInboxRefreshing(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    void getOneCSyncStatus()
-      .then((status) => {
-        if (!active) return;
-        setOneCStatus(status);
-        setOneCStatusError('');
-      })
-      .catch((statusError: Error) => {
-        if (!active) return;
-        setOneCStatusError(statusError.message || 'Нет данных о синхронизации');
-      });
-    return () => { active = false; };
-  }, []);
+    oneCDataMountedRef.current = true;
+    const refreshVisibleData = (initial = false) => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void refreshOneCStatus();
+      void refreshOneCInbox(initial);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshVisibleData(false);
+    };
+
+    refreshVisibleData(true);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const intervalId = window.setInterval(() => refreshVisibleData(false), 60_000);
+    return () => {
+      oneCDataMountedRef.current = false;
+      oneCStatusRequestRef.current += 1;
+      oneCInboxRequestRef.current += 1;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [refreshOneCInbox, refreshOneCStatus]);
+
+  const handleOneCInboxRefresh = useCallback(() => {
+    void refreshOneCStatus();
+    void refreshOneCInbox(false);
+  }, [refreshOneCInbox, refreshOneCStatus]);
+
+  const latestOneCRun = oneCStatus?.latestRun || null;
+  const oneCDisplayStats = latestOneCRun || (oneCStatus ? {
+    rawReceived: oneCStatus.rawReceived ?? oneCStatus.received,
+    accepted: oneCStatus.accepted ?? oneCStatus.received,
+    rejectedCount: oneCStatus.rejectedCount ?? 0,
+    rejectedReasons: oneCStatus.rejectedReasons || {},
+    matched: oneCStatus.matched,
+    unmatchedCount: oneCStatus.unmatchedCount,
+    unmatchedSummary: oneCStatus.unmatchedSummary,
+    updatedProjects: oneCStatus.updatedProjects,
+    complete: true,
+    batchCount: 1,
+    expectedBatchCount: 1,
+    status: 'success' as const,
+    completedAt: oneCStatus.lastSuccessAt,
+  } : null);
+  const oneCRunArithmeticValid = Boolean(oneCDisplayStats)
+    && oneCDisplayStats!.rawReceived === oneCDisplayStats!.accepted + oneCDisplayStats!.rejectedCount
+    && oneCDisplayStats!.accepted === oneCDisplayStats!.matched + oneCDisplayStats!.unmatchedCount;
 
   const runOneCSync = async () => {
     setOneCSyncing(true);
@@ -322,7 +509,7 @@ export default function Accounting() {
         title: 'Данные из 1С обновлены',
         description: `Получено ${status.received}, сопоставлено ${status.matched}, требуют разбора ${status.unmatchedCount}.`,
       });
-      window.setTimeout(() => window.location.reload(), 500);
+      await refreshOneCInbox(false);
     } catch (syncError: any) {
       const message = syncError?.message || 'Не удалось получить данные из 1С';
       setOneCStatusError(message);
@@ -746,9 +933,11 @@ export default function Accounting() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              {oneCStatus?.lastSuccessAt && <Badge variant="secondary">Получено: {oneCStatus.received}</Badge>}
-              {oneCStatus?.lastSuccessAt && <Badge variant="secondary">Сопоставлено: {oneCStatus.matched}</Badge>}
-              {Boolean(oneCStatus?.unmatchedCount) && <Badge variant="destructive">Разобрать: {oneCStatus?.unmatchedCount}</Badge>}
+              {oneCDisplayStats && <Badge variant="secondary">Подготовлено 1С: {oneCDisplayStats.rawReceived}</Badge>}
+              {oneCDisplayStats && <Badge variant="secondary">Принято HUB: {oneCDisplayStats.accepted}</Badge>}
+              {Boolean(oneCDisplayStats?.rejectedCount) && <Badge variant="outline" className="border-amber-300 text-amber-700">Отклонено: {oneCDisplayStats?.rejectedCount}</Badge>}
+              {oneCDisplayStats && <Badge variant="secondary">Сопоставлено: {oneCDisplayStats.matched}</Badge>}
+              {Boolean(oneCDisplayStats?.unmatchedCount) && <Badge variant="destructive">Разобрать: {oneCDisplayStats?.unmatchedCount}</Badge>}
               {user?.role === 'admin' && oneCStatus && !oneCStatus.pushEnabled && <Button variant="outline" onClick={createIntegrationKey} disabled={oneCSyncing}>Создать ключ 1С</Button>}
               {oneCStatus?.pullEnabled ? (
                 <Button onClick={runOneCSync} disabled={oneCSyncing}>
@@ -760,11 +949,36 @@ export default function Accounting() {
               )}
             </div>
           </div>
-          {Boolean(oneCStatus?.unmatchedCount) && (
+          {latestOneCRun && (
+            <div className={`mt-4 rounded-xl border p-3 ${latestOneCRun.complete && oneCRunArithmeticValid && latestOneCRun.status === 'success' ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium">Контроль полного запуска 1С</div>
+                <Badge variant="outline">Пакеты: {latestOneCRun.batchCount} из {latestOneCRun.expectedBatchCount}</Badge>
+              </div>
+              <div className="mt-2 text-sm tabular-nums">
+                {latestOneCRun.rawReceived} подготовлено = {latestOneCRun.accepted} принято + {latestOneCRun.rejectedCount} отклонено; {latestOneCRun.accepted} принято = {latestOneCRun.matched} сопоставлено + {latestOneCRun.unmatchedCount} на разборе.
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {latestOneCRun.complete && oneCRunArithmeticValid && latestOneCRun.status === 'success'
+                  ? 'Все пакеты получены, контрольные суммы сходятся.'
+                  : 'Запуск неполный или контрольные суммы не сошлись — автоматический обмен требует проверки.'}
+              </div>
+              {Object.keys(latestOneCRun.rejectedReasons || {}).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {Object.entries(latestOneCRun.rejectedReasons).map(([reason, count]) => (
+                    <Badge key={reason} variant="outline" className="border-amber-300 bg-background text-amber-900 dark:text-amber-200">
+                      {ONEC_REJECTED_REASON_LABELS[reason] || reason}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {Boolean(oneCDisplayStats?.unmatchedCount) && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20">
               <div className="font-medium text-amber-900 dark:text-amber-200">Записи 1С, которые HUB не смог связать с проектом</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {Object.entries(oneCStatus?.unmatchedSummary || {}).map(([key, count]) => {
+                {Object.entries(oneCDisplayStats?.unmatchedSummary || {}).map(([key, count]) => {
                   const [kind, reason] = key.split(':');
                   const kindLabel = kind === 'payment' ? 'Оплаты' : kind === 'invoice' ? 'Счета' : kind === 'avr' ? 'АВР' : 'ЭСФ';
                   return <Badge key={key} variant="outline" className="border-amber-300 bg-background px-3 py-1.5 text-amber-900 dark:text-amber-200">{kindLabel}: {count} · {ONEC_UNMATCHED_REASON_LABELS[reason] || reason}</Badge>;
@@ -775,6 +989,16 @@ export default function Accounting() {
           )}
         </CardContent>
       </Card>
+
+      <OneCInboxCard
+        records={oneCInboxRecords}
+        loading={oneCInboxLoading}
+        refreshing={oneCInboxRefreshing}
+        available={oneCInboxAvailable}
+        error={oneCInboxError}
+        truncated={oneCInboxTruncated}
+        onRefresh={handleOneCInboxRefresh}
+      />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         {[
