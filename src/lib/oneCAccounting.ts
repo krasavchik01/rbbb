@@ -23,6 +23,7 @@ export interface OneCSyncStatus {
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
   lastError: string;
+  lastErrorCode?: 'schema_not_ready' | 'sync_busy' | 'pull_not_configured' | 'sync_failed' | string;
   source: string;
   rawReceived?: number;
   received: number;

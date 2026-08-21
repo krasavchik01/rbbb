@@ -11,6 +11,7 @@ import {
   Database,
   FileCheck2,
   FileText,
+  Filter,
   Loader2,
   ReceiptText,
   RefreshCw,
@@ -18,6 +19,7 @@ import {
   Send,
   Trash2,
   WalletCards,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useSupabaseData';
@@ -85,6 +87,19 @@ import {
   summarizeOneCAccountingInbox,
   type OneCAccountingInboxRecord,
 } from '@/lib/oneCAccountingInbox';
+import {
+  DEFAULT_ACCOUNTING_FILTERS,
+  countActiveAccountingFilters,
+  filterAndSortAccountingRows,
+  type AccountingContractFilter,
+  type AccountingDeadlineFilter,
+  type AccountingDocumentFilter,
+  type AccountingPaymentFilter,
+  type AccountingProjectStateFilter,
+  type AccountingQuickFilter,
+  type AccountingSort,
+  type AccountingSourceFilter,
+} from '@/lib/accountingFilters';
 
 type EntryKind = AccountingDocumentType | 'payment';
 type AccountingRow = {
@@ -96,8 +111,8 @@ type AccountingRow = {
   contractDate: string;
   deadline: string;
   leaderName: string;
+  contractFileCount: number;
 };
-type DeadlineFilter = 'all' | 'overdue' | 'today' | 'week' | 'month' | 'missing';
 
 const STATUS_COLORS: Record<AccountingProjectStatus, string> = {
   needs_contract: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
@@ -123,7 +138,7 @@ const DEADLINE_COLORS: Record<AccountingDeadlineUrgency, string> = {
   complete: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
 };
 
-const DEADLINE_FILTER_LABELS: Record<DeadlineFilter, string> = {
+const DEADLINE_FILTER_LABELS: Record<AccountingDeadlineFilter, string> = {
   all: 'Все сроки',
   overdue: 'Просрочено',
   today: 'Сделать сегодня',
@@ -131,6 +146,64 @@ const DEADLINE_FILTER_LABELS: Record<DeadlineFilter, string> = {
   month: 'От 8 до 30 дней',
   missing: 'Срок не задан',
 };
+
+const PROJECT_STATE_FILTER_LABELS: Record<AccountingProjectStateFilter, string> = {
+  all: 'Все проекты',
+  open: 'Только в работе',
+  closed: 'Только закрытые',
+};
+
+const PAYMENT_FILTER_LABELS: Record<AccountingPaymentFilter, string> = {
+  all: 'Любая оплата',
+  debt: 'Есть задолженность',
+  unpaid: 'Выставлено, но не оплачено',
+  partial: 'Счета оплачены частично',
+  paid: 'Все выставленные счета оплачены',
+  overpaid: 'Оплата выше выставленных счетов',
+};
+
+const DOCUMENT_FILTER_LABELS: Record<AccountingDocumentFilter, string> = {
+  all: 'Любые документы',
+  invoice_missing: 'Нет счёта',
+  avr_missing: 'Нет АВР',
+  avr_unsigned: 'АВР не подписан',
+  esf_missing: 'Нет ЭСФ',
+  esf_unregistered: 'ЭСФ не зарегистрирован',
+  complete: 'Комплект документов готов',
+};
+
+const CONTRACT_FILTER_LABELS: Record<AccountingContractFilter, string> = {
+  all: 'Любой договор',
+  ready: 'Договор заполнен и загружен',
+  missing_number: 'Нет номера договора',
+  missing_amount: 'Нет суммы договора',
+  missing_file: 'Нет файла договора',
+};
+
+const SOURCE_FILTER_LABELS: Record<AccountingSourceFilter, string> = {
+  all: 'HUB и 1С',
+  has_1c: 'Есть данные из 1С',
+  has_hub: 'Есть ручные данные HUB',
+  mixed: 'Смешанные данные HUB + 1С',
+};
+
+const SORT_LABELS: Record<AccountingSort, string> = {
+  urgency: 'Сначала срочные',
+  debt_desc: 'Сначала большой долг',
+  amount_desc: 'Сначала крупные договоры',
+  paid_desc: 'Сначала крупные оплаты',
+  client: 'Заказчик А–Я',
+};
+
+const QUICK_FILTERS: Array<{ value: AccountingQuickFilter; label: string }> = [
+  { value: 'action', label: 'Требуют действий' },
+  { value: 'overdue', label: 'Просрочено' },
+  { value: 'debt', label: 'Есть долг' },
+  { value: 'no_invoice', label: 'Без счёта' },
+  { value: 'avr_unsigned', label: 'АВР не подписан' },
+  { value: 'esf_unregistered', label: 'ЭСФ не зарегистрирован' },
+  { value: 'closed_debt', label: 'Закрыты с долгом' },
+];
 
 function makeId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -177,13 +250,11 @@ function deadlineText(urgency: AccountingDeadlineUrgency, days: number | null): 
   return `Осталось ${days} дн.`;
 }
 
-function matchesDeadlineFilter(urgency: AccountingDeadlineUrgency, filter: DeadlineFilter): boolean {
-  if (filter === 'all') return true;
-  if (filter === 'overdue') return urgency === 'overdue';
-  if (filter === 'today') return urgency === 'today';
-  if (filter === 'week') return urgency === 'week';
-  if (filter === 'month') return urgency === 'month';
-  return urgency === 'missing';
+function parseFilterAmount(value: string): number | null | undefined {
+  const normalized = value.replace(/\s/g, '').replace(',', '.');
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 function DeadlineBadge({ urgency, days }: { urgency: AccountingDeadlineUrgency; days: number | null }) {
@@ -225,6 +296,7 @@ function OneCInboxCard({
   available,
   error,
   truncated,
+  expectedUnmatchedCount,
   onRefresh,
 }: {
   records: OneCAccountingInboxRecord[];
@@ -233,6 +305,7 @@ function OneCInboxCard({
   available: boolean;
   error: string;
   truncated: boolean;
+  expectedUnmatchedCount: number | null;
   onRefresh: () => void;
 }) {
   const [query, setQuery] = useState('');
@@ -241,12 +314,19 @@ function OneCInboxCard({
   const filtered = useMemo(() => filterOneCAccountingInbox(records, query), [records, query]);
   const visible = filtered.slice(0, visibleLimit);
   const reasons = Object.entries(summary.byReason).sort(([, left], [, right]) => right.count - left.count);
+  const registryMismatch = expectedUnmatchedCount !== null
+    && available
+    && expectedUnmatchedCount !== summary.count;
+  const registryUnavailable = expectedUnmatchedCount !== null
+    && expectedUnmatchedCount > 0
+    && !available;
+  const displayCount = expectedUnmatchedCount ?? summary.count;
 
   useEffect(() => {
     setVisibleLimit(100);
   }, [query]);
 
-  if (!loading && !available && !error) return null;
+  if (!loading && !available && !error && displayCount <= 0) return null;
   if (loading) {
     return <Card className="border-amber-200/80 dark:border-amber-900/70"><CardContent className="flex items-center gap-3 p-4"><Loader2 className="h-5 w-5 animate-spin text-amber-600" /><div><div className="font-semibold">Не привязано к проектам</div><div className="text-xs text-muted-foreground">Загружаю записи 1С, которые нужно разобрать…</div></div></CardContent></Card>;
   }
@@ -262,8 +342,18 @@ function OneCInboxCard({
             <div className="flex items-start gap-3">
               <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300"><AlertCircle className="h-5 w-5" /></div>
               <div>
-                <div className="flex flex-wrap items-center gap-2"><div className="font-semibold">Не привязано к проектам</div><Badge variant={summary.count > 0 ? 'destructive' : 'secondary'}>{summary.count}</Badge></div>
-                <div className="mt-1 text-sm text-muted-foreground">{summary.count > 0 ? 'Эти записи уже пришли из 1С, но HUB не нашёл для них однозначный проект.' : 'Все принятые записи 1С привязаны к проектам.'}</div>
+                <div className="flex flex-wrap items-center gap-2"><div className="font-semibold">Не привязано к проектам</div><Badge variant={displayCount > 0 || summary.count > 0 ? 'destructive' : 'secondary'}>{displayCount}</Badge></div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {expectedUnmatchedCount !== null
+                    ? expectedUnmatchedCount > 0
+                      ? `По последнему завершённому обмену нужно сопоставить ${expectedUnmatchedCount} записей.`
+                      : summary.count > 0
+                        ? `Завершённый обмен показывает 0 записей, но в подробном реестре осталось ${summary.count}. Нужна сверка.`
+                        : 'По последнему завершённому обмену все принятые записи привязаны к проектам.'
+                    : summary.count > 0
+                      ? `В подробном реестре нужно сопоставить ${summary.count} записей.`
+                      : 'Подробный реестр не содержит записей на разборе.'}
+                </div>
               </div>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>
@@ -273,14 +363,16 @@ function OneCInboxCard({
           </div>
 
           {error && <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/70 p-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Не удалось обновить реестр: {error}. Показаны последние успешно загруженные данные.</span></div>}
+          {registryUnavailable && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>По сводке на разборе: {expectedUnmatchedCount}. Подробный реестр пока недоступен — он появится после обновления базы HUB и следующего полного обмена.</span></div>}
+          {registryMismatch && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Нужна сверка: по последнему завершённому обмену — {expectedUnmatchedCount}, в подробном реестре — {summary.count}. Ни одна из записей автоматически не считается исчезнувшей или привязанной.</span></div>}
           {truncated && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Реестр ограничен 10 000 записями. В 1С есть ещё записи на разборе; уточните поиск или устраните несопоставленные договоры.</span></div>}
 
-          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {summary.count > 0 && <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
             {(['invoice', 'avr', 'esf', 'payment'] as const).map((recordKind) => {
               const item = summary.byKind[recordKind];
               return <div key={recordKind} className="rounded-lg border bg-background p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{ONE_C_INBOX_KIND_LABELS[recordKind]}</span><b className="tabular-nums">{item.count}</b></div><div className="mt-1 truncate text-xs font-medium tabular-nums" title={formatAmountBreakdown(item.amountsByCurrency)}>{formatAmountBreakdown(item.amountsByCurrency)}</div></div>;
             })}
-          </div>
+          </div>}
 
           {reasons.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{reasons.map(([reason, item]) => <Badge key={reason} variant="outline" className="border-amber-300 bg-background px-2.5 py-1 text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[reason] || reason}: {item.count}</Badge>)}</div>}
         </div>
@@ -388,7 +480,18 @@ export default function Accounting() {
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | AccountingProjectStatus>('all');
-  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('all');
+  const [deadlineFilter, setDeadlineFilter] = useState<AccountingDeadlineFilter>('all');
+  const [projectStateFilter, setProjectStateFilter] = useState<AccountingProjectStateFilter>('all');
+  const [paymentFilter, setPaymentFilter] = useState<AccountingPaymentFilter>('all');
+  const [documentFilter, setDocumentFilter] = useState<AccountingDocumentFilter>('all');
+  const [contractFilter, setContractFilter] = useState<AccountingContractFilter>('all');
+  const [sourceFilter, setSourceFilter] = useState<AccountingSourceFilter>('all');
+  const [quickFilter, setQuickFilter] = useState<AccountingQuickFilter>('all');
+  const [sortMode, setSortMode] = useState<AccountingSort>('urgency');
+  const [amountMinFilter, setAmountMinFilter] = useState('');
+  const [amountMaxFilter, setAmountMaxFilter] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [oneCDetailsOpen, setOneCDetailsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [entry, setEntry] = useState<{ kind: EntryKind; row: AccountingRow } | null>(null);
   const [amount, setAmount] = useState('');
@@ -401,7 +504,9 @@ export default function Accounting() {
   const [file, setFile] = useState<File | null>(null);
   const [savingKey, setSavingKey] = useState('');
   const [oneCStatus, setOneCStatus] = useState<OneCSyncStatus | null>(null);
-  const [oneCStatusError, setOneCStatusError] = useState('');
+  const [oneCStatusReadError, setOneCStatusReadError] = useState('');
+  const [oneCActionError, setOneCActionError] = useState('');
+  const [oneCActionErrorCode, setOneCActionErrorCode] = useState('');
   const [oneCSyncing, setOneCSyncing] = useState(false);
   const [oneCIntegrationKey, setOneCIntegrationKey] = useState('');
   const [oneCInboxRecords, setOneCInboxRecords] = useState<OneCAccountingInboxRecord[]>([]);
@@ -421,10 +526,14 @@ export default function Accounting() {
       const status = await getOneCSyncStatus();
       if (!oneCDataMountedRef.current || requestId !== oneCStatusRequestRef.current) return;
       setOneCStatus(status);
-      setOneCStatusError('');
+      setOneCStatusReadError('');
+      if (!status.lastError) {
+        setOneCActionError('');
+        setOneCActionErrorCode('');
+      }
     } catch (statusError) {
       if (!oneCDataMountedRef.current || requestId !== oneCStatusRequestRef.current) return;
-      setOneCStatusError(statusError instanceof Error ? statusError.message : 'Нет данных о синхронизации');
+      setOneCStatusReadError(statusError instanceof Error ? statusError.message : 'Нет данных о синхронизации');
     }
   }, []);
 
@@ -480,7 +589,10 @@ export default function Accounting() {
   }, [refreshOneCInbox, refreshOneCStatus]);
 
   const latestOneCRun = oneCStatus?.latestRun || null;
-  const oneCDisplayStats = latestOneCRun || (oneCStatus ? {
+  const completedLatestOneCRun = latestOneCRun?.status === 'success' && latestOneCRun.complete
+    ? latestOneCRun
+    : null;
+  const oneCDisplayStats = completedLatestOneCRun || (oneCStatus?.lastSuccessAt ? {
     rawReceived: oneCStatus.rawReceived ?? oneCStatus.received,
     accepted: oneCStatus.accepted ?? oneCStatus.received,
     rejectedCount: oneCStatus.rejectedCount ?? 0,
@@ -498,13 +610,58 @@ export default function Accounting() {
   const oneCRunArithmeticValid = Boolean(oneCDisplayStats)
     && oneCDisplayStats!.rawReceived === oneCDisplayStats!.accepted + oneCDisplayStats!.rejectedCount
     && oneCDisplayStats!.accepted === oneCDisplayStats!.matched + oneCDisplayStats!.unmatchedCount;
+  const lastOneCSuccessMs = Date.parse(String(oneCStatus?.lastSuccessAt || '')) || 0;
+  const lastOneCErrorMs = Date.parse(String(oneCStatus?.lastErrorAt || '')) || 0;
+  const latestSuccessfulRunMs = completedLatestOneCRun
+    ? Date.parse(String(completedLatestOneCRun.completedAt || '')) || 0
+    : 0;
+  const latestRunErrorMs = latestOneCRun?.status === 'error'
+    ? Date.parse(String(latestOneCRun.completedAt || latestOneCRun.startedAt || '')) || 0
+    : 0;
+  const activeStoredOneCError = Boolean(oneCStatus?.lastError)
+    && (!lastOneCSuccessMs || !lastOneCErrorMs || lastOneCErrorMs > Math.max(lastOneCSuccessMs, latestSuccessfulRunMs));
+  const activeLatestRunError = Boolean(latestRunErrorMs)
+    && latestRunErrorMs > Math.max(lastOneCSuccessMs, latestSuccessfulRunMs);
+  const activeOneCError = Boolean(oneCActionError) || activeStoredOneCError || activeLatestRunError;
+  const oneCIntegrityWarning = Boolean(completedLatestOneCRun) && !oneCRunArithmeticValid;
+  const oneCErrorAfterSuccessfulData = activeOneCError && Boolean(oneCStatus?.lastSuccessAt);
+  const effectiveOneCErrorCode = oneCActionError
+    ? oneCActionErrorCode || 'sync_failed'
+    : oneCStatus?.lastErrorCode
+      || (activeStoredOneCError && !oneCInboxLoading && !oneCInboxAvailable ? 'schema_not_ready' : '');
+  const oneCStatusLabel = activeOneCError
+    ? oneCErrorAfterSuccessfulData ? 'Последняя отправка не принята' : 'Требуется настройка'
+    : oneCIntegrityWarning
+      ? 'Проверить контрольные суммы'
+    : latestOneCRun?.status === 'processing'
+      ? 'Обмен выполняется'
+      : oneCStatus?.lastSuccessAt
+        ? 'Обмен работает'
+        : oneCStatus?.configured ? 'Подключение настроено' : 'Ожидает подключения';
+  const oneCSyncErrorTitle = effectiveOneCErrorCode === 'schema_not_ready'
+    ? 'HUB ожидает обновления базы'
+    : effectiveOneCErrorCode === 'sync_busy'
+      ? 'Другой обмен уже выполняется'
+      : effectiveOneCErrorCode === 'pull_not_configured'
+        ? 'Получение данных из 1С не настроено'
+        : oneCErrorAfterSuccessfulData
+          ? 'Последняя отправка 1С не была принята HUB'
+          : 'Обмен 1С пока не готов';
+  const oneCSyncErrorGuidance = effectiveOneCErrorCode === 'schema_not_ready'
+    ? 'Нужно применить обновление структуры базы HUB, затем повторить полный обмен.'
+    : effectiveOneCErrorCode === 'sync_busy'
+      ? 'Дождитесь завершения текущего обмена и обновите состояние кабинета.'
+      : effectiveOneCErrorCode === 'pull_not_configured'
+        ? 'Автоматическое получение выключено. Используйте отправку из 1С или настройте pull-обмен.'
+        : 'Проверьте журнал обмена и повторите отправку. Частичный импорт не выполнялся.';
 
   const runOneCSync = async () => {
     setOneCSyncing(true);
     try {
       const status = await pullOneCAccounting();
       setOneCStatus(status);
-      setOneCStatusError('');
+      setOneCActionError('');
+      setOneCActionErrorCode('');
       toast({
         title: 'Данные из 1С обновлены',
         description: `Получено ${status.received}, сопоставлено ${status.matched}, требуют разбора ${status.unmatchedCount}.`,
@@ -512,7 +669,17 @@ export default function Accounting() {
       await refreshOneCInbox(false);
     } catch (syncError: any) {
       const message = syncError?.message || 'Не удалось получить данные из 1С';
-      setOneCStatusError(message);
+      let actionErrorCode = 'sync_failed';
+      try {
+        const refreshedStatus = await getOneCSyncStatus();
+        setOneCStatus(refreshedStatus);
+        setOneCStatusReadError('');
+        actionErrorCode = refreshedStatus.lastErrorCode || actionErrorCode;
+      } catch {
+        // The action still has a safe generic classification when status refresh is unavailable.
+      }
+      setOneCActionError(message);
+      setOneCActionErrorCode(actionErrorCode);
       toast({ title: 'Синхронизация 1С не выполнена', description: message, variant: 'destructive' });
     } finally {
       setOneCSyncing(false);
@@ -525,7 +692,8 @@ export default function Accounting() {
       const result = await createOneCIntegrationKey();
       setOneCStatus(result.status);
       setOneCIntegrationKey(result.integrationKey);
-      setOneCStatusError('');
+      setOneCActionError('');
+      setOneCActionErrorCode('');
       toast({ title: 'Ключ обмена 1С создан', description: 'Скопируйте его сейчас: повторно HUB этот ключ не показывает.' });
     } catch (keyError: any) {
       toast({ title: 'Не удалось создать ключ 1С', description: keyError?.message, variant: 'destructive' });
@@ -545,39 +713,108 @@ export default function Accounting() {
       contractDate: String(contract?.date || ''),
       deadline: String(contract?.serviceEndDate || project.deadline || ''),
       leaderName: leaderName(project),
+      contractFileCount: projectContractFiles(project).length,
     };
   }), [projects]);
 
   const companies = useMemo(() => Array.from(new Set(rows.map((row) => row.companyName))).sort(), [rows]);
+  const parsedAmountMin = parseFilterAmount(amountMinFilter);
+  const parsedAmountMax = parseFilterAmount(amountMaxFilter);
+  const amountMinInvalid = parsedAmountMin === undefined;
+  const amountMaxInvalid = parsedAmountMax === undefined;
+  const amountRangeInvalid = typeof parsedAmountMin === 'number'
+    && typeof parsedAmountMax === 'number'
+    && parsedAmountMin > parsedAmountMax;
+  const amountFilterError = amountMinInvalid
+    ? 'Укажите корректную минимальную сумму.'
+    : amountMaxInvalid
+      ? 'Укажите корректную максимальную сумму.'
+      : amountRangeInvalid
+        ? 'Минимальная сумма не может быть больше максимальной.'
+        : '';
+  const normalizedAmountMin: number | null = amountFilterError || parsedAmountMin === undefined ? null : parsedAmountMin;
+  const normalizedAmountMax: number | null = amountFilterError || parsedAmountMax === undefined ? null : parsedAmountMax;
+  const accountingFilters = useMemo(() => ({
+    ...DEFAULT_ACCOUNTING_FILTERS,
+    query: search,
+    company: companyFilter,
+    status: statusFilter,
+    deadline: deadlineFilter,
+    projectState: projectStateFilter,
+    payment: paymentFilter,
+    document: documentFilter,
+    contract: contractFilter,
+    source: sourceFilter,
+    quick: quickFilter,
+    amountMin: normalizedAmountMin,
+    amountMax: normalizedAmountMax,
+    sort: sortMode,
+  }), [
+    search,
+    companyFilter,
+    statusFilter,
+    deadlineFilter,
+    projectStateFilter,
+    paymentFilter,
+    documentFilter,
+    contractFilter,
+    sourceFilter,
+    quickFilter,
+    normalizedAmountMin,
+    normalizedAmountMax,
+    sortMode,
+  ]);
   const filteredRows = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (companyFilter !== 'all' && row.companyName !== companyFilter) return false;
-      if (statusFilter !== 'all') {
-        const isLinkedClosedStatus = statusFilter === 'closed_attention' || statusFilter === 'closed_complete';
-        if (isLinkedClosedStatus ? row.summary.status !== statusFilter : row.summary.accountingStatus !== statusFilter) return false;
-      }
-      if (!matchesDeadlineFilter(row.summary.deadlineUrgency, deadlineFilter)) return false;
-      if (!query) return true;
-      const contact = row.summary.ledger.contact || {};
-      return [
-        row.clientName,
-        row.companyName,
-        row.contractNumber,
-        row.leaderName,
-        contact.name,
-        contact.phone,
-        contact.email,
-      ].some((value) => String(value || '').toLowerCase().includes(query));
-    }).sort((left, right) => {
-      const rank: Record<AccountingDeadlineUrgency, number> = { overdue: 0, today: 1, week: 2, month: 3, later: 4, missing: 5, complete: 6 };
-      const urgency = rank[left.summary.deadlineUrgency] - rank[right.summary.deadlineUrgency];
-      if (urgency !== 0) return urgency;
-      const leftDays = left.summary.daysUntilNextAction ?? Number.MAX_SAFE_INTEGER;
-      const rightDays = right.summary.daysUntilNextAction ?? Number.MAX_SAFE_INTEGER;
-      return leftDays - rightDays || left.clientName.localeCompare(right.clientName, 'ru');
-    });
-  }, [rows, search, companyFilter, statusFilter, deadlineFilter]);
+    return filterAndSortAccountingRows(rows, accountingFilters);
+  }, [rows, accountingFilters]);
+  const activeFilterCount = countActiveAccountingFilters(accountingFilters);
+  const activeFilterLabels = useMemo(() => {
+    const labels: Array<{ id: string; label: string }> = [];
+    if (search.trim()) labels.push({ id: 'search', label: `Поиск: ${search.trim()}` });
+    if (companyFilter !== 'all') labels.push({ id: 'company', label: companyFilter });
+    if (statusFilter !== 'all') labels.push({ id: 'status', label: ACCOUNTING_STATUS_LABELS[statusFilter] });
+    if (deadlineFilter !== 'all') labels.push({ id: 'deadline', label: DEADLINE_FILTER_LABELS[deadlineFilter] });
+    if (projectStateFilter !== 'all') labels.push({ id: 'project', label: PROJECT_STATE_FILTER_LABELS[projectStateFilter] });
+    if (paymentFilter !== 'all') labels.push({ id: 'payment', label: PAYMENT_FILTER_LABELS[paymentFilter] });
+    if (documentFilter !== 'all') labels.push({ id: 'document', label: DOCUMENT_FILTER_LABELS[documentFilter] });
+    if (contractFilter !== 'all') labels.push({ id: 'contract', label: CONTRACT_FILTER_LABELS[contractFilter] });
+    if (sourceFilter !== 'all') labels.push({ id: 'source', label: SOURCE_FILTER_LABELS[sourceFilter] });
+    if (quickFilter !== 'all') labels.push({ id: 'quick', label: QUICK_FILTERS.find((item) => item.value === quickFilter)?.label || quickFilter });
+    if (accountingFilters.amountMin !== null) labels.push({ id: 'amount-min', label: `Сумма от ${accountingFilters.amountMin.toLocaleString('ru-RU')}` });
+    if (accountingFilters.amountMax !== null) labels.push({ id: 'amount-max', label: `Сумма до ${accountingFilters.amountMax.toLocaleString('ru-RU')}` });
+    if (sortMode !== 'urgency') labels.push({ id: 'sort', label: SORT_LABELS[sortMode] });
+    return labels;
+  }, [
+    search,
+    companyFilter,
+    statusFilter,
+    deadlineFilter,
+    projectStateFilter,
+    paymentFilter,
+    documentFilter,
+    contractFilter,
+    sourceFilter,
+    quickFilter,
+    accountingFilters.amountMin,
+    accountingFilters.amountMax,
+    sortMode,
+  ]);
+
+  const resetFilters = () => {
+    setSearch('');
+    setCompanyFilter('all');
+    setStatusFilter('all');
+    setDeadlineFilter('all');
+    setProjectStateFilter('all');
+    setPaymentFilter('all');
+    setDocumentFilter('all');
+    setContractFilter('all');
+    setSourceFilter('all');
+    setQuickFilter('all');
+    setSortMode('urgency');
+    setAmountMinFilter('');
+    setAmountMaxFilter('');
+  };
 
   const deadlineCounts = useMemo(() => ({
     overdue: rows.filter((row) => row.summary.deadlineUrgency === 'overdue').length,
@@ -912,7 +1149,82 @@ export default function Accounting() {
         <Button variant="outline" onClick={exportExcel} disabled={filteredRows.length === 0}><Download className="mr-2 h-4 w-4" />Скачать Excel</Button>
       </div>
 
-      <Card className={oneCStatus?.lastError || oneCStatusError ? 'border-red-300 dark:border-red-900' : 'border-sky-200 dark:border-sky-900'}>
+      <Card data-testid="accounting-filters" className="overflow-hidden border-primary/20 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                aria-label="Поиск по бухгалтерскому реестру"
+                className="h-11 pl-9"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Заказчик, договор, руководитель или контакт…"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant={activeFilterCount > 0 ? 'default' : 'outline'}
+                className="h-11 flex-1 sm:flex-none lg:hidden"
+                aria-expanded={filtersOpen}
+                aria-controls="accounting-advanced-filters"
+                data-testid="accounting-filter-toggle"
+                onClick={() => setFiltersOpen((value) => !value)}
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                Фильтры{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
+              </Button>
+              <div data-testid="accounting-result-count" aria-live="polite" className="whitespace-nowrap rounded-lg bg-muted px-3 py-2 text-sm font-medium tabular-nums">
+                {filteredRows.length} из {rows.length}
+              </div>
+            </div>
+          </div>
+
+          <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Быстрые фильтры">
+            {QUICK_FILTERS.map((item) => {
+              const selected = quickFilter === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  aria-label={`Быстрый фильтр: ${item.label}`}
+                  aria-pressed={selected}
+                  onClick={() => setQuickFilter(selected ? 'all' : item.value)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${selected ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:border-primary/50 hover:bg-muted'}`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div id="accounting-advanced-filters" className={`${filtersOpen ? 'grid' : 'hidden'} mt-4 gap-3 border-t pt-4 sm:grid-cols-2 lg:grid xl:grid-cols-4`}>
+            <div className="grid gap-1.5"><Label>Наша компания</Label><Select value={companyFilter} onValueChange={setCompanyFilter}><SelectTrigger aria-label="Наша компания"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все наши компании</SelectItem>{companies.map((company) => <SelectItem key={company} value={company}>{company}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Что нужно сделать</Label><Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}><SelectTrigger aria-label="Что нужно сделать"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все состояния</SelectItem>{Object.entries(ACCOUNTING_STATUS_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Срок следующего действия</Label><Select value={deadlineFilter} onValueChange={(value) => setDeadlineFilter(value as AccountingDeadlineFilter)}><SelectTrigger aria-label="Срок следующего действия"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(DEADLINE_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Состояние проекта</Label><Select value={projectStateFilter} onValueChange={(value) => setProjectStateFilter(value as AccountingProjectStateFilter)}><SelectTrigger aria-label="Состояние проекта"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(PROJECT_STATE_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Оплата и задолженность</Label><Select value={paymentFilter} onValueChange={(value) => setPaymentFilter(value as AccountingPaymentFilter)}><SelectTrigger aria-label="Оплата и задолженность"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(PAYMENT_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Документы</Label><Select value={documentFilter} onValueChange={(value) => setDocumentFilter(value as AccountingDocumentFilter)}><SelectTrigger aria-label="Документы"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(DOCUMENT_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Договор</Label><Select value={contractFilter} onValueChange={(value) => setContractFilter(value as AccountingContractFilter)}><SelectTrigger aria-label="Договор"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(CONTRACT_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label>Источник данных</Label><Select value={sourceFilter} onValueChange={(value) => setSourceFilter(value as AccountingSourceFilter)}><SelectTrigger aria-label="Источник данных"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(SOURCE_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="grid gap-1.5"><Label htmlFor="accounting-amount-min">Сумма договора от</Label><Input id="accounting-amount-min" inputMode="decimal" aria-invalid={amountMinInvalid || amountRangeInvalid} aria-describedby={amountFilterError ? 'accounting-amount-error' : undefined} value={amountMinFilter} onChange={(event) => setAmountMinFilter(event.target.value)} placeholder="0 ₸" /></div>
+            <div className="grid gap-1.5"><Label htmlFor="accounting-amount-max">Сумма договора до</Label><Input id="accounting-amount-max" inputMode="decimal" aria-invalid={amountMaxInvalid || amountRangeInvalid} aria-describedby={amountFilterError ? 'accounting-amount-error' : undefined} value={amountMaxFilter} onChange={(event) => setAmountMaxFilter(event.target.value)} placeholder="Без ограничения" /></div>
+            <div className="grid gap-1.5 sm:col-span-2"><Label>Сортировка</Label><Select value={sortMode} onValueChange={(value) => setSortMode(value as AccountingSort)}><SelectTrigger aria-label="Сортировка"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(SORT_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            {amountFilterError && <div id="accounting-amount-error" role="alert" className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300 sm:col-span-2 xl:col-span-4">{amountFilterError} Фильтр по сумме применится после исправления.</div>}
+          </div>
+
+          {(activeFilterLabels.length > 0 || Boolean(amountFilterError)) && (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">{activeFilterLabels.length > 0 ? 'Выбрано:' : 'Фильтр суммы не применён'}</span>
+              {activeFilterLabels.map((item) => <Badge key={item.id} variant="secondary" className="max-w-full truncate">{item.label}</Badge>)}
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={resetFilters}><X className="mr-1 h-3.5 w-3.5" />Сбросить всё</Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="onec-health" className={activeOneCError ? oneCErrorAfterSuccessfulData ? 'border-amber-300 dark:border-amber-900' : 'border-red-300 dark:border-red-900' : oneCIntegrityWarning ? 'border-amber-300 dark:border-amber-900' : latestOneCRun?.status === 'processing' ? 'border-sky-300 dark:border-sky-900' : 'border-emerald-200 dark:border-emerald-900'}>
         <CardContent className="p-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-3">
@@ -920,8 +1232,8 @@ export default function Accounting() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="font-semibold">Обмен с 1С</div>
-                  <Badge variant="outline" className={oneCStatus?.configured ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
-                    {oneCStatus?.configured ? 'Подключение настроено' : 'Ожидает подключения'}
+                  <Badge variant="outline" className={activeOneCError || oneCIntegrityWarning ? 'border-amber-300 text-amber-800 dark:text-amber-200' : latestOneCRun?.status === 'processing' ? 'border-sky-300 text-sky-800 dark:text-sky-200' : oneCStatus?.configured ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
+                    {oneCStatusLabel}
                   </Badge>
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
@@ -929,13 +1241,23 @@ export default function Accounting() {
                     ? `Последнее успешное обновление: ${formatDateTime(oneCStatus.lastSuccessAt)} · база ${oneCStatus.source || '1С'}`
                     : 'После подключения оплаты, счета, АВР и ЭСФ будут обновляться здесь автоматически.'}
                 </div>
-                {(oneCStatus?.lastError || oneCStatusError) && <div className="mt-2 text-sm font-medium text-red-600">{oneCStatus?.lastError || oneCStatusError}</div>}
+                {activeOneCError && (
+                  <div role="alert" className={`mt-2 rounded-lg border p-2.5 text-sm ${oneCErrorAfterSuccessfulData ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200' : 'border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200'}`}>
+                    <div className="font-semibold">{oneCSyncErrorTitle}</div>
+                    <div className="mt-1">
+                      {oneCErrorAfterSuccessfulData
+                        ? `Данные успешного обмена от ${formatDateTime(oneCStatus?.lastSuccessAt)} сохранены и не повреждены.`
+                        : 'Финансовые данные не изменялись частично.'}
+                    </div>
+                    <div className="mt-1">{oneCSyncErrorGuidance}</div>
+                    {oneCStatus?.lastErrorAt && <div className="mt-1 text-xs opacity-80">Неудачная попытка: {formatDateTime(oneCStatus.lastErrorAt)}.</div>}
+                  </div>
+                )}
+                {oneCIntegrityWarning && !activeOneCError && <div role="alert" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><div className="font-semibold">Контрольные суммы последнего обмена не сошлись</div><div className="mt-1">Данные сохранены, но бухгалтеру или администратору нужно открыть подробности 1С и проверить пакеты.</div></div>}
+                {oneCStatusReadError && <div role="status" className="mt-2 rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200"><div className="font-semibold">Не удалось обновить текущее состояние кабинета</div><div className="mt-1">Показаны последние сохранённые данные{oneCStatus?.lastSuccessAt ? ` от ${formatDateTime(oneCStatus.lastSuccessAt)}` : ''}. Обновите страницу через минуту.</div></div>}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              {oneCDisplayStats && <Badge variant="secondary">Подготовлено 1С: {oneCDisplayStats.rawReceived}</Badge>}
-              {oneCDisplayStats && <Badge variant="secondary">Принято HUB: {oneCDisplayStats.accepted}</Badge>}
-              {Boolean(oneCDisplayStats?.rejectedCount) && <Badge variant="outline" className="border-amber-300 text-amber-700">Отклонено: {oneCDisplayStats?.rejectedCount}</Badge>}
               {oneCDisplayStats && <Badge variant="secondary">Сопоставлено: {oneCDisplayStats.matched}</Badge>}
               {Boolean(oneCDisplayStats?.unmatchedCount) && <Badge variant="destructive">Разобрать: {oneCDisplayStats?.unmatchedCount}</Badge>}
               {user?.role === 'admin' && oneCStatus && !oneCStatus.pushEnabled && <Button variant="outline" onClick={createIntegrationKey} disabled={oneCSyncing}>Создать ключ 1С</Button>}
@@ -947,9 +1269,18 @@ export default function Accounting() {
               ) : (
                 <Button variant="outline" disabled><RefreshCw className="mr-2 h-4 w-4" />Автообмен из 1С</Button>
               )}
+              <Button type="button" variant="ghost" onClick={() => setOneCDetailsOpen((value) => !value)} aria-expanded={oneCDetailsOpen}>
+                {oneCDetailsOpen ? <ChevronDown className="mr-2 h-4 w-4" /> : <ChevronRight className="mr-2 h-4 w-4" />}
+                {oneCDetailsOpen ? 'Скрыть подробности' : 'Подробности 1С'}
+              </Button>
             </div>
           </div>
-          {latestOneCRun && (
+          {oneCDetailsOpen && <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
+            {oneCDisplayStats && <Badge variant="secondary">Подготовлено 1С: {oneCDisplayStats.rawReceived}</Badge>}
+            {oneCDisplayStats && <Badge variant="secondary">Принято HUB: {oneCDisplayStats.accepted}</Badge>}
+            {Boolean(oneCDisplayStats?.rejectedCount) && <Badge variant="outline" className="border-amber-300 text-amber-700">Отклонено: {oneCDisplayStats?.rejectedCount}</Badge>}
+          </div>}
+          {oneCDetailsOpen && latestOneCRun && (
             <div className={`mt-4 rounded-xl border p-3 ${latestOneCRun.complete && oneCRunArithmeticValid && latestOneCRun.status === 'success' ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20'}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-medium">Контроль полного запуска 1С</div>
@@ -974,7 +1305,7 @@ export default function Accounting() {
               )}
             </div>
           )}
-          {Boolean(oneCDisplayStats?.unmatchedCount) && (
+          {oneCDetailsOpen && Boolean(oneCDisplayStats?.unmatchedCount) && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20">
               <div className="font-medium text-amber-900 dark:text-amber-200">Записи 1С, которые HUB не смог связать с проектом</div>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -987,18 +1318,22 @@ export default function Accounting() {
               <div className="mt-2 text-xs text-muted-foreground">Исправьте номер договора или БИН в HUB/1С и запустите синхронизацию повторно. Финансовые реквизиты несопоставленных записей не сохраняются в общедоступных настройках.</div>
             </div>
           )}
+          {oneCDetailsOpen && (
+            <div className="mt-4">
+              <OneCInboxCard
+                records={oneCInboxRecords}
+                loading={oneCInboxLoading}
+                refreshing={oneCInboxRefreshing}
+                available={oneCInboxAvailable}
+                error={oneCInboxError}
+                truncated={oneCInboxTruncated}
+                expectedUnmatchedCount={oneCDisplayStats ? Number(oneCDisplayStats.unmatchedCount || 0) : null}
+                onRefresh={handleOneCInboxRefresh}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      <OneCInboxCard
-        records={oneCInboxRecords}
-        loading={oneCInboxLoading}
-        refreshing={oneCInboxRefreshing}
-        available={oneCInboxAvailable}
-        error={oneCInboxError}
-        truncated={oneCInboxTruncated}
-        onRefresh={handleOneCInboxRefresh}
-      />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         {[
@@ -1037,16 +1372,6 @@ export default function Accounting() {
               { filter: 'missing' as const, label: 'Без срока', value: deadlineCounts.missing, color: 'text-violet-600' },
             ].map((item) => <button key={item.label} type="button" onClick={() => setDeadlineFilter(item.filter)} className={`rounded-lg border p-3 text-left transition hover:bg-muted ${deadlineFilter === item.filter ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'bg-background'}`}><div className="text-xs text-muted-foreground">{item.label}</div><div className={`mt-1 text-2xl font-bold tabular-nums ${item.color}`}>{item.value}</div></button>)}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_220px_220px_220px_auto]">
-          <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Заказчик, договор, руководитель, контакт…" /></div>
-          <Select value={companyFilter} onValueChange={setCompanyFilter}><SelectTrigger><SelectValue placeholder="Все компании" /></SelectTrigger><SelectContent><SelectItem value="all">Все наши компании</SelectItem>{companies.map((company) => <SelectItem key={company} value={company}>{company}</SelectItem>)}</SelectContent></Select>
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}><SelectTrigger><SelectValue placeholder="Все состояния" /></SelectTrigger><SelectContent><SelectItem value="all">Все состояния</SelectItem>{Object.entries(ACCOUNTING_STATUS_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
-          <Select value={deadlineFilter} onValueChange={(value) => setDeadlineFilter(value as DeadlineFilter)}><SelectTrigger><SelectValue placeholder="Все сроки" /></SelectTrigger><SelectContent>{Object.entries(DEADLINE_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
-          <div className="flex items-center justify-end whitespace-nowrap text-sm text-muted-foreground">{filteredRows.length} из {rows.length}</div>
         </CardContent>
       </Card>
 

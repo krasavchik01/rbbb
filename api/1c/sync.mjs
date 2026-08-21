@@ -192,6 +192,7 @@ function publicStatus(state = {}, latestRun = null) {
     lastSuccessAt: state.lastSuccessAt || null,
     lastErrorAt: state.lastErrorAt || null,
     lastError: state.lastError || '',
+    lastErrorCode: state.lastErrorCode || '',
     source: state.source || '',
     rawReceived: Number(state.rawReceived || state.received || 0),
     received: Number(state.received || 0),
@@ -412,6 +413,7 @@ async function reserveOneCSyncBatch(supabase, context, counters, startedAt) {
   const unavailable = () => {
     const error = new Error('Атомарная блокировка обмена 1С ещё не установлена; примените миграцию и повторите');
     error.statusCode = 503;
+    error.code = 'ONEC_SCHEMA_NOT_READY';
     return error;
   };
   if (typeof supabase.rpc !== 'function') throw unavailable();
@@ -911,6 +913,7 @@ export async function ingestPayload(supabase, body) {
       auditWritten = true;
       const error = new Error('Другой пакет 1С для этой базы ещё обрабатывается; повторите отправку');
       error.statusCode = 503;
+      error.code = 'ONEC_SYNC_BUSY';
       throw error;
     }
     if (reservation.decision === 'skipped') {
@@ -1076,6 +1079,8 @@ export async function ingestPayload(supabase, body) {
       lastSyncAt: syncedAt,
       lastSuccessAt: syncedAt,
       lastError: '',
+      lastErrorAt: null,
+      lastErrorCode: '',
       source: payload.source,
       rawReceived: summary.rawReceived,
       received: summary.received,
@@ -1145,6 +1150,7 @@ async function pullFromOneC() {
   if (!url) {
     const error = new Error('В HUB ещё не указан адрес HTTP-сервиса 1С');
     error.statusCode = 503;
+    error.code = 'ONEC_PULL_NOT_CONFIGURED';
     throw error;
   }
   const controller = new AbortController();
@@ -1167,14 +1173,35 @@ async function pullFromOneC() {
   }
 }
 
-async function recordFailure(supabase) {
+async function recordFailure(supabase, error) {
   try {
     const at = new Date().toISOString();
+    const errorCode = String(error?.code || '').toUpperCase();
+    const failure = errorCode === 'ONEC_SCHEMA_NOT_READY'
+      ? {
+        code: 'schema_not_ready',
+        message: 'HUB ожидает обновления базы. Данные последнего успешного обмена сохранены и не повреждены.',
+      }
+      : errorCode === 'ONEC_SYNC_BUSY'
+        ? {
+          code: 'sync_busy',
+          message: 'Предыдущий пакет 1С ещё обрабатывается. Повторная отправка будет принята после его завершения.',
+        }
+        : errorCode === 'ONEC_PULL_NOT_CONFIGURED'
+          ? {
+            code: 'pull_not_configured',
+            message: 'Ручное получение из 1С ещё не настроено. Автоматическая отправка из 1С продолжает работать отдельно.',
+          }
+          : {
+            code: 'sync_failed',
+            message: 'Последняя попытка обмена не завершилась. Подробности записаны в защищённом журнале сервера.',
+          };
     await saveSyncState(supabase, (previous) => ({
       ...previous,
       lastSyncAt: at,
       lastErrorAt: at,
-      lastError: 'Ошибка связи с 1С. Подробности записаны в защищённом журнале сервера.',
+      lastError: failure.message,
+      lastErrorCode: failure.code,
     }));
   } catch (stateError) {
     console.error('Failed to record 1C sync error:', stateError);
@@ -1244,7 +1271,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, status });
   } catch (error) {
     console.error('1C accounting sync error:', error);
-    if (supabase && authenticated && (!error.statusCode || error.statusCode >= 500)) await recordFailure(supabase);
+    if (req.method === 'POST' && supabase && authenticated && (!error.statusCode || error.statusCode >= 500)) {
+      await recordFailure(supabase, error);
+    }
     return res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || 'Ошибка синхронизации с 1С',

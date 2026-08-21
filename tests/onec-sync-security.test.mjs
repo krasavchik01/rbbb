@@ -110,6 +110,27 @@ test('1C inbox is exposed only through the protected bounded API path', async ()
   );
 });
 
+test('1C health reads never overwrite sync health and successful writes clear the full error state', async () => {
+  const source = await readFile(syncUrl, 'utf8');
+  assert.match(
+    source,
+    /if \(req\.method === 'POST' && supabase && authenticated[\s\S]*?recordFailure\(supabase, error\)/,
+  );
+  assert.doesNotMatch(
+    source,
+    /if \(supabase && authenticated[\s\S]{0,160}?recordFailure\(supabase\)/,
+  );
+  assert.match(source, /lastError:\s*''[\s\S]{0,100}?lastErrorAt:\s*null[\s\S]{0,100}?lastErrorCode:\s*''/);
+});
+
+test('1C schema rollout failure is stored as a safe actionable state, not a false connection loss', async () => {
+  const source = await readFile(syncUrl, 'utf8');
+  assert.match(source, /error\.code = 'ONEC_SCHEMA_NOT_READY'/);
+  assert.match(source, /code:\s*'schema_not_ready'/);
+  assert.match(source, /HUB ожидает обновления базы\. Данные последнего успешного обмена сохранены и не повреждены\./);
+  assert.doesNotMatch(source, /lastError:\s*'Ошибка связи с 1С/);
+});
+
 test('1C inbox persistence follows successful project note updates', async () => {
   const source = await readFile(syncUrl, 'utf8');
   const futureGuard = source.indexOf("new Error('Момент снимка 1С слишком далеко в будущем')");
