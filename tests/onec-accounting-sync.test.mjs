@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   hashSharedSecret,
+  isOneCNoopBatch,
   matchOneCRecord,
   mergeOneCRecordsIntoNotes,
   normalizeOneCPayload,
@@ -17,6 +18,20 @@ const project = {
     client: { name: 'ТОО Клиент', bin: '123456789012' },
   },
 };
+
+test('1C connection check accepts only an explicit empty non-snapshot batch', () => {
+  assert.equal(isOneCNoopBatch({
+    source: '1С Бухгалтерия для Казахстана / MAK_290424',
+    fullSnapshot: false,
+    records: [],
+  }), true);
+
+  assert.equal(isOneCNoopBatch({}), false);
+  assert.equal(isOneCNoopBatch({ fullSnapshot: false, records: [] }), false);
+  assert.equal(isOneCNoopBatch({ source: '1C', fullSnapshot: true, records: [] }), false);
+  assert.equal(isOneCNoopBatch({ source: '1C', fullSnapshot: false, records: [{}] }), false);
+  assert.equal(normalizeOneCPayload({ records: [{}] }).records.length, 0);
+});
 
 test('1C payload accepts Russian accounting field names', () => {
   const payload = normalizeOneCPayload({

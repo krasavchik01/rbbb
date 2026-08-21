@@ -7,6 +7,7 @@ import {
 } from '../_email-utils.mjs';
 import {
   hashSharedSecret,
+  isOneCNoopBatch,
   matchOneCRecord,
   mergeOneCRecordsIntoNotes,
   normalizeOneCPayload,
@@ -249,6 +250,9 @@ export default async function handler(req, res) {
     const body = parseBody(req);
     if (await isExternalOneCRequest(req, supabase)) {
       authenticated = true;
+      if (isOneCNoopBatch(body)) {
+        return res.status(200).json({ success: true, probe: true, received: 0 });
+      }
       const status = await ingestPayload(supabase, body);
       return res.status(200).json({ success: true, status });
     }

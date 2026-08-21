@@ -151,6 +151,18 @@ export function normalizeOneCPayload(body) {
   };
 }
 
+export function isOneCNoopBatch(body) {
+  return Boolean(
+    body
+    && typeof body === 'object'
+    && !Array.isArray(body)
+    && text(body.source || body.database || body.ИнформационнаяБаза)
+    && body.fullSnapshot === false
+    && Array.isArray(body.records)
+    && body.records.length === 0,
+  );
+}
+
 function parseNotes(value) {
   if (!value) return {};
   if (typeof value === 'object' && !Array.isArray(value)) return value;
