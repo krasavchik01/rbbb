@@ -6,6 +6,7 @@ import {
   matchOneCRecord,
   mergeOneCRecordsIntoNotes,
   normalizeOneCPayload,
+  runWithConcurrency,
   secureSecretMatches,
 } from '../api/_1c-sync-utils.mjs';
 
@@ -99,4 +100,19 @@ test('1C shared secret comparison rejects empty and different values', () => {
   assert.equal(secureSecretMatches('', ''), false);
   assert.equal(secureSecretMatches('wrong', 'same-secret'), false);
   assert.equal(secureSecretMatches(hashSharedSecret('same-secret'), hashSharedSecret('same-secret')), true);
+});
+
+test('1C project updates use bounded concurrency and preserve result order', async () => {
+  let active = 0;
+  let maximumActive = 0;
+  const results = await runWithConcurrency([1, 2, 3, 4, 5, 6], 3, async (value) => {
+    active += 1;
+    maximumActive = Math.max(maximumActive, active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    active -= 1;
+    return value * 10;
+  });
+
+  assert.deepEqual(results, [10, 20, 30, 40, 50, 60]);
+  assert.equal(maximumActive, 3);
 });

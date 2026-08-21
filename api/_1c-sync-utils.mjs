@@ -325,3 +325,24 @@ export function secureSecretMatches(received, expected) {
 export function hashSharedSecret(value) {
   return crypto.createHash('sha256').update(text(value), 'utf8').digest('hex');
 }
+
+export async function runWithConcurrency(items, concurrency, worker) {
+  const values = Array.from(items || []);
+  if (values.length === 0) return [];
+
+  const requested = Number.isFinite(Number(concurrency)) ? Math.floor(Number(concurrency)) : 1;
+  const workerCount = Math.min(values.length, Math.max(1, requested));
+  const results = new Array(values.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < values.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await worker(values[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return results;
+}

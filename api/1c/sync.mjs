@@ -11,11 +11,13 @@ import {
   matchOneCRecord,
   mergeOneCRecordsIntoNotes,
   normalizeOneCPayload,
+  runWithConcurrency,
   secureSecretMatches,
 } from '../_1c-sync-utils.mjs';
 
 const ACCOUNTING_ROLES = new Set(['accountant', 'ceo', 'admin']);
 const MAX_HISTORY = 30;
+const PROJECT_UPDATE_CONCURRENCY = 8;
 
 function header(req, name) {
   return String(req.headers?.[name.toLowerCase()] || req.headers?.[name] || '').trim();
@@ -85,14 +87,18 @@ async function isExternalOneCRequest(req, supabase) {
   return secureSecretMatches(hashSharedSecret(received), envelope.oneCAccounting?.secretHash || '');
 }
 
-async function updateProjectNotes(supabase, projectId, records, source, syncedAt) {
+async function updateProjectNotes(supabase, projectId, records, source, syncedAt, initialProject = null) {
+  let current = initialProject;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { data: current, error: readError } = await supabase
-      .from('projects')
-      .select('id,notes,updated_at')
-      .eq('id', projectId)
-      .maybeSingle();
-    if (readError) throw readError;
+    if (!current) {
+      const { data, error: readError } = await supabase
+        .from('projects')
+        .select('id,notes,updated_at')
+        .eq('id', projectId)
+        .maybeSingle();
+      if (readError) throw readError;
+      current = data;
+    }
     if (!current) throw new Error(`Project ${projectId} not found`);
 
     const notes = mergeOneCRecordsIntoNotes(current.notes, records, source, syncedAt);
@@ -104,11 +110,13 @@ async function updateProjectNotes(supabase, projectId, records, source, syncedAt
     const { data: rows, error: updateError } = await query.select('id');
     if (updateError) throw updateError;
     if (Array.isArray(rows) && rows.length > 0) return;
+    current = null;
   }
   throw new Error(`Project ${projectId} changed during 1C sync`);
 }
 
 async function ingestPayload(supabase, body) {
+  const startedAt = Date.now();
   const payload = normalizeOneCPayload(body);
   if (payload.records.length === 0) {
     const error = new Error('Пакет 1С не содержит корректных записей');
@@ -134,9 +142,19 @@ async function ingestPayload(supabase, body) {
   }
 
   const syncedAt = new Date().toISOString();
-  for (const [projectId, records] of grouped) {
-    await updateProjectNotes(supabase, projectId, records, payload.source, syncedAt);
-  }
+  const projectsById = new Map((projects || []).map((project) => [String(project.id), project]));
+  await runWithConcurrency(
+    grouped.entries(),
+    PROJECT_UPDATE_CONCURRENCY,
+    ([projectId, records]) => updateProjectNotes(
+      supabase,
+      projectId,
+      records,
+      payload.source,
+      syncedAt,
+      projectsById.get(projectId),
+    ),
+  );
 
   const { envelope } = await loadSettings(supabase);
   const previous = envelope.oneCAccounting && typeof envelope.oneCAccounting === 'object'
@@ -171,6 +189,13 @@ async function ingestPayload(supabase, body) {
     history: [summary, ...(Array.isArray(previous.history) ? previous.history : [])].slice(0, MAX_HISTORY),
   };
   await saveSyncState(supabase, state);
+  console.info('1C accounting batch processed', JSON.stringify({
+    received: summary.received,
+    matched: summary.matched,
+    unmatched: summary.unmatched,
+    updatedProjects: summary.updatedProjects,
+    durationMs: Date.now() - startedAt,
+  }));
   return publicStatus(state);
 }
 
