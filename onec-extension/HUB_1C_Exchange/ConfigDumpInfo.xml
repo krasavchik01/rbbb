@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" format="Hierarchical" version="2.16">
+	<ConfigVersions>
+		<Metadata name="Configuration.HUB_1C_Exchange" id="b80a77ff-f0c1-4a2d-9678-e354e7f0c952" configVersion="6e58e900118645049916969115acd6367bfd9584"/>
+		<Metadata name="Subsystem.HUB_Интеграция" id="8b18991a-948b-43cd-826c-d49b6a75ca8a" configVersion="ae13850efad144fcba7fa5d72b6f9786d80521ed"/>
+		<Metadata name="Constant.HUB_АдресAPI" id="d977ca0f-6542-4f6c-9e38-2ccc8c7bf0c6" configVersion="5c7c0c737a0d6d6365aafcfaa01944a9c8c553a9"/>
+		<Metadata name="Constant.HUB_ДатаНачалаОбмена" id="2f9c3f69-9cd9-4209-9663-eee41d9dc821" configVersion="e61d5b2068d6dd23e4008d46555d9a0f9f70733b"/>
+		<Metadata name="Constant.HUB_КлючAPI" id="5eedf652-34dc-45ea-b8b5-26c34518d237" configVersion="7ffb22c3a07eeb1509f6c68ccd348310789aeaca"/>
+		<Metadata name="Constant.HUB_ОбменВключен" id="575ed655-5c8c-4ec0-bb49-eb7fe1c695e0" configVersion="669b1dd0c388ae3c00ac1d31de8919245d128df4"/>
+		<Metadata name="CommonModule.HUB_ОбменСервер" id="c0f104b2-a7c9-411b-8617-67dbcbb235b4" configVersion="36c75272ddaf4adaa862db6d24b9aa9200000000"/>
+		<Metadata name="ScheduledJob.HUB_РегламентныйОбмен" id="b52fa5e1-952e-4766-8d20-ac02a383f7df" configVersion="2f170b019c7440888b796d1e4534d2d100000000"/>
+		<Metadata name="Language.Русский" id="67ff54b7-3649-4dd8-aeec-ea24d0cb81aa" configVersion="fdf5999339de9ad248000a0fe67c0e42094f28f6"/>
+		<Metadata name="Role.HUB_ОсновнаяРоль" id="1dbf45b1-37eb-44fd-8baa-b1065b27ad6f" configVersion="6cafddcfb6ff46bba48223922826b6bf23fa3dcc"/>
+		<Metadata name="CommonCommand.HUB_ОткрытьНастройкуОбмена" id="9c3d6933-c321-4e21-9b0c-45e638a843cc" configVersion="f7e75fd6c2184dad8846193628d32171b1eb4f54"/>
+		<Metadata name="CommonCommand.HUB_ОткрытьНастройкуОбмена.CommandModule" id="9c3d6933-c321-4e21-9b0c-45e638a843cc.2" configVersion="98ad123fdd0843c39a9783510c7b6e5b00000000"/>
+		<Metadata name="CommonForm.HUB_НастройкаОбмена" id="452a3e2f-2a6d-4d29-ae42-83f5408c2530" configVersion="04e62a0090cf4d45afaf96aeb81263aca489a565"/>
+		<Metadata name="CommonForm.HUB_НастройкаОбмена.Form" id="452a3e2f-2a6d-4d29-ae42-83f5408c2530.0" configVersion="89ff145944f843249ec8a47b49a7d35c00000000"/>
+	</ConfigVersions>
+</ConfigDumpInfo>

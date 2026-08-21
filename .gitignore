@@ -20,3 +20,7 @@ reports/
 playwright-report/
 test-results/
 supabase/.temp/
+
+# Local read-only dump of the proprietary 1C vendor configuration.
+# It is used only to map BPK metadata while building the HUB extension.
+onec-extension/BPK_3_0_73_1_metadata/

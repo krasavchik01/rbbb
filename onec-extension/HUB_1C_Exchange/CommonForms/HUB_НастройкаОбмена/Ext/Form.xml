@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.16">
+	<WindowOpeningMode>LockOwnerWindow</WindowOpeningMode>
+	<CommandBarLocation>Bottom</CommandBarLocation>
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">
+		<HorizontalAlign>Right</HorizontalAlign>
+		<Autofill>false</Autofill>
+		<ChildItems>
+			<Button name="ФормаСохранить" id="20">
+				<Type>CommandBarButton</Type>
+				<DefaultButton>true</DefaultButton>
+				<CommandName>Form.Command.Сохранить</CommandName>
+				<ExtendedTooltip name="ФормаСохранитьExtendedTooltip" id="21"/>
+			</Button>
+			<Button name="ФормаПроверитьСвязь" id="22">
+				<Type>CommandBarButton</Type>
+				<CommandName>Form.Command.ПроверитьСвязь</CommandName>
+				<ExtendedTooltip name="ФормаПроверитьСвязьExtendedTooltip" id="23"/>
+			</Button>
+			<Button name="ФормаЗапуститьОбменСейчас" id="28">
+				<Type>CommandBarButton</Type>
+				<CommandName>Form.Command.ЗапуститьОбменСейчас</CommandName>
+				<ExtendedTooltip name="ФормаЗапуститьОбменСейчасExtendedTooltip" id="29"/>
+			</Button>
+			<Button name="ФормаЗакрыть" id="24">
+				<Type>CommandBarButton</Type>
+				<CommandName>Form.StandardCommand.Close</CommandName>
+				<ExtendedTooltip name="ФормаЗакрытьExtendedTooltip" id="25"/>
+			</Button>
+		</ChildItems>
+	</AutoCommandBar>
+	<Events>
+		<Event name="OnCreateAtServer">ПриСозданииНаСервере</Event>
+	</Events>
+	<ChildItems>
+		<LabelDecoration name="ЗаголовокПодключения" id="1">
+			<Title formatted="false">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Подключение 1С:Бухгалтерии к HUB RB Partners</v8:content>
+				</v8:item>
+			</Title>
+			<ContextMenu name="ЗаголовокПодключенияКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="ЗаголовокПодключенияExtendedTooltip" id="3"/>
+		</LabelDecoration>
+		<LabelDecoration name="ОписаниеПодключения" id="4">
+			<Title formatted="false">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>После успешной проверки можно запустить обмен вручную. Автообмен выполняется в 08:00, 12:00, 16:00 и 20:00.</v8:content>
+				</v8:item>
+			</Title>
+			<ContextMenu name="ОписаниеПодключенияКонтекстноеМеню" id="5"/>
+			<ExtendedTooltip name="ОписаниеПодключенияExtendedTooltip" id="6"/>
+		</LabelDecoration>
+		<InputField name="АдресAPI" id="7">
+			<DataPath>АдресAPI</DataPath>
+			<ContextMenu name="АдресAPIКонтекстноеМеню" id="8"/>
+			<ExtendedTooltip name="АдресAPIExtendedTooltip" id="9"/>
+		</InputField>
+		<InputField name="КлючAPI" id="10">
+			<DataPath>КлючAPI</DataPath>
+			<PasswordMode>true</PasswordMode>
+			<ContextMenu name="КлючAPIКонтекстноеМеню" id="11"/>
+			<ExtendedTooltip name="КлючAPIExtendedTooltip" id="12"/>
+		</InputField>
+		<InputField name="ДатаНачалаОбмена" id="13">
+			<DataPath>ДатаНачалаОбмена</DataPath>
+			<ContextMenu name="ДатаНачалаОбменаКонтекстноеМеню" id="14"/>
+			<ExtendedTooltip name="ДатаНачалаОбменаExtendedTooltip" id="15"/>
+		</InputField>
+		<CheckBoxField name="ОбменВключен" id="16">
+			<DataPath>ОбменВключен</DataPath>
+			<TitleLocation>Right</TitleLocation>
+			<CheckBoxType>Auto</CheckBoxType>
+			<ContextMenu name="ОбменВключенКонтекстноеМеню" id="17"/>
+			<ExtendedTooltip name="ОбменВключенExtendedTooltip" id="18"/>
+		</CheckBoxField>
+		<LabelField name="Статус" id="19">
+			<DataPath>Статус</DataPath>
+			<TitleLocation>Top</TitleLocation>
+			<AutoMaxWidth>false</AutoMaxWidth>
+			<ContextMenu name="СтатусКонтекстноеМеню" id="26"/>
+			<ExtendedTooltip name="СтатусExtendedTooltip" id="27"/>
+		</LabelField>
+	</ChildItems>
+	<Attributes>
+		<Attribute name="АдресAPI" id="1">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Адрес API HUB</v8:content></v8:item></Title>
+			<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>250</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
+		</Attribute>
+		<Attribute name="КлючAPI" id="2">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Секретный ключ HUB</v8:content></v8:item></Title>
+			<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>250</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
+		</Attribute>
+		<Attribute name="ДатаНачалаОбмена" id="3">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Загружать документы начиная с</v8:content></v8:item></Title>
+			<Type><v8:Type>xs:dateTime</v8:Type><v8:DateQualifiers><v8:DateFractions>Date</v8:DateFractions></v8:DateQualifiers></Type>
+		</Attribute>
+		<Attribute name="ОбменВключен" id="4">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Включить автоматический обмен</v8:content></v8:item></Title>
+			<Type><v8:Type>xs:boolean</v8:Type></Type>
+		</Attribute>
+		<Attribute name="Статус" id="5">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Состояние подключения</v8:content></v8:item></Title>
+			<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>0</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
+		</Attribute>
+	</Attributes>
+	<Commands>
+		<Command name="Сохранить" id="1">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Сохранить</v8:content></v8:item></Title>
+			<ToolTip><v8:item><v8:lang>ru</v8:lang><v8:content>Сохранить настройки HUB</v8:content></v8:item></ToolTip>
+			<Action>Сохранить</Action>
+			<CurrentRowUse>DontUse</CurrentRowUse>
+		</Command>
+		<Command name="ПроверитьСвязь" id="2">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Проверить связь</v8:content></v8:item></Title>
+			<ToolTip><v8:item><v8:lang>ru</v8:lang><v8:content>Отправить безопасный тестовый запрос без документов</v8:content></v8:item></ToolTip>
+			<Action>ПроверитьСвязь</Action>
+			<CurrentRowUse>DontUse</CurrentRowUse>
+		</Command>
+		<Command name="ЗапуститьОбменСейчас" id="3">
+			<Title><v8:item><v8:lang>ru</v8:lang><v8:content>Запустить обмен сейчас</v8:content></v8:item></Title>
+			<ToolTip><v8:item><v8:lang>ru</v8:lang><v8:content>Передать в HUB счета, АВР, ЭСФ и оплаты за выбранный период</v8:content></v8:item></ToolTip>
+			<Action>ЗапуститьОбменСейчас</Action>
+			<CurrentRowUse>DontUse</CurrentRowUse>
+		</Command>
+	</Commands>
+</Form>
