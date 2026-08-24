@@ -66,7 +66,7 @@ test('project draft bonuses are labelled as allocated, not falsely paid', () => 
     inlineDetailSource,
     /<BonusFact label="Выплачено" value=\{formatMoney\(allocated\)\}/,
   );
-  assert.match(inlineDetailSource, /Ведомость бонусов/);
+  assert.match(inlineDetailSource, /data-testid="project-bonus-summary"/);
   assert.match(inlineDetailSource, /Выплачено \{formatMoney\(paid\)\}/);
   assert.match(pageSource, /Бонусный пул:[\s\S]{0,120}executiveSummary\.plannedBonusPool/);
   assert.match(pageSource, /Выплачено:[\s\S]{0,120}executiveSummary\.paidFromRegistry/);

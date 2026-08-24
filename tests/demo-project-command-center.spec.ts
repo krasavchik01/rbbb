@@ -131,7 +131,7 @@ test.describe('CEO command center completion', () => {
     await expect(detail).toContainText('Команда');
     await expect(detail).toContainText('Таймшиты');
     await expect(detail).toContainText('Как складывается доход');
-    await expect(detail).toContainText('Ведомость бонусов');
+    await expect(detail.getByTestId('project-bonus-summary')).toBeVisible();
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -150,7 +150,7 @@ test.describe('CEO command center completion', () => {
       await expect(detail).toBeVisible();
       await expect(detail.getByText('Таймшиты', { exact: true })).toBeAttached();
       await expect(detail.getByText('Как складывается доход', { exact: true })).toBeAttached();
-      await expect(detail.getByText('Ведомость бонусов', { exact: true })).toBeAttached();
+      await expect(detail.getByTestId('project-bonus-summary')).toBeAttached();
       await page.screenshot({ path: `test-results/command-center-${width}.png`, fullPage: true });
       expect(network.productionMutations).toEqual([]);
     });

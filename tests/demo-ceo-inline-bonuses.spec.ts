@@ -116,6 +116,9 @@ test.describe('CEO inline project bonuses', () => {
     await expect(identity).toContainText('Клиент');
     await expect(identity).toContainText('Наша компания');
     await expect(identity).toContainText('Директор компании');
+    const bonusSummary = detail.getByTestId('project-bonus-summary');
+    await expect(bonusSummary).toBeVisible();
+    expect((await bonusSummary.boundingBox())?.height || 0).toBeLessThanOrEqual(48);
     await expect(detail.getByTestId('project-executive-ledger')).toBeVisible();
     await expect(detail.getByTestId('project-tab-bonuses')).toHaveCount(0);
     await expect(detail.getByTestId('project-tab-team')).toHaveCount(0);
@@ -344,7 +347,7 @@ test.describe('CEO inline project bonuses', () => {
     const detail = await openDemoProjectInline(page);
     await expect(detail).toContainText(/В реестре ждёт\s*50\s*000/);
     const bonuses = detail.getByTestId('project-bonus-editor');
-    await expect(bonuses).toContainText('Ведомость бонусов');
+    await expect(bonuses.getByTestId('project-bonus-summary')).toBeVisible();
     await expect(detail).toContainText('Расчёт уже передан в платёжный реестр');
     await expect(bonuses.locator('input, button')).toHaveCount(0);
     await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toHaveCount(0);

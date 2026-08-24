@@ -51,6 +51,31 @@ describe('calculateProjectFinances', () => {
     expect(finances.bonusPoolHistory).toHaveLength(1);
   });
 
+  it('recalculates a CEO percentage allocation when the manual pool changes', () => {
+    const finances = calculateProjectFinances({
+      contract: { amountWithoutVAT: 1_000_000 },
+      finances: {
+        bonusPercent: 10,
+        preExpensePercent: 0,
+        bonusPoolOverrideAmount: 200_000,
+        bonusPoolManuallyAdjusted: true,
+        teamBonuses: {
+          'employee-1': {
+            role: 'assistant_1',
+            percent: 25,
+            amount: 25_000,
+            manuallyAdjusted: true,
+            adjustmentMode: 'percent',
+          },
+        },
+      },
+      team: [{ userId: 'employee-1', role: 'assistant_1', bonusPercent: 2 }],
+    } as any);
+
+    expect(finances.teamBonuses['employee-1']).toMatchObject({ percent: 25, amount: 50_000 });
+    expect(finances.totalPaidBonuses).toBe(50_000);
+  });
+
   it('returns to the percentage formula when the manual pool flag is cleared', () => {
     const finances = calculateProjectFinances({
       contract: { amountWithoutVAT: 1_000_000 },

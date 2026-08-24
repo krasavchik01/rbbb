@@ -29,6 +29,8 @@ export interface TeamBonusDraft extends UnknownRecord {
   percent: number;
   amount: number;
   manuallyAdjusted?: boolean;
+  /** What the CEO changed last: a share of the pool or a fixed tenge amount. */
+  adjustmentMode?: 'percent' | 'amount';
   hiddenFromEmployee?: boolean;
   paidAt?: string | null;
   paidByName?: string | null;

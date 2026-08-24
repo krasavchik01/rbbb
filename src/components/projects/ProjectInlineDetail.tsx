@@ -404,7 +404,7 @@ function CeoProjectIdentityLine({
 }) {
   return (
     <section
-      className="grid min-w-0 gap-px border-b bg-border sm:grid-cols-3"
+      className="grid min-w-0 gap-px border-b bg-border md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]"
       aria-label="Клиент, наша компания и директор"
       data-testid="ceo-project-identity"
     >
@@ -417,9 +417,9 @@ function CeoProjectIdentityLine({
 
 function LedgerIdentityCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 bg-background px-3 py-2.5 sm:px-4">
-      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-0.5 break-words text-sm font-semibold leading-5">{value}</div>
+    <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 bg-background px-3 py-2 text-xs sm:px-4">
+      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}:</span>
+      <span className="min-w-0 break-words text-sm font-semibold leading-5">{value}</span>
     </div>
   );
 }
@@ -459,18 +459,6 @@ function CeoBonusLedger({
 
   return (
     <section className="min-w-0 bg-background" aria-label="Ведомость бонусов и команда" data-testid="project-bonus-editor">
-      <div className="border-b px-3 py-3 sm:px-4">
-        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-          <div>
-            <h4 className="text-base font-semibold">Ведомость бонусов</h4>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-              Вводите процент в строке сотрудника — сумма справа пересчитывается сразу.
-            </p>
-          </div>
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{employees.length} чел.</span>
-        </div>
-      </div>
-
       <BonusEditor
         projectId={projectId}
         projectName={projectName}
@@ -482,12 +470,12 @@ function CeoBonusLedger({
       />
 
       {bonuses.lockedReason && (
-        <div className="mx-3 mt-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 sm:mx-4">
+        <div className="mx-3 my-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs leading-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 sm:mx-4">
           {bonuses.lockedReason}
         </div>
       )}
 
-      <section className="mt-3 min-w-0" data-testid="project-team-ledger" aria-label="Команда и бонусы проекта">
+      <section className="min-w-0" data-testid="project-team-ledger" aria-label="Команда и бонусы проекта">
         <CeoBonusLedgerHeader />
         <div className="min-w-0">
           <CeoBonusAllocationRow
@@ -512,12 +500,12 @@ function CeoBonusLedger({
           />}
         </div>
 
-        <div className="border-y bg-muted/20 px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 items-center justify-between gap-3 border-y bg-muted/20 px-3 py-1.5 sm:px-4">
           <div className="text-xs font-semibold">Команда</div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">Каждый участник — отдельной строкой с процентом и суммой.</div>
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{teamEmployees.length} чел.</span>
         </div>
         {teamEmployees.length === 0 ? (
-          <div className="border-b px-3 py-3 text-sm text-muted-foreground sm:px-4">Другие участники команды не назначены.</div>
+          <div className="border-b px-3 py-2 text-sm text-muted-foreground sm:px-4">Другие участники команды не назначены.</div>
         ) : teamEmployees.map((employee) => (
           <CeoBonusAllocationRow
             key={employee.id}
@@ -538,7 +526,7 @@ function CeoBonusLedger({
 
 function CeoBonusLedgerHeader() {
   return (
-    <div className="hidden min-w-0 grid-cols-[minmax(125px,0.8fr)_minmax(180px,1.25fr)_100px_minmax(130px,0.8fr)] gap-3 border-b bg-muted/20 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid sm:px-4">
+    <div className="hidden min-w-0 grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] gap-3 border-b bg-muted/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground xl:grid sm:px-4">
       <span>Роль</span>
       <span>Сотрудник</span>
       <span>Процент</span>
@@ -625,7 +613,7 @@ function CeoBonusAllocationRow({
 
   if (!employee) {
     return (
-      <div className="grid min-w-0 gap-2 border-b px-3 py-2.5 sm:px-4 lg:grid-cols-[minmax(125px,0.8fr)_minmax(180px,1.25fr)_100px_minmax(130px,0.8fr)] lg:items-center lg:gap-3" data-testid={`member-bonus-${projectId}-${label.toLocaleLowerCase('ru').replace(/\s+/g, '-')}`}>
+      <div className="grid min-w-0 gap-1.5 border-b px-3 py-1.5 sm:px-4 xl:grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] xl:items-center xl:gap-3" data-testid={`member-bonus-${projectId}-${label.toLocaleLowerCase('ru').replace(/\s+/g, '-')}`}>
         <div className="min-w-0 text-xs font-medium text-muted-foreground">{label}</div>
         <div className="min-w-0 text-sm text-muted-foreground">Не назначен</div>
         <div className="text-sm text-muted-foreground">—</div>
@@ -636,29 +624,31 @@ function CeoBonusAllocationRow({
 
   return (
     <div
-      className="grid min-w-0 gap-2 border-b px-3 py-2.5 last:border-b-0 sm:px-4 lg:grid-cols-[minmax(125px,0.8fr)_minmax(180px,1.25fr)_100px_minmax(130px,0.8fr)] lg:items-center lg:gap-3"
+      className="grid min-w-0 gap-1.5 border-b px-3 py-1.5 last:border-b-0 sm:px-4 xl:grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] xl:items-center xl:gap-3"
       data-testid={`member-bonus-${projectId}-${employee.id}`}
       data-team-member-row="true"
       data-employee-id={employee.id}
     >
       <div className="min-w-0">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Роль</div>
-        <div className="break-words text-xs font-medium leading-5 text-muted-foreground">{label}</div>
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground xl:hidden">Роль</div>
+        <div className="break-words text-xs font-medium leading-4 text-muted-foreground">{label}</div>
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Сотрудник</div>
-        <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
-        {showHours && <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{safePositive(employee.approvedHours).toFixed(1)} ч утверждено{safePositive(employee.pendingHours) > 0 ? ` · ${safePositive(employee.pendingHours).toFixed(1)} ч ждёт` : ''}</div>}
-        <div className="mt-1"><PaymentStatus employee={employee} registryState={registryState} /></div>
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground xl:hidden">Сотрудник</div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
+          {showHours && <div className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{safePositive(employee.approvedHours).toFixed(1)} ч{safePositive(employee.pendingHours) > 0 ? ` · ${safePositive(employee.pendingHours).toFixed(1)} ждёт` : ''}</div>}
+          <PaymentStatus employee={employee} registryState={registryState} compact showEmpty={false} />
+        </div>
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Процент</div>
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground xl:hidden">Процент</div>
         {rowEditable ? (
           <div className="relative min-w-0" title={employee.lockedReason || undefined}>
             <Input
               value={draftPercent}
               inputMode="decimal"
-              className="h-10 w-full pr-7 text-right text-sm font-semibold tabular-nums"
+              className="h-10 w-full pr-7 text-right text-sm font-semibold tabular-nums xl:h-9"
               aria-label={`Процент бонуса ${employee.name}`}
               data-testid={`employee-bonus-percent-${employee.id}-input`}
               disabled={saving}
@@ -679,21 +669,21 @@ function CeoBonusAllocationRow({
         )}
         {employee.lockedReason && editable && <div className="mt-1 text-[10px] leading-4 text-amber-800 dark:text-amber-200">{employee.lockedReason}</div>}
       </div>
-      <div className="min-w-0 lg:text-right">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Сумма бонуса</div>
+      <div className="min-w-0 xl:text-right">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground xl:hidden">Сумма бонуса</div>
         {rowEditable ? (
           <Input
             readOnly
             tabIndex={-1}
             value={formatMoneyInput(previewAmount)}
-            className="h-10 w-full cursor-default text-right text-sm font-semibold tabular-nums lg:ml-auto lg:max-w-[150px]"
+            className="h-10 w-full cursor-default text-right text-sm font-semibold tabular-nums xl:ml-auto xl:h-9 xl:max-w-[150px]"
             aria-label={`Сумма бонуса ${employee.name}; рассчитывается по проценту`}
             data-testid={`employee-bonus-${employee.id}-input`}
           />
         ) : (
           <div className="pt-1 text-sm font-semibold tabular-nums" data-testid={`employee-bonus-${employee.id}-amount`}>{formatMoney(safePositive(employee.amount))}</div>
         )}
-        {rowEditable && <div className="mt-1 text-[10px] text-muted-foreground">считается от пула</div>}
+        {rowEditable && <div className="mt-0.5 text-[10px] text-muted-foreground">от пула</div>}
       </div>
     </div>
   );
@@ -746,6 +736,15 @@ function BonusEditor({
   const overallocated = allocated > pool;
   const registryState = bonuses.registryState || 'ready';
   const editable = Boolean(bonuses.editable);
+  const paymentSummary = registryState === 'loading'
+    ? 'Выплаты сверяются…'
+    : registryState === 'error'
+      ? 'Статус выплат недоступен'
+      : safePositive(bonuses.pendingAmount) > 0
+        ? `В реестре ждёт ${formatMoney(bonuses.pendingAmount)} · к выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`
+        : safePositive(bonuses.approvedForPayment) > 0 || safePositive(bonuses.paidAmount) > 0
+          ? `К выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`
+          : null;
   const [percentBusy, setPercentBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
 
@@ -770,34 +769,41 @@ function BonusEditor({
   };
 
   return (
-    <section className="min-w-0 border-b bg-sky-50/30 px-3 py-3 dark:bg-sky-950/10 sm:px-4" aria-label="Пул бонусов">
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="min-w-0 rounded-md border bg-background p-2.5" data-testid={editable ? `project-bonus-pool-${projectId}` : undefined}>
-          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Бонусный пул</div>
+    <section className="min-w-0 border-b bg-sky-50/30 px-3 py-1.5 dark:bg-sky-950/10 sm:px-4" aria-label="Пул бонусов" data-testid="project-bonus-summary">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="shrink-0 text-xs font-semibold">Бонусы</span>
+        <div className="flex min-w-0 items-center gap-1.5" data-testid={editable ? `project-bonus-pool-${projectId}` : undefined}>
+          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Бонусный пул</span>
           {editable ? (
-            <MoneyStepper
-              value={pool}
-              step={50_000}
-              disabled={!onPoolAmountCommit}
-              disabledReason={bonuses.lockedReason || undefined}
-              onCommit={onPoolAmountCommit}
-              label={`бонусный пул ${projectName}`}
-              testIdPrefix="project-bonus-pool"
-            />
-          ) : <div className="text-base font-semibold tabular-nums">{formatMoney(pool)}</div>}
+            <div className="w-[220px] max-w-full">
+              <MoneyStepper
+                value={pool}
+                step={50_000}
+                disabled={!onPoolAmountCommit}
+                disabledReason={bonuses.lockedReason || undefined}
+                onCommit={onPoolAmountCommit}
+                label={`бонусный пул ${projectName}`}
+                testIdPrefix="project-bonus-pool"
+                compact
+              />
+            </div>
+          ) : <span className="text-sm font-semibold tabular-nums">{formatMoney(pool)}</span>}
         </div>
-        <div className="min-w-0 rounded-md border bg-background p-2.5">
-          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Процент пула от базы</div>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">От базы</span>
           {editable ? (
-            <PercentStepper
-              value={bonuses.poolPercent}
-              disabled={!onPoolPercentCommit || percentBusy || Boolean(bonuses.manuallyAdjusted)}
-              disabledReason={bonuses.manuallyAdjusted ? 'Сначала нажмите «Вернуть по формуле»' : bonuses.lockedReason || undefined}
-              onCommit={onPoolPercentCommit ? commitPercent : undefined}
-              label="процент бонусного пула"
-              testIdPrefix="project-bonus-percent"
-            />
-          ) : <div className="text-base font-semibold tabular-nums">{normalizedPercent(bonuses.poolPercent).toFixed(1)}%</div>}
+            <div className="w-[146px] max-w-full">
+              <PercentStepper
+                value={bonuses.poolPercent}
+                disabled={!onPoolPercentCommit || percentBusy || Boolean(bonuses.manuallyAdjusted)}
+                disabledReason={bonuses.manuallyAdjusted ? 'Сначала нажмите «Вернуть по формуле»' : bonuses.lockedReason || undefined}
+                onCommit={onPoolPercentCommit ? commitPercent : undefined}
+                label="процент бонусного пула"
+                testIdPrefix="project-bonus-percent"
+                compact
+              />
+            </div>
+          ) : <span className="text-sm font-semibold tabular-nums">{normalizedPercent(bonuses.poolPercent).toFixed(1)}%</span>}
         </div>
         <BonusFact label="Распределено" value={formatMoney(allocated)} />
         <BonusFact
@@ -805,19 +811,9 @@ function BonusEditor({
           value={formatMoney(Math.abs(remainder))}
           tone={overallocated ? 'danger' : remainder > 0 ? 'warning' : 'positive'}
         />
-      </div>
-      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-[11px] leading-4 text-muted-foreground">
-        <span>{bonuses.formulaPoolAmount == null ? 'Формульная сумма не рассчитана' : `По формуле: ${formatMoney(bonuses.formulaPoolAmount)}`}</span>
-        <span>
-          {registryState === 'loading'
-            ? 'Выплаты сверяются…'
-            : registryState === 'error'
-              ? 'Статус выплат недоступен'
-              : safePositive(bonuses.pendingAmount) > 0
-                ? `В реестре ждёт ${formatMoney(bonuses.pendingAmount)} · к выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`
-                : `К выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`}
-        </span>
-        {editable && <Button type="button" variant="ghost" size="sm" className="h-8 max-w-full whitespace-normal px-2 text-xs" disabled={!onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Вернуть по формуле</Button>}
+        {bonuses.manuallyAdjusted && <span className="text-[11px] leading-4 text-muted-foreground">По формуле: {bonuses.formulaPoolAmount == null ? 'не рассчитано' : formatMoney(bonuses.formulaPoolAmount)}</span>}
+        {paymentSummary && <span className="text-[11px] leading-4 text-muted-foreground">{paymentSummary}</span>}
+        {editable && bonuses.manuallyAdjusted && <Button type="button" variant="ghost" size="sm" className="h-7 max-w-full whitespace-normal px-1.5 text-[11px]" disabled={!onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1 h-3.5 w-3.5" />Вернуть по формуле</Button>}
       </div>
     </section>
   );
@@ -827,17 +823,22 @@ function BonusFact({
   label,
   value,
   tone = 'neutral',
-  compact = false,
 }: {
   label: string;
   value: string;
   tone?: ProjectInlineTone;
-  compact?: boolean;
 }) {
+  const valueTone = tone === 'danger'
+    ? 'text-red-700 dark:text-red-300'
+    : tone === 'positive'
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : tone === 'warning'
+        ? 'text-amber-800 dark:text-amber-200'
+        : 'text-foreground';
   return (
-    <div className={`min-w-0 rounded-md border p-2.5 ${toneClasses[tone]}`}>
-      <div className="text-[10px] uppercase tracking-wide opacity-70">{label}</div>
-      <div className={`mt-1 break-words font-semibold tabular-nums ${compact ? 'text-xs leading-4' : 'text-sm'}`}>{value}</div>
+    <div className="flex shrink-0 items-baseline gap-1 text-xs">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className={`font-semibold tabular-nums ${valueTone}`}>{value}</span>
     </div>
   );
 }
@@ -1135,22 +1136,33 @@ function EmployeeBonusRow({
   );
 }
 
-function PaymentStatus({ employee, registryState }: { employee: ProjectInlineBonusEmployee; registryState: ProjectInlineDataState }) {
-  if (registryState === 'loading') return <Badge variant="outline" className="self-start text-[10px]">Реестр загружается</Badge>;
-  if (registryState === 'error') return <Badge variant="outline" className={`${toneClasses.danger} self-start text-[10px]`}>Статус выплаты недоступен</Badge>;
+function PaymentStatus({
+  employee,
+  registryState,
+  compact = false,
+  showEmpty = true,
+}: {
+  employee: ProjectInlineBonusEmployee;
+  registryState: ProjectInlineDataState;
+  compact?: boolean;
+  showEmpty?: boolean;
+}) {
+  const className = compact ? 'self-start px-1.5 py-0 text-[9px] leading-4' : 'self-start text-[10px]';
+  if (registryState === 'loading') return <Badge variant="outline" className={className}>Реестр загружается</Badge>;
+  if (registryState === 'error') return <Badge variant="outline" className={`${toneClasses.danger} ${className}`}>Статус выплаты недоступен</Badge>;
   const paid = safePositive(employee.paidAmount);
   const approved = safePositive(employee.approvedForPayment);
   const pending = safePositive(employee.pendingAmount);
   if (paid > 0 || approved > 0 || pending > 0) {
     return (
       <div className="flex max-w-full flex-wrap gap-1 sm:justify-end">
-        {pending > 0 && <Badge variant="outline" className={`${toneClasses.info} whitespace-normal text-[10px]`}>Ждёт утверждения {formatMoney(pending)}</Badge>}
-        {approved > 0 && <Badge variant="outline" className={`${toneClasses.warning} whitespace-normal text-[10px]`}>К выплате {formatMoney(approved)}</Badge>}
-        {paid > 0 && <Badge variant="outline" className={`${toneClasses.positive} whitespace-normal text-[10px]`}>Выплачено {formatMoney(paid)}</Badge>}
+        {pending > 0 && <Badge variant="outline" className={`${toneClasses.info} whitespace-normal ${compact ? 'px-1.5 py-0 text-[9px] leading-4' : 'text-[10px]'}`}>Ждёт утверждения {formatMoney(pending)}</Badge>}
+        {approved > 0 && <Badge variant="outline" className={`${toneClasses.warning} whitespace-normal ${compact ? 'px-1.5 py-0 text-[9px] leading-4' : 'text-[10px]'}`}>К выплате {formatMoney(approved)}</Badge>}
+        {paid > 0 && <Badge variant="outline" className={`${toneClasses.positive} whitespace-normal ${compact ? 'px-1.5 py-0 text-[9px] leading-4' : 'text-[10px]'}`}>Выплачено {formatMoney(paid)}</Badge>}
       </div>
     );
   }
-  return <Badge variant="outline" className="self-start text-[10px] text-muted-foreground">Не в реестре</Badge>;
+  return showEmpty ? <Badge variant="outline" className={`${className} text-muted-foreground`}>Не в реестре</Badge> : null;
 }
 
 function PercentStepper({
@@ -1160,6 +1172,7 @@ function PercentStepper({
   onCommit,
   label,
   testIdPrefix,
+  compact = false,
 }: {
   value: number;
   disabled: boolean;
@@ -1167,6 +1180,7 @@ function PercentStepper({
   onCommit?: (percent: number) => Promise<boolean>;
   label: string;
   testIdPrefix: string;
+  compact?: boolean;
 }) {
   const normalizedValue = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
   const [draft, setDraft] = useState(normalizedValue.toFixed(1));
@@ -1219,11 +1233,11 @@ function PercentStepper({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] gap-2" title={disabledReason}>
-      <Button type="button" variant="outline" size="icon" className="h-10 w-10" disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit((parsedDraft() ?? normalizedValue) - 1)} aria-label={`Уменьшить ${label} на 1 процент`} data-testid={`${testIdPrefix}-minus`}><Minus className="h-4 w-4" /></Button>
+    <div className={`grid min-w-0 ${compact ? 'grid-cols-[2rem_minmax(0,1fr)_2rem] gap-1' : 'grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] gap-2'}`} title={disabledReason}>
+      <Button type="button" variant="outline" size="icon" className={compact ? 'h-8 w-8' : 'h-10 w-10'} disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit((parsedDraft() ?? normalizedValue) - 1)} aria-label={`Уменьшить ${label} на 1 процент`} data-testid={`${testIdPrefix}-minus`}><Minus className="h-4 w-4" /></Button>
       <div className="relative min-w-0">
         <Input
-          className="h-10 min-w-0 w-full px-2 pr-7 text-center text-sm font-semibold tabular-nums"
+          className={`${compact ? 'h-8' : 'h-10'} min-w-0 w-full px-2 pr-7 text-center text-sm font-semibold tabular-nums`}
           inputMode="decimal"
           aria-label={`${label}, процентов от пула`}
           value={draft}
@@ -1241,7 +1255,7 @@ function PercentStepper({
         />
         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">%</span>
       </div>
-      <Button type="button" variant="outline" size="icon" className="h-10 w-10" disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit((parsedDraft() ?? normalizedValue) + 1)} aria-label={`Увеличить ${label} на 1 процент`} data-testid={`${testIdPrefix}-plus`}><Plus className="h-4 w-4" /></Button>
+      <Button type="button" variant="outline" size="icon" className={compact ? 'h-8 w-8' : 'h-10 w-10'} disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit((parsedDraft() ?? normalizedValue) + 1)} aria-label={`Увеличить ${label} на 1 процент`} data-testid={`${testIdPrefix}-plus`}><Plus className="h-4 w-4" /></Button>
     </div>
   );
 }
@@ -1254,6 +1268,7 @@ function MoneyStepper({
   onCommit,
   label,
   testIdPrefix,
+  compact = false,
 }: {
   value: number;
   step: number;
@@ -1262,6 +1277,7 @@ function MoneyStepper({
   onCommit?: (amount: number) => Promise<boolean>;
   label: string;
   testIdPrefix: string;
+  compact?: boolean;
 }) {
   const normalizedValue = Math.max(0, Math.round(Number.isFinite(value) ? value : 0));
   const [draft, setDraft] = useState(formatMoneyInput(normalizedValue));
@@ -1310,10 +1326,10 @@ function MoneyStepper({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] gap-2" title={disabledReason}>
-      <Button type="button" variant="outline" size="icon" className="h-10 w-10" disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit(Math.max(0, draftValue - step))} aria-label={`Уменьшить ${label} на ${moneyFormatter.format(step)} тенге`} data-testid={`${testIdPrefix}-minus`}><Minus className="h-4 w-4" /></Button>
+    <div className={`grid min-w-0 ${compact ? 'grid-cols-[2rem_minmax(0,1fr)_2rem] gap-1' : 'grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] gap-2'}`} title={disabledReason}>
+      <Button type="button" variant="outline" size="icon" className={compact ? 'h-8 w-8' : 'h-10 w-10'} disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit(Math.max(0, draftValue - step))} aria-label={`Уменьшить ${label} на ${moneyFormatter.format(step)} тенге`} data-testid={`${testIdPrefix}-minus`}><Minus className="h-4 w-4" /></Button>
       <Input
-        className="h-10 min-w-0 w-full px-2 text-center text-sm font-semibold tabular-nums"
+        className={`${compact ? 'h-8' : 'h-10'} min-w-0 w-full px-2 text-center text-sm font-semibold tabular-nums`}
         inputMode="numeric"
         aria-label={`${label} в тенге`}
         value={draft}
@@ -1329,7 +1345,7 @@ function MoneyStepper({
         }}
         data-testid={`${testIdPrefix}-input`}
       />
-      <Button type="button" variant="outline" size="icon" className="h-10 w-10" disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit(draftValue + step)} aria-label={`Увеличить ${label} на ${moneyFormatter.format(step)} тенге`} data-testid={`${testIdPrefix}-plus`}><Plus className="h-4 w-4" /></Button>
+      <Button type="button" variant="outline" size="icon" className={compact ? 'h-8 w-8' : 'h-10 w-10'} disabled={controlsDisabled} onPointerDown={keepDraftForStepClick} onClick={() => void commit(draftValue + step)} aria-label={`Увеличить ${label} на ${moneyFormatter.format(step)} тенге`} data-testid={`${testIdPrefix}-plus`}><Plus className="h-4 w-4" /></Button>
     </div>
   );
 }

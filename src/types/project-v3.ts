@@ -5,7 +5,7 @@
 
 import { UserRole } from './roles';
 import type { AuditPeriod } from '@/lib/auditPeriods';
-import { financeParticipants, isProtectedDetachedBonus } from '@/lib/projectLegacyCompatibility';
+import { financeParticipants } from '@/lib/projectLegacyCompatibility';
 
 // Статусы проекта
 export type ProjectStatus = 
@@ -230,6 +230,7 @@ export interface ProjectFinances {
       percent: number;
       amount: number;
       manuallyAdjusted?: boolean;              // Изменено вручную CEO
+      adjustmentMode?: 'percent' | 'amount';   // Что было введено: доля пула или фиксированная сумма
       hiddenFromEmployee?: boolean;
       paidAt?: string | null;
       paidByName?: string | null;
@@ -464,15 +465,39 @@ export const calculateProjectFinances = (project: Partial<ProjectV3>): ProjectFi
     if (!userId) return;
     const existingBonus = existingTeamBonuses[userId];
     const manuallyAdjusted = Boolean(existingBonus?.manuallyAdjusted);
-    const amountLocked = isProtectedDetachedBonus(existingBonus);
-    const memberPercent = Math.max(0, parseProjectMoney(member.bonusPercent));
     const previousCalculated = teamBonuses[userId];
+    const history = Array.isArray(existingBonus?.history) ? existingBonus.history : [];
+    const lastManualChange = [...history].reverse().find((item: any) => (
+      item?.type === 'percent_change' || item?.type === 'amount_change'
+    )) as any;
+    const adjustmentMode = existingBonus?.adjustmentMode === 'percent'
+      || (!existingBonus?.adjustmentMode && lastManualChange?.type === 'percent_change')
+      ? 'percent'
+      : 'amount';
+    const paymentStatus = String((existingBonus as any)?.paymentStatus || (existingBonus as any)?.status || '').trim().toLowerCase();
+    const paymentLocked = Boolean(
+      (existingBonus as any)?.paymentRegistryId
+      || (existingBonus as any)?.paidAt
+      || (existingBonus as any)?.approvedAt
+      || (existingBonus as any)?.paid === true
+      || ['approved', 'paid', 'payment_approved'].includes(paymentStatus)
+    );
+    // Old records with no explicit mode were edited as a fixed tenge amount.
+    // New CEO edits store a percentage, so their amount must always follow the
+    // current pool. Settled payments remain immutable in both cases.
+    const amountLocked = paymentLocked || (manuallyAdjusted && adjustmentMode !== 'percent');
+    const storedPercent = Math.max(0, parseProjectMoney(existingBonus?.percent));
+    const memberPercent = manuallyAdjusted && adjustmentMode === 'percent'
+      ? (previousCalculated ? 0 : storedPercent)
+      : Math.max(0, parseProjectMoney(member.bonusPercent));
     const combinedPercent = amountLocked
       ? Math.max(0, parseProjectMoney(existingBonus?.percent ?? memberPercent))
       : Math.max(0, parseProjectMoney(previousCalculated?.percent)) + memberPercent;
+    // KZT is accounted in whole tenge. Rounding here keeps the visible row,
+    // the allocated total and the persisted payment draft in agreement.
     const amount = amountLocked
-      ? Math.max(0, parseProjectMoney(existingBonus?.amount))
-      : totalBonusAmount * (combinedPercent / 100);
+      ? Math.round(Math.max(0, parseProjectMoney(existingBonus?.amount)))
+      : Math.round(totalBonusAmount * (combinedPercent / 100));
     const percent = amountLocked && totalBonusAmount > 0
       ? Number(((amount / totalBonusAmount) * 100).toFixed(2))
       : combinedPercent;

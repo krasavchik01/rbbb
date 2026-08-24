@@ -3428,6 +3428,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               [memberId]: {
                 ...previousBonus,
                 manuallyAdjusted: false,
+                adjustmentMode: undefined,
               },
             },
           },
@@ -3498,6 +3499,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             percent,
             amount,
             manuallyAdjusted: true,
+            adjustmentMode: 'percent',
             history: [
               ...history,
               {
@@ -3575,6 +3577,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               : Number(member?.bonusPercent || 0),
             amount,
             manuallyAdjusted: true,
+            adjustmentMode: 'amount',
             history: [
               ...history,
               {

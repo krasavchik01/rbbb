@@ -38,6 +38,7 @@ const DEMO_TEAM_LEDGER = [
     name: 'Демо Партнёр',
     role: 'Партнер',
     approvedHours: '0.0',
+    bonusPercent: '25.0',
     bonusAmount: '840000',
   },
   {
@@ -45,6 +46,7 @@ const DEMO_TEAM_LEDGER = [
     name: 'Демо Менеджер',
     role: 'Менеджер 1',
     approvedHours: '6.0',
+    bonusPercent: '10.0',
     bonusAmount: '336000',
   },
   {
@@ -52,6 +54,7 @@ const DEMO_TEAM_LEDGER = [
     name: 'Демо Ассистент',
     role: 'Ассистент 1',
     approvedHours: '8.0',
+    bonusPercent: '3.0',
     bonusAmount: '100800',
   },
 ] as const;
@@ -71,7 +74,7 @@ type ProjectNotesRecord = {
   company?: string;
   ourCompany?: string;
   finances: {
-    teamBonuses: Record<string, { amount: number }>;
+    teamBonuses: Record<string, { amount: number; percent?: number; manuallyAdjusted?: boolean }>;
     totalPaidBonuses: number;
     bonusPoolOverrideAmount?: number;
     bonusPoolManuallyAdjusted?: boolean;
@@ -209,6 +212,20 @@ async function openProjectDetail(page: Page) {
   return detail;
 }
 
+async function openProjectManagement(detail: Locator) {
+  const management = detail.getByTestId('project-management-details');
+  await expect(management).toBeVisible();
+  if ((await management.getAttribute('open')) === null) {
+    await management.locator('summary').click();
+  }
+  await expect(management).toHaveAttribute('open', '');
+  return management;
+}
+
+function moneyInputPattern(value: string | number) {
+  return new RegExp(String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s*'));
+}
+
 async function expectEditableTeamLedger(detail: Locator) {
   const ledger = detail.getByTestId('project-team-ledger');
   await expect(ledger).toBeVisible();
@@ -219,9 +236,16 @@ async function expectEditableTeamLedger(detail: Locator) {
     const member = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employee.id}`);
     await expect(member).toBeVisible();
     await expect(member).toContainText(employee.name);
-    await expect(member).toContainText(employee.role);
+    await expect(member).toContainText(
+      employee.id === DEMO_EMPLOYEE_IDS.partner
+        ? 'Партнер'
+        : employee.id === DEMO_EMPLOYEE_IDS.manager
+          ? 'Руководитель'
+          : employee.role,
+    );
     await expect(member).toContainText(`${employee.approvedHours} ч`);
-    await expect(member.locator('input')).toHaveValue(employee.bonusAmount);
+    await expect(member.getByTestId(`employee-bonus-percent-${employee.id}-input`)).toHaveValue(employee.bonusPercent);
+    await expect(member.getByTestId(`employee-bonus-${employee.id}-input`)).toHaveValue(moneyInputPattern(employee.bonusAmount));
   }
 
   const geometry = await memberRows.evaluateAll((elements) => elements.map((element) => {
@@ -298,7 +322,7 @@ test.describe('single-row project command center contract', () => {
       'Команда',
       'Сумма без НДС',
       'Бонусный пул',
-      'Итого бонусов',
+      'Распределено',
       'Остаток',
     ]) {
       await expect(row).toContainText(label);
@@ -310,7 +334,7 @@ test.describe('single-row project command center contract', () => {
     await expect(row).toContainText('Демо Менеджер');
     await expect(row).toContainText('Демо Ассистент');
     await expect(row).toContainText(/48\s*000\s*000\s*₸/);
-    await expect(row).toContainText(/3\s*360\s*000\s*₸/);
+    await expect(row.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`).getByTestId('project-bonus-pool-input')).toHaveValue(/3\s*360\s*000/);
     await expect(row).toContainText(/1\s*276\s*800\s*₸/);
     await expect(row).toContainText(/2\s*083\s*200\s*₸/);
     await expectEditableTeamLedger(row.getByTestId(`project-details-${DEMO_PROJECT_ID}`));
@@ -352,6 +376,7 @@ test.describe('single-row project command center contract', () => {
     await page.goto('/projects');
     await waitForDemoApp(page);
     let row = await projectRow(page);
+    await openProjectManagement(row.getByTestId(`project-details-${DEMO_PROJECT_ID}`));
 
     await searchAndPick(
       page,
@@ -369,6 +394,7 @@ test.describe('single-row project command center contract', () => {
     expect(teamMemberIds(notes)).not.toContain(DEMO_EMPLOYEE_IDS.partner);
 
     row = await projectRow(page);
+    await openProjectManagement(row.getByTestId(`project-details-${DEMO_PROJECT_ID}`));
     const leader = row.getByRole('button', { name: `Руководитель проекта ${demoProject.name}`, exact: true });
     await leader.click();
     const search = page.getByPlaceholder(employeeSearchPlaceholder).last();
@@ -394,27 +420,28 @@ test.describe('single-row project command center contract', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
-  test('CEO saves an exact amount for every employee and an exact project pool', async ({ page }) => {
+  test('CEO saves a percentage for every employee and the exact project pool', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'ceo');
     await page.setViewportSize({ width: 1500, height: 900 });
     await page.goto('/projects');
     await waitForDemoApp(page);
     let detail = await openProjectDetail(page);
 
-    const exactAmounts: Array<[string, number]> = [
-      [DEMO_EMPLOYEE_IDS.partner, 900_001],
-      [DEMO_EMPLOYEE_IDS.manager, 400_002],
-      [DEMO_EMPLOYEE_IDS.assistant, 100_003],
+    const exactPercentages: Array<[string, string, number]> = [
+      [DEMO_EMPLOYEE_IDS.partner, '27', 907_200],
+      [DEMO_EMPLOYEE_IDS.manager, '12.5', 420_000],
+      [DEMO_EMPLOYEE_IDS.assistant, '3.1', 104_160],
     ];
-    for (const [employeeId, amount] of exactAmounts) {
-      const input = detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employeeId}`).locator('input');
+    for (const [employeeId, percent, amount] of exactPercentages) {
+      const input = detail.getByTestId(`employee-bonus-percent-${employeeId}-input`);
       await expect(input).toBeEnabled();
-      await input.fill(String(amount));
+      await input.fill(percent);
       await input.press('Enter');
       await expect.poll(() => targetProjectPatches(network).length).toBe(
-        exactAmounts.findIndex(([candidate]) => candidate === employeeId) + 1,
+        exactPercentages.findIndex(([candidate]) => candidate === employeeId) + 1,
       );
-      await expect(input).toHaveValue(String(amount));
+      await expect(input).toHaveValue(`${Number(percent).toFixed(1)}`);
+      await expect(detail.getByTestId(`employee-bonus-${employeeId}-input`)).toHaveValue(moneyInputPattern(amount));
     }
 
     const poolInput = detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`).locator('input');
@@ -424,10 +451,10 @@ test.describe('single-row project command center contract', () => {
     await expect.poll(() => targetProjectPatches(network).length).toBe(4);
 
     const notes = latestTargetNotes(network);
-    expect(notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.partner].amount).toBe(900_001);
-    expect(notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.manager].amount).toBe(400_002);
-    expect(notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.assistant].amount).toBe(100_003);
-    expect(notes.finances.totalPaidBonuses).toBe(1_400_006);
+    expect(notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.partner]).toMatchObject({ percent: 27, amount: 1_215_002 });
+    expect(notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.manager]).toMatchObject({ percent: 12.5, amount: 562_501 });
+    expect(notes.finances.teamBonuses[DEMO_EMPLOYEE_IDS.assistant]).toMatchObject({ percent: 3.1, amount: 139_500 });
+    expect(notes.finances.totalPaidBonuses).toBe(1_917_003);
     expect(notes.finances).toMatchObject({
       bonusPoolOverrideAmount: 4_500_007,
       bonusPoolManuallyAdjusted: true,
@@ -437,10 +464,10 @@ test.describe('single-row project command center contract', () => {
     await page.reload();
     await waitForDemoApp(page);
     detail = await openProjectDetail(page);
-    for (const [employeeId, amount] of exactAmounts) {
-      await expect(detail.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${employeeId}`).locator('input')).toHaveValue(String(amount));
+    for (const [employeeId, percent] of exactPercentages) {
+      await expect(detail.getByTestId(`employee-bonus-percent-${employeeId}-input`)).toHaveValue(`${Number(percent).toFixed(1)}`);
     }
-    await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`).locator('input')).toHaveValue('4500007');
+    await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`).locator('input')).toHaveValue(moneyInputPattern(4_500_007));
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -511,15 +538,15 @@ test.describe('single-row project command center contract', () => {
 
     const row = await projectRow(page);
     const detachedBonus = row.getByTestId(`member-bonus-${DEMO_PROJECT_ID}-${DETACHED_BONUS_EMPLOYEE_ID}`);
-    const input = detachedBonus.locator('input');
+    const input = detachedBonus.getByTestId(`employee-bonus-percent-${DETACHED_BONUS_EMPLOYEE_ID}-input`);
     await expect(input).toBeEnabled();
-    await expect(input).toHaveValue('222222');
-    await input.fill('333333');
+    await expect(input).toHaveValue('6.6');
+    await input.fill('9.9');
     await input.press('Enter');
 
     await expect.poll(() => targetProjectPatches(network).length).toBe(1);
     const notes = latestTargetNotes(network);
-    expect(notes.finances.teamBonuses[DETACHED_BONUS_EMPLOYEE_ID].amount).toBe(333_333);
+    expect(notes.finances.teamBonuses[DETACHED_BONUS_EMPLOYEE_ID]).toMatchObject({ percent: 9.9, amount: 332_640 });
     expect((notes.finances.teamBonuses[DETACHED_BONUS_EMPLOYEE_ID] as any).manuallyAdjusted).toBe(true);
     expect(teamMemberIds(notes)).not.toContain(DETACHED_BONUS_EMPLOYEE_ID);
     await expect(row).toContainText('Команда · 3 чел.');

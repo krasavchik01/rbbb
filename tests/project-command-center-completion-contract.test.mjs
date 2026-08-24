@@ -14,8 +14,8 @@ test('CEO sees one directly editable unified row per project', () => {
   assert.match(pageSource, /renderProjectInlineDetail\(row, false, true\)/);
   assert.match(pageSource, /onPick=\{\(employeeId\) => addTeamMember\(row, 'partner', employeeId\)\}/);
   assert.match(pageSource, /onPick=\{\(employeeId\) => addTeamMember\(row, 'project_leader', employeeId\)\}/);
-  assert.match(inlineDetailSource, /label="Бонусный пул"/);
-  assert.match(inlineDetailSource, /label="Итого бонусов"/);
+  assert.match(inlineDetailSource, /Бонусный пул/);
+  assert.match(inlineDetailSource, /<BonusFact label="Распределено"/);
   assert.match(inlineDetailSource, /label=\{overallocated \? 'Сверх пула' : 'Остаток'\}/);
   assert.match(pageSource, /Скачать Excel ИТОГО/);
 });
