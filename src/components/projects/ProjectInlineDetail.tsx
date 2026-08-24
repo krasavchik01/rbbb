@@ -222,7 +222,7 @@ export function ProjectInlineDetail({
       data-project-id={embedded ? undefined : projectId}
       aria-label={`Свод проекта ${name}`}
     >
-      <div className="flex min-w-0 flex-col gap-3 border-b bg-gradient-to-r from-background to-sky-50/60 px-3 py-3 dark:to-sky-950/20 sm:px-4 lg:flex-row lg:items-start lg:justify-between">
+      {!showBonuses && <div className="flex min-w-0 flex-col gap-3 border-b bg-gradient-to-r from-background to-sky-50/60 px-3 py-3 dark:to-sky-950/20 sm:px-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h3 className="min-w-0 break-words text-base font-semibold leading-snug sm:text-lg">{name}</h3>
@@ -262,7 +262,7 @@ export function ProjectInlineDetail({
             {advancedOpen ? <ChevronUp className="ml-1.5 h-4 w-4" /> : <ChevronDown className="ml-1.5 h-4 w-4" />}
           </Button>}
         </div>
-      </div>
+      </div>}
 
       {managementControls && !showBonuses && (
         <section className="min-w-0 border-b bg-background px-3 py-3 sm:px-4" aria-label="Управление проектом">
@@ -304,7 +304,15 @@ export function ProjectInlineDetail({
         </div>
       )}
 
-      <div className={`grid min-w-0 grid-cols-1 gap-px bg-border sm:grid-cols-2 ${factGridColumns}`} data-testid="project-inline-facts">
+      {showBonuses ? <CeoProjectMetaDetails
+        projectId={projectId}
+        deadline={deadline}
+        hours={hours}
+        contract={contract}
+        finances={finances}
+        showHours={showHours}
+        showFinances={showFinances}
+      /> : <div className={`grid min-w-0 grid-cols-1 gap-px bg-border sm:grid-cols-2 ${factGridColumns}`} data-testid="project-inline-facts">
         {showTeamFact && <FactCard icon={<Users className="h-4 w-4" />} label="Команда">
           <div className="font-semibold">{Math.max(0, team.count)} чел.</div>
           <div className="mt-1 break-words text-[11px] leading-4 text-muted-foreground">
@@ -340,9 +348,9 @@ export function ProjectInlineDetail({
             {Math.max(0, contract.filesCount)} файл(а)
           </div>
         </FactCard>
-      </div>
+      </div>}
 
-      {showFinances && <section className="min-w-0 border-t px-3 py-3 sm:px-4" aria-label="Финансовый поток проекта" data-testid="project-finance-flow">
+      {showFinances && !showBonuses && <section className="min-w-0 border-t px-3 py-3 sm:px-4" aria-label="Финансовый поток проекта" data-testid="project-finance-flow">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><BriefcaseBusiness className="h-4 w-4" /> Как складывается доход</div>
         <div className={`grid min-w-0 grid-cols-2 gap-2 ${showBonuses ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
           <FlowValue index="1" label="Договор" value={finances.contractAmount} />
@@ -390,6 +398,73 @@ function FactCard({ icon, label, children }: { icon: ReactNode; label: string; c
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{icon}{label}</div>
       <div className="min-w-0 text-sm">{children}</div>
     </div>
+  );
+}
+
+function CeoProjectMetaDetails({
+  projectId,
+  deadline,
+  hours,
+  contract,
+  finances,
+  showHours,
+  showFinances,
+}: {
+  projectId: string;
+  deadline: ProjectInlineDeadlineSummary;
+  hours: ProjectInlineHoursSummary;
+  contract: ProjectInlineContractSummary;
+  finances: ProjectInlineFinances;
+  showHours: boolean;
+  showFinances: boolean;
+}) {
+  const approvedHours = safePositive(hours.approved);
+  const pendingHours = safePositive(hours.pending);
+  const totalHours = approvedHours + pendingHours;
+  const approvedWidth = safePercent(approvedHours, totalHours);
+  const pendingWidth = totalHours > 0 ? Math.max(0, 100 - approvedWidth) : 0;
+
+  return (
+    <details className="min-w-0 border-t bg-background" data-testid="project-meta-details">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium hover:bg-muted/30 sm:px-4">
+        <span>Сроки, часы и договор</span>
+        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">Открыть <ChevronDown className="h-4 w-4" /></span>
+      </summary>
+      <div className={`grid min-w-0 grid-cols-1 gap-px border-t bg-border sm:grid-cols-2 ${showHours ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+        <FactCard icon={<CalendarClock className="h-4 w-4" />} label="Сроки проекта">
+          <div className="break-words font-semibold tabular-nums">{deadline.rangeLabel || 'Не указан'}</div>
+          <Badge variant="outline" className={`mt-1.5 max-w-full whitespace-normal text-[10px] ${toneClasses[deadline.tone || 'neutral']}`}>
+            {deadline.stateLabel || 'Нет оценки срока'}
+          </Badge>
+        </FactCard>
+        {showHours && <FactCard icon={<Clock3 className="h-4 w-4" />} label="Таймшиты">
+          {hours.state === 'loading' ? (
+            <div className="text-sm text-muted-foreground">Загружаются…</div>
+          ) : hours.state === 'error' ? (
+            <div className="text-sm font-medium text-red-700 dark:text-red-300">Данные недоступны</div>
+          ) : (
+            <>
+              <div className="font-semibold tabular-nums">{totalHours.toFixed(1)} ч</div>
+              <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-muted" data-testid="project-hours-bar" aria-label={`Утверждено ${approvedHours.toFixed(1)} часа, ждёт ${pendingHours.toFixed(1)} часа`}>
+                {approvedHours > 0 && <div className="bg-emerald-500" style={{ width: `${approvedWidth}%` }} />}
+                {pendingHours > 0 && <div className="bg-amber-400" style={{ width: `${pendingWidth}%` }} />}
+              </div>
+              <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{approvedHours.toFixed(1)} утверждено · {pendingHours.toFixed(1)} ждёт</div>
+            </>
+          )}
+        </FactCard>}
+        <FactCard icon={<FileText className="h-4 w-4" />} label="Договор">
+          <div className="break-words font-semibold">{contract.number ? `№ ${contract.number}` : 'Номер не указан'}</div>
+          <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            {showFinances ? <>Сумма без НДС: {formatMoney(finances.contractAmount)} · </> : null}
+            {Math.max(0, contract.filesCount)} файл(а)
+          </div>
+          <Button asChild type="button" variant="link" size="sm" className="mt-1 h-auto px-0 py-0 text-xs">
+            <Link to={`/project/${projectId}`}>Файлы и договор <ExternalLink className="ml-1 h-3.5 w-3.5" /></Link>
+          </Button>
+        </FactCard>
+      </div>
+    </details>
   );
 }
 
@@ -769,9 +844,21 @@ function BonusEditor({
   };
 
   return (
-    <section className="min-w-0 border-b bg-sky-50/30 px-3 py-1.5 dark:bg-sky-950/10 sm:px-4" aria-label="Пул бонусов" data-testid="project-bonus-summary">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="shrink-0 text-xs font-semibold">Бонусы</span>
+    <details className="min-w-0 border-b bg-sky-50/30 dark:bg-sky-950/10" aria-label="Пул бонусов" data-testid="project-bonus-settings" open>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-1.5 hover:bg-sky-100/40 dark:hover:bg-sky-900/20 sm:px-4" data-testid="project-bonus-summary">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="shrink-0 text-xs font-semibold">Бонусы</span>
+          <BonusFact label="Пул" value={formatMoney(pool)} />
+          <BonusFact label="Распределено" value={formatMoney(allocated)} />
+          <BonusFact
+            label={overallocated ? 'Сверх пула' : 'Остаток'}
+            value={formatMoney(Math.abs(remainder))}
+            tone={overallocated ? 'danger' : remainder > 0 ? 'warning' : 'positive'}
+          />
+        </div>
+        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">Настроить <ChevronDown className="h-4 w-4" /></span>
+      </summary>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-1.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-1.5" data-testid={editable ? `project-bonus-pool-${projectId}` : undefined}>
           <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Бонусный пул</span>
           {editable ? (
@@ -815,7 +902,7 @@ function BonusEditor({
         {paymentSummary && <span className="text-[11px] leading-4 text-muted-foreground">{paymentSummary}</span>}
         {editable && bonuses.manuallyAdjusted && <Button type="button" variant="ghost" size="sm" className="h-7 max-w-full whitespace-normal px-1.5 text-[11px]" disabled={!onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1 h-3.5 w-3.5" />Вернуть по формуле</Button>}
       </div>
-    </section>
+    </details>
   );
 }
 

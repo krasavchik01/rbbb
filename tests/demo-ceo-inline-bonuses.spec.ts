@@ -72,8 +72,9 @@ test.describe('CEO inline project bonuses', () => {
     await expect(shell.locator(`tr[data-project-id="${DEMO_PROJECT_ID}"]`)).toHaveCount(1);
 
     const detail = await openDemoProjectInline(page);
-    await expect(detail).toContainText(demoProject.name);
-    await expect(detail).toContainText('Как складывается доход');
+    await expect(detail.getByTestId('ceo-project-identity')).toBeVisible();
+    await expect(detail.getByTestId('project-finance-flow')).toHaveCount(0);
+    await expect(detail.getByTestId('project-meta-details')).toBeVisible();
     await expect(detail.getByTestId(`project-bonus-pool-${DEMO_PROJECT_ID}`)).toBeVisible();
     await expect(page.getByRole('button', {
       name: `Уменьшить бонусный пул ${demoProject.name} на 50 000 тенге`,

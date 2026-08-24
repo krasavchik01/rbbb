@@ -130,7 +130,8 @@ test.describe('CEO command center completion', () => {
     await expect(detail).toBeVisible();
     await expect(detail).toContainText('Команда');
     await expect(detail).toContainText('Таймшиты');
-    await expect(detail).toContainText('Как складывается доход');
+    await expect(detail.getByTestId('project-finance-flow')).toHaveCount(0);
+    await expect(detail.getByTestId('project-meta-details')).toBeVisible();
     await expect(detail.getByTestId('project-bonus-summary')).toBeVisible();
     expect(network.productionMutations).toEqual([]);
   });
@@ -149,7 +150,8 @@ test.describe('CEO command center completion', () => {
       const detail = shell.locator(`tr[data-project-id="${demoProject.id}"]`).getByTestId(`project-details-${demoProject.id}`);
       await expect(detail).toBeVisible();
       await expect(detail.getByText('Таймшиты', { exact: true })).toBeAttached();
-      await expect(detail.getByText('Как складывается доход', { exact: true })).toBeAttached();
+      await expect(detail.getByTestId('project-finance-flow')).toHaveCount(0);
+      await expect(detail.getByTestId('project-meta-details')).toBeAttached();
       await expect(detail.getByTestId('project-bonus-summary')).toBeAttached();
       await page.screenshot({ path: `test-results/command-center-${width}.png`, fullPage: true });
       expect(network.productionMutations).toEqual([]);
