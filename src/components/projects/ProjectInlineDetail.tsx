@@ -272,6 +272,7 @@ export function ProjectInlineDetail({
 
       {showBonuses && bonuses && (
         <CeoProjectIdentityLine
+          projectName={name}
           client={client}
           company={company}
           companyDirectorName={bonuses.companyDirectorName}
@@ -469,23 +470,30 @@ function CeoProjectMetaDetails({
 }
 
 function CeoProjectIdentityLine({
+  projectName,
   client,
   company,
   companyDirectorName,
 }: {
+  projectName: string;
   client?: string | null;
   company?: string | null;
   companyDirectorName?: string | null;
 }) {
   return (
     <section
-      className="grid min-w-0 gap-px border-b bg-border md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]"
+      className="min-w-0 border-b bg-border"
       aria-label="Клиент, наша компания и директор"
       data-testid="ceo-project-identity"
     >
-      <LedgerIdentityCell label="Клиент" value={client || 'Не указан'} />
-      <LedgerIdentityCell label="Наша компания" value={company || 'Не указана'} />
-      <LedgerIdentityCell label="Директор компании" value={companyDirectorName || 'Не назначен'} />
+      <div className="bg-sky-50/60 px-3 py-2.5 dark:bg-sky-950/20 sm:px-4">
+        <h3 className="break-words text-lg font-bold leading-snug tracking-tight text-slate-950 dark:text-slate-50 sm:text-xl" data-testid="ceo-project-title">{projectName}</h3>
+      </div>
+      <div className="grid min-w-0 gap-px border-t bg-border md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <LedgerIdentityCell label="Клиент" value={client || 'Не указан'} />
+        <LedgerIdentityCell label="Наша компания" value={company || 'Не указана'} />
+        <LedgerIdentityCell label="Директор компании" value={companyDirectorName || 'Не назначен'} />
+      </div>
     </section>
   );
 }
@@ -575,9 +583,9 @@ function CeoBonusLedger({
           />}
         </div>
 
-        <div className="flex min-w-0 items-center justify-between gap-3 border-y bg-muted/20 px-3 py-1.5 sm:px-4">
-          <div className="text-xs font-semibold">Команда</div>
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{teamEmployees.length} чел.</span>
+        <div className="flex min-w-0 items-center justify-between gap-3 border-y border-l-4 border-l-violet-500 bg-violet-50/70 px-3 py-2 dark:bg-violet-950/20 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-violet-950 dark:text-violet-100"><Users className="h-4 w-4 shrink-0" />Команда</div>
+          <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-violet-900 dark:bg-violet-900/50 dark:text-violet-100">{teamEmployees.length} чел.</span>
         </div>
         {teamEmployees.length === 0 ? (
           <div className="border-b px-3 py-2 text-sm text-muted-foreground sm:px-4">Другие участники команды не назначены.</div>
@@ -661,6 +669,19 @@ function CeoBonusAllocationRow({
   const previewPercent = parsePercentInput(draftPercent) ?? savedPercent;
   const previewAmount = Math.max(0, safePositive(poolAmount) * (previewPercent / 100));
   const rowEditable = Boolean(employee && editable && employee.editable !== false && onPercentCommit);
+  const partnerRow = isPartnerLabel(label);
+  const leaderRow = !partnerRow && isLeaderLabel(label);
+  const rowEmphasis = partnerRow
+    ? 'border-l-4 border-l-sky-500 bg-sky-50/65 dark:bg-sky-950/20'
+    : leaderRow
+      ? 'border-l-4 border-l-amber-500 bg-amber-50/60 dark:bg-amber-950/20'
+      : '';
+  const roleEmphasis = partnerRow
+    ? 'font-semibold text-sky-800 dark:text-sky-200'
+    : leaderRow
+      ? 'font-semibold text-amber-900 dark:text-amber-200'
+      : 'font-medium text-muted-foreground';
+  const employeeEmphasis = partnerRow || leaderRow ? 'font-bold' : 'font-semibold';
 
   const commitPercent = async () => {
     const nextPercent = parsePercentInput(draftPercent);
@@ -688,8 +709,8 @@ function CeoBonusAllocationRow({
 
   if (!employee) {
     return (
-      <div className="grid min-w-0 gap-1.5 border-b px-3 py-1.5 sm:px-4 xl:grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] xl:items-center xl:gap-3" data-testid={`member-bonus-${projectId}-${label.toLocaleLowerCase('ru').replace(/\s+/g, '-')}`}>
-        <div className="min-w-0 text-xs font-medium text-muted-foreground">{label}</div>
+      <div className={`grid min-w-0 gap-1.5 border-b px-3 py-2 sm:px-4 xl:grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] xl:items-center xl:gap-3 ${rowEmphasis}`} data-testid={`member-bonus-${projectId}-${label.toLocaleLowerCase('ru').replace(/\s+/g, '-')}`}>
+        <div className={`min-w-0 text-xs ${roleEmphasis}`}>{label}</div>
         <div className="min-w-0 text-sm text-muted-foreground">Не назначен</div>
         <div className="text-sm text-muted-foreground">—</div>
         <div className="text-sm text-muted-foreground lg:text-right">—</div>
@@ -699,19 +720,19 @@ function CeoBonusAllocationRow({
 
   return (
     <div
-      className="grid min-w-0 gap-1.5 border-b px-3 py-1.5 last:border-b-0 sm:px-4 xl:grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] xl:items-center xl:gap-3"
+      className={`grid min-w-0 gap-1.5 border-b px-3 py-2 last:border-b-0 sm:px-4 xl:grid-cols-[minmax(105px,0.7fr)_minmax(180px,1.55fr)_92px_minmax(130px,0.8fr)] xl:items-center xl:gap-3 ${rowEmphasis}`}
       data-testid={`member-bonus-${projectId}-${employee.id}`}
       data-team-member-row="true"
       data-employee-id={employee.id}
     >
       <div className="min-w-0">
         <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground xl:hidden">Роль</div>
-        <div className="break-words text-xs font-medium leading-4 text-muted-foreground">{label}</div>
+        <div className={`break-words text-xs leading-4 ${roleEmphasis}`}>{label}</div>
       </div>
       <div className="min-w-0">
         <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground xl:hidden">Сотрудник</div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
+          <div className={`break-words text-sm leading-5 ${employeeEmphasis}`}>{employee.name}</div>
           {showHours && <div className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{safePositive(employee.approvedHours).toFixed(1)} ч{safePositive(employee.pendingHours) > 0 ? ` · ${safePositive(employee.pendingHours).toFixed(1)} ждёт` : ''}</div>}
           <PaymentStatus employee={employee} registryState={registryState} compact showEmpty={false} />
         </div>
