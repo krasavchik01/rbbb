@@ -52,7 +52,7 @@ describe('ProjectInlineDetail access combinations', () => {
 
     expect(html).toContain('data-testid="member-bonus-project-1-employee-1"');
     expect(html).toContain('Alice Employee');
-    expect(html).toContain('data-testid="employee-bonus-employee-1-input"');
+    expect(html).toContain('data-testid="employee-bonus-employee-1-amount"');
   });
 
   it('does not render employee identities when both team and bonuses are disabled', () => {

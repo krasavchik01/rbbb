@@ -91,6 +91,11 @@ export interface ProjectInlineBonuses {
   registryState?: ProjectInlineDataState;
   editable?: boolean;
   lockedReason?: string | null;
+  /** The director assigned to the project's executor company in the company catalog. */
+  companyDirectorName?: string | null;
+  /** Stable employee identities keep the partner and project leader at the top of the CEO ledger. */
+  partnerEmployeeId?: string | null;
+  leaderEmployeeId?: string | null;
   employees: ProjectInlineBonusEmployee[];
 }
 
@@ -189,9 +194,7 @@ export function ProjectInlineDetail({
   onPoolAmountCommit,
   onPoolPercentCommit,
   onResetPoolFormula,
-  onEmployeeAmountCommit,
   onEmployeePercentCommit,
-  onResetEmployeeFormula,
   embedded = false,
   managementControls,
 }: ProjectInlineDetailProps) {
@@ -200,18 +203,14 @@ export function ProjectInlineDetail({
   const totalHours = approvedHours + pendingHours;
   const approvedWidth = safePercent(approvedHours, totalHours);
   const pendingWidth = totalHours > 0 ? Math.max(0, 100 - approvedWidth) : 0;
-  const visibleFactCount = 2 + Number(showTeam) + Number(showHours);
+  const Root = embedded ? 'div' : Card;
+  const showTeamFact = showTeam && !showBonuses;
+  const visibleFactCount = 2 + Number(showTeamFact) + Number(showHours);
   const factGridColumns = visibleFactCount >= 4
     ? 'lg:grid-cols-4'
     : visibleFactCount === 3
       ? 'lg:grid-cols-3'
       : 'lg:grid-cols-2';
-  const Root = embedded ? 'div' : Card;
-  const [activeSection, setActiveSection] = useState<'bonuses' | 'team'>('bonuses');
-
-  useEffect(() => {
-    if (!showBonuses && activeSection !== 'team') setActiveSection('team');
-  }, [activeSection, showBonuses]);
 
   return (
     <Root
@@ -231,8 +230,8 @@ export function ProjectInlineDetail({
           </div>
           <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
             {[
-              company ? `Наша компания: ${company}` : '',
               client ? `Клиент: ${client}` : '',
+              company ? `Наша компания: ${company}` : '',
               serviceType ? `Услуга: ${serviceType}` : '',
             ].filter(Boolean).join(' · ') || 'Основные данные проекта не указаны'}
           </p>
@@ -271,8 +270,42 @@ export function ProjectInlineDetail({
         </section>
       )}
 
+      {showBonuses && bonuses && (
+        <CeoProjectIdentityLine
+          client={client}
+          company={company}
+          companyDirectorName={bonuses.companyDirectorName}
+        />
+      )}
+
+      {showBonuses && bonuses && (
+        <div className="min-w-0 border-b" data-testid="project-executive-ledger">
+          <CeoBonusLedger
+            projectId={projectId}
+            projectName={name}
+            finances={finances}
+            bonuses={bonuses}
+            showHours={showHours}
+            onPoolAmountCommit={onPoolAmountCommit}
+            onPoolPercentCommit={onPoolPercentCommit}
+            onResetPoolFormula={onResetPoolFormula}
+            onEmployeePercentCommit={onEmployeePercentCommit}
+          />
+          {managementControls && (
+            <details className="border-t bg-muted/10" data-testid="project-management-details">
+              <summary className="cursor-pointer px-3 py-3 text-sm font-medium text-muted-foreground hover:text-foreground sm:px-4">
+                Изменить состав, компанию и сроки
+              </summary>
+              <section className="min-w-0 border-t bg-background px-3 py-3 sm:px-4" aria-label="Управление проектом">
+                {managementControls}
+              </section>
+            </details>
+          )}
+        </div>
+      )}
+
       <div className={`grid min-w-0 grid-cols-1 gap-px bg-border sm:grid-cols-2 ${factGridColumns}`} data-testid="project-inline-facts">
-        {showTeam && <FactCard icon={<Users className="h-4 w-4" />} label="Команда">
+        {showTeamFact && <FactCard icon={<Users className="h-4 w-4" />} label="Команда">
           <div className="font-semibold">{Math.max(0, team.count)} чел.</div>
           <div className="mt-1 break-words text-[11px] leading-4 text-muted-foreground">
             Партнёр: {team.partnerName || '—'}<br />Руководитель: {team.leaderName || '—'}
@@ -334,74 +367,13 @@ export function ProjectInlineDetail({
         </div>
       </section>}
 
-      {showBonuses && bonuses ? (
-        <div className="min-w-0 border-t" data-testid="project-executive-tabs">
-          <div className="flex min-w-0 gap-1 overflow-x-auto border-b bg-muted/20 px-3 pt-2 sm:px-4" role="tablist" aria-label="Разделы свода проекта">
-            <ProjectSectionTab
-              active={activeSection === 'bonuses'}
-              label="Бонусы"
-              description={`${bonuses.employees.length} сотрудников`}
-              onClick={() => setActiveSection('bonuses')}
-              testId="project-tab-bonuses"
-            />
-            <ProjectSectionTab
-              active={activeSection === 'team'}
-              label="Команда и управление"
-              description={`${team.count} участников`}
-              onClick={() => setActiveSection('team')}
-              testId="project-tab-team"
-            />
-          </div>
-
-          {activeSection === 'bonuses' ? (
-            <div role="tabpanel" aria-label="Бонусы проекта" data-testid="project-tab-panel-bonuses">
-              <BonusEditor
-                projectId={projectId}
-                projectName={name}
-                finances={finances}
-                bonuses={bonuses}
-                onPoolAmountCommit={onPoolAmountCommit}
-                onPoolPercentCommit={onPoolPercentCommit}
-                onResetPoolFormula={onResetPoolFormula}
-              />
-              <TeamMemberLedger
-                projectId={projectId}
-                members={team.members}
-                showHours={showHours}
-                bonusEmployees={bonuses.employees}
-                bonusesEditable={Boolean(bonuses.editable)}
-                registryState={bonuses.registryState || 'ready'}
-                onAmountCommit={onEmployeeAmountCommit}
-                onPercentCommit={onEmployeePercentCommit}
-                onResetFormula={onResetEmployeeFormula}
-              />
-            </div>
-          ) : (
-            <div role="tabpanel" aria-label="Команда и управление проектом" data-testid="project-tab-panel-team">
-              {managementControls && (
-                <section className="min-w-0 border-b bg-background px-3 py-3 sm:px-4" aria-label="Управление проектом">
-                  {managementControls}
-                </section>
-              )}
-              {showTeam && <TeamMemberLedger
-                projectId={projectId}
-                members={team.members}
-                showHours={showHours}
-                bonusesEditable={false}
-                registryState="ready"
-              />}
-            </div>
-          )}
-        </div>
-      ) : (
-        showTeam && <TeamMemberLedger
-          projectId={projectId}
-          members={team.members}
-          showHours={showHours}
-          bonusesEditable={false}
-          registryState="ready"
-        />
-      )}
+      {!showBonuses && showTeam && <TeamMemberLedger
+        projectId={projectId}
+        members={team.members}
+        showHours={showHours}
+        bonusesEditable={false}
+        registryState="ready"
+      />}
 
       {advancedOpen && advancedContent && (
         <div className="min-w-0 max-w-full border-t bg-muted/10 px-3 py-3 sm:px-4" data-testid="project-advanced-content">
@@ -421,33 +393,309 @@ function FactCard({ icon, label, children }: { icon: ReactNode; label: string; c
   );
 }
 
-function ProjectSectionTab({
-  active,
-  label,
-  description,
-  onClick,
-  testId,
+function CeoProjectIdentityLine({
+  client,
+  company,
+  companyDirectorName,
 }: {
-  active: boolean;
-  label: string;
-  description: string;
-  onClick: () => void;
-  testId: string;
+  client?: string | null;
+  company?: string | null;
+  companyDirectorName?: string | null;
 }) {
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      className={`min-w-[170px] border-b-2 px-3 py-2 text-left transition-colors ${active
-        ? 'border-sky-500 bg-background text-foreground'
-        : 'border-transparent text-muted-foreground hover:border-border hover:bg-background/60 hover:text-foreground'}`}
-      onClick={onClick}
-      data-testid={testId}
+    <section
+      className="grid min-w-0 gap-px border-b bg-border sm:grid-cols-3"
+      aria-label="Клиент, наша компания и директор"
+      data-testid="ceo-project-identity"
     >
-      <span className="block text-sm font-semibold">{label}</span>
-      <span className="mt-0.5 block text-[10px] leading-4">{description}</span>
-    </button>
+      <LedgerIdentityCell label="Клиент" value={client || 'Не указан'} />
+      <LedgerIdentityCell label="Наша компания" value={company || 'Не указана'} />
+      <LedgerIdentityCell label="Директор компании" value={companyDirectorName || 'Не назначен'} />
+    </section>
+  );
+}
+
+function LedgerIdentityCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 bg-background px-3 py-2.5 sm:px-4">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 break-words text-sm font-semibold leading-5">{value}</div>
+    </div>
+  );
+}
+
+function CeoBonusLedger({
+  projectId,
+  projectName,
+  finances,
+  bonuses,
+  showHours,
+  onPoolAmountCommit,
+  onPoolPercentCommit,
+  onResetPoolFormula,
+  onEmployeePercentCommit,
+}: {
+  projectId: string;
+  projectName: string;
+  finances: ProjectInlineFinances;
+  bonuses: ProjectInlineBonuses;
+  showHours: boolean;
+  onPoolAmountCommit?: (amount: number) => Promise<boolean>;
+  onPoolPercentCommit?: (percent: number) => Promise<boolean>;
+  onResetPoolFormula?: () => Promise<boolean>;
+  onEmployeePercentCommit?: (employeeId: string, percent: number) => Promise<boolean>;
+}) {
+  const employees = Array.isArray(bonuses.employees) ? bonuses.employees : [];
+  const byId = new Map(employees.map((employee) => [employee.id, employee]));
+  const partner = bonuses.partnerEmployeeId
+    ? byId.get(bonuses.partnerEmployeeId)
+    : employees.find((employee) => employee.roles.some(isPartnerLabel));
+  const leader = bonuses.leaderEmployeeId
+    ? byId.get(bonuses.leaderEmployeeId)
+    : employees.find((employee) => employee.roles.some(isLeaderLabel));
+  const primaryIds = new Set([partner?.id, leader?.id].filter(Boolean));
+  const teamEmployees = employees.filter((employee) => !primaryIds.has(employee.id));
+  const partnerAndLeaderAreSame = Boolean(partner && leader && partner.id === leader.id);
+
+  return (
+    <section className="min-w-0 bg-background" aria-label="Ведомость бонусов и команда" data-testid="project-bonus-editor">
+      <div className="border-b px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+          <div>
+            <h4 className="text-base font-semibold">Ведомость бонусов</h4>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+              Вводите процент в строке сотрудника — сумма справа пересчитывается сразу.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{employees.length} чел.</span>
+        </div>
+      </div>
+
+      <BonusEditor
+        projectId={projectId}
+        projectName={projectName}
+        finances={finances}
+        bonuses={bonuses}
+        onPoolAmountCommit={onPoolAmountCommit}
+        onPoolPercentCommit={onPoolPercentCommit}
+        onResetPoolFormula={onResetPoolFormula}
+      />
+
+      {bonuses.lockedReason && (
+        <div className="mx-3 mt-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 sm:mx-4">
+          {bonuses.lockedReason}
+        </div>
+      )}
+
+      <section className="mt-3 min-w-0" data-testid="project-team-ledger" aria-label="Команда и бонусы проекта">
+        <CeoBonusLedgerHeader />
+        <div className="min-w-0">
+          <CeoBonusAllocationRow
+            projectId={projectId}
+            label={partnerAndLeaderAreSame ? 'Партнер и руководитель' : 'Партнер'}
+            employee={partner}
+            poolAmount={bonuses.poolAmount}
+            showHours={showHours}
+            editable={Boolean(bonuses.editable)}
+            registryState={bonuses.registryState || 'ready'}
+            onPercentCommit={onEmployeePercentCommit}
+          />
+          {!partnerAndLeaderAreSame && <CeoBonusAllocationRow
+            projectId={projectId}
+            label="Руководитель"
+            employee={leader}
+            poolAmount={bonuses.poolAmount}
+            showHours={showHours}
+            editable={Boolean(bonuses.editable)}
+            registryState={bonuses.registryState || 'ready'}
+            onPercentCommit={onEmployeePercentCommit}
+          />}
+        </div>
+
+        <div className="border-y bg-muted/20 px-3 py-2 sm:px-4">
+          <div className="text-xs font-semibold">Команда</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">Каждый участник — отдельной строкой с процентом и суммой.</div>
+        </div>
+        {teamEmployees.length === 0 ? (
+          <div className="border-b px-3 py-3 text-sm text-muted-foreground sm:px-4">Другие участники команды не назначены.</div>
+        ) : teamEmployees.map((employee) => (
+          <CeoBonusAllocationRow
+            key={employee.id}
+            projectId={projectId}
+            label={employee.roles.join(' · ') || 'Участник команды'}
+            employee={employee}
+            poolAmount={bonuses.poolAmount}
+            showHours={showHours}
+            editable={Boolean(bonuses.editable)}
+            registryState={bonuses.registryState || 'ready'}
+            onPercentCommit={onEmployeePercentCommit}
+          />
+        ))}
+      </section>
+    </section>
+  );
+}
+
+function CeoBonusLedgerHeader() {
+  return (
+    <div className="hidden min-w-0 grid-cols-[minmax(125px,0.8fr)_minmax(180px,1.25fr)_100px_minmax(130px,0.8fr)] gap-3 border-b bg-muted/20 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid sm:px-4">
+      <span>Роль</span>
+      <span>Сотрудник</span>
+      <span>Процент</span>
+      <span className="text-right">Сумма бонуса</span>
+    </div>
+  );
+}
+
+function isPartnerLabel(value: string): boolean {
+  return /партн|partner/i.test(value || '');
+}
+
+function isLeaderLabel(value: string): boolean {
+  return /руковод|leader|директор проекта/i.test(value || '');
+}
+
+function normalizedPercent(value: number | null | undefined): number {
+  return Math.max(0, Math.min(100, Number.isFinite(value) ? Number(value) : 0));
+}
+
+function parsePercentInput(value: string): number | null {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : null;
+}
+
+function CeoBonusAllocationRow({
+  projectId,
+  label,
+  employee,
+  poolAmount,
+  showHours,
+  editable,
+  registryState,
+  onPercentCommit,
+}: {
+  projectId: string;
+  label: string;
+  employee?: ProjectInlineBonusEmployee;
+  poolAmount: number;
+  showHours: boolean;
+  editable: boolean;
+  registryState: ProjectInlineDataState;
+  onPercentCommit?: (employeeId: string, percent: number) => Promise<boolean>;
+}) {
+  const savedPercent = normalizedPercent(employee?.percent);
+  const [draftPercent, setDraftPercent] = useState(savedPercent.toFixed(1));
+  const [saving, setSaving] = useState(false);
+  const savedPercentRef = useRef(savedPercent);
+  savedPercentRef.current = savedPercent;
+
+  useEffect(() => {
+    if (!saving) setDraftPercent(savedPercent.toFixed(1));
+  }, [savedPercent, saving]);
+
+  const previewPercent = parsePercentInput(draftPercent) ?? savedPercent;
+  const previewAmount = Math.max(0, safePositive(poolAmount) * (previewPercent / 100));
+  const rowEditable = Boolean(employee && editable && employee.editable !== false && onPercentCommit);
+
+  const commitPercent = async () => {
+    const nextPercent = parsePercentInput(draftPercent);
+    if (!employee || !rowEditable || saving) return;
+    if (nextPercent === null) {
+      setDraftPercent(savedPercentRef.current.toFixed(1));
+      return;
+    }
+    const normalized = Number(nextPercent.toFixed(2));
+    if (Math.abs(normalized - savedPercentRef.current) < 0.001) {
+      setDraftPercent(savedPercentRef.current.toFixed(1));
+      return;
+    }
+    setSaving(true);
+    let accepted = false;
+    try {
+      accepted = await onPercentCommit!(employee.id, normalized);
+    } catch {
+      accepted = false;
+    } finally {
+      setSaving(false);
+    }
+    if (!accepted) setDraftPercent(savedPercentRef.current.toFixed(1));
+  };
+
+  if (!employee) {
+    return (
+      <div className="grid min-w-0 gap-2 border-b px-3 py-2.5 sm:px-4 lg:grid-cols-[minmax(125px,0.8fr)_minmax(180px,1.25fr)_100px_minmax(130px,0.8fr)] lg:items-center lg:gap-3" data-testid={`member-bonus-${projectId}-${label.toLocaleLowerCase('ru').replace(/\s+/g, '-')}`}>
+        <div className="min-w-0 text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="min-w-0 text-sm text-muted-foreground">Не назначен</div>
+        <div className="text-sm text-muted-foreground">—</div>
+        <div className="text-sm text-muted-foreground lg:text-right">—</div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="grid min-w-0 gap-2 border-b px-3 py-2.5 last:border-b-0 sm:px-4 lg:grid-cols-[minmax(125px,0.8fr)_minmax(180px,1.25fr)_100px_minmax(130px,0.8fr)] lg:items-center lg:gap-3"
+      data-testid={`member-bonus-${projectId}-${employee.id}`}
+      data-team-member-row="true"
+      data-employee-id={employee.id}
+    >
+      <div className="min-w-0">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Роль</div>
+        <div className="break-words text-xs font-medium leading-5 text-muted-foreground">{label}</div>
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Сотрудник</div>
+        <div className="break-words text-sm font-semibold leading-5">{employee.name}</div>
+        {showHours && <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{safePositive(employee.approvedHours).toFixed(1)} ч утверждено{safePositive(employee.pendingHours) > 0 ? ` · ${safePositive(employee.pendingHours).toFixed(1)} ч ждёт` : ''}</div>}
+        <div className="mt-1"><PaymentStatus employee={employee} registryState={registryState} /></div>
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Процент</div>
+        {rowEditable ? (
+          <div className="relative min-w-0" title={employee.lockedReason || undefined}>
+            <Input
+              value={draftPercent}
+              inputMode="decimal"
+              className="h-10 w-full pr-7 text-right text-sm font-semibold tabular-nums"
+              aria-label={`Процент бонуса ${employee.name}`}
+              data-testid={`employee-bonus-percent-${employee.id}-input`}
+              disabled={saving}
+              onChange={(event) => setDraftPercent(event.target.value)}
+              onBlur={() => void commitPercent()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') {
+                  setDraftPercent(savedPercentRef.current.toFixed(1));
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">%</span>
+          </div>
+        ) : (
+          <div className="pt-1 text-sm font-semibold tabular-nums">{savedPercent.toFixed(1)}%</div>
+        )}
+        {employee.lockedReason && editable && <div className="mt-1 text-[10px] leading-4 text-amber-800 dark:text-amber-200">{employee.lockedReason}</div>}
+      </div>
+      <div className="min-w-0 lg:text-right">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:hidden">Сумма бонуса</div>
+        {rowEditable ? (
+          <Input
+            readOnly
+            tabIndex={-1}
+            value={formatMoneyInput(previewAmount)}
+            className="h-10 w-full cursor-default text-right text-sm font-semibold tabular-nums lg:ml-auto lg:max-w-[150px]"
+            aria-label={`Сумма бонуса ${employee.name}; рассчитывается по проценту`}
+            data-testid={`employee-bonus-${employee.id}-input`}
+          />
+        ) : (
+          <div className="pt-1 text-sm font-semibold tabular-nums" data-testid={`employee-bonus-${employee.id}-amount`}>{formatMoney(safePositive(employee.amount))}</div>
+        )}
+        {rowEditable && <div className="mt-1 text-[10px] text-muted-foreground">считается от пула</div>}
+      </div>
+    </div>
   );
 }
 
@@ -495,7 +743,6 @@ function BonusEditor({
   const pool = safePositive(bonuses.poolAmount);
   const allocated = safePositive(finances.allocatedBonusAmount);
   const remainder = pool - allocated;
-  const allocationPercent = safePercent(allocated, pool);
   const overallocated = allocated > pool;
   const registryState = bonuses.registryState || 'ready';
   const editable = Boolean(bonuses.editable);
@@ -523,89 +770,55 @@ function BonusEditor({
   };
 
   return (
-    <section className="min-w-0 border-t bg-sky-50/30 px-3 py-3 dark:bg-sky-950/10 sm:px-4" aria-label="Бонусы команды" data-testid="project-bonus-editor">
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-base font-semibold">Бонусы проекта</h4>
-            <Badge variant="outline" className={bonuses.manuallyAdjusted ? toneClasses.warning : toneClasses.info}>
-              {bonuses.manuallyAdjusted ? 'Пул задан вручную' : 'Пул по формуле'}
-            </Badge>
-            {!editable && <Badge variant="outline" className={toneClasses.neutral}>Только просмотр</Badge>}
-          </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {editable
-              ? 'Пул и суммы каждого сотрудника меняются прямо здесь. Реальная выплата подтверждается платёжным реестром.'
-              : 'Точный пул, распределение и выплаты показаны без права изменения. Редактирование выполняют генеральный директор или администратор.'}
-          </p>
-        </div>
-        {bonuses.lockedReason && (
-          <div className="max-w-full rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-sm">
-            {bonuses.lockedReason}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
-        <BonusFact label="Бонусный пул" value={formatMoney(pool)} />
-        <BonusFact label="Итого бонусов" value={formatMoney(allocated)} />
-        <BonusFact label={overallocated ? 'Сверх пула' : 'Остаток'} value={formatMoney(Math.abs(remainder))} tone={overallocated ? 'danger' : remainder > 0 ? 'warning' : 'positive'} />
-        <BonusFact
-          label="Статус выплаты"
-          value={registryState === 'loading'
-            ? 'Сверяется…'
-            : registryState === 'error'
-              ? 'Нет данных'
-              : safePositive(bonuses.pendingAmount) > 0
-                ? `В реестре ждёт ${formatMoney(bonuses.pendingAmount)} · к выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`
-                : `К выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`}
-          tone={registryState === 'error' ? 'danger' : safePositive(bonuses.paidAmount) > 0 ? 'positive' : 'neutral'}
-          compact
-        />
-      </div>
-
-      <div className="mt-2" data-testid="project-bonus-allocation-bar">
-        <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]">
-          <span className="text-muted-foreground">Заполнение пула</span>
-          <span className={`shrink-0 font-semibold tabular-nums ${overallocated ? 'text-red-700 dark:text-red-300' : ''}`}>{pool > 0 ? `${((allocated / pool) * 100).toFixed(0)}%` : allocated > 0 ? 'сверх пула' : '0%'}</span>
-        </div>
-        <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-muted" aria-label={`Распределено ${formatMoney(allocated)} из ${formatMoney(pool)}`}>
-          {allocated > 0 && <div className={`h-full rounded-full ${overallocated ? 'bg-red-500' : 'bg-sky-500'}`} style={{ width: `${allocationPercent}%` }} />}
-        </div>
-      </div>
-
-      {editable && <div className="mt-3 rounded-lg border bg-background p-3" data-testid={`project-bonus-pool-${projectId}`}>
-        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 text-xs font-medium">Сумма бонусного пула</div>
+    <section className="min-w-0 border-b bg-sky-50/30 px-3 py-3 dark:bg-sky-950/10 sm:px-4" aria-label="Пул бонусов">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 rounded-md border bg-background p-2.5" data-testid={editable ? `project-bonus-pool-${projectId}` : undefined}>
+          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Бонусный пул</div>
+          {editable ? (
             <MoneyStepper
               value={pool}
               step={50_000}
-              disabled={!editable || !onPoolAmountCommit}
+              disabled={!onPoolAmountCommit}
               disabledReason={bonuses.lockedReason || undefined}
               onCommit={onPoolAmountCommit}
               label={`бонусный пул ${projectName}`}
               testIdPrefix="project-bonus-pool"
             />
-          </div>
-          <div className="min-w-0 lg:w-[260px]">
-            <div className="mb-1.5 text-xs font-medium">{bonuses.manuallyAdjusted ? 'Процент по формуле (не активен)' : 'Процент от базы'}</div>
+          ) : <div className="text-base font-semibold tabular-nums">{formatMoney(pool)}</div>}
+        </div>
+        <div className="min-w-0 rounded-md border bg-background p-2.5">
+          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Процент пула от базы</div>
+          {editable ? (
             <PercentStepper
               value={bonuses.poolPercent}
-              disabled={!editable || !onPoolPercentCommit || percentBusy || Boolean(bonuses.manuallyAdjusted)}
+              disabled={!onPoolPercentCommit || percentBusy || Boolean(bonuses.manuallyAdjusted)}
               disabledReason={bonuses.manuallyAdjusted ? 'Сначала нажмите «Вернуть по формуле»' : bonuses.lockedReason || undefined}
               onCommit={onPoolPercentCommit ? commitPercent : undefined}
               label="процент бонусного пула"
               testIdPrefix="project-bonus-percent"
             />
-          </div>
+          ) : <div className="text-base font-semibold tabular-nums">{normalizedPercent(bonuses.poolPercent).toFixed(1)}%</div>}
         </div>
-        <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-          <span>{bonuses.formulaPoolAmount == null ? 'Формульная сумма не рассчитана' : `По формуле: ${formatMoney(bonuses.formulaPoolAmount)}`}</span>
-          <Button type="button" variant="ghost" size="sm" className="h-10 max-w-full whitespace-normal px-2 text-xs" disabled={!editable || !onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Вернуть по формуле</Button>
-        </div>
-      </div>}
-
+        <BonusFact label="Распределено" value={formatMoney(allocated)} />
+        <BonusFact
+          label={overallocated ? 'Сверх пула' : 'Остаток'}
+          value={formatMoney(Math.abs(remainder))}
+          tone={overallocated ? 'danger' : remainder > 0 ? 'warning' : 'positive'}
+        />
+      </div>
+      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-[11px] leading-4 text-muted-foreground">
+        <span>{bonuses.formulaPoolAmount == null ? 'Формульная сумма не рассчитана' : `По формуле: ${formatMoney(bonuses.formulaPoolAmount)}`}</span>
+        <span>
+          {registryState === 'loading'
+            ? 'Выплаты сверяются…'
+            : registryState === 'error'
+              ? 'Статус выплат недоступен'
+              : safePositive(bonuses.pendingAmount) > 0
+                ? `В реестре ждёт ${formatMoney(bonuses.pendingAmount)} · к выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`
+                : `К выплате ${formatMoney(bonuses.approvedForPayment)} · выплачено ${formatMoney(bonuses.paidAmount)}`}
+        </span>
+        {editable && <Button type="button" variant="ghost" size="sm" className="h-8 max-w-full whitespace-normal px-2 text-xs" disabled={!onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Вернуть по формуле</Button>}
+      </div>
     </section>
   );
 }

@@ -97,12 +97,14 @@ test.describe('CEO command center completion', () => {
     const table = page.getByLabel('Единый свод проектов');
     const projectRow = table.locator(`tr[data-project-id="${demoProject.id}"]`);
     await expect(projectRow).toBeVisible();
+    const projectDetails = projectRow.getByTestId(`project-details-${demoProject.id}`);
+    await expect(projectDetails).toBeVisible();
+    await projectDetails.getByTestId('project-management-details').locator('summary').click();
     await expect(projectRow.getByLabel(`Партнёр проекта ${demoProject.name}`)).toBeVisible();
     await expect(projectRow.getByLabel(`Руководитель проекта ${demoProject.name}`)).toBeVisible();
     await expect(projectRow).toContainText(/48\s*000\s*000\s*₸/);
     await expect(page.getByRole('button', { name: /Скачать Excel ИТОГО/ })).toBeVisible();
     await projectRow.getByRole('button', { name: /15\.01\.2026.*20\.12\.2026.*изменить/i }).click();
-    await expect(projectRow.getByTestId(`project-details-${demoProject.id}`)).toBeVisible();
     await projectRow.getByLabel(`Начало проекта ${demoProject.name}`).fill('2026-02-01');
     await projectRow.getByLabel(`Дедлайн проекта ${demoProject.name}`).fill('2026-11-30');
     await projectRow.getByRole('button', { name: 'Сохранить', exact: true }).click();
@@ -129,7 +131,7 @@ test.describe('CEO command center completion', () => {
     await expect(detail).toContainText('Команда');
     await expect(detail).toContainText('Таймшиты');
     await expect(detail).toContainText('Как складывается доход');
-    await expect(detail).toContainText('Бонусы проекта');
+    await expect(detail).toContainText('Ведомость бонусов');
     expect(network.productionMutations).toEqual([]);
   });
 
@@ -148,7 +150,7 @@ test.describe('CEO command center completion', () => {
       await expect(detail).toBeVisible();
       await expect(detail.getByText('Таймшиты', { exact: true })).toBeAttached();
       await expect(detail.getByText('Как складывается доход', { exact: true })).toBeAttached();
-      await expect(detail.getByText('Бонусы проекта', { exact: true })).toBeAttached();
+      await expect(detail.getByText('Ведомость бонусов', { exact: true })).toBeAttached();
       await page.screenshot({ path: `test-results/command-center-${width}.png`, fullPage: true });
       expect(network.productionMutations).toEqual([]);
     });

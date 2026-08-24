@@ -116,7 +116,14 @@ type CompanyFilter = 'all' | 'missing' | string;
 type YearFilter = 'all' | string;
 type BusinessSeasonFilter = 'all' | string;
 type ContractFileFilter = 'all' | 'uploaded' | 'missing';
-type CompanyOption = { id: string; name: string; fullName?: string; isActive?: boolean };
+type CompanyOption = {
+  id: string;
+  name: string;
+  fullName?: string;
+  isActive?: boolean;
+  directorId?: string;
+  directorName?: string;
+};
 type PeriodDraft = { name: string; type: AuditPeriod['type']; startDate: string; endDate: string; deadline: string };
 type ProjectDateDraft = { startDate: string; deadline: string };
 type DateRange = { start: Date; end: Date };
@@ -4157,10 +4164,19 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
       }));
     const currentPartner = teamMemberForRole(currentTeamMembers, isPartnerRole);
     const currentLeader = teamMemberForRole(currentTeamMembers, isLeaderRole);
-    const currentCompanyId = companyOptions.find((option) => rowMatchesCompanyOption(row, option.company))?.key;
+    const currentCompanyOption = companyOptions.find((option) => rowMatchesCompanyOption(row, option.company));
+    const currentCompanyId = currentCompanyOption?.key;
+    const companyDirectorEmployee = currentCompanyOption?.company?.directorId
+      ? employees.find((employee) => String(employee.id) === String(currentCompanyOption.company.directorId))
+      : undefined;
+    const currentCompanyDirectorName = String(
+      currentCompanyOption?.company?.directorName
+      || (companyDirectorEmployee ? employeeName(companyDirectorEmployee) : ''),
+    ).trim() || null;
     const commonPartner = currentPartner;
     const commonLeader = currentLeader;
     const commonPartnerId = teamMemberId(commonPartner);
+    const commonLeaderId = teamMemberId(commonLeader);
     const selectedTeamRole = teamRoleDrafts[row.id] || 'manager_1';
     const totalBonusAmount = plannedBonusPool(row);
     const allocatedBonuses = allocatedDraftBonuses(row);
@@ -4223,6 +4239,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           registryState: paymentRegistryLoading ? 'loading' : paymentRegistryError ? 'error' : 'ready',
           editable: bonusEditable,
           lockedReason: bonusLockedReason,
+          companyDirectorName: currentCompanyDirectorName,
+          partnerEmployeeId: commonPartnerId || (commonPartner ? bonusMemberIdentity(commonPartner) : null),
+          leaderEmployeeId: commonLeaderId || (commonLeader ? bonusMemberIdentity(commonLeader) : null),
           employees: bonusEmployees,
         } : undefined}
         showAdvancedToggle={showAdvancedToggle}
