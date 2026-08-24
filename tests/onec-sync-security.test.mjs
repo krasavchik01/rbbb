@@ -135,11 +135,14 @@ test('1C inbox persistence follows successful project note updates', async () =>
   const source = await readFile(syncUrl, 'utf8');
   const futureGuard = source.indexOf("new Error('Момент снимка 1С слишком далеко в будущем')");
   const reservation = source.indexOf('const reservation = await reserveOneCSyncBatch', futureGuard);
+  const inboxReadiness = source.indexOf('await ensureOneCInboxReady(supabase);', reservation);
+  const projectRead = source.indexOf(".from('projects')", inboxReadiness);
   const removalUpdate = source.indexOf('const removalResults = await runWithConcurrency(');
   const additionUpdate = source.indexOf('const additionResults = await runWithConcurrency(', removalUpdate);
   const inboxWrite = source.indexOf('const inbox = await persistOneCInbox', additionUpdate);
   assert.ok(reservation >= 0);
   assert.ok(futureGuard >= 0 && futureGuard < reservation, 'future watermark validation must precede reservation');
+  assert.ok(inboxReadiness > reservation && inboxReadiness < projectRead, 'durable inbox must be ready before project mutations');
   assert.ok(removalUpdate > reservation, 'durable processing reservation must precede project mutations');
   assert.ok(additionUpdate > removalUpdate, 'old project cleanup must complete before the new project merge');
   assert.ok(inboxWrite > additionUpdate, 'durable match must be published only after both note phases');
@@ -370,7 +373,7 @@ test('JWT accounting access uses normalized role and still blocks designer/admin
   );
 });
 
-function allRejectedSupabase(batchError = null, initialBatchRows = []) {
+function allRejectedSupabase(batchError = null, initialBatchRows = [], inboxError = null) {
   const calls = [];
   const batchRows = structuredClone(initialBatchRows);
   const settings = {
@@ -531,7 +534,7 @@ function allRejectedSupabase(batchError = null, initialBatchRows = []) {
             calls.push({ operation: 'inbox_upsert', value });
             return { error: null };
           },
-          then(resolve, reject) { return Promise.resolve({ data: [], error: null }).then(resolve, reject); },
+          then(resolve, reject) { return Promise.resolve({ data: [], error: inboxError }).then(resolve, reject); },
         };
         return query;
       }
@@ -841,6 +844,27 @@ test('versioned imports fail closed before project or inbox writes when atomic g
   );
   assert.equal(supabase.calls.some((call) => call.table === 'projects'), false);
   assert.equal(supabase.calls.some((call) => call.table === 'one_c_accounting_records'), false);
+});
+
+test('accepted records fail before project writes when the detailed 1C registry is unavailable', async () => {
+  const supabase = allRejectedSupabase(null, [], {
+    code: 'PGRST205',
+    message: "Could not find the table 'public.one_c_accounting_records' in the schema cache",
+  });
+  await assert.rejects(
+    ingestPayload(supabase, {
+      source: 'MAK', runId: 'inbox-migration-gap', batchIndex: 0, batchCount: 1,
+      fullSnapshot: true, snapshotSince: '2024-01-01',
+      snapshotCapturedAt: new Date(Date.now() - 60_000).toISOString(),
+      records: [{
+        type: 'payment', id: 'requires-registry', date: '2026-08-20', amount: 100,
+        contractNumber: 'D-1', counterpartyBin: '123456789012',
+      }],
+    }),
+    (error) => error.statusCode === 503 && error.code === 'ONEC_SCHEMA_NOT_READY',
+  );
+  assert.equal(supabase.calls.some((call) => call.table === 'projects'), false);
+  assert.equal(supabase.calls.some((call) => call.operation === 'inbox_upsert'), false);
 });
 
 test('legacy packets are skipped after the source has a versioned watermark', async () => {

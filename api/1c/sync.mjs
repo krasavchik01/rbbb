@@ -227,6 +227,23 @@ async function persistOneCInbox(supabase, matches, source, syncedAt) {
   return { available: true, upserted: rows.length, uniqueRecords: rows.length };
 }
 
+async function ensureOneCInboxReady(supabase) {
+  const { error } = await supabase
+    .from('one_c_accounting_records')
+    .select('id')
+    .limit(1);
+  if (!error) return;
+  if (isMissingOneCInboxTable(error)) {
+    const unavailable = new Error(
+      'Подробный реестр 1С ещё не установлен в базе HUB. Примените обновление базы и повторите полный обмен.',
+    );
+    unavailable.statusCode = 503;
+    unavailable.code = 'ONEC_SCHEMA_NOT_READY';
+    throw unavailable;
+  }
+  throw error;
+}
+
 function oneCInboxKey(kind, externalId) {
   return `${String(kind || '')}\u0000${String(externalId || '')}`;
 }
@@ -955,6 +972,13 @@ export async function ingestPayload(supabase, body) {
       console.info('1C accounting batch skipped as stale', JSON.stringify(skippedSummary));
       return publicStatus(state);
     }
+
+    // The detailed register is part of a successful accounting exchange. Verify
+    // it before changing project data so HUB never reports unmatched totals that
+    // cannot be opened and resolved by the accountant. A packet containing only
+    // rejected source rows does not need an inbox because it has no records to show.
+    if (payload.records.length > 0) await ensureOneCInboxReady(supabase);
+
     const syncedAt = new Date().toISOString();
     if (payload.records.length > 0) {
       const { data: projects, error: projectsError } = await supabase
