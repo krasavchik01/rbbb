@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getUnreadCount } from '@/lib/notifications';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useEmployees } from '@/hooks/useSupabaseData';
 import { ROLE_LABELS, normalizeUserRole } from '@/types/roles';
 import type { Employee } from '@/lib/supabaseDataStore';
@@ -185,6 +186,9 @@ function RoleCheckMenu() {
   const { user, originalUser, isImpersonating, startImpersonation, stopImpersonation } = useAuth();
   const { employees, loading } = useEmployees();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [roleSearch, setRoleSearch] = useState('');
+  const roleSearchInputRef = useRef<HTMLInputElement>(null);
 
   const canSwitch = (originalUser || user)?.role === 'admin';
   const sortedEmployees = useMemo(() => {
@@ -196,6 +200,17 @@ function RoleCheckMenu() {
         return `${roleA} ${a.name}`.localeCompare(`${roleB} ${b.name}`, 'ru');
       });
   }, [employees]);
+
+  const filteredEmployees = useMemo(() => {
+    const query = roleSearch.trim().toLocaleLowerCase('ru');
+    if (!query) return sortedEmployees;
+
+    return sortedEmployees.filter((employee) => {
+      const role = normalizeUserRole(employee.role, employee.level);
+      const roleLabel = ROLE_LABELS[role] || role;
+      return `${roleLabel} ${employee.name} ${employee.email || ''}`.toLocaleLowerCase('ru').includes(query);
+    });
+  }, [roleSearch, sortedEmployees]);
 
   const handleSwitch = async (employeeId: string) => {
     setSelectedEmployeeId(employeeId);
@@ -212,13 +227,38 @@ function RoleCheckMenu() {
       <Select
         value={isImpersonating ? user?.id || selectedEmployeeId : selectedEmployeeId}
         onValueChange={(value) => void handleSwitch(value)}
+        open={roleMenuOpen}
+        onOpenChange={(open) => {
+          setRoleMenuOpen(open);
+          if (!open) {
+            setRoleSearch('');
+            return;
+          }
+          setTimeout(() => roleSearchInputRef.current?.focus(), 0);
+        }}
         disabled={loading}
       >
         <SelectTrigger className="h-8 w-[230px] text-xs">
           <SelectValue placeholder={loading ? 'Загрузка ролей...' : 'Проверить роль'} />
         </SelectTrigger>
         <SelectContent className="max-h-[420px]">
-          {sortedEmployees.map((employee) => {
+          <div
+            className="sticky top-0 z-10 border-b bg-popover p-2"
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') event.stopPropagation();
+            }}
+          >
+            <Input
+              ref={roleSearchInputRef}
+              value={roleSearch}
+              onChange={(event) => setRoleSearch(event.target.value)}
+              placeholder="Поиск по ФИО или роли"
+              aria-label="Поиск роли или сотрудника"
+              className="h-8 text-xs"
+            />
+          </div>
+          {filteredEmployees.map((employee) => {
             const role = normalizeUserRole(employee.role, employee.level);
             const roleLabel = ROLE_LABELS[role] || role;
             return (
@@ -227,6 +267,9 @@ function RoleCheckMenu() {
               </SelectItem>
             );
           })}
+          {filteredEmployees.length === 0 && (
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">Никого не найдено</div>
+          )}
         </SelectContent>
       </Select>
       {isImpersonating && (
