@@ -830,6 +830,13 @@ function BonusEditor({
   const allocated = safePositive(finances.allocatedBonusAmount);
   const remainder = pool - allocated;
   const overallocated = allocated > pool;
+  const contractAmount = safePositive(finances.contractAmount);
+  const gphAmount = safePositive(finances.gphAmount);
+  const preExpenseAmount = safePositive(finances.preExpenseAmount);
+  const bonusBase = Math.max(0, contractAmount - gphAmount - preExpenseAmount);
+  const formulaPoolAmount = bonuses.formulaPoolAmount == null
+    ? bonusBase * (normalizedPercent(bonuses.poolPercent) / 100)
+    : safePositive(bonuses.formulaPoolAmount);
   const registryState = bonuses.registryState || 'ready';
   const editable = Boolean(bonuses.editable);
   const paymentSummary = registryState === 'loading'
@@ -843,6 +850,7 @@ function BonusEditor({
           : null;
   const [percentBusy, setPercentBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
+  const [formulaOpen, setFormulaOpen] = useState(false);
 
   const commitPercent = async (nextPercent: number) => {
     if (!editable || !onPoolPercentCommit || percentBusy) return false;
@@ -869,6 +877,7 @@ function BonusEditor({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-1.5 hover:bg-sky-100/40 dark:hover:bg-sky-900/20 sm:px-4" data-testid="project-bonus-summary">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <span className="shrink-0 text-xs font-semibold">Бонусы</span>
+          <BonusFact label="Сумма без НДС" value={formatMoney(finances.contractAmount)} />
           <BonusFact label="Пул" value={formatMoney(pool)} />
           <BonusFact label="Распределено" value={formatMoney(allocated)} />
           <BonusFact
@@ -881,7 +890,16 @@ function BonusEditor({
       </summary>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-1.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-1.5" data-testid={editable ? `project-bonus-pool-${projectId}` : undefined}>
-          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Бонусный пул</span>
+          <button
+            type="button"
+            className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            onClick={() => setFormulaOpen((current) => !current)}
+            aria-expanded={formulaOpen}
+            aria-controls={`project-bonus-formula-${projectId}`}
+            data-testid="project-bonus-formula-toggle"
+          >
+            Бонусный пул {formulaOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
           {editable ? (
             <div className="w-[220px] max-w-full">
               <MoneyStepper
@@ -922,6 +940,25 @@ function BonusEditor({
         {bonuses.manuallyAdjusted && <span className="text-[11px] leading-4 text-muted-foreground">По формуле: {bonuses.formulaPoolAmount == null ? 'не рассчитано' : formatMoney(bonuses.formulaPoolAmount)}</span>}
         {paymentSummary && <span className="text-[11px] leading-4 text-muted-foreground">{paymentSummary}</span>}
         {editable && bonuses.manuallyAdjusted && <Button type="button" variant="ghost" size="sm" className="h-7 max-w-full whitespace-normal px-1.5 text-[11px]" disabled={!onResetPoolFormula || resetBusy} onClick={() => void resetPool()} data-testid="project-bonus-pool-reset"><RotateCcw className="mr-1 h-3.5 w-3.5" />Вернуть по формуле</Button>}
+        {formulaOpen && (
+          <div
+            id={`project-bonus-formula-${projectId}`}
+            className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-sky-200 bg-sky-50/70 px-2.5 py-2 text-xs leading-5 dark:border-sky-900 dark:bg-sky-950/20"
+            data-testid="project-bonus-formula"
+          >
+            <span>Без НДС <b className="tabular-nums">{formatMoney(contractAmount)}</b></span>
+            {gphAmount > 0 && <><span aria-hidden="true">−</span><span>ГПХ / субподряд <b className="tabular-nums">{formatMoney(gphAmount)}</b></span></>}
+            <span aria-hidden="true">−</span>
+            <span>Предрасход <b className="tabular-nums">{formatMoney(preExpenseAmount)}</b></span>
+            <span aria-hidden="true">=</span>
+            <span>База <b className="tabular-nums">{formatMoney(bonusBase)}</b></span>
+            <span aria-hidden="true">×</span>
+            <span><b className="tabular-nums">{normalizedPercent(bonuses.poolPercent).toFixed(1)}%</b></span>
+            <span aria-hidden="true">=</span>
+            <span className="font-semibold text-sky-900 dark:text-sky-100">Бонусный пул <b className="tabular-nums">{formatMoney(formulaPoolAmount)}</b></span>
+            {bonuses.manuallyAdjusted && <span className="w-full text-[11px] text-muted-foreground">Сейчас пул задан вручную: {formatMoney(pool)}.</span>}
+          </div>
+        )}
       </div>
     </details>
   );

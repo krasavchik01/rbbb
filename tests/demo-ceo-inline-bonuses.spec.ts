@@ -120,6 +120,17 @@ test.describe('CEO inline project bonuses', () => {
     const bonusSummary = detail.getByTestId('project-bonus-summary');
     await expect(bonusSummary).toBeVisible();
     expect((await bonusSummary.boundingBox())?.height || 0).toBeLessThanOrEqual(48);
+    await expect(bonusSummary).toContainText('Сумма без НДС');
+    await expect(bonusSummary).toContainText(/48\s*000\s*000\s*₸/);
+    const formulaToggle = detail.getByTestId('project-bonus-formula-toggle');
+    await expect(detail.getByTestId('project-bonus-formula')).toHaveCount(0);
+    await formulaToggle.click();
+    const formula = detail.getByTestId('project-bonus-formula');
+    await expect(formula).toContainText('Без НДС');
+    await expect(formula).toContainText('Предрасход');
+    await expect(formula).toContainText('База');
+    await expect(formula).toContainText(/33\s*600\s*000\s*₸/);
+    await expect(formula).toContainText(/3\s*360\s*000\s*₸/);
     await expect(detail.getByTestId('project-executive-ledger')).toBeVisible();
     await expect(detail.getByTestId('project-tab-bonuses')).toHaveCount(0);
     await expect(detail.getByTestId('project-tab-team')).toHaveCount(0);
