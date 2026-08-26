@@ -268,7 +268,12 @@ export const notifyNewProject = async (projectName: string, creatorName: string,
 /**
  * Уведомить зам. директора о новом проекте
  */
-export const notifyDeputyDirectorNewProject = async (projectName: string, clientName: string, amount: string) => {
+export const notifyDeputyDirectorNewProject = async (
+  projectName: string,
+  clientName: string,
+  amount: string,
+  projectId?: string,
+) => {
   try {
     // Находим зам. директора из базы Supabase
     console.log('🔍 Ищем зам. директора в базе...');
@@ -302,7 +307,11 @@ export const notifyDeputyDirectorNewProject = async (projectName: string, client
       title: '📋 Новый проект требует утверждения',
       message: `Отдел закупок создал проект "${projectName}" для клиента ${clientName}. Сумма: ${amount} ₸. Требуется ваше утверждение.`,
       type: 'info',
-      action_url: '/projects?view=working',
+      // Новые уведомления открывают короткий режим назначения именно этого
+      // проекта. Старые уведомления без id остаются совместимыми со сводом.
+      action_url: projectId
+        ? `/projects?teamProject=${encodeURIComponent(projectId)}&team=1`
+        : '/projects?view=working',
     });
 
     console.log('✅ Уведомление создано:', notification);

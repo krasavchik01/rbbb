@@ -414,7 +414,8 @@ export default function CreateProjectProcurement() {
           notifyDeputyDirectorNewProject(
             project.name,
             clientName,
-            formattedAmount
+            formattedAmount,
+            savedProjectId,
           );
         }
       } catch (e) {

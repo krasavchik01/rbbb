@@ -2,6 +2,53 @@ import { expect, test } from '@playwright/test';
 import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
 test.describe('bulk administration and deputy project status', () => {
+  test('a deputy notification opens the simple team assignment for the exact project', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const notification = network.tableRows.notifications[0] as Record<string, any>;
+    notification.user_id = 'demo-deputy_director';
+    notification.title = 'Назначьте команду новому проекту';
+    notification.action_url = `/projects?teamProject=${demoProject.id}&team=1`;
+
+    await page.goto('/notifications');
+    await waitForDemoApp(page);
+    await page.getByText('Назначьте команду новому проекту', { exact: true }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/projects\\?teamProject=${demoProject.id}&team=1`));
+    const quickAssignment = page.getByTestId('deputy-team-assignment');
+    await expect(quickAssignment).toBeVisible();
+    await expect(quickAssignment.getByRole('heading', { name: demoProject.name, exact: true })).toBeVisible();
+    await expect(quickAssignment.getByTestId('deputy-team-partner-search')).toBeVisible();
+    await expect(quickAssignment.getByTestId('deputy-team-leader-search')).toBeVisible();
+    await expect(quickAssignment.getByTestId('deputy-team-member-search')).toBeVisible();
+    await expect(quickAssignment.getByTestId('deputy-team-members-demo-project-001').getByText('Демо Партнёр', { exact: true })).toBeVisible();
+    expect(network.productionMutations).toEqual([]);
+  });
+
+  test('the deputy quick assignment stays usable on a phone', async ({ page }) => {
+    await loginAsDemoRole(page, 'deputy_director');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/projects?teamProject=${demoProject.id}&team=1`);
+    await waitForDemoApp(page);
+
+    const quickAssignment = page.getByTestId('deputy-team-assignment');
+    await expect(quickAssignment).toBeVisible();
+    await expect(quickAssignment.getByText('Два простых шага:', { exact: true })).toBeVisible();
+    await quickAssignment.getByTestId('deputy-team-member-search').click();
+    await expect(page.getByRole('textbox', { name: 'Поиск по ФИО, email или роли', exact: true })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Поиск по ФИО, email или роли', exact: true }).fill('Ассистент');
+    await expect(page.getByRole('option', { name: /Демо Ассистент/ })).toBeVisible();
+  });
+
+  test('the deputy can open the simple team assignment from the normal project summary', async ({ page }) => {
+    await loginAsDemoRole(page, 'deputy_director');
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+
+    await page.getByRole('link', { name: 'Простое назначение команды', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects\\?teamProject=${demoProject.id}&team=1`));
+    await expect(page.getByTestId('deputy-team-assignment')).toBeVisible();
+  });
+
   test('deputy director can add a GPH amount from the project summary', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
     await page.setViewportSize({ width: 1920, height: 1080 });

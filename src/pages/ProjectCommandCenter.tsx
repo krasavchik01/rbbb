@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle2, ChevronDown, ChevronRight, Download, ExternalLink, Eye, FileSpreadsheet, Filter, Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1643,6 +1643,7 @@ function EmployeeSearchAdd({
 
 export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommandScope }) {
   const { user, isImpersonating } = useAuth();
+  const location = useLocation();
   const { projects = [], loading: projectsLoading, error: projectsError, updateProject, deleteProject, deleteProjects, refresh: refreshProjects } = useProjects();
   const { employees = [], createEmployee } = useEmployees();
   const [appSettings] = useAppSettings();
@@ -1783,6 +1784,10 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const canEditPeriods = capabilities.canEditPeriods;
   const canEditContractAmount = capabilities.canSeeContractMoney;
   const isInitialProjectsLoad = projectsLoading && projects.length === 0;
+  // Ссылка из уведомления для замдиректора: сначала показываем короткий
+  // редактор команды конкретного проекта, а уже затем общий свод.
+  const teamAssignmentProjectId = new URLSearchParams(location.search).get('teamProject') || '';
+  const isDeputyTeamAssignmentMode = user?.role === 'deputy_director' && Boolean(teamAssignmentProjectId);
 
   const openContractFile = async (
     file: any,
@@ -2549,6 +2554,17 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const projectIdsForRow = (row: (typeof rows)[number]): string[] => {
     return Array.from(new Set((row.projectIds?.length ? row.projectIds : [row.id]).filter(Boolean)));
   };
+
+  const deputyTeamAssignmentRow = isDeputyTeamAssignmentMode
+    ? rows.find((row) => projectIdsForRow(row).some((projectId) => String(projectId) === String(teamAssignmentProjectId)))
+    : undefined;
+  const deputyTeam = deputyTeamAssignmentRow ? effectiveProjectTeam(deputyTeamAssignmentRow.project) : [];
+  const deputyPartner = teamMemberForRole(deputyTeam, isPartnerRole);
+  const deputyLeader = teamMemberForRole(deputyTeam, isLeaderRole);
+  const deputySelectedTeamRole = deputyTeamAssignmentRow
+    ? teamRoleDrafts[deputyTeamAssignmentRow.id] || 'assistant_1'
+    : 'assistant_1';
+  const deputyPartnerId = teamMemberId(deputyPartner);
 
   const filteredProjectIds = Array.from(new Set(filteredRows.flatMap(projectIdsForRow)));
   const filteredDisplayRowCount = filteredRows.length;
@@ -4281,6 +4297,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         onToggleAdvanced={() => toggleAdvancedRow(row.id)}
         embedded={embedded}
         managementControls={embedded ? (
+          <>
+          {user?.role === 'deputy_director' && !isDeputyTeamAssignmentMode && (
+            <Button asChild type="button" variant="default" size="sm" className="mb-3 min-h-10 w-full justify-start text-sm sm:w-auto">
+              <Link to={`/projects?teamProject=${encodeURIComponent(row.id)}&team=1`}>Простое назначение команды</Link>
+            </Button>
+          )}
           <div className={`grid min-w-0 gap-3 ${canSeeTeam ? 'xl:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.1fr)_minmax(420px,1.7fr)]' : ''}`}>
             <div className="min-w-0 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Компания, статус и срок</div>
@@ -4442,6 +4464,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
               )}
             </div>}
           </div>
+          </>
         ) : undefined}
         onPoolAmountCommit={(amount) => setBonusPoolAmount(row, amount)}
         onPoolPercentCommit={(percent) => setBonusPercent(row, percent)}
@@ -4512,6 +4535,155 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <p className="mt-1 text-sm text-red-700 dark:text-red-300">Финансовые показатели и бонусы не показываются нулями, потому что исходные данные сейчас недоступны: {projectsError}</p>
             <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refreshProjects()}>Повторить загрузку</Button>
           </Card>
+        )}
+
+        {isDeputyTeamAssignmentMode && (
+          deputyTeamAssignmentRow ? (
+            <Card className="overflow-hidden border-primary/30 bg-primary/[0.035]" data-testid="deputy-team-assignment">
+              <div className="flex flex-col gap-3 border-b bg-background/70 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-primary">Задача из уведомления</div>
+                  <h2 className="mt-1 break-words text-lg font-semibold leading-snug sm:text-xl">{deputyTeamAssignmentRow.name}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {deputyTeamAssignmentRow.client} · Наша компания: {deputyTeamAssignmentRow.company || 'не указана'}
+                  </p>
+                </div>
+                <Button asChild type="button" variant="outline" size="sm" className="w-full shrink-0 sm:w-auto">
+                  <Link to="/projects">К общему своду</Link>
+                </Button>
+              </div>
+
+              <div className="space-y-4 p-4 sm:p-5">
+                <div className="rounded-lg border border-primary/20 bg-background px-3 py-2.5 text-sm leading-5 text-muted-foreground">
+                  <span className="font-semibold text-foreground">Два простых шага:</span> выберите партнёра и руководителя, затем добавьте остальных участников. Каждый выбор сохраняется сразу.
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border bg-background p-3">
+                    <div className="mb-2 text-sm font-semibold text-sky-700 dark:text-sky-300">1. Партнёр</div>
+                    {canManageTeam ? (
+                      <EmployeeSearchAdd
+                        employees={partnerEmployees}
+                        disabled={savingProjectId === `${deputyTeamAssignmentRow.id}:add:partner`}
+                        selectedEmployeeId={deputyPartnerId}
+                        triggerLabel={deputyPartner ? teamName(deputyPartner) : 'Выбрать партнёра'}
+                        triggerAriaLabel={`Партнёр проекта ${deputyTeamAssignmentRow.name}`}
+                        triggerTestId="deputy-team-partner-search"
+                        triggerClassName="h-11 w-full text-sm"
+                        onPick={(employeeId) => void addTeamMember(deputyTeamAssignmentRow, 'partner', employeeId)}
+                      />
+                    ) : (
+                      <div className="text-sm font-medium">{deputyPartner ? teamName(deputyPartner) : 'Не назначен'}</div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-3">
+                    <div className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-300">2. Руководитель проекта</div>
+                    {canManageTeam ? (
+                      <EmployeeSearchAdd
+                        employees={assignableEmployees}
+                        disabled={savingProjectId === `${deputyTeamAssignmentRow.id}:add:project_leader`}
+                        selectedEmployeeId={teamMemberId(deputyLeader)}
+                        triggerLabel={deputyLeader ? teamName(deputyLeader) : 'Выбрать руководителя'}
+                        triggerAriaLabel={`Руководитель проекта ${deputyTeamAssignmentRow.name}`}
+                        triggerTestId="deputy-team-leader-search"
+                        triggerClassName="h-11 w-full text-sm"
+                        onPick={(employeeId) => void addTeamMember(deputyTeamAssignmentRow, 'project_leader', employeeId)}
+                      />
+                    ) : (
+                      <div className="text-sm font-medium">{deputyLeader ? teamName(deputyLeader) : 'Не назначен'}</div>
+                    )}
+                  </div>
+                </div>
+
+                {canManageTeam && deputyPartnerId && partnerTeamTemplate(deputyPartnerId, deputyTeamAssignmentRow.id)?.length ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 w-full justify-start whitespace-normal px-3 text-left text-sm"
+                    disabled={savingProjectId === `${deputyTeamAssignmentRow.id}:team-template`}
+                    onClick={() => setProjectTeamTemplateTarget({ rowId: deputyTeamAssignmentRow.id, partnerId: deputyPartnerId })}
+                  >
+                    Подставить готовую команду этого партнёра
+                  </Button>
+                ) : null}
+
+                <div className="rounded-lg border bg-background">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
+                    <div>
+                      <div className="text-sm font-semibold">3. Команда</div>
+                      <div className="text-xs text-muted-foreground">{deputyTeam.length} {deputyTeam.length === 1 ? 'участник' : deputyTeam.length < 5 ? 'участника' : 'участников'}</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 p-3" data-testid={`deputy-team-members-${deputyTeamAssignmentRow.id}`}>
+                    {deputyTeam.length === 0 ? (
+                      <div className="rounded-md bg-muted/50 px-3 py-3 text-sm text-muted-foreground">Команда пока не назначена.</div>
+                    ) : deputyTeam.map((member: CanonicalTeamMember, index: number) => {
+                      const memberId = teamMemberId(member);
+                      const role = teamRole(member);
+                      const roleIndex = deputyTeam
+                        .filter((candidate) => teamRole(candidate) === role)
+                        .findIndex((candidate) => memberId ? teamMemberId(candidate) === memberId : teamName(candidate) === teamName(member));
+                      return (
+                        <div key={`${memberId || teamName(member)}-${role}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-3 py-2.5">
+                          <div className="min-w-0">
+                            <div className="text-xs text-muted-foreground">{projectRoleLabel(role)}</div>
+                            <div className="truncate text-sm font-medium">{teamName(member)}</div>
+                          </div>
+                          {canManageTeam && roleIndex >= 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 border-red-200 px-2 text-xs text-red-700 hover:bg-red-50 hover:text-red-700"
+                              aria-label={`Убрать ${teamName(member)} из команды проекта`}
+                              disabled={savingProjectId === `${deputyTeamAssignmentRow.id}:remove:${memberId || roleIndex}`}
+                              onClick={() => void removeTeamMember(deputyTeamAssignmentRow, member, roleIndex)}
+                            >
+                              Убрать
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {canManageTeam && (
+                    <div className="grid gap-2 border-t p-3 sm:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)]">
+                      <Select
+                        value={deputySelectedTeamRole}
+                        onValueChange={(value) => setTeamRoleDrafts((current) => ({ ...current, [deputyTeamAssignmentRow.id]: value }))}
+                      >
+                        <SelectTrigger className="h-11 w-full" aria-label={`Роль нового участника проекта ${deputyTeamAssignmentRow.name}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TEAM_COLUMNS.filter((column) => column.key !== 'partner' && column.key !== 'project_leader').map((column) => (
+                            <SelectItem key={column.key} value={column.key}>{column.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <EmployeeSearchAdd
+                        employees={assignableEmployees}
+                        disabled={savingProjectId === `${deputyTeamAssignmentRow.id}:add:${deputySelectedTeamRole}`}
+                        triggerLabel="Найти и добавить сотрудника"
+                        triggerAriaLabel={`Добавить сотрудника в команду проекта ${deputyTeamAssignmentRow.name}`}
+                        triggerTestId="deputy-team-member-search"
+                        triggerClassName="h-11 w-full text-sm"
+                        onPick={(employeeId) => void addTeamMember(deputyTeamAssignmentRow, deputySelectedTeamRole, employeeId)}
+                        onAddContractor={canManageContractors ? () => openGphAssignment(deputyTeamAssignmentRow.id, deputySelectedTeamRole) : undefined}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ) : !projectsLoading ? (
+            <Card className="border-amber-200 bg-amber-50/60 p-4" data-testid="deputy-team-assignment-not-found">
+              <div className="font-semibold text-amber-950">Проект из уведомления не найден</div>
+              <p className="mt-1 text-sm text-amber-900">Он мог быть удалён или больше недоступен для вашей роли. Откройте общий свод и выберите другой проект.</p>
+              <Button asChild type="button" variant="outline" size="sm" className="mt-3"><Link to="/projects">К общему своду</Link></Button>
+            </Card>
+          ) : null
         )}
 
         <Card className="p-3">
