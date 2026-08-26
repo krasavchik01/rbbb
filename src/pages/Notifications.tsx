@@ -166,6 +166,23 @@ export default function Notifications() {
     const actionUrl = notification.action_url;
     if (!actionUrl) return;
 
+    // До появления прямой ссылки старые уведомления для замдиректора вели в
+    // общий свод. В их тексте есть название нового проекта — используем его,
+    // чтобы также открыть простой экран назначения команды.
+    const isLegacyDeputyProjectNotification = user?.role === 'deputy_director'
+      && actionUrl === '/projects?view=working'
+      && /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`);
+    const notifiedProjectName = String(notification.message || '').match(/["«]([^"»]+)["»]/u)?.[1]?.trim();
+    const notifiedProject = isLegacyDeputyProjectNotification && notifiedProjectName
+      ? (projects as Project[]).find((project) => String(project.name || '').trim() === notifiedProjectName)
+      : undefined;
+    if (notifiedProject?.id) {
+      navigate(`/projects?teamProject=${encodeURIComponent(String(notifiedProject.id))}&team=1`, {
+        state: { project: notifiedProject },
+      });
+      return;
+    }
+
     // Если это ссылка на проект, загружаем проект и передаем в state
     const projectMatch = actionUrl.match(/^\/projects?\/([^/]+)/);
     if (projectMatch) {

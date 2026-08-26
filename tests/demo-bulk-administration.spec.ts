@@ -24,6 +24,22 @@ test.describe('bulk administration and deputy project status', () => {
     expect(network.productionMutations).toEqual([]);
   });
 
+  test('a legacy deputy notification also opens the simple team assignment', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const notification = network.tableRows.notifications[0] as Record<string, any>;
+    notification.user_id = 'demo-deputy_director';
+    notification.title = '📋 Новый проект требует утверждения';
+    notification.message = `Отдел закупок создал проект "${demoProject.name}". Требуется ваше утверждение.`;
+    notification.action_url = '/projects?view=working';
+
+    await page.goto('/notifications');
+    await waitForDemoApp(page);
+    await page.getByText(/Новый проект требует утверждения/).click();
+
+    await expect(page).toHaveURL(new RegExp(`/projects\\?teamProject=${demoProject.id}&team=1`));
+    await expect(page.getByTestId('deputy-team-assignment')).toBeVisible();
+  });
+
   test('the deputy quick assignment stays usable on a phone', async ({ page }) => {
     await loginAsDemoRole(page, 'deputy_director');
     await page.setViewportSize({ width: 390, height: 844 });
