@@ -2555,6 +2555,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
   const totalDisplayRowCount = rows.length;
   const filteredDatabaseRecordCount = filteredProjectIds.length;
   const totalDatabaseRecordCount = projects.length;
+  const projectsById = new Map(projects.map((project: any) => [String(project.id), project]));
+  // Заместитель директора разбирает только очередь без исполнителя. Он не
+  // должен иметь возможность заменить уже назначенную «нашу компанию» ни в
+  // одной строке, ни массовым действием.
+  const selectedCompanyAssignmentIds = Array.from(selectedProjectIds).filter((projectId) => (
+    user?.role !== 'deputy_director'
+      || projectHasMissingCompanyIdentity(projectsById.get(String(projectId)))
+  ));
+  const selectedCompanyReplacementBlockedCount = selectedProjectIds.size - selectedCompanyAssignmentIds.length;
   const allFilteredProjectsSelected = filteredProjectIds.length > 0
     && filteredProjectIds.every((projectId) => selectedProjectIds.has(projectId));
 
@@ -2732,6 +2741,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const assignCompanyToSelectedProjects = async () => {
     if (!canBulkAssignCompany || !updateProject || bulkAssigningCompany || selectedProjectIds.size === 0) return;
+    const ids = selectedCompanyAssignmentIds;
+    if (ids.length === 0) {
+      toast({
+        title: 'Компания уже назначена',
+        description: 'Заместитель директора может назначить нашу компанию только проектам без назначенной компании.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const company = companyOptions.find((option) => option.key === bulkCompanyId)?.company;
     if (!company) {
       toast({
@@ -2743,7 +2761,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     }
 
     setBulkAssigningCompany(true);
-    const ids = Array.from(selectedProjectIds);
     const failedIds: string[] = [];
     const patch = {
       companyId: company.id,
@@ -2760,11 +2777,12 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
       }
-      setSelectedProjectIds(new Set(failedIds));
+      const blockedIds = Array.from(selectedProjectIds).filter((projectId) => !ids.includes(projectId));
+      setSelectedProjectIds(new Set([...blockedIds, ...failedIds]));
       setBulkCompanyAssignOpen(false);
       toast({
         title: failedIds.length > 0 ? 'Назначение завершено частично' : 'Компания назначена',
-        description: `Компания «${company.name}» назначена для ${ids.length - failedIds.length} проектов.${failedIds.length > 0 ? ` Не сохранено: ${failedIds.length}.` : ''}`,
+        description: `Компания «${company.name}» назначена для ${ids.length - failedIds.length} проектов.${failedIds.length > 0 ? ` Не сохранено: ${failedIds.length}.` : ''}${blockedIds.length > 0 ? ` Уже назначены и пропущены: ${blockedIds.length}.` : ''}`,
         variant: failedIds.length > 0 ? 'destructive' : 'default',
       });
     } catch (error: any) {
@@ -2780,6 +2798,14 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
   const assignCompanyToProject = async (row: (typeof rows)[number], companyId: string) => {
     if (!canBulkAssignCompany || !updateProject) return;
+    if (user?.role === 'deputy_director' && !projectHasMissingCompanyIdentity(row.project)) {
+      toast({
+        title: 'Компания уже назначена',
+        description: 'Заместитель директора может назначить нашу компанию только проекту без назначенной компании.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const company = companyOptions.find((option) => option.key === companyId)?.company;
     if (!company) return;
     setSavingProjectId(`${row.id}:company`);
@@ -4169,6 +4195,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const currentLeader = teamMemberForRole(currentTeamMembers, isLeaderRole);
     const currentCompanyOption = companyOptions.find((option) => rowMatchesCompanyOption(row, option.company));
     const currentCompanyId = currentCompanyOption?.key;
+    const canAssignCompanyToRow = canBulkAssignCompany && (
+      user?.role !== 'deputy_director' || projectHasMissingCompanyIdentity(row.project)
+    );
     const companyDirectorEmployee = currentCompanyOption?.company?.directorId
       ? employees.find((employee) => String(employee.id) === String(currentCompanyOption.company.directorId))
       : undefined;
@@ -4255,7 +4284,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
           <div className={`grid min-w-0 gap-3 ${canSeeTeam ? 'xl:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.1fr)_minmax(420px,1.7fr)]' : ''}`}>
             <div className="min-w-0 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Компания, статус и срок</div>
-              {canBulkAssignCompany ? (
+              {canAssignCompanyToRow ? (
                 <Select
                   value={currentCompanyId}
                   onValueChange={(companyId) => void assignCompanyToProject(row, companyId)}
@@ -4716,7 +4745,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedProjectIds(new Set())}>
                     Снять весь выбор
                   </Button>
-                  {canBulkAssignCompany && (
+                  {canBulkAssignCompany && selectedCompanyAssignmentIds.length > 0 && (
                     <>
                       <Select value={bulkCompanyId} onValueChange={setBulkCompanyId} disabled={bulkAssigningCompany}>
                         <SelectTrigger className="min-w-0 w-full sm:w-[250px]" aria-label="Выбрать компанию для выбранных проектов">
@@ -4734,9 +4763,16 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                         onClick={() => setBulkCompanyAssignOpen(true)}
                         disabled={!bulkCompanyId || bulkAssigningCompany}
                       >
-                        Назначить компанию выбранным
+                        {user?.role === 'deputy_director'
+                          ? `Назначить компанию без компании (${selectedCompanyAssignmentIds.length})`
+                          : 'Назначить компанию выбранным'}
                       </Button>
                     </>
+                  )}
+                  {canBulkAssignCompany && user?.role === 'deputy_director' && selectedCompanyAssignmentIds.length === 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      Компания уже назначена: заместитель директора её не меняет.
+                    </span>
                   )}
                   {canBulkAssignPartner && (
                     <>
@@ -6161,7 +6197,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             <AlertDialogHeader>
               <AlertDialogTitle>Назначить компанию выбранным проектам?</AlertDialogTitle>
               <AlertDialogDescription>
-                Компания «{companyOptions.find((option) => option.key === bulkCompanyId)?.name || 'не выбрана'}» будет назначена для {selectedProjectIds.size} проектов. Договоры, команда, часы, бонусы и файлы не изменятся.
+                Компания «{companyOptions.find((option) => option.key === bulkCompanyId)?.name || 'не выбрана'}» будет назначена для {selectedCompanyAssignmentIds.length} проектов.{user?.role === 'deputy_director' && selectedCompanyReplacementBlockedCount > 0 ? ` Проекты с уже назначенной компанией будут пропущены: ${selectedCompanyReplacementBlockedCount}.` : ''} Договоры, команда, часы, бонусы и файлы не изменятся.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -6171,9 +6207,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
                   event.preventDefault();
                   void assignCompanyToSelectedProjects();
                 }}
-                disabled={bulkAssigningCompany || !bulkCompanyId}
+                disabled={bulkAssigningCompany || !bulkCompanyId || selectedCompanyAssignmentIds.length === 0}
               >
-                {bulkAssigningCompany ? 'Назначаю…' : `Назначить ${selectedProjectIds.size}`}
+                {bulkAssigningCompany ? 'Назначаю…' : `Назначить ${selectedCompanyAssignmentIds.length}`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

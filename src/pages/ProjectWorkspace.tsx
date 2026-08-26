@@ -25,6 +25,7 @@ import { supabaseDataStore } from "@/lib/supabaseDataStore";
 import { useAppSettings } from "@/lib/appSettings";
 import { canRoleViewProjectSection } from '@/lib/projectAccessControl';
 import { projectCommandCenterCapabilities } from '@/lib/projectCommandCenterPermissions';
+import { projectHasMissingCompanyIdentity } from '@/lib/userCompanyAccess';
 import { projectCompanyId, projectCompanyName } from "@/types/companies";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -316,7 +317,6 @@ export default function ProjectWorkspace() {
   const canSeeHours = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'hours');
   const canSeeContractMoney = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'contractMoney');
   const canSeeBonuses = canRoleViewProjectSection(appSettings.projectAccess, user?.role, 'bonuses');
-  const canManageProjectCompany = capabilities.canBulkAssignCompany;
   const projectStatus = project?.notes?.status || project?.status;
   // Единая команда проекта управляется CEO, администратором и замдиректора
   // на любой стадии проекта.
@@ -353,6 +353,10 @@ export default function ProjectWorkspace() {
       name: projectCompanyName(project, activeCompanies, ''),
     };
   }, [activeCompanies, project]);
+  // Заместитель директора назначает исполнителя только в очереди без
+  // компании; замена уже назначенной компании остаётся у CEO и администратора.
+  const canManageProjectCompany = capabilities.canBulkAssignCompany
+    && (!isDeputy || projectHasMissingCompanyIdentity(project));
 
   useEffect(() => {
     const matched = activeCompanies.find((company) => (
@@ -365,6 +369,14 @@ export default function ProjectWorkspace() {
 
   const saveProjectCompany = async () => {
     if (!project || !updateProject || isSavingCompany) return;
+    if (isDeputy && !projectHasMissingCompanyIdentity(project)) {
+      toast({
+        title: 'Компания уже назначена',
+        description: 'Заместитель директора может назначить нашу компанию только проекту без назначенной компании.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const company = activeCompanies.find((candidate) => candidate.id === companyDraftId);
     if (!company) {
       toast({

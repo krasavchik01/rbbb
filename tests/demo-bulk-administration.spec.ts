@@ -124,8 +124,33 @@ test.describe('bulk administration and deputy project status', () => {
     expect(network.mutationRequests).toEqual([]);
   });
 
-  test('deputy director can assign a company while an assistant stays read-only', async ({ page }) => {
+  test('deputy director cannot replace an assigned company while an assistant stays read-only', async ({ page }) => {
     let network = await loginAsDemoRole(page, 'deputy_director');
+    await page.goto(`/project/${demoProject.id}`);
+    await waitForDemoApp(page);
+    const companySelect = page.getByRole('combobox', { name: 'Выбрать компанию проекта', exact: true });
+    const saveCompany = page.getByRole('button', { name: 'Назначить компанию', exact: true });
+    await expect(companySelect).toHaveCount(0);
+    await expect(saveCompany).toHaveCount(0);
+    expect(network.mutationRequests).toEqual([]);
+    expect(network.productionMutations).toEqual([]);
+
+    network = await loginAsDemoRole(page, 'assistant_1');
+    await page.goto(`/project/${demoProject.id}`);
+    await waitForDemoApp(page);
+    await expect(page.getByRole('button', { name: 'Назначить компанию', exact: true })).toHaveCount(0);
+    expect(network.productionMutations).toEqual([]);
+  });
+
+  test('deputy director can assign a company only to a project without a company', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const project = network.tableRows.projects[0] as Record<string, any>;
+    delete project.company_id;
+    const notes = JSON.parse(String(project.notes));
+    delete notes.companyName;
+    delete notes.ourCompany;
+    project.notes = JSON.stringify(notes);
+
     await page.goto(`/project/${demoProject.id}`);
     await waitForDemoApp(page);
     const companySelect = page.getByRole('combobox', { name: 'Выбрать компанию проекта', exact: true });
@@ -137,15 +162,9 @@ test.describe('bulk administration and deputy project status', () => {
     await saveCompany.click();
     await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
     expect(network.productionMutations).toEqual([]);
-
-    network = await loginAsDemoRole(page, 'assistant_1');
-    await page.goto(`/project/${demoProject.id}`);
-    await waitForDemoApp(page);
-    await expect(page.getByRole('button', { name: 'Назначить компанию', exact: true })).toHaveCount(0);
-    expect(network.productionMutations).toEqual([]);
   });
 
-  test('deputy director can prepare a bulk company assignment but cannot bulk delete', async ({ page }) => {
+  test('deputy director can prepare a bulk company assignment only for unassigned projects and cannot bulk delete', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
     await page.goto('/projects');
     await waitForDemoApp(page);
@@ -154,18 +173,34 @@ test.describe('bulk administration and deputy project status', () => {
     await expect(projectCheckbox).toBeVisible();
     await projectCheckbox.check();
     const companySelect = page.getByRole('combobox', { name: 'Выбрать компанию для выбранных проектов', exact: true });
-    const bulkAssign = page.getByRole('button', { name: 'Назначить компанию выбранным', exact: true });
-    await expect(companySelect).toBeVisible();
-    await expect(bulkAssign).toBeVisible();
+    const bulkAssign = page.getByRole('button', { name: /Назначить компанию без компании/ });
+    await expect(companySelect).toHaveCount(0);
+    await expect(bulkAssign).toHaveCount(0);
+    await expect(page.getByText('Компания уже назначена: заместитель директора её не меняет.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Удалить выбранные', exact: true })).toHaveCount(0);
 
-    await companySelect.click();
+    expect(network.productionMutations).toEqual([]);
+    expect(network.mutationRequests).toEqual([]);
+  });
+
+  test('deputy director can bulk assign a company to an unassigned project', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const project = network.tableRows.projects[0] as Record<string, any>;
+    delete project.company_id;
+    const notes = JSON.parse(String(project.notes));
+    delete notes.companyName;
+    delete notes.ourCompany;
+    project.notes = JSON.stringify(notes);
+
+    await page.goto('/projects');
+    await waitForDemoApp(page);
+    await page.getByRole('checkbox', { name: `Выбрать проект ${demoProject.name}`, exact: true }).check();
+    await page.getByRole('combobox', { name: 'Выбрать компанию для выбранных проектов', exact: true }).click();
     await page.getByRole('option').first().click();
-    await bulkAssign.click();
+    await page.getByRole('button', { name: 'Назначить компанию без компании (1)', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Назначить компанию выбранным проектам?', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Назначить 1', exact: true }).click();
     await expect.poll(() => network.mutationRequests.filter((request) => request.url.includes('/rest/v1/projects')).length).toBe(1);
-
     expect(network.productionMutations).toEqual([]);
   });
 
