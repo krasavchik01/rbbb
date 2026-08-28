@@ -40,6 +40,52 @@ test.describe('bulk administration and deputy project status', () => {
     await expect(page.getByTestId('deputy-team-assignment')).toBeVisible();
   });
 
+  test('completed deputy team assignment leaves active alerts and is kept in history', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const notification = network.tableRows.notifications[0] as Record<string, any>;
+    notification.user_id = 'demo-deputy_director';
+    notification.title = '📋 Новый проект требует утверждения';
+    notification.message = `Отдел закупок создал проект "${demoProject.name}". Требуется ваше утверждение.`;
+    notification.action_url = `/projects?teamProject=${demoProject.id}&team=1`;
+
+    await page.goto(`/projects?teamProject=${demoProject.id}&team=1`);
+    await waitForDemoApp(page);
+    const quickAssignment = page.getByTestId('deputy-team-assignment');
+    await quickAssignment.getByTestId('deputy-team-partner-search').click();
+    await page.getByRole('option', { name: /Демо Партнёр/ }).click();
+
+    await expect.poll(() => (network.tableRows.notifications as Record<string, any>[])
+      .some((item) => item.id === 'demo-notification-1' && item.read === true)).toBe(true);
+    await expect.poll(() => (network.tableRows.notifications as Record<string, any>[])
+      .some((item) => item.title === '✅ Команда проекта назначена' && item.read === true)).toBe(true);
+
+    await page.goto('/notifications');
+    await waitForDemoApp(page);
+    await expect(page.getByText('📋 Новый проект требует утверждения', { exact: true })).toHaveCount(0);
+    await page.getByRole('tab', { name: /История/ }).click();
+    await expect(page.getByText('✅ Команда проекта назначена', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Демо deputy_director: .*назначен\(а\) Демо Партнёр/)).toBeVisible();
+    expect(network.productionMutations).toEqual([]);
+  });
+
+  test('notification history keeps completed actions out of the active list', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const notification = network.tableRows.notifications[0] as Record<string, any>;
+    notification.user_id = 'demo-deputy_director';
+    notification.title = '✅ Команда проекта обновлена';
+    notification.message = `Демо заместитель: назначен руководитель. Проект «${demoProject.name}».`;
+    notification.type = 'success';
+    notification.read = true;
+    notification.action_url = `/projects?teamProject=${demoProject.id}&team=1`;
+
+    await page.goto('/notifications');
+    await waitForDemoApp(page);
+    await expect(page.getByText('✅ Команда проекта обновлена', { exact: true })).toHaveCount(0);
+    await page.getByRole('tab', { name: /История/ }).click();
+    await expect(page.getByText('✅ Команда проекта обновлена', { exact: true })).toBeVisible();
+    expect(network.productionMutations).toEqual([]);
+  });
+
   test('the deputy quick assignment stays usable on a phone', async ({ page }) => {
     await loginAsDemoRole(page, 'deputy_director');
     await page.setViewportSize({ width: 390, height: 844 });

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Bell, Check, Trash2, Search, ExternalLink, RefreshCw, CheckCheck } from "lucide-react";
+import { Bell, Check, Trash2, Search, ExternalLink, RefreshCw, CheckCheck, History } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { supabaseDataStore, Project } from "@/lib/supabaseDataStore";
@@ -38,6 +38,7 @@ export default function Notifications() {
   const [query, setQuery] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [notificationView, setNotificationView] = useState<'active' | 'history'>('active');
 
   // Функция загрузки уведомлений
   const loadNotifications = useCallback(async () => {
@@ -101,6 +102,14 @@ export default function Notifications() {
         [n.title || '', n.message || ''].join(" ").toLowerCase().includes(query.toLowerCase())
       )
     : [];
+
+  const isTeamHistory = (notification: Notification) => (
+    notification.type === 'success'
+    && /команда проекта (назначена|обновлена)/i.test(notification.title || '')
+  );
+  const activeNotifications = filtered.filter((notification) => !notification.read && !isTeamHistory(notification));
+  const historyNotifications = filtered.filter((notification) => notification.read || isTeamHistory(notification));
+  const visibleNotifications = notificationView === 'active' ? activeNotifications : historyNotifications;
 
   const handleMarkAllRead = async () => {
     if (!user) return;
@@ -243,7 +252,9 @@ export default function Notifications() {
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   };
 
-  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.read).length : 0;
+  const unreadCount = Array.isArray(notifications)
+    ? notifications.filter((notification) => !notification.read && !isTeamHistory(notification)).length
+    : 0;
 
   return (
     <div className="space-y-4 sm:space-y-6 page-enter">
@@ -260,7 +271,7 @@ export default function Notifications() {
               <Badge className="bg-primary text-primary-foreground text-xs">{unreadCount}</Badge>
             )}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">Все события и напоминания по проектам</p>
+          <p className="text-muted-foreground mt-1 text-sm">Активные задачи отдельно от истории выполненных действий</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -334,6 +345,36 @@ export default function Notifications() {
       </div>
 
       <Card className="border-0 shadow-sm overflow-hidden">
+        <div className="p-2.5 sm:p-3 border-b border-border bg-muted/20">
+          <div className="inline-flex w-full sm:w-auto gap-1 rounded-xl bg-muted/70 p-1" role="tablist" aria-label="Разделы уведомлений">
+            <Button
+              type="button"
+              size="sm"
+              variant={notificationView === 'active' ? 'default' : 'ghost'}
+              onClick={() => setNotificationView('active')}
+              className="flex-1 sm:flex-none gap-2 rounded-lg"
+              role="tab"
+              aria-selected={notificationView === 'active'}
+            >
+              <Bell className="h-3.5 w-3.5" />
+              Активные
+              <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1 text-[10px]">{activeNotifications.length}</Badge>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={notificationView === 'history' ? 'default' : 'ghost'}
+              onClick={() => setNotificationView('history')}
+              className="flex-1 sm:flex-none gap-2 rounded-lg"
+              role="tab"
+              aria-selected={notificationView === 'history'}
+            >
+              <History className="h-3.5 w-3.5" />
+              История
+              <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1 text-[10px]">{historyNotifications.length}</Badge>
+            </Button>
+          </div>
+        </div>
         <div className="p-3 sm:p-4 border-b border-border">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -352,16 +393,22 @@ export default function Notifications() {
               <RefreshCw className="w-8 h-8 mx-auto mb-3 text-muted-foreground/50 animate-spin" />
               <p className="text-sm text-muted-foreground">Загрузка...</p>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : visibleNotifications.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
                 <Bell className="w-7 h-7 text-muted-foreground/50" />
               </div>
-              <p className="font-medium text-muted-foreground">Нет уведомлений</p>
-              <p className="text-sm text-muted-foreground/60 mt-1">Нажмите «Дедлайны» чтобы проверить сроки</p>
+              <p className="font-medium text-muted-foreground">
+                {notificationView === 'active' ? 'Нет активных уведомлений' : 'История пока пуста'}
+              </p>
+              <p className="text-sm text-muted-foreground/60 mt-1">
+                {notificationView === 'active'
+                  ? 'Назначенная команда автоматически уходит в историю.'
+                  : 'Здесь сохраняются назначение команды и другие выполненные действия.'}
+              </p>
             </div>
           ) : (
-            filtered.map((n) => (
+            visibleNotifications.map((n) => (
               <div
                 key={n.id}
                 className={`p-3 sm:p-4 transition-all duration-150 ${

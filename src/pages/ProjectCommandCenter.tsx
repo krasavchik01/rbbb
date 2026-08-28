@@ -65,6 +65,7 @@ import {
 } from '@/lib/projectStatusActions';
 import { getProjectWorkflowStatus } from '@/lib/projectWorkflow';
 import { notifyProjectReadyForCeoBonuses } from '@/lib/projectNotifications';
+import { recordDeputyTeamAssignmentHistory } from '@/lib/notifications';
 import { getAuditPeriods, projectToAuditPeriod, type AuditPeriod } from '@/lib/auditPeriods';
 import { buildProjectCommandCenterModel } from '@/lib/projectCommandCenterModel';
 import {
@@ -423,6 +424,17 @@ function projectRoleLabel(role: string): string {
   if (fixed) return fixed;
   if (isUserRole(role)) return ROLE_LABELS[role];
   return role.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase()) || 'Другая роль';
+}
+
+function teamAssignmentIsComplete(team: CanonicalTeamMember[]): boolean {
+  return team.some((member) => isPartnerRole(teamRole(member)))
+    && team.some((member) => isLeaderRole(teamRole(member)));
+}
+
+function teamAssignmentSummary(team: CanonicalTeamMember[]): string {
+  return team
+    .map((member) => `${projectRoleLabel(teamRole(member))} — ${teamName(member)}`)
+    .join('; ');
 }
 
 function bonusRoleColumnsForTeam(team: any[]): Array<{ key: string; label: string; percent: string }> {
@@ -2878,6 +2890,38 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     return { ...marker, finances };
   };
 
+  const recordDeputyTeamActivity = async (
+    row: (typeof rows)[number],
+    team: CanonicalTeamMember[],
+    action: string,
+  ) => {
+    if (user?.role !== 'deputy_director' || !user.id) return;
+
+    try {
+      const completed = teamAssignmentIsComplete(team);
+      const result = await recordDeputyTeamAssignmentHistory({
+        deputyUserId: user.id,
+        projectId: String(row.id),
+        projectName: row.name,
+        actorName: user.name || 'Заместитель генерального директора',
+        action,
+        teamSummary: teamAssignmentSummary(team),
+        completed,
+      });
+
+      if (completed && result.archived > 0) {
+        toast({
+          title: 'Задача по команде закрыта',
+          description: 'Проект убран из активных уведомлений и записан в историю.',
+        });
+      }
+    } catch (error) {
+      // Назначение команды уже сохранено. Ошибка записи истории не должна
+      // отменять рабочее действие заместителя директора.
+      console.error('Не удалось записать историю назначения команды:', error);
+    }
+  };
+
   const assignPartnerToSelectedProjects = async () => {
     if (!canBulkAssignPartner || !updateProject || bulkAssigningPartner || selectedProjectIds.size === 0) return;
     const partner = partnerEmployees.find((employee) => employee.id === bulkPartnerId);
@@ -2889,6 +2933,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setBulkAssigningPartner(true);
     const ids = Array.from(selectedProjectIds);
     const failedIds: string[] = [];
+    const changedTeams = new Map<string, CanonicalTeamMember[]>();
     try {
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
@@ -2906,12 +2951,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             assignedAt: new Date().toISOString(),
             assignedBy: user?.id || 'bulk-partner',
           });
+          changedTeams.set(projectId, nextTeam);
           return canonicalTeamUpdatePatch(currentProject, nextTeam);
         })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
       }
+      await Promise.all(ids
+        .filter((projectId) => !failedIds.includes(projectId))
+        .map((projectId) => {
+          const row = rows.find((candidate) => candidate.id === projectId);
+          const team = changedTeams.get(projectId);
+          return row && team
+            ? recordDeputyTeamActivity(row, team, `партнёр: назначен(а) ${employeeName(partner)} массово`)
+            : Promise.resolve();
+        }));
       setSelectedProjectIds(new Set(failedIds));
       setBulkPartnerAssignOpen(false);
       toast({
@@ -2937,17 +2992,25 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setBulkAssigningTeam(true);
     const ids = Array.from(selectedProjectIds);
     const failedIds: string[] = [];
+    const templateTeam = template.team.map((member) => ({ ...member }));
     try {
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
         const results = await Promise.allSettled(batch.map((projectId) => updateProject(projectId, (currentProject: any) => {
-          const team = template.team.map((member) => ({ ...member }));
-          return canonicalTeamUpdatePatch(currentProject, team);
+          return canonicalTeamUpdatePatch(currentProject, templateTeam);
         })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
       }
+      await Promise.all(ids
+        .filter((projectId) => !failedIds.includes(projectId))
+        .map((projectId) => {
+          const row = rows.find((candidate) => candidate.id === projectId);
+          return row
+            ? recordDeputyTeamActivity(row, templateTeam, `массово применён шаблон «${template.label}»`)
+            : Promise.resolve();
+        }));
       setSelectedProjectIds(new Set(failedIds));
       setBulkTeamAssignOpen(false);
       toast({
@@ -2973,6 +3036,7 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     setBulkAssigningLeader(true);
     const ids = Array.from(selectedProjectIds);
     const failedIds: string[] = [];
+    const changedTeams = new Map<string, CanonicalTeamMember[]>();
     try {
       for (let index = 0; index < ids.length; index += 20) {
         const batch = ids.slice(index, index + 20);
@@ -2990,12 +3054,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
             assignedAt: new Date().toISOString(),
             assignedBy: user?.id || 'bulk-leader',
           });
+          changedTeams.set(projectId, team);
           return canonicalTeamUpdatePatch(currentProject, team);
         })));
         results.forEach((result, resultIndex) => {
           if (result.status === 'rejected') failedIds.push(batch[resultIndex]);
         });
       }
+      await Promise.all(ids
+        .filter((projectId) => !failedIds.includes(projectId))
+        .map((projectId) => {
+          const row = rows.find((candidate) => candidate.id === projectId);
+          const team = changedTeams.get(projectId);
+          return row && team
+            ? recordDeputyTeamActivity(row, team, `руководитель: назначен(а) ${employeeName(employee)} массово`)
+            : Promise.resolve();
+        }));
       setSelectedProjectIds(new Set(failedIds));
       setBulkLeaderAssignOpen(false);
       toast({
@@ -3681,15 +3755,22 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         assignedAt: new Date().toISOString(),
         assignedBy: user?.id || 'inline-table',
       };
+      let savedTeam: CanonicalTeamMember[] = [];
       await updateProject(row.id, (currentProject: any) => {
         const currentTeam = effectiveProjectTeam(currentProject);
         const nextTeam = roleKey === 'partner'
           ? [nextMember, ...currentTeam.filter((member: any) => teamRole(member) !== 'partner')]
           : isLeaderRole(roleKey)
-            ? [...currentTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
+          ? [...currentTeam.filter((member: any) => !isLeaderRole(teamRole(member))), nextMember]
             : [...currentTeam, nextMember];
+        savedTeam = nextTeam;
         return canonicalTeamUpdatePatch(currentProject, nextTeam);
       });
+      await recordDeputyTeamActivity(
+        row,
+        savedTeam,
+        `${projectRoleLabel(roleKey)}: назначен(а) ${employeeName(employee)}`,
+      );
       toast({
         title: isPartnerRole(roleKey) ? 'Партнёр назначен' : 'Участник добавлен',
         description: isPartnerRole(roleKey)
@@ -3723,10 +3804,15 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
     const row = projectTeamTemplateTargetRow;
     setSavingProjectId(`${row.id}:team-template`);
     try {
+      const savedTeam = template.map((member) => ({ ...member }));
       await updateProject(row.id, (currentProject: any) => {
-        const nextTeam = template.map((member) => ({ ...member }));
-        return canonicalTeamUpdatePatch(currentProject, nextTeam);
+        return canonicalTeamUpdatePatch(currentProject, savedTeam);
       });
+      await recordDeputyTeamActivity(
+        row,
+        savedTeam,
+        `применён шаблон «${projectTeamTemplateTargetDefinition?.label || 'Команда партнёра'}»`,
+      );
       toast({
         title: 'Шаблон команды применён',
         description: `${projectTeamTemplateTargetDefinition?.label || 'Команда партнёра'}. Состав сохранён как единая команда проекта.`,

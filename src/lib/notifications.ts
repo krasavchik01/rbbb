@@ -56,7 +56,17 @@ export const getNotifications = async (userId: string): Promise<Notification[]> 
 /**
  * Добавить новое уведомление в Supabase
  */
-export const addNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'updated_at' | 'read'>): Promise<Notification | null> => {
+type NewNotification = Omit<Notification, 'id' | 'created_at' | 'updated_at' | 'read'> & {
+  /**
+   * Системные записи журнала не должны возвращаться в активные уведомления.
+   * Обычные вызовы оставляют значение пустым и получают прежнее поведение.
+   */
+  read?: boolean;
+  /** Не воспроизводить звук для технической истории действий. */
+  silent?: boolean;
+};
+
+export const addNotification = async (notification: NewNotification): Promise<Notification | null> => {
   try {
     console.log('📤 [addNotification] Создание уведомления:', {
       userId: notification.user_id,
@@ -73,7 +83,7 @@ export const addNotification = async (notification: Omit<Notification, 'id' | 'c
         message: notification.message,
         type: notification.type,
         action_url: notification.action_url,
-        read: false
+        read: notification.read ?? false
       })
       .select()
       .single();
@@ -85,14 +95,80 @@ export const addNotification = async (notification: Omit<Notification, 'id' | 'c
 
     console.log('✅ [addNotification] Уведомление создано:', data.id);
 
-    // Воспроизводим звук
-    playNotificationSound();
+    // Воспроизводим звук только для нового действия, а не для строк истории.
+    if (!notification.silent) {
+      playNotificationSound();
+    }
 
     return toNotification(data);
   } catch (error) {
     console.error('❌ [addNotification] Ошибка:', error);
     return null;
   }
+};
+
+type DeputyTeamHistoryInput = {
+  deputyUserId: string;
+  projectId: string;
+  projectName: string;
+  actorName: string;
+  action: string;
+  teamSummary: string;
+  completed: boolean;
+};
+
+function deputyTeamActionUrl(projectId: string) {
+  return `/projects?teamProject=${encodeURIComponent(projectId)}&team=1`;
+}
+
+function notificationTargetsDeputyTeamTask(notification: Notification, projectId: string, projectName: string) {
+  const actionUrl = notification.action_url || '';
+  const directProjectId = actionUrl.match(/[?&]teamProject=([^&]+)/)?.[1];
+  if (directProjectId && decodeURIComponent(directProjectId) === projectId) return true;
+
+  return actionUrl === '/projects?view=working'
+    && /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`)
+    && String(notification.message || '').includes(projectName);
+}
+
+/**
+ * Фиксирует назначение команды заместителем директора в отдельной истории.
+ * Когда обязательные роли уже есть, исходная задача «назначить команду»
+ * помечается прочитанной и больше не мешает в активных уведомлениях.
+ */
+export const recordDeputyTeamAssignmentHistory = async ({
+  deputyUserId,
+  projectId,
+  projectName,
+  actorName,
+  action,
+  teamSummary,
+  completed,
+}: DeputyTeamHistoryInput): Promise<{ archived: number; historyId: string | null }> => {
+  const history = await addNotification({
+    user_id: deputyUserId,
+    title: completed ? '✅ Команда проекта назначена' : '📝 Команда проекта обновлена',
+    message: `${actorName}: ${action}. Проект «${projectName}». Состав: ${teamSummary || 'пока не назначен'}.`,
+    type: 'success',
+    action_url: deputyTeamActionUrl(projectId),
+    read: true,
+    silent: true,
+  });
+
+  if (!completed) {
+    return { archived: 0, historyId: history?.id || null };
+  }
+
+  const notifications = await getNotifications(deputyUserId);
+  const pendingTasks = notifications.filter((notification) => (
+    !notification.read
+    && notificationTargetsDeputyTeamTask(notification, projectId, projectName)
+  ));
+  const results = await Promise.all(pendingTasks.map((notification) => markAsRead(notification.id)));
+  return {
+    archived: results.filter(Boolean).length,
+    historyId: history?.id || null,
+  };
 };
 
 /**
