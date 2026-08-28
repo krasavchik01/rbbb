@@ -1,9 +1,19 @@
 import { expect, test } from '@playwright/test';
 import { demoProject, loginAsDemoRole, waitForDemoApp } from './helpers/demo-fixtures';
 
+function makeDemoProjectPending(network: { tableRows: Record<string, unknown[]> }) {
+  const project = network.tableRows.projects[0] as Record<string, any>;
+  const notes = typeof project.notes === 'string' ? JSON.parse(project.notes) : { ...(project.notes || {}) };
+  project.partner_id = null;
+  project.manager_id = null;
+  project.status = 'active';
+  project.notes = JSON.stringify({ ...notes, status: 'new', team: [], tasks: [] });
+}
+
 test.describe('bulk administration and deputy project status', () => {
   test('a deputy notification opens the simple team assignment for the exact project', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
+    makeDemoProjectPending(network);
     const notification = network.tableRows.notifications[0] as Record<string, any>;
     notification.user_id = 'demo-deputy_director';
     notification.title = 'Назначьте команду новому проекту';
@@ -11,7 +21,7 @@ test.describe('bulk administration and deputy project status', () => {
 
     await page.goto('/notifications');
     await waitForDemoApp(page);
-    await page.getByRole('button', { name: 'Открыть задачу', exact: true }).click();
+    await page.getByRole('button', { name: 'Назначить команду', exact: true }).click();
 
     await expect(page).toHaveURL(new RegExp(`/projects\\?teamProject=${demoProject.id}&team=1`));
     const quickAssignment = page.getByTestId('deputy-team-assignment');
@@ -26,18 +36,36 @@ test.describe('bulk administration and deputy project status', () => {
 
   test('a legacy deputy notification also opens the simple team assignment', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'deputy_director');
+    makeDemoProjectPending(network);
     const notification = network.tableRows.notifications[0] as Record<string, any>;
     notification.user_id = 'demo-deputy_director';
     notification.title = '📋 Новый проект требует утверждения';
     notification.message = `Отдел закупок создал проект "${demoProject.name}". Требуется ваше утверждение.`;
-    notification.action_url = '/projects?view=working';
+    notification.action_url = '/project-approval';
 
     await page.goto('/notifications');
     await waitForDemoApp(page);
-    await page.getByRole('button', { name: 'Открыть задачу', exact: true }).click();
+    await page.getByRole('button', { name: 'Назначить команду', exact: true }).click();
 
     await expect(page).toHaveURL(new RegExp(`/projects\\?teamProject=${demoProject.id}&team=1`));
     await expect(page.getByTestId('deputy-team-assignment')).toBeVisible();
+  });
+
+  test('a project that already has work does not remain an approval task', async ({ page }) => {
+    const network = await loginAsDemoRole(page, 'deputy_director');
+    const notification = network.tableRows.notifications[0] as Record<string, any>;
+    notification.user_id = 'demo-deputy_director';
+    notification.title = '📋 Новый проект требует утверждения';
+    notification.message = `Отдел закупок создал проект "${demoProject.name}". Требуется ваше утверждение.`;
+    notification.action_url = '/project-approval';
+
+    await page.goto('/notifications');
+    await waitForDemoApp(page);
+
+    await expect.poll(() => (network.tableRows.notifications as Record<string, any>[])
+      .some((item) => item.id === 'demo-notification-1' && item.read === true)).toBe(true);
+    await expect(page.getByRole('button', { name: 'Назначить команду', exact: true })).toHaveCount(0);
+    expect(network.productionMutations).toEqual([]);
   });
 
   test('completed deputy team assignment leaves active alerts and is kept in history', async ({ page }) => {
@@ -65,6 +93,11 @@ test.describe('bulk administration and deputy project status', () => {
     await page.getByRole('tab', { name: /История/ }).click();
     await expect(page.getByText(demoProject.name, { exact: true })).toBeVisible();
     await expect(page.getByText(/партнер: назначен\(а\) Демо Партнёр/i)).toBeVisible();
+    await expect(page.getByText('Партнёр', { exact: true })).toBeVisible();
+    await expect(page.getByText('Демо Партнёр', { exact: true })).toBeVisible();
+    await expect(page.getByText('Руководитель', { exact: true })).toBeVisible();
+    await expect(page.getByText('Демо Менеджер', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Ассистент 1: Демо Ассистент/)).toBeVisible();
     expect(network.productionMutations).toEqual([]);
   });
 

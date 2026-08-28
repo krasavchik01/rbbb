@@ -4,16 +4,106 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Bell, Search, RefreshCw, History, ArrowRight } from "lucide-react";
+import { Bell, Search, RefreshCw, History, ArrowRight, Users, UserRound } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { supabaseDataStore, Project } from "@/lib/supabaseDataStore";
 import {
   getNotifications,
   Notification,
-  checkDeadlinesAndNotify
+  checkDeadlinesAndNotify,
+  markAsRead,
 } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
+
+function normalizeProjectName(value: unknown) {
+  return String(value || '')
+    .toLocaleLowerCase('ru-RU')
+    .replace(/[«»"'`]/g, '')
+    .replace(/[–—-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function projectNameFromNotification(notification: Notification) {
+  const message = String(notification.message || '');
+  const createdProject = message.match(/создал проект\s+["«]([\s\S]+)["»]\s+для клиента/iu)?.[1]?.trim();
+  if (createdProject) return createdProject;
+  return message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim()
+    || message.match(/["«]([^"»]+)["»]/u)?.[1]?.trim()
+    || '';
+}
+
+function findProjectByName(projectName: string, projects: Project[]) {
+  const notifiedName = normalizeProjectName(projectName);
+  if (!notifiedName) return undefined;
+  const exact = projects.filter((project) => normalizeProjectName(project.name) === notifiedName);
+  if (exact.length === 1) return exact[0];
+  const fuzzy = projects.filter((project) => {
+    const projectName = normalizeProjectName(project.name);
+    return projectName.length >= 12
+      && notifiedName.length >= 12
+      && (projectName.includes(notifiedName) || notifiedName.includes(projectName));
+  });
+  return fuzzy.length === 1 ? fuzzy[0] : undefined;
+}
+
+function findNotificationProject(notification: Notification, projects: Project[]) {
+  const actionUrl = String(notification.action_url || '');
+  const directId = actionUrl.match(/[?&]teamProject=([^&]+)/)?.[1]
+    || actionUrl.match(/^\/projects?\/([^/?]+)/)?.[1];
+  if (directId) {
+    const decodedId = decodeURIComponent(directId);
+    const directProject = projects.find((project) => String(project.id) === decodedId);
+    if (directProject) return directProject;
+  }
+
+  return findProjectByName(projectNameFromNotification(notification), projects);
+}
+
+function projectTeam(project?: Project): any[] {
+  if (!project) return [];
+  if (Array.isArray(project.team)) return project.team;
+  return Array.isArray((project.notes as any)?.team) ? (project.notes as any).team : [];
+}
+
+function teamMemberName(member: any) {
+  return member?.userName || member?.name || member?.employeeName || 'Без имени';
+}
+
+function teamMemberRole(member: any) {
+  return String(member?.role || member?.role_on_project || 'member').trim().toLowerCase();
+}
+
+function teamRoleLabel(role: string) {
+  const labels: Record<string, string> = {
+    partner: 'Партнёр',
+    project_leader: 'Руководитель',
+    manager_1: 'Менеджер 1',
+    manager_2: 'Менеджер 2',
+    manager_3: 'Менеджер 3',
+    assistant: 'Ассистент',
+    assistant_1: 'Ассистент 1',
+    assistant_2: 'Ассистент 2',
+    assistant_3: 'Ассистент 3',
+  };
+  return labels[role] || role.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function isDeputyProjectTask(notification: Notification) {
+  return /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`);
+}
+
+function projectAlreadyProcessed(project?: Project) {
+  if (!project) return false;
+  const notesStatus = String((project.notes as any)?.status || '').trim().toLowerCase();
+  const directStatus = String(project.status || '').trim().toLowerCase();
+  const pendingStatuses = new Set(['', 'new', 'pending', 'pending_approval', 'active', 'approval']);
+  return projectTeam(project).length > 0
+    || !pendingStatuses.has(notesStatus)
+    || !pendingStatuses.has(directStatus)
+    || (Array.isArray(project.tasks) && project.tasks.length > 0);
+}
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -92,7 +182,32 @@ export default function Notifications() {
     notification.type === 'success'
     && /команда проекта (назначена|обновлена)/i.test(notification.title || '')
   );
-  const activeNotifications = filtered.filter((notification) => !notification.read && !isTeamHistory(notification));
+  const staleDeputyTaskIds = user?.role === 'deputy_director'
+    ? filtered
+        .filter((notification) => !notification.read && isDeputyProjectTask(notification))
+        .filter((notification) => projectAlreadyProcessed(findNotificationProject(notification, projects as Project[])))
+        .map((notification) => notification.id)
+    : [];
+  const staleDeputyTaskIdKey = staleDeputyTaskIds.join('|');
+
+  useEffect(() => {
+    if (!staleDeputyTaskIdKey) return;
+    let cancelled = false;
+    Promise.all(staleDeputyTaskIds.map((notificationId) => markAsRead(notificationId)))
+      .then(() => {
+        if (!cancelled) return loadNotifications();
+        return undefined;
+      })
+      .catch((error) => console.error('Не удалось закрыть старые задачи по проектам:', error));
+    return () => { cancelled = true; };
+  }, [staleDeputyTaskIdKey, loadNotifications]);
+
+  const staleDeputyTaskIdSet = new Set(staleDeputyTaskIds);
+  const activeNotifications = filtered.filter((notification) => (
+    !notification.read
+    && !isTeamHistory(notification)
+    && !staleDeputyTaskIdSet.has(notification.id)
+  ));
   // В истории оставляем только журнал выполненных действий, а не каждое
   // когда-либо прочитанное системное напоминание.
   const historyNotifications = filtered.filter(isTeamHistory);
@@ -107,11 +222,10 @@ export default function Notifications() {
     // общий свод. В их тексте есть название нового проекта — используем его,
     // чтобы также открыть простой экран назначения команды.
     const isLegacyDeputyProjectNotification = user?.role === 'deputy_director'
-      && actionUrl === '/projects?view=working'
-      && /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`);
-    const notifiedProjectName = String(notification.message || '').match(/["«]([^"»]+)["»]/u)?.[1]?.trim();
-    const notifiedProject = isLegacyDeputyProjectNotification && notifiedProjectName
-      ? (projects as Project[]).find((project) => String(project.name || '').trim() === notifiedProjectName)
+      && isDeputyProjectTask(notification)
+      && ['/projects?view=working', '/project-approval'].includes(actionUrl);
+    const notifiedProject = isLegacyDeputyProjectNotification
+      ? findNotificationProject(notification, projects as Project[])
       : undefined;
     if (notifiedProject?.id) {
       navigate(`/projects?teamProject=${encodeURIComponent(String(notifiedProject.id))}&team=1`, {
@@ -154,16 +268,64 @@ export default function Notifications() {
 
   const historyDescription = (notification: Notification) => {
     const message = String(notification.message || '');
-    const project = message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim();
-    const action = message.match(/Действие:\s*([^.]*)/iu)?.[1]?.trim();
-    const actor = message.match(/Выполнил\(а\):\s*([^.]*)/iu)?.[1]?.trim();
+    const project = message.match(/^Проект\s+«([\s\S]+?)»\r?\nПартнёр:/iu)?.[1]?.trim()
+      || message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim();
+    const action = message.match(/^Действие:\s*(.+)$/imu)?.[1]?.trim()
+      || message.match(/Действие:\s*([^.]*)/iu)?.[1]?.trim();
+    const actor = message.match(/^Выполнил\(а\):\s*(.+)$/imu)?.[1]?.trim()
+      || message.match(/Выполнил\(а\):\s*([^.]*)/iu)?.[1]?.trim();
+    const recordedPartner = message.match(/^Партнёр:\s*(.+)$/imu)?.[1]?.trim();
+    const recordedLeader = message.match(/^Руководитель:\s*(.+)$/imu)?.[1]?.trim();
+    const recordedMembers = message.match(/^Команда:\s*(.+)$/imu)?.[1]?.trim();
 
-    if (project && action) return { project, action, actor };
+    const resolvedProjectName = project || projectNameFromNotification(notification);
+    const liveProject = resolvedProjectName
+      ? findProjectByName(resolvedProjectName, projects as Project[])
+      : undefined;
+    const team = projectTeam(liveProject);
+    const partner = team.find((member: any) => teamMemberRole(member) === 'partner');
+    const leader = team.find((member: any) => teamMemberRole(member) === 'project_leader')
+      || team.find((member: any) => ['manager_1', 'manager_2', 'manager_3'].includes(teamMemberRole(member)));
+    const partnerDisplayName = recordedPartner || (partner ? teamMemberName(partner) : 'Не назначен');
+    const leaderDisplayName = recordedLeader || (leader ? teamMemberName(leader) : 'Не назначен');
+    const members = team
+      .filter((member: any) => (
+        member !== partner
+        && member !== leader
+        && teamMemberName(member) !== teamMemberName(partner)
+        && teamMemberName(member) !== teamMemberName(leader)
+      ))
+      .map((member: any) => `${teamRoleLabel(teamMemberRole(member))}: ${teamMemberName(member)}`);
+    const recordedMemberList = recordedMembers
+      ? (/нет остальных участников/i.test(recordedMembers)
+          ? []
+          : recordedMembers.split('|').map((item) => item.trim()).filter(Boolean))
+      : members;
+    const visibleMembers = recordedMemberList.filter((item) => {
+      const memberName = item.includes(':') ? item.slice(item.indexOf(':') + 1).trim() : item;
+      return memberName !== partnerDisplayName && memberName !== leaderDisplayName;
+    });
+
+    if (resolvedProjectName && action) return {
+      project: resolvedProjectName,
+      action,
+      actor,
+      partner: partnerDisplayName,
+      leader: leaderDisplayName,
+      members: visibleMembers,
+    };
 
     // Формат истории из первых релизов: «Имя: действие. Проект «...».»
     const legacyProject = message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim();
     const legacyAction = message.match(/^[^:]+:\s*([^.]*)/u)?.[1]?.trim();
-    return { project: legacyProject || 'Проект', action: legacyAction || message, actor: '' };
+    return {
+      project: legacyProject || 'Проект',
+      action: legacyAction || message,
+      actor: '',
+      partner: partner ? teamMemberName(partner) : 'Не назначен',
+      leader: leader ? teamMemberName(leader) : 'Не назначен',
+      members,
+    };
   };
 
   const formatDate = (dateStr: string) => {
@@ -306,30 +468,66 @@ export default function Notifications() {
                     {notificationView === 'history' ? (() => {
                       const history = historyDescription(n);
                       return <>
-                        <p className="font-semibold text-sm">{history.project}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5">{history.action}</p>
-                        <p className="text-xs text-muted-foreground/60 mt-1.5">
-                          {history.actor ? `${history.actor} · ` : ''}{formatDate(n.created_at)}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">Выполнено</Badge>
+                          <span className="text-xs text-muted-foreground">{formatDate(n.created_at)}</span>
+                        </div>
+                        <p className="mt-2 text-base font-bold leading-snug sm:text-lg">{history.project}</p>
+                        <p className="mt-1 text-sm font-medium text-foreground/80">{history.action}</p>
+
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-2.5">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+                              <UserRound className="h-3.5 w-3.5" /> Партнёр
+                            </div>
+                            <p className="mt-1 text-sm font-semibold leading-snug">{history.partner}</p>
+                          </div>
+                          <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-2.5">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                              <UserRound className="h-3.5 w-3.5" /> Руководитель
+                            </div>
+                            <p className="mt-1 text-sm font-semibold leading-snug">{history.leader}</p>
+                          </div>
+                          <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-2.5 sm:col-span-2 lg:col-span-1">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                              <Users className="h-3.5 w-3.5" /> Команда · {history.members.length}
+                            </div>
+                            {history.members.length > 0 ? (
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                {history.members.map((member: string, index: number) => (
+                                  <span key={`${member}-${index}`} className="rounded-md bg-background px-2 py-1 text-xs font-medium shadow-sm">{member}</span>
+                                ))}
+                              </div>
+                            ) : <p className="mt-1 text-sm text-muted-foreground">Нет остальных участников</p>}
+                          </div>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {history.actor ? `Сделал(а): ${history.actor}` : 'Действие зафиксировано в HUB'}
                         </p>
                       </>;
                     })() : (
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-medium text-sm">{n.title}</p>
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                        <div className="flex items-center gap-3 mt-1.5">
-                          <p className="text-xs text-muted-foreground/60">{formatDate(n.created_at)}</p>
+                      (() => {
+                        const notifiedProjectName = projectNameFromNotification(n);
+                        return <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Нужно назначить команду</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDate(n.created_at)}</span>
+                            </div>
+                            <p className="mt-2 text-base font-bold leading-snug sm:text-lg">
+                              {notifiedProjectName || n.title}
+                            </p>
+                            {!notifiedProjectName && (
+                              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{n.message}</p>
+                            )}
+                          </div>
                           {n.action_url && (
-                            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={() => handleNotificationClick(n)}>
-                              Открыть задачу <ArrowRight className="w-3.5 h-3.5" />
+                            <Button size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => handleNotificationClick(n)}>
+                              Назначить команду <ArrowRight className="w-3.5 h-3.5" />
                             </Button>
                           )}
-                        </div>
-                        </div>
-                      </div>
+                        </div>;
+                      })()
                     )}
                   </div>
                 </div>

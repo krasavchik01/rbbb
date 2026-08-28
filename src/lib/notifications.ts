@@ -114,6 +114,9 @@ type DeputyTeamHistoryInput = {
   actorName: string;
   action: string;
   completed: boolean;
+  partnerName?: string;
+  leaderName?: string;
+  teamMembers?: string[];
 };
 
 function notificationTargetsDeputyTeamTask(notification: Notification, projectId: string, projectName: string) {
@@ -138,11 +141,21 @@ export const recordDeputyTeamAssignmentHistory = async ({
   actorName,
   action,
   completed,
+  partnerName,
+  leaderName,
+  teamMembers = [],
 }: DeputyTeamHistoryInput): Promise<{ archived: number; historyId: string | null }> => {
   const history = await addNotification({
     user_id: deputyUserId,
     title: completed ? '✅ Команда проекта назначена' : '📝 Команда проекта обновлена',
-    message: `Проект «${projectName}». Действие: ${action}. Выполнил(а): ${actorName}.`,
+    message: [
+      `Проект «${projectName}»`,
+      `Партнёр: ${partnerName || 'Не назначен'}`,
+      `Руководитель: ${leaderName || 'Не назначен'}`,
+      `Команда: ${teamMembers.length > 0 ? teamMembers.join(' | ') : 'Нет остальных участников'}`,
+      `Действие: ${action}`,
+      `Выполнил(а): ${actorName}`,
+    ].join('\n'),
     type: 'success',
     // История — это журнал, а не ещё одна задача. Перехода из неё нет.
     action_url: null,

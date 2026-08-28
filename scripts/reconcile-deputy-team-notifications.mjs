@@ -36,10 +36,51 @@ function memberName(member) {
   return member?.userName || member?.name || member?.employeeName || 'Сотрудник';
 }
 
-function hasAssignedTeam(project) {
+function memberId(member) {
+  return member?.userId || member?.user_id || member?.employeeId || member?.employee_id || '';
+}
+
+function roleLabel(role) {
+  const labels = {
+    partner: 'Партнёр',
+    project_leader: 'Руководитель',
+    project_manager: 'Руководитель',
+    manager: 'Руководитель',
+    manager_1: 'Менеджер 1',
+    manager_2: 'Менеджер 2',
+    manager_3: 'Менеджер 3',
+    assistant: 'Ассистент',
+    assistant_1: 'Ассистент 1',
+    assistant_2: 'Ассистент 2',
+    assistant_3: 'Ассистент 3',
+  };
+  return labels[role] || String(role || 'Участник').replace(/_/g, ' ');
+}
+
+function projectTeam(project) {
   const notes = project.notes;
-  const team = Array.isArray(notes.team) ? notes.team : [];
+  return Array.isArray(notes.team) ? notes.team : [];
+}
+
+function hasAssignedTeam(project) {
+  const team = projectTeam(project);
   return team.length > 0 || Boolean(project.partner_id) || Boolean(project.manager_id);
+}
+
+function workflowStatus(project) {
+  const notesStatus = String(project.notes?.status || '').trim().toLowerCase();
+  const directStatus = String(project.status || '').trim().toLowerCase();
+  return { notesStatus, directStatus };
+}
+
+function projectHasWork(project, taskProjectIds, timesheetProjectIds) {
+  const { notesStatus, directStatus } = workflowStatus(project);
+  const pendingStatuses = new Set(['', 'new', 'pending', 'pending_approval', 'active']);
+  return hasAssignedTeam(project)
+    || !pendingStatuses.has(notesStatus)
+    || !pendingStatuses.has(directStatus)
+    || taskProjectIds.has(String(project.id))
+    || timesheetProjectIds.has(String(project.id));
 }
 
 function taskProjectId(notification) {
@@ -50,7 +91,14 @@ function taskProjectId(notification) {
 }
 
 function quotedProjectName(notification) {
-  return String(notification.message || '').match(/["«]([^"»]+)["»]/u)?.[1]?.trim() || '';
+  const message = String(notification.message || '');
+  // Названия старых проектов часто сами содержат кавычки. Окончание
+  // «для клиента» надёжнее первой попавшейся закрывающей кавычки.
+  const createdProject = message.match(/создал проект\s+["«]([\s\S]+)["»]\s+для клиента/iu)?.[1]?.trim();
+  if (createdProject) return createdProject;
+  return message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim()
+    || message.match(/["«]([^"»]+)["»]/u)?.[1]?.trim()
+    || '';
 }
 
 function normalizeProjectName(value) {
@@ -81,16 +129,27 @@ function findProjectByLegacyName(projects, name) {
 }
 
 function looksLikeDeputyTeamTask(notification) {
-  return /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`)
-    && (String(notification.action_url || '') === '/projects?view=working' || Boolean(taskProjectId(notification)));
+  return /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`);
 }
 
-const [{ data: deputies, error: deputyError }, { data: projects, error: projectError }] = await Promise.all([
+const [
+  { data: deputies, error: deputyError },
+  { data: projects, error: projectError },
+  { data: tasks, error: taskError },
+  { data: timesheets, error: timesheetError },
+] = await Promise.all([
   supabase.from('employees').select('id,name').eq('role', 'deputy_director'),
-  supabase.from('projects').select('id,name,notes,partner_id,manager_id').range(0, 999),
+  supabase.from('projects').select('id,name,status,notes,partner_id,manager_id').range(0, 4999),
+  supabase.from('tasks').select('project_id').not('project_id', 'is', null).range(0, 9999),
+  supabase.from('timesheets').select('project_id').not('project_id', 'is', null).range(0, 9999),
 ]);
 if (deputyError) throw new Error(deputyError.message);
 if (projectError) throw new Error(projectError.message);
+if (taskError) throw new Error(taskError.message);
+if (timesheetError) throw new Error(timesheetError.message);
+
+const taskProjectIds = new Set((tasks || []).map((task) => String(task.project_id)));
+const timesheetProjectIds = new Set((timesheets || []).map((entry) => String(entry.project_id)));
 
 const completedById = new Map();
 const completedByName = new Map();
@@ -103,7 +162,7 @@ const preparedProjects = (projects || []).map((project) => ({
 for (const project of preparedProjects) {
   projectsById.set(String(project.id), project);
   projectsByName.set(normalizeProjectName(project.name), project);
-  if (!hasAssignedTeam(project)) continue;
+  if (!projectHasWork(project, taskProjectIds, timesheetProjectIds)) continue;
   const prepared = { ...project };
   completedById.set(String(project.id), prepared);
   completedByName.set(normalizeProjectName(project.name), prepared);
@@ -136,6 +195,9 @@ for (const deputy of deputies || []) {
       || findProjectByLegacyName(preparedProjects, projectName);
     if (!linkedProject) {
       diagnostics.notLinked += 1;
+      // Удалённый либо переименованный проект нельзя открыть и обработать из
+      // старого уведомления. Такая строка больше не является рабочей задачей.
+      candidates.push({ deputy, notification, project: null });
       if (diagnostics.examples.length < 10) diagnostics.examples.push({ status: 'not-linked', projectName, actionUrl: notification.action_url });
       continue;
     }
@@ -147,7 +209,10 @@ for (const deputy of deputies || []) {
       if (diagnostics.examples.length < 10) diagnostics.examples.push({
         status: 'incomplete',
         projectName: linkedProject.name,
+        workflowStatus: workflowStatus(linkedProject),
         teamSize: Array.isArray(linkedProject.notes.team) ? linkedProject.notes.team.length : 0,
+        hasTasks: taskProjectIds.has(String(linkedProject.id)),
+        hasTimesheets: timesheetProjectIds.has(String(linkedProject.id)),
       });
     }
   }
@@ -160,7 +225,7 @@ const summary = {
   examples: candidates.slice(0, 15).map(({ deputy, notification, project }) => ({
     notificationId: notification.id,
     deputy: deputy.name,
-    project: project.name,
+    project: project?.name || quotedProjectName(notification) || 'Проект удалён',
   })),
   diagnostics,
 };
@@ -171,6 +236,7 @@ if (!apply) {
 }
 
 const failed = [];
+const historyRecordedProjects = new Set();
 for (const { deputy, notification, project } of candidates) {
   const { error: archiveError } = await supabase
     .from('notifications')
@@ -180,17 +246,42 @@ for (const { deputy, notification, project } of candidates) {
     failed.push({ notificationId: notification.id, error: archiveError.message });
     continue;
   }
-  const { error: historyError } = await supabase
-    .from('notifications')
-    .insert({
-      user_id: deputy.id,
-      title: '✅ Команда проекта назначена',
-      message: `Проект «${project.name}». Действие: команда уже была назначена. Выполнил(а): система HUB.`,
-      type: 'success',
-      action_url: null,
-      read: true,
-    });
-  if (historyError) failed.push({ notificationId: notification.id, error: historyError.message });
+  const team = project ? projectTeam(project) : [];
+  if (project && team.length > 0 && !historyRecordedProjects.has(String(project.id))) {
+    historyRecordedProjects.add(String(project.id));
+    const partner = team.find((member) => memberRole(member) === 'partner');
+    const leader = team.find((member) => memberRole(member) === 'project_leader')
+      || team.find((member) => ['project_manager', 'manager', 'manager_1', 'manager_2', 'manager_3'].includes(memberRole(member)));
+    const partnerId = partner ? memberId(partner) : '';
+    const leaderId = leader ? memberId(leader) : '';
+    const members = team
+      .filter((member) => {
+        const id = memberId(member);
+        return member !== partner
+          && member !== leader
+          && (!partnerId || id !== partnerId)
+          && (!leaderId || id !== leaderId);
+      })
+      .map((member) => `${roleLabel(memberRole(member))}: ${memberName(member)}`);
+    const { error: historyError } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: deputy.id,
+        title: '✅ Команда проекта назначена',
+        message: [
+          `Проект «${project.name}»`,
+          `Партнёр: ${partner ? memberName(partner) : 'Не назначен'}`,
+          `Руководитель: ${leader ? memberName(leader) : 'Не назначен'}`,
+          `Команда: ${members.length > 0 ? members.join(' | ') : 'Нет остальных участников'}`,
+          'Действие: старая задача закрыта — проект уже был обработан',
+          'Выполнил(а): система HUB',
+        ].join('\n'),
+        type: 'success',
+        action_url: null,
+        read: true,
+      });
+    if (historyError) failed.push({ notificationId: notification.id, error: historyError.message });
+  }
 }
 
 console.log(JSON.stringify({ ...summary, archived: candidates.length - failed.length, failed }, null, 2));

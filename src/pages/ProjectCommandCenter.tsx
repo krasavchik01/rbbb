@@ -2895,6 +2895,20 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
 
     try {
       const completed = teamAssignmentIsComplete(team);
+      const partner = team.find((member) => isPartnerRole(teamRole(member)));
+      const leader = team.find((member) => teamRole(member) === 'project_leader')
+        || team.find((member) => isLeaderRole(teamRole(member)));
+      const partnerId = partner ? teamMemberId(partner) : '';
+      const leaderId = leader ? teamMemberId(leader) : '';
+      const otherMembers = team
+        .filter((member) => {
+          const memberId = teamMemberId(member);
+          return member !== partner
+            && member !== leader
+            && (!partnerId || memberId !== partnerId)
+            && (!leaderId || memberId !== leaderId);
+        })
+        .map((member) => `${projectRoleLabel(teamRole(member))}: ${teamName(member)}`);
       const result = await recordDeputyTeamAssignmentHistory({
         deputyUserId: user.id,
         projectId: String(row.id),
@@ -2902,6 +2916,9 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         actorName: user.name || 'Заместитель генерального директора',
         action,
         completed,
+        partnerName: partner ? teamName(partner) : undefined,
+        leaderName: leader ? teamName(leader) : undefined,
+        teamMembers: otherMembers,
       });
 
       if (completed && result.archived > 0) {
