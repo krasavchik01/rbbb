@@ -36,15 +36,10 @@ function memberName(member) {
   return member?.userName || member?.name || member?.employeeName || 'Сотрудник';
 }
 
-function isCompleteTeam(notes) {
+function hasAssignedTeam(project) {
+  const notes = project.notes;
   const team = Array.isArray(notes.team) ? notes.team : [];
-  return team.some((member) => memberRole(member) === 'partner')
-    && team.some((member) => ['project_leader', 'manager_1', 'manager_2', 'manager_3'].includes(memberRole(member)));
-}
-
-function teamSummary(notes) {
-  const team = Array.isArray(notes.team) ? notes.team : [];
-  return team.map((member) => `${memberRole(member) || 'роль'} — ${memberName(member)}`).join('; ');
+  return team.length > 0 || Boolean(project.partner_id) || Boolean(project.manager_id);
 }
 
 function taskProjectId(notification) {
@@ -58,6 +53,33 @@ function quotedProjectName(notification) {
   return String(notification.message || '').match(/["«]([^"»]+)["»]/u)?.[1]?.trim() || '';
 }
 
+function normalizeProjectName(value) {
+  return String(value || '')
+    .toLocaleLowerCase('ru-RU')
+    .replace(/[«»"'`]/g, '')
+    .replace(/[–—-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findProjectByLegacyName(projects, name) {
+  const normalizedName = normalizeProjectName(name);
+  if (!normalizedName) return null;
+
+  const exact = projects.filter((project) => normalizeProjectName(project.name) === normalizedName);
+  if (exact.length === 1) return exact[0];
+
+  // Старые уведомления иногда содержат полное/сокращённое название проекта.
+  // Берём совпадение только если оно единственное, чтобы не закрыть чужую задачу.
+  const fuzzy = projects.filter((project) => {
+    const normalizedProjectName = normalizeProjectName(project.name);
+    return normalizedProjectName.length >= 12
+      && normalizedName.length >= 12
+      && (normalizedProjectName.includes(normalizedName) || normalizedName.includes(normalizedProjectName));
+  });
+  return fuzzy.length === 1 ? fuzzy[0] : null;
+}
+
 function looksLikeDeputyTeamTask(notification) {
   return /новый проект|требует утверждения/i.test(`${notification.title || ''} ${notification.message || ''}`)
     && (String(notification.action_url || '') === '/projects?view=working' || Boolean(taskProjectId(notification)));
@@ -65,22 +87,37 @@ function looksLikeDeputyTeamTask(notification) {
 
 const [{ data: deputies, error: deputyError }, { data: projects, error: projectError }] = await Promise.all([
   supabase.from('employees').select('id,name').eq('role', 'deputy_director'),
-  supabase.from('projects').select('id,name,notes').range(0, 999),
+  supabase.from('projects').select('id,name,notes,partner_id,manager_id').range(0, 999),
 ]);
 if (deputyError) throw new Error(deputyError.message);
 if (projectError) throw new Error(projectError.message);
 
 const completedById = new Map();
 const completedByName = new Map();
-for (const project of projects || []) {
-  const notes = notesOf(project.notes);
-  if (!isCompleteTeam(notes)) continue;
-  const prepared = { id: project.id, name: project.name, notes };
+const projectsById = new Map();
+const projectsByName = new Map();
+const preparedProjects = (projects || []).map((project) => ({
+  ...project,
+  notes: notesOf(project.notes),
+}));
+for (const project of preparedProjects) {
+  projectsById.set(String(project.id), project);
+  projectsByName.set(normalizeProjectName(project.name), project);
+  if (!hasAssignedTeam(project)) continue;
+  const prepared = { ...project };
   completedById.set(String(project.id), prepared);
-  completedByName.set(String(project.name || '').trim(), prepared);
+  completedByName.set(normalizeProjectName(project.name), prepared);
 }
 
 const candidates = [];
+const diagnostics = {
+  unreadDeputyNotifications: 0,
+  teamTasks: 0,
+  linkedToProject: 0,
+  linkedButIncomplete: 0,
+  notLinked: 0,
+  examples: [],
+};
 for (const deputy of deputies || []) {
   const { data: notifications, error } = await supabase
     .from('notifications')
@@ -88,11 +125,31 @@ for (const deputy of deputies || []) {
     .eq('user_id', deputy.id)
     .eq('read', false);
   if (error) throw new Error(error.message);
+  diagnostics.unreadDeputyNotifications += (notifications || []).length;
   for (const notification of notifications || []) {
     if (!looksLikeDeputyTeamTask(notification)) continue;
-    const project = completedById.get(taskProjectId(notification))
-      || completedByName.get(quotedProjectName(notification));
+    diagnostics.teamTasks += 1;
+    const projectId = taskProjectId(notification);
+    const projectName = quotedProjectName(notification);
+    const linkedProject = projectsById.get(projectId)
+      || projectsByName.get(normalizeProjectName(projectName))
+      || findProjectByLegacyName(preparedProjects, projectName);
+    if (!linkedProject) {
+      diagnostics.notLinked += 1;
+      if (diagnostics.examples.length < 10) diagnostics.examples.push({ status: 'not-linked', projectName, actionUrl: notification.action_url });
+      continue;
+    }
+    diagnostics.linkedToProject += 1;
+    const project = completedById.get(String(linkedProject.id));
     if (project) candidates.push({ deputy, notification, project });
+    else {
+      diagnostics.linkedButIncomplete += 1;
+      if (diagnostics.examples.length < 10) diagnostics.examples.push({
+        status: 'incomplete',
+        projectName: linkedProject.name,
+        teamSize: Array.isArray(linkedProject.notes.team) ? linkedProject.notes.team.length : 0,
+      });
+    }
   }
 }
 
@@ -105,6 +162,7 @@ const summary = {
     deputy: deputy.name,
     project: project.name,
   })),
+  diagnostics,
 };
 
 if (!apply) {
@@ -127,9 +185,9 @@ for (const { deputy, notification, project } of candidates) {
     .insert({
       user_id: deputy.id,
       title: '✅ Команда проекта назначена',
-      message: `Система: проект «${project.name}» уже имел назначенных партнёра и руководителя. Активная задача закрыта. Состав: ${teamSummary(project.notes)}.`,
+      message: `Проект «${project.name}». Действие: команда уже была назначена. Выполнил(а): система HUB.`,
       type: 'success',
-      action_url: `/projects?teamProject=${encodeURIComponent(project.id)}&team=1`,
+      action_url: null,
       read: true,
     });
   if (historyError) failed.push({ notificationId: notification.id, error: historyError.message });

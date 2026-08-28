@@ -4,31 +4,16 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Bell, Check, Trash2, Search, ExternalLink, RefreshCw, CheckCheck, History } from "lucide-react";
+import { Bell, Search, RefreshCw, History, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjects } from "@/hooks/useSupabaseData";
 import { supabaseDataStore, Project } from "@/lib/supabaseDataStore";
 import {
   getNotifications,
-  markAsRead,
-  markAllAsRead,
-  deleteNotification,
-  deleteAllNotifications,
   Notification,
   checkDeadlinesAndNotify
 } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -108,69 +93,12 @@ export default function Notifications() {
     && /команда проекта (назначена|обновлена)/i.test(notification.title || '')
   );
   const activeNotifications = filtered.filter((notification) => !notification.read && !isTeamHistory(notification));
-  const historyNotifications = filtered.filter((notification) => notification.read || isTeamHistory(notification));
+  // В истории оставляем только журнал выполненных действий, а не каждое
+  // когда-либо прочитанное системное напоминание.
+  const historyNotifications = filtered.filter(isTeamHistory);
   const visibleNotifications = notificationView === 'active' ? activeNotifications : historyNotifications;
 
-  const handleMarkAllRead = async () => {
-    if (!user) return;
-    const ok = await markAllAsRead(user.id);
-    await loadNotifications();
-    if (ok) {
-      toast({ title: '✅ Готово', description: 'Все уведомления отмечены как прочитанные' });
-    }
-  };
-
-  const handleClearRead = async () => {
-    const readNotifications = notifications.filter(n => n.read);
-    if (readNotifications.length === 0) {
-      toast({ title: 'Нет прочитанных', description: 'Нечего удалять' });
-      return;
-    }
-    for (const n of readNotifications) {
-      await deleteNotification(n.id);
-    }
-    await loadNotifications();
-    toast({ title: '🗑️ Удалено', description: `Удалено ${readNotifications.length} прочитанных уведомлений` });
-  };
-
-  // Удалить ВСЕ уведомления пользователя (прочитанные и непрочитанные).
-  // Разрушительное действие — вызывается из AlertDialog с подтверждением.
-  const handleDeleteAll = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const { deleted, error } = await deleteAllNotifications(user.id);
-      if (error) {
-        toast({ title: '❌ Ошибка', description: error, variant: 'destructive' });
-      } else {
-        toast({
-          title: '🗑️ Все уведомления удалены',
-          description: `Удалено ${deleted} ${deleted === 1 ? 'уведомление' : 'уведомлений'}`,
-        });
-      }
-      await loadNotifications();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggleRead = async (id: string) => {
-    await markAsRead(id);
-    await loadNotifications();
-  };
-
-  const handleDelete = async (id: string) => {
-    await deleteNotification(id);
-    await loadNotifications();
-  };
-
   const handleNotificationClick = async (notification: Notification) => {
-    // Отмечаем как прочитанное
-    if (!notification.read) {
-      await markAsRead(notification.id);
-      await loadNotifications();
-    }
-
     // Получаем URL (поддерживаем оба варианта)
     const actionUrl = notification.action_url;
     if (!actionUrl) return;
@@ -224,21 +152,23 @@ export default function Notifications() {
     }
   };
 
-  const typeBadge = (type: Notification["type"]) => {
-    switch (type) {
-      case "error":
-        return <Badge variant="destructive">Ошибка</Badge>;
-      case "warning":
-        return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-700 dark:text-yellow-300">Важно</Badge>;
-      case "success":
-        return <Badge variant="secondary" className="bg-green-500/20 text-green-700 dark:text-green-300">Успех</Badge>;
-      default:
-        return <Badge variant="secondary">Инфо</Badge>;
-    }
+  const historyDescription = (notification: Notification) => {
+    const message = String(notification.message || '');
+    const project = message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim();
+    const action = message.match(/Действие:\s*([^.]*)/iu)?.[1]?.trim();
+    const actor = message.match(/Выполнил\(а\):\s*([^.]*)/iu)?.[1]?.trim();
+
+    if (project && action) return { project, action, actor };
+
+    // Формат истории из первых релизов: «Имя: действие. Проект «...».»
+    const legacyProject = message.match(/Проект\s*[«"]([^»"]+)[»"]/iu)?.[1]?.trim();
+    const legacyAction = message.match(/^[^:]+:\s*([^.]*)/u)?.[1]?.trim();
+    return { project: legacyProject || 'Проект', action: legacyAction || message, actor: '' };
   };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return 'Только что';
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -252,9 +182,7 @@ export default function Notifications() {
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   };
 
-  const unreadCount = Array.isArray(notifications)
-    ? notifications.filter((notification) => !notification.read && !isTeamHistory(notification)).length
-    : 0;
+  const unreadCount = activeNotifications.length;
 
   return (
     <div className="space-y-4 sm:space-y-6 page-enter">
@@ -271,7 +199,7 @@ export default function Notifications() {
               <Badge className="bg-primary text-primary-foreground text-xs">{unreadCount}</Badge>
             )}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">Активные задачи отдельно от истории выполненных действий</p>
+          <p className="text-muted-foreground mt-1 text-sm">Только задачи, требующие действия. Выполненные назначения — в истории.</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -286,61 +214,6 @@ export default function Notifications() {
             <span className="hidden sm:inline">Проверить дедлайны</span>
             <span className="sm:hidden">Дедлайны</span>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleMarkAllRead}
-            disabled={loading || unreadCount === 0}
-            className="gap-2 text-xs sm:text-sm"
-            title="Отметить все как прочитанные"
-          >
-            <CheckCheck className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Прочитать все</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearRead}
-            disabled={loading || notifications.filter(n => n.read).length === 0}
-            className="gap-2 text-xs sm:text-sm"
-            title="Удалить только прочитанные"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Удалить прочитанные</span>
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading || notifications.length === 0}
-                className="gap-2 text-xs sm:text-sm text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                title="Удалить все уведомления"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Удалить все</span>
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Удалить все уведомления?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Будут удалены {notifications.length} {notifications.length === 1 ? 'уведомление' : 'уведомлений'}
-                  {unreadCount > 0 && ` (включая ${unreadCount} непрочитанных)`}.
-                  Действие необратимо.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteAll}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Удалить все
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
 
@@ -403,8 +276,8 @@ export default function Notifications() {
               </p>
               <p className="text-sm text-muted-foreground/60 mt-1">
                 {notificationView === 'active'
-                  ? 'Назначенная команда автоматически уходит в историю.'
-                  : 'Здесь сохраняются назначение команды и другие выполненные действия.'}
+                  ? 'После назначения команды задача исчезнет сама.'
+                  : 'Здесь: проект, выполненное действие и время.'}
               </p>
             </div>
           ) : (
@@ -412,9 +285,8 @@ export default function Notifications() {
               <div
                 key={n.id}
                 className={`p-3 sm:p-4 transition-all duration-150 ${
-                  n.action_url ? 'cursor-pointer active:bg-muted/50' : ''
-                } ${!n.read ? 'bg-primary/3' : 'hover:bg-muted/30'}`}
-                onClick={() => n.action_url && handleNotificationClick(n)}
+                  notificationView === 'history' ? 'bg-muted/20' : 'bg-primary/3'
+                }`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -423,52 +295,42 @@ export default function Notifications() {
                     n.type === 'success' ? 'bg-green-500/15' :
                     'bg-primary/15'
                   }`}>
-                    <Bell className={`w-4 h-4 ${
+                    {notificationView === 'history' ? <History className="w-4 h-4 text-green-600" /> : <Bell className={`w-4 h-4 ${
                       n.type === 'error' ? 'text-red-500' :
                       n.type === 'warning' ? 'text-yellow-500' :
                       n.type === 'success' ? 'text-green-500' :
                       'text-primary'
-                    }`} />
+                    }`} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
+                    {notificationView === 'history' ? (() => {
+                      const history = historyDescription(n);
+                      return <>
+                        <p className="font-semibold text-sm">{history.project}</p>
+                        <p className="text-sm text-muted-foreground mt-0.5">{history.action}</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1.5">
+                          {history.actor ? `${history.actor} · ` : ''}{formatDate(n.created_at)}
+                        </p>
+                      </>;
+                    })() : (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-medium text-sm">{n.title}</p>
-                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
                         <div className="flex items-center gap-3 mt-1.5">
                           <p className="text-xs text-muted-foreground/60">{formatDate(n.created_at)}</p>
-                          {typeBadge(n.type)}
                           {n.action_url && (
-                            <span className="text-xs text-primary flex items-center gap-0.5">
-                              <ExternalLink className="w-3 h-3" />перейти
-                            </span>
+                            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={() => handleNotificationClick(n)}>
+                              Открыть задачу <ArrowRight className="w-3.5 h-3.5" />
+                            </Button>
                           )}
                         </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 rounded-lg"
-                          onClick={(e) => { e.stopPropagation(); handleToggleRead(n.id); }}
-                          title={n.read ? "Прочитано" : "Отметить прочитанным"}
-                        >
-                          <Check className={`w-3.5 h-3.5 ${n.read ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(n.id); }}
-                          title="Удалить"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>

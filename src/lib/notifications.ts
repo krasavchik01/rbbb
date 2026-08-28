@@ -113,13 +113,8 @@ type DeputyTeamHistoryInput = {
   projectName: string;
   actorName: string;
   action: string;
-  teamSummary: string;
   completed: boolean;
 };
-
-function deputyTeamActionUrl(projectId: string) {
-  return `/projects?teamProject=${encodeURIComponent(projectId)}&team=1`;
-}
 
 function notificationTargetsDeputyTeamTask(notification: Notification, projectId: string, projectName: string) {
   const actionUrl = notification.action_url || '';
@@ -133,8 +128,8 @@ function notificationTargetsDeputyTeamTask(notification: Notification, projectId
 
 /**
  * Фиксирует назначение команды заместителем директора в отдельной истории.
- * Когда обязательные роли уже есть, исходная задача «назначить команду»
- * помечается прочитанной и больше не мешает в активных уведомлениях.
+ * Как только заместитель директора назначил первый элемент команды,
+ * исходная задача «назначить команду» закрывается и уходит из активных.
  */
 export const recordDeputyTeamAssignmentHistory = async ({
   deputyUserId,
@@ -142,15 +137,15 @@ export const recordDeputyTeamAssignmentHistory = async ({
   projectName,
   actorName,
   action,
-  teamSummary,
   completed,
 }: DeputyTeamHistoryInput): Promise<{ archived: number; historyId: string | null }> => {
   const history = await addNotification({
     user_id: deputyUserId,
     title: completed ? '✅ Команда проекта назначена' : '📝 Команда проекта обновлена',
-    message: `${actorName}: ${action}. Проект «${projectName}». Состав: ${teamSummary || 'пока не назначен'}.`,
+    message: `Проект «${projectName}». Действие: ${action}. Выполнил(а): ${actorName}.`,
     type: 'success',
-    action_url: deputyTeamActionUrl(projectId),
+    // История — это журнал, а не ещё одна задача. Перехода из неё нет.
+    action_url: null,
     read: true,
     silent: true,
   });

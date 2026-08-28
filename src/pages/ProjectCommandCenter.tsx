@@ -427,14 +427,10 @@ function projectRoleLabel(role: string): string {
 }
 
 function teamAssignmentIsComplete(team: CanonicalTeamMember[]): boolean {
-  return team.some((member) => isPartnerRole(teamRole(member)))
-    && team.some((member) => isLeaderRole(teamRole(member)));
-}
-
-function teamAssignmentSummary(team: CanonicalTeamMember[]): string {
-  return team
-    .map((member) => `${projectRoleLabel(teamRole(member))} — ${teamName(member)}`)
-    .join('; ');
+  // Уведомление замдиректора — это входящая задача на назначение команды,
+  // а не чек-лист всех ролей. Как только назначен хотя бы один участник,
+  // задача обработана и должна уйти в историю.
+  return team.length > 0;
 }
 
 function bonusRoleColumnsForTeam(team: any[]): Array<{ key: string; label: string; percent: string }> {
@@ -2905,7 +2901,6 @@ export default function ProjectCommandCenter({ scope }: { scope?: ProjectCommand
         projectName: row.name,
         actorName: user.name || 'Заместитель генерального директора',
         action,
-        teamSummary: teamAssignmentSummary(team),
         completed,
       });
 
