@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiGet } from '@/lib/api';
 import {
+  buildOneCAccountantMessage,
+  buildOneCAccountingFixInstruction,
   filterOneCAccountingInbox,
   isMissingOneCInboxTable,
   loadOneCAccountingInbox,
@@ -119,6 +121,49 @@ describe('oneCAccountingInbox', () => {
     expect(summary.byKind.payment.amountsByCurrency.KZT).toBe(300_000);
     expect(summary.byReason.contract_not_found.count).toBe(1);
     expect(summary.byReason.missing_contract.count).toBe(1);
+  });
+
+  it('explains the exact 1C screen and field that the accountant must fix', () => {
+    const record = normalizeOneCAccountingInboxRecord({
+      id: 'payment-without-contract',
+      normalized_record: {
+        kind: 'payment',
+        externalId: 'payment-guid-15',
+        number: 'ПП-15',
+        date: '2026-08-21',
+        amount: 300_000,
+        organizationName: 'ТОО МАК',
+        organizationBin: '123456789012',
+        counterpartyName: 'ТОО Клиент',
+        counterpartyBin: '210987654321',
+      },
+      match_reason: 'missing_contract',
+    });
+
+    expect(record).not.toBeNull();
+    const instruction = buildOneCAccountingFixInstruction(record!);
+    expect(instruction.path).toBe('1С → Банк и касса → Платёжные поручения входящие');
+    expect(instruction.field).toBe('Расшифровка платежа → Договор контрагента');
+    expect(instruction.action).toContain('ПП-15');
+    expect(instruction.action).toContain('выберите договор');
+
+    const message = buildOneCAccountantMessage(record!, ['Проект «Аудит» · договор Д-15']);
+    expect(message).toContain('Где открыть: 1С → Банк и касса');
+    expect(message).toContain('Организация: ТОО МАК, БИН 123456789012');
+    expect(message).toContain('Найденные проекты HUB: Проект «Аудит» · договор Д-15');
+  });
+
+  it('distinguishes a missing HUB contract from duplicate contract numbers', () => {
+    const base = normalizeOneCAccountingInboxRecord({
+      normalized_record: {
+        kind: 'invoice', number: 'СЧ-77', date: '2026-08-20',
+        contractNumber: '24/10-49', organizationName: 'ТОО МАК',
+        counterpartyName: 'АО Клиент',
+      },
+      match_reason: 'contract_not_found',
+    })!;
+    expect(buildOneCAccountingFixInstruction(base).reason).toContain('проекта с таким номером договора в HUB нет');
+    expect(buildOneCAccountingFixInstruction({ ...base, matchReason: 'ambiguous_contract' }).reason).toContain('сразу в нескольких проектах HUB');
   });
 
   it('recognizes a not-yet-migrated table without hiding other accounting data', () => {

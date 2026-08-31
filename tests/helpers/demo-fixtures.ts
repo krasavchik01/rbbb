@@ -303,6 +303,35 @@ async function fulfillApplicationApi(route: Route, journal: DemoNetworkJournal) 
   }
 
   if (url.pathname.includes('/api/1c/sync')) {
+    if (url.searchParams.get('resource') === 'inbox') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          records: [{
+            id: '10000000-0000-4000-8000-000000000001',
+            source: '1С Бухгалтерия RB',
+            kind: 'invoice',
+            external_id: 'invoice-demo-77',
+            normalized_record: {
+              kind: 'invoice', externalId: 'invoice-demo-77', number: 'СЧ-77',
+              date: '2026-08-20', amount: 1_250_000, currency: 'KZT',
+              contractNumber: '24/10-49', organizationName: 'RBI Audit Kazakhstan',
+              organizationBin: '123456789012', counterpartyName: 'АО Демонстрационный клиент',
+              counterpartyBin: '210987654321',
+            },
+            match_status: 'unmatched',
+            match_reason: 'contract_not_found',
+            match_candidates: [DEMO_PROJECT_ID],
+          }],
+          nextCursor: null,
+          hasMore: false,
+          truncated: false,
+        }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

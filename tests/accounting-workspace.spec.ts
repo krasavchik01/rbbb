@@ -64,6 +64,18 @@ test.describe('accounting workspace', () => {
     await expect(page.getByText('Свод', { exact: true })).toHaveCount(0);
   });
 
+  test('accountant gets an exact 1C correction path for every unmatched record', async ({ page }) => {
+    await loginAsDemoRole(page, 'accountant');
+    await page.goto('/accounting');
+    await waitForDemoApp(page);
+
+    await page.getByRole('button', { name: 'Подробности 1С' }).click();
+    await expect(page.getByText('1С → Продажа → Счета на оплату покупателям').first()).toBeVisible();
+    await expect(page.getByText(/В 1С указан договор «24\/10-49», но проекта с таким номером договора в HUB нет/).first()).toBeVisible();
+    await expect(page.getByText(/Контрагент:.*АО Демонстрационный клиент/).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Скопировать бухгалтеру' }).first()).toBeVisible();
+  });
+
   test('accountant sees the full register and can record a partial payment', async ({ page }) => {
     const network = await loginAsDemoRole(page, 'accountant');
     addAccountingFixture(network.tableRows.projects[0]);

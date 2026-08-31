@@ -45,7 +45,7 @@ export async function apiRequest<T = any>(
     // Prefer a real Supabase JWT when a session exists. Legacy x-user-* headers
     // remain only as compatibility fallback until REQUIRE_SUPABASE_JWT is enabled
     // on the backend after all users have Auth accounts.
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`;
     }
@@ -69,10 +69,25 @@ export async function apiRequest<T = any>(
       }
     }
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       ...options,
       headers,
     });
+
+    // A browser tab can remain open longer than the access token. Retry one
+    // protected request after refreshing the Supabase session so accounting
+    // does not misleadingly look disconnected while a refresh token is valid.
+    if (response.status === 401 && session?.refresh_token) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      session = refreshed.session;
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      }
+    }
 
     if (!response.ok) {
       let error = `HTTP ${response.status}`;

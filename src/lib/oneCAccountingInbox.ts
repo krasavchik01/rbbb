@@ -40,6 +40,15 @@ export interface OneCAccountingInboxLoadResult {
   truncated: boolean;
 }
 
+export interface OneCAccountingFixInstruction {
+  documentTitle: string;
+  path: string;
+  field: string;
+  reason: string;
+  action: string;
+  currentValues: string[];
+}
+
 interface OneCAccountingInboxApiResponse {
   success?: boolean;
   records?: unknown[];
@@ -56,6 +65,102 @@ export const ONE_C_INBOX_KIND_LABELS: Record<OneCAccountingInboxKind, string> = 
   payment: 'Оплаты',
   unknown: 'Другое',
 };
+
+const ONE_C_DOCUMENT_GUIDANCE: Record<OneCAccountingInboxKind, { title: string; path: string; field: string }> = {
+  invoice: {
+    title: 'Счёт на оплату покупателю',
+    path: '1С → Продажа → Счета на оплату покупателям',
+    field: 'Договор контрагента',
+  },
+  avr: {
+    title: 'Реализация товаров и услуг (АВР)',
+    path: '1С → Продажа → Реализация товаров и услуг',
+    field: 'Договор контрагента',
+  },
+  esf: {
+    title: 'Электронный счёт-фактура (ЭСФ)',
+    path: '1С → Продажа → Электронные счета-фактуры',
+    field: 'Договор поставки / номер договора',
+  },
+  payment: {
+    title: 'Платёжное поручение входящее',
+    path: '1С → Банк и касса → Платёжные поручения входящие',
+    field: 'Расшифровка платежа → Договор контрагента',
+  },
+  unknown: {
+    title: 'Документ 1С',
+    path: '1С → откройте документ по номеру и дате',
+    field: 'Организация, Контрагент и Договор',
+  },
+};
+
+function present(value: string, emptyLabel = 'не указано'): string {
+  return text(value) || emptyLabel;
+}
+
+export function buildOneCAccountingFixInstruction(
+  record: OneCAccountingInboxRecord,
+): OneCAccountingFixInstruction {
+  const guide = ONE_C_DOCUMENT_GUIDANCE[record.kind] || ONE_C_DOCUMENT_GUIDANCE.unknown;
+  const number = record.documentNumber ? `№ ${record.documentNumber}` : 'без номера';
+  const date = record.documentDate ? ` от ${record.documentDate}` : '';
+  const contract = present(record.contractNumber);
+  const organization = `${present(record.organizationName)}${record.organizationBin ? `, БИН ${record.organizationBin}` : ''}`;
+  const counterparty = `${present(record.counterpartyName)}${record.counterpartyBin ? `, БИН ${record.counterpartyBin}` : ''}`;
+  const commonIdentityAction = `Откройте ${guide.title.toLocaleLowerCase('ru')} ${number}${date}. Проверьте поля «Организация», «Контрагент» и «${guide.field}».`;
+
+  let reason = 'HUB не смог определить проект для этой записи.';
+  let action = `${commonIdentityAction} Номер договора в 1С должен полностью совпадать с номером договора проекта в HUB.`;
+  if (record.matchReason === 'missing_contract') {
+    reason = `В 1С не заполнено поле «${guide.field}».`;
+    action = `Откройте ${guide.title.toLocaleLowerCase('ru')} ${number}${date} и выберите договор в поле «${guide.field}». После записи документа повторите обмен.`;
+  } else if (record.matchReason === 'contract_not_found') {
+    reason = `В 1С указан договор «${contract}», но проекта с таким номером договора в HUB нет.`;
+    action = `${commonIdentityAction} Сверьте номер с подписанным договором: если ошибка в 1С — выберите правильный договор; если номер в 1С верный — передайте администратору HUB номер проекта для исправления карточки договора.`;
+  } else if (record.matchReason === 'contract_identity_mismatch') {
+    reason = `Номер договора «${contract}» найден в HUB, но организация или контрагент в 1С не совпадают с проектом.`;
+    action = `${commonIdentityAction} Исправьте выбранную организацию/контрагента либо их БИН в карточках 1С и повторите обмен.`;
+  } else if (record.matchReason === 'ambiguous_contract') {
+    reason = `Номер договора «${contract}» найден сразу в нескольких проектах HUB.`;
+    action = `${commonIdentityAction} Убедитесь, что выбраны точные организация и контрагент и в их карточках заполнены БИН. Если реквизиты верны, администратор HUB должен сделать номера договоров проектов уникальными.`;
+  } else if (record.matchReason === 'ambiguous_existing_record') {
+    reason = 'Эта запись 1С уже обнаружена сразу в нескольких проектах HUB.';
+    action = `${commonIdentityAction} Сообщите администратору HUB номер документа: нужно удалить его дубликат из неверного проекта, затем повторить обмен.`;
+  } else if (record.matchReason === 'project_deleted') {
+    reason = 'Проект, к которому раньше была привязана запись, удалён из HUB.';
+    action = `${commonIdentityAction} Проверьте реквизиты договора. Если они верны, передайте администратору HUB просьбу восстановить или заново создать проект.`;
+  }
+
+  return {
+    documentTitle: `${guide.title} ${number}${date}`,
+    path: guide.path,
+    field: guide.field,
+    reason,
+    action,
+    currentValues: [
+      `Договор: ${contract}`,
+      `Организация: ${organization}`,
+      `Контрагент: ${counterparty}`,
+    ],
+  };
+}
+
+export function buildOneCAccountantMessage(
+  record: OneCAccountingInboxRecord,
+  candidateProjects: readonly string[] = [],
+): string {
+  const instruction = buildOneCAccountingFixInstruction(record);
+  return [
+    'Нужно исправить запись в 1С',
+    `Документ: ${instruction.documentTitle}`,
+    `Где открыть: ${instruction.path}`,
+    `Сейчас в 1С: ${instruction.currentValues.join('; ')}`,
+    `Почему не принят HUB: ${instruction.reason}`,
+    `Что сделать: ${instruction.action}`,
+    candidateProjects.length > 0 ? `Найденные проекты HUB: ${candidateProjects.join('; ')}` : '',
+    record.externalId ? `Технический ID 1С: ${record.externalId}` : '',
+  ].filter(Boolean).join('\n');
+}
 
 const EMPTY_KINDS: Record<OneCAccountingInboxKind, OneCAccountingInboxGroupSummary> = {
   invoice: { count: 0, amountsByCurrency: {} },
