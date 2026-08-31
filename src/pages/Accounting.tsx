@@ -668,10 +668,17 @@ export default function Accounting() {
   const oneCDataMountedRef = useRef(false);
   const oneCStatusRequestRef = useRef(0);
   const oneCInboxRequestRef = useRef(0);
-  const oneCInboxScopeCounts = useMemo(() => oneCInboxRecords.reduce<Record<OneCAccountingScope, number>>((result, record) => {
+  const currentOneCInboxRecords = useMemo(() => {
+    const lastSuccessMs = Date.parse(String(oneCStatus?.lastSuccessAt || ''));
+    if (!Number.isFinite(lastSuccessMs)) return oneCInboxRecords;
+    const current = oneCInboxRecords.filter((record) => Date.parse(record.lastSeenAt) === lastSuccessMs);
+    return current.length > 0 ? current : oneCInboxRecords;
+  }, [oneCInboxRecords, oneCStatus?.lastSuccessAt]);
+  const oneCInboxScopeCounts = useMemo(() => currentOneCInboxRecords.reduce<Record<OneCAccountingScope, number>>((result, record) => {
     result[record.accountingScope] += 1;
     return result;
-  }, { project: 0, supplier: 0, other: 0, review: 0 }), [oneCInboxRecords]);
+  }, { project: 0, supplier: 0, other: 0, review: 0 }), [currentOneCInboxRecords]);
+  const currentOneCReviewCount = oneCInboxScopeCounts.project + oneCInboxScopeCounts.review;
 
   const refreshOneCStatus = useCallback(async () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
@@ -1426,10 +1433,7 @@ export default function Accounting() {
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               {oneCDisplayStats && <Badge variant="secondary">Сопоставлено: {oneCDisplayStats.matched}</Badge>}
-              {oneCInboxScopeCounts.project > 0 && <Badge variant="destructive">Ошибки проектов: {oneCInboxScopeCounts.project}</Badge>}
-              {oneCInboxScopeCounts.supplier > 0 && <Badge variant="outline" className="border-emerald-300 text-emerald-700 dark:text-emerald-200">Поставщики: {oneCInboxScopeCounts.supplier}</Badge>}
-              {oneCInboxScopeCounts.review > 0 && <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-200">Определить: {oneCInboxScopeCounts.review}</Badge>}
-              {oneCInboxScopeCounts.other > 0 && <Badge variant="outline">Прочее: {oneCInboxScopeCounts.other}</Badge>}
+              {currentOneCReviewCount > 0 && <Badge variant="destructive">Разобрать: {currentOneCReviewCount}</Badge>}
               {user?.role === 'admin' && oneCStatus && !oneCStatus.pushEnabled && <Button variant="outline" onClick={createIntegrationKey} disabled={oneCSyncing}>Создать ключ 1С</Button>}
               {oneCStatus?.pullEnabled ? (
                 <Button onClick={runOneCSync} disabled={oneCSyncing}>
@@ -1478,7 +1482,7 @@ export default function Accounting() {
           {oneCDetailsOpen && (
             <div className="mt-4">
               <OneCInboxCard
-                records={oneCInboxRecords}
+                records={currentOneCInboxRecords}
                 projects={projects}
                 loading={oneCInboxLoading}
                 refreshing={oneCInboxRefreshing}
