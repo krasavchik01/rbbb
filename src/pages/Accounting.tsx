@@ -84,11 +84,14 @@ import {
 import {
   buildOneCAccountantMessage,
   buildOneCAccountingFixInstruction,
+  classifyOneCCounterparty,
   filterOneCAccountingInbox,
   loadOneCAccountingInbox,
+  ONE_C_ACCOUNTING_SCOPE_LABELS,
   ONE_C_INBOX_KIND_LABELS,
   summarizeOneCAccountingInbox,
   type OneCAccountingInboxRecord,
+  type OneCAccountingScope,
 } from '@/lib/oneCAccountingInbox';
 import {
   DEFAULT_ACCOUNTING_FILTERS,
@@ -324,22 +327,31 @@ function OneCInboxCard({
   onRefresh: () => void;
 }) {
   const [query, setQuery] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<OneCAccountingScope>('review');
   const [visibleLimit, setVisibleLimit] = useState(100);
   const [copiedRecordId, setCopiedRecordId] = useState('');
-  const summary = useMemo(() => summarizeOneCAccountingInbox(records), [records]);
-  const filtered = useMemo(() => filterOneCAccountingInbox(records, query), [records, query]);
+  const [classifyingRecordId, setClassifyingRecordId] = useState('');
+  const [classificationMessage, setClassificationMessage] = useState('');
+  const [classificationError, setClassificationError] = useState('');
+  const scopeCounts = useMemo(() => records.reduce<Record<OneCAccountingScope, number>>((result, record) => {
+    result[record.accountingScope] += 1;
+    return result;
+  }, { project: 0, supplier: 0, other: 0, review: 0 }), [records]);
+  const scopedRecords = useMemo(
+    () => records.filter((record) => record.accountingScope === scopeFilter),
+    [records, scopeFilter],
+  );
+  const summary = useMemo(() => summarizeOneCAccountingInbox(scopedRecords), [scopedRecords]);
+  const filtered = useMemo(() => filterOneCAccountingInbox(scopedRecords, query), [scopedRecords, query]);
   const projectLabels = useMemo(() => new Map(
     projects.map((project) => [String(project.id), oneCCandidateProjectLabel(project)]),
   ), [projects]);
   const visible = filtered.slice(0, visibleLimit);
   const reasons = Object.entries(summary.byReason).sort(([, left], [, right]) => right.count - left.count);
-  const registryMismatch = expectedUnmatchedCount !== null
-    && available
-    && expectedUnmatchedCount !== summary.count;
   const registryUnavailable = expectedUnmatchedCount !== null
     && expectedUnmatchedCount > 0
     && !available;
-  const displayCount = expectedUnmatchedCount ?? summary.count;
+  const displayCount = records.length;
   const candidateLabels = (record: OneCAccountingInboxRecord) => record.matchCandidates
     .map((projectId) => projectLabels.get(projectId) || `Проект ${projectId}`)
     .filter(Boolean);
@@ -348,14 +360,41 @@ function OneCInboxCard({
     setCopiedRecordId(record.id);
     window.setTimeout(() => setCopiedRecordId((current) => current === record.id ? '' : current), 1800);
   };
+  const classifyCounterparty = async (record: OneCAccountingInboxRecord, scope: OneCAccountingScope) => {
+    setClassifyingRecordId(record.id);
+    setClassificationMessage('');
+    setClassificationError('');
+    try {
+      const result = await classifyOneCCounterparty(record.id, scope);
+      setClassificationMessage(
+        scope === 'review'
+          ? 'Ручная классификация снята. Контрагент возвращён в автоматически определённый раздел.'
+          : `${ONE_C_ACCOUNTING_SCOPE_LABELS[scope]}: перенесено записей — ${result.updated}.`,
+      );
+      onRefresh();
+    } catch (classificationFailure) {
+      setClassificationError(classificationFailure instanceof Error
+        ? classificationFailure.message
+        : 'Не удалось сохранить вид контрагента');
+    } finally {
+      setClassifyingRecordId('');
+    }
+  };
 
   useEffect(() => {
     setVisibleLimit(100);
-  }, [query]);
+  }, [query, scopeFilter]);
+
+  useEffect(() => {
+    if (scopeCounts[scopeFilter] > 0 || records.length === 0) return;
+    const fallback = (['review', 'project', 'supplier', 'other'] as OneCAccountingScope[])
+      .find((scope) => scopeCounts[scope] > 0);
+    if (fallback) setScopeFilter(fallback);
+  }, [records.length, scopeCounts, scopeFilter]);
 
   if (!loading && !available && !error && displayCount <= 0) return null;
   if (loading) {
-    return <Card className="border-amber-200/80 dark:border-amber-900/70"><CardContent className="flex items-center gap-3 p-4"><Loader2 className="h-5 w-5 animate-spin text-amber-600" /><div><div className="font-semibold">Не привязано к проектам</div><div className="text-xs text-muted-foreground">Загружаю записи 1С, которые нужно разобрать…</div></div></CardContent></Card>;
+    return <Card className="border-sky-200/80 dark:border-sky-900/70"><CardContent className="flex items-center gap-3 p-4"><Loader2 className="h-5 w-5 animate-spin text-sky-600" /><div><div className="font-semibold">Реестр контрагентов 1С</div><div className="text-xs text-muted-foreground">Разделяю клиентов, поставщиков и прочие операции…</div></div></CardContent></Card>;
   }
   if (error && !available && records.length === 0) {
     const sessionExpired = isOneCSessionError(error);
@@ -363,25 +402,15 @@ function OneCInboxCard({
   }
 
   return (
-    <Card className="overflow-hidden border-amber-200/80 dark:border-amber-900/70">
+    <Card className="overflow-hidden border-sky-200/80 dark:border-sky-900/70">
       <CardContent className="p-0">
-        <div className="border-b bg-amber-50/50 p-4 dark:bg-amber-950/10">
+        <div className="border-b bg-sky-50/50 p-4 dark:bg-sky-950/10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300"><AlertCircle className="h-5 w-5" /></div>
+              <div className="rounded-xl bg-sky-100 p-2.5 text-sky-700 dark:bg-sky-950 dark:text-sky-300"><Database className="h-5 w-5" /></div>
               <div>
-                <div className="flex flex-wrap items-center gap-2"><div className="font-semibold">Не привязано к проектам</div><Badge variant={displayCount > 0 || summary.count > 0 ? 'destructive' : 'secondary'}>{displayCount}</Badge></div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {expectedUnmatchedCount !== null
-                    ? expectedUnmatchedCount > 0
-                      ? `По последнему завершённому обмену нужно сопоставить ${expectedUnmatchedCount} записей.`
-                      : summary.count > 0
-                        ? `Завершённый обмен показывает 0 записей, но в подробном реестре осталось ${summary.count}. Нужна сверка.`
-                        : 'По последнему завершённому обмену все принятые записи привязаны к проектам.'
-                    : summary.count > 0
-                      ? `В подробном реестре нужно сопоставить ${summary.count} записей.`
-                      : 'Подробный реестр не содержит записей на разборе.'}
-                </div>
+                <div className="flex flex-wrap items-center gap-2"><div className="font-semibold">Клиенты, поставщики и прочие операции</div><Badge variant="secondary">{displayCount}</Badge></div>
+                <div className="mt-1 text-sm text-muted-foreground">Поставщики и хозяйственные расходы учитываются отдельно и не считаются ошибками проектов.</div>
               </div>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>
@@ -392,8 +421,23 @@ function OneCInboxCard({
 
           {error && <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/70 p-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Не удалось обновить реестр: {error}. Показаны последние успешно загруженные данные.</span></div>}
           {registryUnavailable && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>По сводке на разборе: {expectedUnmatchedCount}. Подробный реестр пока недоступен — он появится после обновления базы HUB и следующего полного обмена.</span></div>}
-          {registryMismatch && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Нужна сверка: по последнему завершённому обмену — {expectedUnmatchedCount}, в подробном реестре — {summary.count}. Для этого обмена HUB не сохранил строки реестра; запустите полный обмен из 1С повторно — после него здесь появится список каждой записи и причина, почему она не привязана.</span></div>}
           {truncated && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>Реестр ограничен 10 000 записями. В 1С есть ещё записи на разборе; уточните поиск или устраните несопоставленные договоры.</span></div>}
+          {classificationMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">{classificationMessage}</div>}
+          {classificationError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50/70 p-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{classificationError}</div>}
+
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {([
+              ['review', 'Нужно определить', 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'],
+              ['project', 'Клиенты / проекты', 'border-red-300 bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-200'],
+              ['supplier', 'Поставщики / расходы', 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'],
+              ['other', 'Прочие операции', 'border-slate-300 bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-200'],
+            ] as const).map(([scope, label, color]) => (
+              <button key={scope} type="button" onClick={() => setScopeFilter(scope)} className={`rounded-lg border p-3 text-left transition hover:brightness-95 ${color} ${scopeFilter === scope ? 'ring-2 ring-primary/40' : ''}`}>
+                <div className="text-xs font-medium">{label}</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">{scopeCounts[scope]}</div>
+              </button>
+            ))}
+          </div>
 
           {summary.count > 0 && <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
             {(['invoice', 'avr', 'esf', 'payment'] as const).map((recordKind) => {
@@ -402,20 +446,20 @@ function OneCInboxCard({
             })}
           </div>}
 
-          {reasons.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{reasons.map(([reason, item]) => <Badge key={reason} variant="outline" className="border-amber-300 bg-background px-2.5 py-1 text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[reason] || reason}: {item.count}</Badge>)}</div>}
+          {scopeFilter === 'project' && reasons.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{reasons.map(([reason, item]) => <Badge key={reason} variant="outline" className="border-red-300 bg-background px-2.5 py-1 text-red-900 dark:text-red-200">{ONEC_UNMATCHED_REASON_LABELS[reason] || reason}: {item.count}</Badge>)}</div>}
         </div>
 
         {summary.count > 0 && (
           <>
             <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="relative min-w-0 flex-1 sm:max-w-xl"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Контрагент, БИН, договор или номер документа…" /></div>
-              <div className="whitespace-nowrap text-sm text-muted-foreground">{filtered.length} из {records.length}</div>
+              <div className="relative min-w-0 flex-1 sm:max-w-xl"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Контрагент, БИН, договор, документ или назначение платежа…" /></div>
+              <div className="whitespace-nowrap text-sm text-muted-foreground">{filtered.length} из {scopedRecords.length}</div>
             </div>
 
             <div className="hidden max-h-[560px] overflow-auto md:block">
               <table className="w-full min-w-[1180px] text-sm">
                 <thead className="sticky top-0 z-10 bg-muted/95 text-left text-xs uppercase tracking-wide text-muted-foreground backdrop-blur">
-                  <tr><th className="px-3 py-2.5">Документ 1С</th><th className="px-3 py-2.5">Что сейчас указано</th><th className="px-3 py-2.5 text-right">Сумма</th><th className="px-3 py-2.5">Что исправить бухгалтеру</th></tr>
+                  <tr><th className="px-3 py-2.5">Документ 1С</th><th className="px-3 py-2.5">Контрагент и назначение</th><th className="px-3 py-2.5 text-right">Сумма</th><th className="px-3 py-2.5">Как учитывать</th></tr>
                 </thead>
                 <tbody className="divide-y">
                   {visible.map((record) => {
@@ -432,16 +476,33 @@ function OneCInboxCard({
                           <div><span className="text-xs text-muted-foreground">Договор:</span> <b>{record.contractNumber || 'не указан'}</b></div>
                           <div className="mt-1"><span className="text-xs text-muted-foreground">Контрагент:</span> {record.counterpartyName || 'не указан'}{record.counterpartyBin ? ` · БИН ${record.counterpartyBin}` : ''}</div>
                           <div className="mt-1"><span className="text-xs text-muted-foreground">Организация:</span> {record.organizationName || 'не указана'}{record.organizationBin ? ` · БИН ${record.organizationBin}` : ''}</div>
+                          {record.reference && <div className="mt-1"><span className="text-xs text-muted-foreground">Назначение:</span> {record.reference}</div>}
                           {candidates.length > 0 && <details className="mt-2 text-xs"><summary className="cursor-pointer font-medium text-sky-700">Возможные проекты HUB: {candidates.length}</summary><ul className="mt-1 space-y-1 pl-4 text-muted-foreground">{candidates.map((candidate) => <li key={candidate}>{candidate}</li>)}</ul></details>}
                         </td>
                         <td className="w-[130px] whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums">{formatMoney(record.amount, record.currency)}</td>
                         <td className="min-w-[430px] px-3 py-3">
-                          <Badge variant="outline" className="whitespace-normal border-amber-300 text-left text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[record.matchReason] || record.matchReason}</Badge>
-                          <div className="mt-2 font-medium text-amber-950 dark:text-amber-100">{instruction.reason}</div>
-                          <div className="mt-1 text-sm leading-5 text-muted-foreground">{instruction.action}</div>
-                          <Button type="button" size="sm" variant="outline" className="mt-2 h-8" onClick={() => void copyAccountantMessage(record)}>
-                            <Copy className="mr-2 h-3.5 w-3.5" />{copiedRecordId === record.id ? 'Скопировано' : 'Скопировать бухгалтеру'}
-                          </Button>
+                          {scopeFilter === 'project' ? <>
+                            <Badge variant="outline" className="whitespace-normal border-red-300 text-left text-red-900 dark:text-red-200">{ONEC_UNMATCHED_REASON_LABELS[record.matchReason] || record.matchReason}</Badge>
+                            <div className="mt-2 font-medium text-red-950 dark:text-red-100">{instruction.reason}</div>
+                            <div className="mt-1 text-sm leading-5 text-muted-foreground">{instruction.action}</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => void copyAccountantMessage(record)}><Copy className="mr-2 h-3.5 w-3.5" />{copiedRecordId === record.id ? 'Скопировано' : 'Скопировать бухгалтеру'}</Button>
+                              <Button type="button" size="sm" variant="ghost" className="h-8" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'supplier')}>Это поставщик</Button>
+                            </div>
+                          </> : scopeFilter === 'review' ? <>
+                            <div className="font-medium">Куда относится этот контрагент?</div>
+                            <div className="mt-1 text-sm text-muted-foreground">Выбор применяется ко всем его записям и запоминается для следующих обменов.</div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button type="button" size="sm" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'supplier')}>Поставщик / расход</Button>
+                              <Button type="button" size="sm" variant="outline" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'project')}>Клиент / проект</Button>
+                              <Button type="button" size="sm" variant="ghost" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'other')}>Прочее</Button>
+                            </div>
+                          </> : <>
+                            <Badge variant="outline" className={scopeFilter === 'supplier' ? 'border-emerald-300 text-emerald-800 dark:text-emerald-200' : ''}>{ONE_C_ACCOUNTING_SCOPE_LABELS[scopeFilter]}</Badge>
+                            <div className="mt-2 font-medium">К проекту привязывать не нужно</div>
+                            <div className="mt-1 text-sm text-muted-foreground">Запись хранится в отдельном учёте и не увеличивает счётчик ошибок проектов.</div>
+                            <Button type="button" size="sm" variant="ghost" className="mt-2 h-8" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'review')}>Изменить классификацию</Button>
+                          </>}
                         </td>
                       </tr>
                     );
@@ -457,13 +518,25 @@ function OneCInboxCard({
                 return (
                   <div key={record.id} className="rounded-xl border p-3">
                     <div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{ONE_C_INBOX_KIND_LABELS[record.kind]} № {record.documentNumber || 'б/н'}</div><div className="text-xs text-muted-foreground">{formatDate(record.documentDate)}</div></div><div className="whitespace-nowrap font-bold tabular-nums">{formatCompactMoney(record.amount, record.currency)}</div></div>
-                    <div className="mt-3 rounded-lg bg-muted/50 p-2.5 text-sm"><div><span className="text-xs text-muted-foreground">Договор:</span> <b>{record.contractNumber || 'не указан'}</b></div><div className="mt-1"><span className="text-xs text-muted-foreground">Контрагент:</span> {record.counterpartyName || 'не указан'}{record.counterpartyBin ? ` · БИН ${record.counterpartyBin}` : ''}</div><div className="mt-1"><span className="text-xs text-muted-foreground">Организация:</span> {record.organizationName || 'не указана'}{record.organizationBin ? ` · БИН ${record.organizationBin}` : ''}</div></div>
-                    <Badge variant="outline" className="mt-3 whitespace-normal border-amber-300 text-left text-amber-900 dark:text-amber-200">{ONEC_UNMATCHED_REASON_LABELS[record.matchReason] || record.matchReason}</Badge>
-                    <div className="mt-2 font-medium text-amber-950 dark:text-amber-100">{instruction.reason}</div>
-                    <div className="mt-2 text-xs font-medium text-sky-700 dark:text-sky-300">{instruction.path}</div>
-                    <div className="mt-1 text-sm leading-5 text-muted-foreground">{instruction.action}</div>
-                    {candidates.length > 0 && <details className="mt-2 text-xs"><summary className="cursor-pointer font-medium text-sky-700">Показать возможные проекты HUB ({candidates.length})</summary><ul className="mt-1 space-y-1 pl-4 text-muted-foreground">{candidates.map((candidate) => <li key={candidate}>{candidate}</li>)}</ul></details>}
-                    <Button type="button" size="sm" variant="outline" className="mt-3 w-full" onClick={() => void copyAccountantMessage(record)}><Copy className="mr-2 h-3.5 w-3.5" />{copiedRecordId === record.id ? 'Скопировано' : 'Скопировать бухгалтеру'}</Button>
+                    <div className="mt-3 rounded-lg bg-muted/50 p-2.5 text-sm"><div><span className="text-xs text-muted-foreground">Договор:</span> <b>{record.contractNumber || 'не указан'}</b></div><div className="mt-1"><span className="text-xs text-muted-foreground">Контрагент:</span> {record.counterpartyName || 'не указан'}{record.counterpartyBin ? ` · БИН ${record.counterpartyBin}` : ''}</div><div className="mt-1"><span className="text-xs text-muted-foreground">Организация:</span> {record.organizationName || 'не указана'}{record.organizationBin ? ` · БИН ${record.organizationBin}` : ''}</div>{record.reference && <div className="mt-1"><span className="text-xs text-muted-foreground">Назначение:</span> {record.reference}</div>}</div>
+                    {scopeFilter === 'project' ? <>
+                      <Badge variant="outline" className="mt-3 whitespace-normal border-red-300 text-left text-red-900 dark:text-red-200">{ONEC_UNMATCHED_REASON_LABELS[record.matchReason] || record.matchReason}</Badge>
+                      <div className="mt-2 font-medium text-red-950 dark:text-red-100">{instruction.reason}</div>
+                      <div className="mt-2 text-xs font-medium text-sky-700 dark:text-sky-300">{instruction.path}</div>
+                      <div className="mt-1 text-sm leading-5 text-muted-foreground">{instruction.action}</div>
+                      {candidates.length > 0 && <details className="mt-2 text-xs"><summary className="cursor-pointer font-medium text-sky-700">Показать возможные проекты HUB ({candidates.length})</summary><ul className="mt-1 space-y-1 pl-4 text-muted-foreground">{candidates.map((candidate) => <li key={candidate}>{candidate}</li>)}</ul></details>}
+                      <Button type="button" size="sm" variant="outline" className="mt-3 w-full" onClick={() => void copyAccountantMessage(record)}><Copy className="mr-2 h-3.5 w-3.5" />{copiedRecordId === record.id ? 'Скопировано' : 'Скопировать бухгалтеру'}</Button>
+                      <Button type="button" size="sm" variant="ghost" className="mt-2 w-full" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'supplier')}>Это поставщик / расход</Button>
+                    </> : scopeFilter === 'review' ? <>
+                      <div className="mt-3 font-medium">Куда относится этот контрагент?</div>
+                      <div className="mt-1 text-sm text-muted-foreground">Выбор применится ко всем его записям и сохранится.</div>
+                      <div className="mt-3 grid gap-2"><Button type="button" size="sm" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'supplier')}>Поставщик / расход</Button><Button type="button" size="sm" variant="outline" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'project')}>Клиент / проект</Button><Button type="button" size="sm" variant="ghost" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'other')}>Прочая операция</Button></div>
+                    </> : <>
+                      <Badge variant="outline" className={`mt-3 ${scopeFilter === 'supplier' ? 'border-emerald-300 text-emerald-800 dark:text-emerald-200' : ''}`}>{ONE_C_ACCOUNTING_SCOPE_LABELS[scopeFilter]}</Badge>
+                      <div className="mt-2 font-medium">К проекту привязывать не нужно</div>
+                      <div className="mt-1 text-sm text-muted-foreground">Запись хранится отдельно и не считается ошибкой проекта.</div>
+                      <Button type="button" size="sm" variant="ghost" className="mt-2 w-full" disabled={classifyingRecordId === record.id} onClick={() => void classifyCounterparty(record, 'review')}>Изменить классификацию</Button>
+                    </>}
                   </div>
                 );
               })}
@@ -473,6 +546,7 @@ function OneCInboxCard({
             {filtered.length > visible.length && <div className="flex flex-col gap-2 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"><span>Показано {visible.length} из {filtered.length}</span><Button type="button" size="sm" variant="outline" onClick={() => setVisibleLimit((value) => Math.min(value + 100, filtered.length))}>Показать ещё {Math.min(100, filtered.length - visible.length)}</Button></div>}
           </>
         )}
+        {summary.count === 0 && <div className="p-8 text-center text-sm text-muted-foreground">В разделе «{ONE_C_ACCOUNTING_SCOPE_LABELS[scopeFilter]}» пока нет записей.</div>}
       </CardContent>
     </Card>
   );
@@ -594,6 +668,10 @@ export default function Accounting() {
   const oneCDataMountedRef = useRef(false);
   const oneCStatusRequestRef = useRef(0);
   const oneCInboxRequestRef = useRef(0);
+  const oneCInboxScopeCounts = useMemo(() => oneCInboxRecords.reduce<Record<OneCAccountingScope, number>>((result, record) => {
+    result[record.accountingScope] += 1;
+    return result;
+  }, { project: 0, supplier: 0, other: 0, review: 0 }), [oneCInboxRecords]);
 
   const refreshOneCStatus = useCallback(async () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
@@ -747,7 +825,7 @@ export default function Accounting() {
       setOneCActionErrorCode('');
       toast({
         title: 'Данные из 1С обновлены',
-        description: `Получено ${status.received}, сопоставлено ${status.matched}, требуют разбора ${status.unmatchedCount}.`,
+        description: `Получено ${status.received}, связано с проектами ${status.matched}, без проекта ${status.unmatchedCount}. Поставщики учитываются отдельно.`,
       });
       await refreshOneCInbox(false);
     } catch (syncError: any) {
@@ -1348,7 +1426,10 @@ export default function Accounting() {
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               {oneCDisplayStats && <Badge variant="secondary">Сопоставлено: {oneCDisplayStats.matched}</Badge>}
-              {Boolean(oneCDisplayStats?.unmatchedCount) && <Badge variant="destructive">Разобрать: {oneCDisplayStats?.unmatchedCount}</Badge>}
+              {oneCInboxScopeCounts.project > 0 && <Badge variant="destructive">Ошибки проектов: {oneCInboxScopeCounts.project}</Badge>}
+              {oneCInboxScopeCounts.supplier > 0 && <Badge variant="outline" className="border-emerald-300 text-emerald-700 dark:text-emerald-200">Поставщики: {oneCInboxScopeCounts.supplier}</Badge>}
+              {oneCInboxScopeCounts.review > 0 && <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-200">Определить: {oneCInboxScopeCounts.review}</Badge>}
+              {oneCInboxScopeCounts.other > 0 && <Badge variant="outline">Прочее: {oneCInboxScopeCounts.other}</Badge>}
               {user?.role === 'admin' && oneCStatus && !oneCStatus.pushEnabled && <Button variant="outline" onClick={createIntegrationKey} disabled={oneCSyncing}>Создать ключ 1С</Button>}
               {oneCStatus?.pullEnabled ? (
                 <Button onClick={runOneCSync} disabled={oneCSyncing}>
@@ -1376,7 +1457,7 @@ export default function Accounting() {
                 <Badge variant="outline">Пакеты: {latestOneCRun.batchCount} из {latestOneCRun.expectedBatchCount}</Badge>
               </div>
               <div className="mt-2 text-sm tabular-nums">
-                {latestOneCRun.rawReceived} подготовлено = {latestOneCRun.accepted} принято + {latestOneCRun.rejectedCount} отклонено; {latestOneCRun.accepted} принято = {latestOneCRun.matched} сопоставлено + {latestOneCRun.unmatchedCount} на разборе.
+                {latestOneCRun.rawReceived} подготовлено = {latestOneCRun.accepted} принято + {latestOneCRun.rejectedCount} отклонено; {latestOneCRun.accepted} принято = {latestOneCRun.matched} связано с проектами + {latestOneCRun.unmatchedCount} без проекта, включая поставщиков и прочие операции.
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 {latestOneCRun.complete && oneCRunArithmeticValid && latestOneCRun.status === 'success'
@@ -1392,19 +1473,6 @@ export default function Accounting() {
                   ))}
                 </div>
               )}
-            </div>
-          )}
-          {oneCDetailsOpen && Boolean(oneCDisplayStats?.unmatchedCount) && (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-              <div className="font-medium text-amber-900 dark:text-amber-200">Записи 1С, которые HUB не смог связать с проектом</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {Object.entries(oneCDisplayStats?.unmatchedSummary || {}).map(([key, count]) => {
-                  const [kind, reason] = key.split(':');
-                  const kindLabel = kind === 'payment' ? 'Оплаты' : kind === 'invoice' ? 'Счета' : kind === 'avr' ? 'АВР' : 'ЭСФ';
-                  return <Badge key={key} variant="outline" className="border-amber-300 bg-background px-3 py-1.5 text-amber-900 dark:text-amber-200">{kindLabel}: {count} · {ONEC_UNMATCHED_REASON_LABELS[reason] || reason}</Badge>;
-                })}
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">Исправьте номер договора или БИН в HUB/1С и запустите синхронизацию повторно. Финансовые реквизиты несопоставленных записей не сохраняются в общедоступных настройках.</div>
             </div>
           )}
           {oneCDetailsOpen && (

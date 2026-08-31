@@ -301,6 +301,8 @@ export function buildOneCInboxRows(matches, source, syncedAt) {
       match_status: match.project ? 'matched' : 'unmatched',
       match_reason: text(match.reason),
       match_candidates: Array.isArray(match.candidates) ? match.candidates.map(String).slice(0, 50) : [],
+      auto_scope: text(match.autoScope) || (match.project ? 'project' : 'review'),
+      manual_scope: text(match.manualScope) || null,
       synced_at: syncedAt,
       last_seen_at: syncedAt,
       is_active: true,

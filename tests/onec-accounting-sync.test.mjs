@@ -4,10 +4,12 @@ import { planOneCProjectChanges } from '../api/1c/sync.mjs';
 import {
   findOneCRecordLocations,
   hashSharedSecret,
+  inferOneCAccountingScope,
   isOneCNoopBatch,
   matchOneCRecord,
   mergeOneCRecordsIntoNotes,
   normalizeOneCPayload,
+  oneCCounterpartyScopeKey,
   removeOneCRecordsFromNotes,
   runWithConcurrency,
   secureSecretMatches,
@@ -22,6 +24,19 @@ const project = {
     client: { name: 'ТОО Клиент', bin: '123456789012' },
   },
 };
+
+test('1C accounting direction separates supplier expenses without guessing unknown counterparties', () => {
+  const [outgoingPayment, incomingPayment, unknownInvoice] = normalizeOneCPayload({ records: [
+    { type: 'payment', id: 'pay-out', date: '2026-08-31', amount: 10_000, direction: 'Исходящий', counterpartyBin: '111111111111' },
+    { type: 'payment', id: 'pay-in', date: '2026-08-31', amount: 20_000, direction: 'Входящий', counterpartyBin: '222222222222' },
+    { type: 'invoice', id: 'invoice-unknown', date: '2026-08-31', amount: 30_000, counterpartyName: 'ТОО Неизвестный' },
+  ] }).records;
+
+  assert.equal(inferOneCAccountingScope(outgoingPayment), 'supplier');
+  assert.equal(inferOneCAccountingScope(incomingPayment), 'project');
+  assert.equal(inferOneCAccountingScope(unknownInvoice, { project: null, reason: 'contract_not_found' }), 'review');
+  assert.equal(oneCCounterpartyScopeKey(outgoingPayment, 'MAK'), 'MAK\u0000organization:unknown\u0000bin:111111111111');
+});
 
 test('1C connection check accepts only an explicit empty non-snapshot batch', () => {
   assert.equal(isOneCNoopBatch({
@@ -341,6 +356,33 @@ test('rematch plan cleans A, writes B, and uses notes safely when inbox migratio
   assert.deepEqual([...plan.removals.keys()], ['project-a']);
   assert.deepEqual([...plan.additions.keys()], ['project-b']);
   assert.equal(plan.matches[0].match.project?.id, 'project-b');
+});
+
+test('remembered supplier classification detaches records from projects and never creates a project error', () => {
+  const source = 'MAK';
+  const [record] = normalizeOneCPayload({ records: [{
+    type: 'invoice', id: 'internet-1', number: 'INV-1', date: '2026-08-31', amount: 45_000,
+    contractNumber: 'B-11', counterpartyBin: '333333333333', organizationBin: '444444444444',
+  }] }).records;
+  const linkedProject = { id: 'project-b', notes: {
+    contract: { number: 'B-11' },
+    client: { bin: '333333333333' },
+    accounting: { documents: [{ source: '1c', sourceDatabase: source, type: 'invoice', externalId: record.externalId }] },
+  } };
+  const ruleKey = oneCCounterpartyScopeKey(record, source);
+  const plan = planOneCProjectChanges(
+    [record],
+    [linkedProject],
+    source,
+    { rowsByKey: new Map(), projectIdsByPaymentDocumentId: new Map() },
+    new Map([[ruleKey, 'supplier']]),
+  );
+
+  assert.equal(plan.matches[0].match.project, null);
+  assert.equal(plan.matches[0].match.accountingScope, 'supplier');
+  assert.equal(plan.matches[0].match.reason, 'supplier_expense');
+  assert.deepEqual([...plan.removals.keys()], ['project-b']);
+  assert.equal(plan.additions.size, 0);
 });
 
 test('cancel-after-rematch plan removes duplicate imported payments but keeps durable project B', () => {

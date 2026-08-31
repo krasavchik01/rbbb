@@ -32,6 +32,10 @@ export interface OneCSyncStatus {
   rejectedReasons?: Record<string, number>;
   matched: number;
   unmatchedCount: number;
+  projectIssueCount?: number;
+  supplierCount?: number;
+  reviewCount?: number;
+  otherCount?: number;
   unmatchedSummary: Record<string, number>;
   updatedProjects: number;
   unmatched: OneCUnmatchedRecord[];

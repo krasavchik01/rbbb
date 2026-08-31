@@ -13,6 +13,10 @@ const migrationUrl = new URL(
   '../supabase/migrations/20260821110000_create_one_c_accounting_records.sql',
   import.meta.url,
 );
+const counterpartyScopeMigrationUrl = new URL(
+  '../supabase/migrations/20260831113000_split_one_c_projects_and_suppliers.sql',
+  import.meta.url,
+);
 const syncUrl = new URL('../api/1c/sync.mjs', import.meta.url);
 const vercelUrl = new URL('../vercel.json', import.meta.url);
 
@@ -60,6 +64,17 @@ test('1C source lease outlives the explicitly bounded serverless handler', async
   assert.equal(config.functions?.['api/1c/sync.mjs']?.maxDuration, 300);
   assert.match(source, /const ONE_C_SOURCE_LEASE_SECONDS = 30 \* 60/);
   assert.ok(30 * 60 > config.functions['api/1c/sync.mjs'].maxDuration);
+});
+
+test('1C supplier classification is durable and remains service-only', async () => {
+  const sql = await readFile(counterpartyScopeMigrationUrl, 'utf8');
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS auto_scope TEXT NOT NULL DEFAULT 'review'/i);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS manual_scope TEXT/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.one_c_counterparty_scopes/i);
+  assert.match(sql, /scope IN \('project', 'supplier', 'other'\)/i);
+  assert.match(sql, /REVOKE ALL ON TABLE public\.one_c_counterparty_scopes FROM PUBLIC, anon, authenticated/i);
+  assert.match(sql, /GRANT ALL ON TABLE public\.one_c_counterparty_scopes TO service_role/i);
+  assert.doesNotMatch(sql, /GRANT SELECT ON TABLE public\.one_c_counterparty_scopes TO authenticated/i);
 });
 
 test('source-gate migration seeds only proven successful imports, including successful NULL rollout barriers', async () => {
@@ -535,6 +550,14 @@ function allRejectedSupabase(batchError = null, initialBatchRows = [], inboxErro
             return { error: null };
           },
           then(resolve, reject) { return Promise.resolve({ data: [], error: inboxError }).then(resolve, reject); },
+        };
+        return query;
+      }
+      if (table === 'one_c_counterparty_scopes') {
+        const query = {
+          select() { return query; },
+          eq() { return query; },
+          then(resolve, reject) { return Promise.resolve({ data: [], error: null }).then(resolve, reject); },
         };
         return query;
       }

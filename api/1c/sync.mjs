@@ -7,11 +7,13 @@ import {
 } from '../_email-utils.mjs';
 import {
   hashSharedSecret,
+  inferOneCAccountingScope,
   isOneCNoopBatch,
   findOneCRecordLocations,
   matchOneCRecord,
   mergeOneCRecordsIntoNotes,
   normalizeOneCPayload,
+  oneCCounterpartyScopeKey,
   removeOneCRecordsFromNotes,
   runWithConcurrency,
   secureSecretMatches,
@@ -201,6 +203,10 @@ function publicStatus(state = {}, latestRun = null) {
     rejectedReasons: state.rejectedReasons && typeof state.rejectedReasons === 'object' ? state.rejectedReasons : {},
     matched: Number(state.matched || 0),
     unmatchedCount: Number(state.unmatchedCount || 0),
+    projectIssueCount: Number(state.projectIssueCount || 0),
+    supplierCount: Number(state.supplierCount || 0),
+    reviewCount: Number(state.reviewCount || 0),
+    otherCount: Number(state.otherCount || 0),
     unmatchedSummary: state.unmatchedSummary && typeof state.unmatchedSummary === 'object' ? state.unmatchedSummary : {},
     updatedProjects: Number(state.updatedProjects || 0),
     inboxUpserted: Number(state.inboxUpserted || 0),
@@ -208,6 +214,102 @@ function publicStatus(state = {}, latestRun = null) {
     history: Array.isArray(state.history) ? state.history.slice(0, 10) : [],
     latestRun,
   };
+}
+
+function isMissingOneCCounterpartyScopeTable(error) {
+  const code = String(error?.code || '').toUpperCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42P01'
+    || code === 'PGRST205'
+    || (message.includes('one_c_counterparty_scopes') && (
+      message.includes('does not exist')
+      || message.includes('could not find the table')
+      || message.includes('schema cache')
+    ));
+}
+
+async function loadOneCCounterpartyScopeRules(supabase, source) {
+  const { data, error } = await supabase
+    .from('one_c_counterparty_scopes')
+    .select('rule_key,scope')
+    .eq('source', source);
+  if (error) {
+    if (isMissingOneCCounterpartyScopeTable(error)) return new Map();
+    throw error;
+  }
+  return new Map((data || []).map((row) => [String(row.rule_key || ''), String(row.scope || '')]));
+}
+
+async function classifyOneCCounterparty(supabase, user, recordId, requestedScope) {
+  const allowed = new Set(['project', 'supplier', 'other', 'review']);
+  const scope = String(requestedScope || '').trim().toLowerCase();
+  if (!allowed.has(scope)) {
+    const error = new Error('Выберите: клиент/проект, поставщик/расход, прочее или определить позже');
+    error.statusCode = 400;
+    throw error;
+  }
+  const { data: row, error: readError } = await supabase
+    .from('one_c_accounting_records')
+    .select('id,source,normalized_record')
+    .eq('id', String(recordId || ''))
+    .eq('is_active', true)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!row) {
+    const error = new Error('Запись 1С уже обновилась или больше не существует');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const record = row.normalized_record && typeof row.normalized_record === 'object'
+    ? row.normalized_record
+    : {};
+  const ruleKey = oneCCounterpartyScopeKey(record, row.source);
+  if (!ruleKey) {
+    const error = new Error('В записи 1С нет БИН или наименования контрагента');
+    error.statusCode = 400;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const manualScope = scope === 'review' ? null : scope;
+  if (manualScope) {
+    const { error: ruleError } = await supabase
+      .from('one_c_counterparty_scopes')
+      .upsert({
+        source: row.source,
+        rule_key: ruleKey,
+        scope: manualScope,
+        organization_name: String(record.organizationName || ''),
+        organization_bin: String(record.organizationBin || ''),
+        counterparty_name: String(record.counterpartyName || ''),
+        counterparty_bin: String(record.counterpartyBin || ''),
+        classified_by: String(user?.id || user?.name || user?.role || ''),
+        updated_at: now,
+      }, { onConflict: 'source,rule_key' });
+    if (ruleError) throw ruleError;
+  } else {
+    const { error: deleteError } = await supabase
+      .from('one_c_counterparty_scopes')
+      .delete()
+      .eq('source', row.source)
+      .eq('rule_key', ruleKey);
+    if (deleteError && !isMissingOneCCounterpartyScopeTable(deleteError)) throw deleteError;
+  }
+
+  let update = supabase
+    .from('one_c_accounting_records')
+    .update({ manual_scope: manualScope, scope_updated_at: now })
+    .eq('source', row.source)
+    .eq('is_active', true);
+  const organizationBin = String(record.organizationBin || '').replace(/\D/g, '');
+  const counterpartyBin = String(record.counterpartyBin || '').replace(/\D/g, '');
+  if (organizationBin) update = update.eq('normalized_record->>organizationBin', organizationBin);
+  else if (record.organizationName) update = update.eq('normalized_record->>organizationName', String(record.organizationName));
+  if (counterpartyBin) update = update.eq('normalized_record->>counterpartyBin', counterpartyBin);
+  else update = update.eq('normalized_record->>counterpartyName', String(record.counterpartyName || ''));
+  const { data: updatedRows, error: updateError } = await update.select('id');
+  if (updateError) throw updateError;
+  return { scope, updated: Array.isArray(updatedRows) ? updatedRows.length : 0 };
 }
 
 async function persistOneCInbox(supabase, matches, source, syncedAt) {
@@ -256,7 +358,7 @@ async function loadPreviousOneCInbox(supabase, records, source) {
     const batch = externalIds.slice(offset, offset + INBOX_UPSERT_BATCH_SIZE);
     const { data, error } = await supabase
       .from('one_c_accounting_records')
-      .select('source,kind,external_id,normalized_record,project_id,match_status,last_seen_at')
+      .select('source,kind,external_id,normalized_record,project_id,match_status,manual_scope,last_seen_at')
       .eq('source', source)
       .in('external_id', batch);
     if (error) {
@@ -277,7 +379,7 @@ async function loadPreviousOneCInbox(supabase, records, source) {
     const batch = paymentDocumentIds.slice(offset, offset + INBOX_UPSERT_BATCH_SIZE);
     const { data, error } = await supabase
       .from('one_c_accounting_records')
-      .select('source,kind,external_id,normalized_record,project_id,match_status,last_seen_at')
+      .select('source,kind,external_id,normalized_record,project_id,match_status,manual_scope,last_seen_at')
       .eq('source', source)
       .eq('kind', 'payment')
       .in('normalized_record->>paymentDocumentId', batch);
@@ -298,7 +400,7 @@ async function loadPreviousOneCInbox(supabase, records, source) {
   return { available: true, rowsByKey, projectIdsByPaymentDocumentId };
 }
 
-export function planOneCProjectChanges(records, projects, source, previousInbox = {}) {
+export function planOneCProjectChanges(records, projects, source, previousInbox = {}, scopeRules = new Map()) {
   const additions = new Map();
   const removals = new Map();
   const matches = [];
@@ -317,10 +419,24 @@ export function planOneCProjectChanges(records, projects, source, previousInbox 
       : priorPaymentProjectIds.size === 1
         ? [...priorPaymentProjectIds][0]
         : null;
-    const match = matchOneCRecord(record, projects || [], {
+    const businessMatch = matchOneCRecord(record, projects || [], {
       source,
       preferredProjectId: record.status === 'cancelled' ? preferredProjectId : null,
     });
+    const ruleKey = oneCCounterpartyScopeKey(record, source);
+    const manualScope = String(previous?.manual_scope || (ruleKey ? scopeRules.get(ruleKey) : '') || '');
+    const autoScope = inferOneCAccountingScope(record, businessMatch);
+    const accountingScope = manualScope || autoScope;
+    const match = ['supplier', 'other'].includes(accountingScope)
+      ? {
+        project: null,
+        reason: accountingScope === 'supplier' ? 'supplier_expense' : 'other_counterparty',
+        candidates: [],
+        autoScope,
+        manualScope,
+        accountingScope,
+      }
+      : { ...businessMatch, autoScope, manualScope, accountingScope };
     matches.push({ record, match });
 
     const targetProjectId = match.project ? String(match.project.id) : '';
@@ -334,8 +450,9 @@ export function planOneCProjectChanges(records, projects, source, previousInbox 
     }
 
     const cancelledPayment = record.kind === 'payment' && record.status === 'cancelled';
+    const shouldDetachFromProjects = ['supplier', 'other'].includes(accountingScope);
     for (const locationProjectId of locationProjectIds) {
-      if (cancelledPayment || (targetProjectId && locationProjectId !== targetProjectId)) {
+      if (cancelledPayment || shouldDetachFromProjects || (targetProjectId && locationProjectId !== targetProjectId)) {
         removals.set(locationProjectId, [...(removals.get(locationProjectId) || []), record]);
       }
     }
@@ -564,7 +681,7 @@ async function loadOneCInboxPage(supabase, query) {
   const { cursor, limit } = normalizeOneCInboxQuery(query);
   let request = supabase
     .from('one_c_accounting_records')
-    .select('id,source,kind,external_id,normalized_record,match_status,match_reason,match_candidates,synced_at,first_seen_at,last_seen_at')
+    .select('id,source,kind,external_id,normalized_record,match_status,match_reason,match_candidates,auto_scope,manual_scope,scope_updated_at,synced_at,first_seen_at,last_seen_at')
     .eq('match_status', 'unmatched')
     .is('project_id', null)
     .eq('is_active', true)
@@ -899,6 +1016,10 @@ export async function ingestPayload(supabase, body) {
     rejectedReasons: diagnostics.rejectedReasons,
     matched: 0,
     unmatched: 0,
+    projectIssues: 0,
+    suppliers: 0,
+    review: 0,
+    other: 0,
     unmatchedSummary: {},
     updatedProjects: 0,
     updatedProjectIds: new Set(),
@@ -986,18 +1107,26 @@ export async function ingestPayload(supabase, body) {
         .select('id,name,notes,status,updated_at');
       if (projectsError) throw projectsError;
 
-      const previousInbox = await loadPreviousOneCInbox(supabase, payload.records, payload.source);
+      const [previousInbox, scopeRules] = await Promise.all([
+        loadPreviousOneCInbox(supabase, payload.records, payload.source),
+        loadOneCCounterpartyScopeRules(supabase, payload.source),
+      ]);
       const { additions, removals, matches } = planOneCProjectChanges(
         payload.records,
         projects || [],
         payload.source,
         previousInbox,
+        scopeRules,
       );
       for (const { record, match } of matches) {
         if (!match.project) {
           counters.unmatched += 1;
           const key = `${record.kind}:${match.reason}`;
           counters.unmatchedSummary[key] = (counters.unmatchedSummary[key] || 0) + 1;
+          if (match.accountingScope === 'supplier') counters.suppliers += 1;
+          else if (match.accountingScope === 'other') counters.other += 1;
+          else if (match.accountingScope === 'project') counters.projectIssues += 1;
+          else counters.review += 1;
           continue;
         }
         counters.matched += 1;
@@ -1092,6 +1221,10 @@ export async function ingestPayload(supabase, body) {
       rejectedReasons: counters.rejectedReasons,
       matched: counters.matched,
       unmatched: counters.unmatched,
+      projectIssues: counters.projectIssues,
+      suppliers: counters.suppliers,
+      review: counters.review,
+      other: counters.other,
       updatedProjects: counters.updatedProjects,
       inboxUpserted: counters.inboxUpserted,
       reconciled: reconciliation.reconciled,
@@ -1113,6 +1246,10 @@ export async function ingestPayload(supabase, body) {
       rejectedReasons: summary.rejectedReasons,
       matched: summary.matched,
       unmatchedCount: summary.unmatched,
+      projectIssueCount: summary.projectIssues,
+      supplierCount: summary.suppliers,
+      reviewCount: summary.review,
+      otherCount: summary.other,
       updatedProjects: summary.updatedProjects,
       inboxUpserted: summary.inboxUpserted,
       unmatchedSummary: counters.unmatchedSummary,
@@ -1272,6 +1409,15 @@ export default async function handler(req, res) {
 
     const { user } = await requireAccountingUser(req, supabase);
     authenticated = true;
+    if (body?.action === 'classify_counterparty') {
+      const result = await classifyOneCCounterparty(
+        supabase,
+        user,
+        body?.recordId,
+        body?.scope,
+      );
+      return res.status(200).json({ success: true, ...result });
+    }
     if (body?.action === 'rotate_key') {
       if (String(user.role || '') !== 'admin') {
         const accessError = new Error('Только администратор может создать ключ обмена 1С');

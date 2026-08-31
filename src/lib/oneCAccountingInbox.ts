@@ -1,6 +1,7 @@
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 
 export type OneCAccountingInboxKind = 'invoice' | 'avr' | 'esf' | 'payment' | 'unknown';
+export type OneCAccountingScope = 'project' | 'supplier' | 'other' | 'review';
 
 export interface OneCAccountingInboxRecord {
   id: string;
@@ -16,6 +17,12 @@ export interface OneCAccountingInboxRecord {
   organizationBin: string;
   counterpartyName: string;
   counterpartyBin: string;
+  reference: string;
+  accountingDirection: string;
+  operationType: string;
+  autoScope: OneCAccountingScope;
+  manualScope: OneCAccountingScope | '';
+  accountingScope: OneCAccountingScope;
   matchStatus: string;
   matchReason: string;
   matchCandidates: string[];
@@ -58,12 +65,26 @@ interface OneCAccountingInboxApiResponse {
   error?: string;
 }
 
+interface OneCAccountingScopeResponse {
+  success?: boolean;
+  scope?: OneCAccountingScope;
+  updated?: number;
+  error?: string;
+}
+
 export const ONE_C_INBOX_KIND_LABELS: Record<OneCAccountingInboxKind, string> = {
   invoice: 'Счета',
   avr: 'АВР',
   esf: 'ЭСФ',
   payment: 'Оплаты',
   unknown: 'Другое',
+};
+
+export const ONE_C_ACCOUNTING_SCOPE_LABELS: Record<OneCAccountingScope, string> = {
+  project: 'Клиенты и проекты',
+  supplier: 'Поставщики и расходы',
+  other: 'Прочие операции',
+  review: 'Нужно определить',
 };
 
 const ONE_C_DOCUMENT_GUIDANCE: Record<OneCAccountingInboxKind, { title: string; path: string; field: string }> = {
@@ -202,6 +223,13 @@ function kind(value: unknown): OneCAccountingInboxKind {
   return 'unknown';
 }
 
+function accountingScope(value: unknown, fallback: OneCAccountingScope = 'review'): OneCAccountingScope {
+  const normalized = text(value).toLocaleLowerCase('ru');
+  return ['project', 'supplier', 'other', 'review'].includes(normalized)
+    ? normalized as OneCAccountingScope
+    : fallback;
+}
+
 function candidates(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(text).filter(Boolean);
   if (value && typeof value === 'object') return Object.values(value).map(text).filter(Boolean);
@@ -249,6 +277,16 @@ export function normalizeOneCAccountingInboxRecord(
     organizationBin: text(businessField(['organization_bin', 'organizationBin', 'company_bin', 'companyBin'])),
     counterpartyName: text(businessField(['counterparty_name', 'counterpartyName', 'customer_name', 'customerName'])),
     counterpartyBin: text(businessField(['counterparty_bin', 'counterpartyBin', 'customer_bin', 'customerBin'])),
+    reference: text(businessField(['reference', 'purpose', 'paymentPurpose'])),
+    accountingDirection: text(businessField(['accountingDirection', 'accounting_direction', 'direction'])),
+    operationType: text(businessField(['operationType', 'operation_type', 'operation'])),
+    autoScope: accountingScope(first(metadata, ['auto_scope', 'autoScope'])),
+    manualScope: text(first(metadata, ['manual_scope', 'manualScope']))
+      ? accountingScope(first(metadata, ['manual_scope', 'manualScope']))
+      : '',
+    accountingScope: accountingScope(
+      first(metadata, ['manual_scope', 'manualScope']) || first(metadata, ['auto_scope', 'autoScope']),
+    ),
     matchStatus: text(first(metadata, ['match_status', 'matchStatus'])) || 'unmatched',
     matchReason: text(first(metadata, ['match_reason', 'matchReason', 'reason'])) || 'unknown',
     matchCandidates: candidates(first(metadata, ['match_candidates', 'matchCandidates', 'candidates'])),
@@ -304,7 +342,27 @@ export function filterOneCAccountingInbox(
     record.externalId,
     record.organizationName,
     record.organizationBin,
+    record.reference,
+    record.operationType,
   ].some((value) => searchKey(value).includes(needle)));
+}
+
+export async function classifyOneCCounterparty(
+  recordId: string,
+  scope: OneCAccountingScope,
+): Promise<{ scope: OneCAccountingScope; updated: number }> {
+  const { data, error } = await apiPost<OneCAccountingScopeResponse>('/api/1c/sync', {
+    action: 'classify_counterparty',
+    recordId,
+    scope,
+  });
+  if (error || !data || data.success === false) {
+    throw new Error(error || data?.error || 'Не удалось сохранить вид контрагента');
+  }
+  return {
+    scope: accountingScope(data.scope, scope),
+    updated: Number(data.updated || 0),
+  };
 }
 
 export function isMissingOneCInboxTable(error: unknown): boolean {

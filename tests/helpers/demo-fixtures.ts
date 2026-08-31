@@ -324,6 +324,8 @@ async function fulfillApplicationApi(route: Route, journal: DemoNetworkJournal) 
             match_status: 'unmatched',
             match_reason: 'contract_not_found',
             match_candidates: [DEMO_PROJECT_ID],
+            auto_scope: 'project',
+            manual_scope: null,
           }],
           nextCursor: null,
           hasMore: false,

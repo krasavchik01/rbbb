@@ -90,6 +90,46 @@ function normalizePaymentKind(value) {
   return 'other';
 }
 
+export function normalizeOneCAccountingDirection(value) {
+  const key = normalizeIdentity(value);
+  if (!key) return 'unknown';
+  if (/поставщик|закуп|покупк|расход|списан|оплатапоставщику|vendor|supplier|purchase|expense/.test(key)) return 'supplier';
+  if (/клиент|покупател|заказчик|продаж|выручк|customer|client|sale|revenue/.test(key)) return 'customer';
+  if (/исходящ|outgoing|outbound|расходный/.test(key)) return 'outgoing';
+  if (/входящ|incoming|inbound|поступлен/.test(key)) return 'incoming';
+  if (/налог|зарплат|подотчет|комисси.*банк|госпошлин|tax|salary|payroll|employee|bankfee|other/.test(key)) return 'other';
+  return 'unknown';
+}
+
+export function oneCCounterpartyScopeKey(record, source = '') {
+  const identityKey = (bin, name) => {
+    const digits = text(bin).replace(/\D/g, '');
+    if (digits) return `bin:${digits}`;
+    const normalized = normalizeIdentity(name);
+    return normalized ? `name:${normalized}` : '';
+  };
+  const organization = identityKey(record?.organizationBin, record?.organizationName);
+  const counterparty = identityKey(record?.counterpartyBin, record?.counterpartyName);
+  if (!counterparty) return '';
+  return `${text(source || record?.source || '1C')}\u0000${organization || 'organization:unknown'}\u0000${counterparty}`;
+}
+
+export function inferOneCAccountingScope(record, match = {}) {
+  if (match?.project) return 'project';
+  const direction = normalizeOneCAccountingDirection(
+    record?.accountingDirection || record?.operationType || '',
+  );
+  if (direction === 'supplier') return 'supplier';
+  if (direction === 'customer') return 'project';
+  if (direction === 'other') return 'other';
+  if (direction === 'incoming') return record?.kind === 'payment' ? 'project' : 'supplier';
+  if (direction === 'outgoing') return record?.kind === 'payment' ? 'supplier' : 'project';
+  if (Array.isArray(match?.candidates) && match.candidates.length > 0) return 'project';
+  if (['contract_identity_mismatch', 'ambiguous_contract', 'ambiguous_existing_record', 'project_deleted']
+    .includes(String(match?.reason || ''))) return 'project';
+  return 'review';
+}
+
 export function normalizeOneCRecord(raw, index = 0) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const kind = normalizeKind(first(raw, ['kind', 'type', 'documentType', 'ВидДокумента', 'ТипДокумента']));
@@ -120,6 +160,12 @@ export function normalizeOneCRecord(raw, index = 0) {
     currency: text(first(raw, ['currency', 'Валюта'])) || 'KZT',
     status,
     paymentKind: normalizePaymentKind(first(raw, ['paymentKind', 'ВидОплаты', 'ТипОплаты'])),
+    accountingDirection: normalizeOneCAccountingDirection(first(raw, [
+      'accountingDirection', 'flow', 'direction', 'operationDirection',
+      'НаправлениеУчета', 'НаправлениеУчёта', 'Направление', 'СторонаУчета', 'СторонаУчёта',
+      'ВидОперации', 'ТипОперации',
+    ])),
+    operationType: text(first(raw, ['operationType', 'operation', 'ВидОперации', 'ТипОперации'])),
     paymentDocumentId,
     reference: text(first(raw, ['reference', 'purpose', 'НазначениеПлатежа', 'Основание'])),
     contractNumber,

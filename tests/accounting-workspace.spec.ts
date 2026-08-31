@@ -59,7 +59,8 @@ test.describe('accounting workspace', () => {
     await expect(page.getByText('Обмен с 1С')).toBeVisible();
     await expect(page.getByText('Обмен работает')).toBeVisible();
     await page.getByRole('button', { name: 'Подробности 1С' }).click();
-    await expect(page.getByText(/Счета: 1 · Договор не найден/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Клиенты \/ проекты/ })).toContainText('1');
+    await expect(page.getByText('Договор не найден в проектах HUB').first()).toBeVisible();
     await expect(page.getByText('Бонусная ведомость')).toHaveCount(0);
     await expect(page.getByText('Свод', { exact: true })).toHaveCount(0);
   });

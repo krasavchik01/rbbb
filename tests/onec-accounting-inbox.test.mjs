@@ -55,6 +55,8 @@ test('1C inbox rows preserve unmatched diagnostics and deduplicate source keys',
   assert.equal(rows[0].project_id, 'p2');
   assert.equal(rows[0].match_status, 'matched');
   assert.equal(rows[0].match_reason, 'contract_and_identity');
+  assert.equal(rows[0].auto_scope, 'project');
+  assert.equal(rows[0].manual_scope, null);
   assert.equal(rows[0].is_active, true);
 });
 

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import {
   buildOneCAccountantMessage,
   buildOneCAccountingFixInstruction,
+  classifyOneCCounterparty,
   filterOneCAccountingInbox,
   isMissingOneCInboxTable,
   loadOneCAccountingInbox,
@@ -10,13 +11,15 @@ import {
   summarizeOneCAccountingInbox,
 } from './oneCAccountingInbox';
 
-vi.mock('@/lib/api', () => ({ apiGet: vi.fn() }));
+vi.mock('@/lib/api', () => ({ apiGet: vi.fn(), apiPost: vi.fn() }));
 
 const apiGetMock = vi.mocked(apiGet);
+const apiPostMock = vi.mocked(apiPost);
 
 describe('oneCAccountingInbox', () => {
   beforeEach(() => {
     apiGetMock.mockReset();
+    apiPostMock.mockReset();
   });
 
   const invoice = normalizeOneCAccountingInboxRecord({
@@ -59,6 +62,37 @@ describe('oneCAccountingInbox', () => {
       matchReason: 'contract_not_found',
     });
     expect(payment).toMatchObject({ kind: 'payment', documentNumber: 'ПП-15', contractNumber: 'А-15' });
+  });
+
+  it('keeps supplier and manual counterparty scopes separate from project errors', async () => {
+    const supplier = normalizeOneCAccountingInboxRecord({
+      id: 'supplier-row',
+      auto_scope: 'review',
+      manual_scope: 'supplier',
+      normalized_record: {
+        kind: 'payment', number: 'ПП-99', date: '2026-08-31', amount: 25_000,
+        reference: 'Оплата интернета', accountingDirection: 'outgoing',
+      },
+      match_reason: 'missing_contract',
+    });
+    expect(supplier).toMatchObject({
+      accountingScope: 'supplier',
+      autoScope: 'review',
+      manualScope: 'supplier',
+      reference: 'Оплата интернета',
+    });
+
+    apiPostMock.mockResolvedValueOnce({
+      status: 200,
+      data: { success: true, scope: 'supplier', updated: 7 },
+    });
+    await expect(classifyOneCCounterparty('supplier-row', 'supplier')).resolves.toEqual({
+      scope: 'supplier',
+      updated: 7,
+    });
+    expect(apiPostMock).toHaveBeenCalledWith('/api/1c/sync', {
+      action: 'classify_counterparty', recordId: 'supplier-row', scope: 'supplier',
+    });
   });
 
   it('reads business fields from normalized_record while keeping table metadata authoritative', () => {
