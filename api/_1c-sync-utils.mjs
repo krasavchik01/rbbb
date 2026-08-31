@@ -124,6 +124,11 @@ export function inferOneCAccountingScope(record, match = {}) {
   if (direction === 'other') return 'other';
   if (direction === 'incoming') return record?.kind === 'payment' ? 'project' : 'supplier';
   if (direction === 'outgoing') return record?.kind === 'payment' ? 'supplier' : 'project';
+  // The bundled 1C extension exports incoming payment orders. Older 1C
+  // documents may not contain an explicit direction, but they are still
+  // client receipts. Explicit outgoing/supplier directions above keep
+  // priority for custom integrations.
+  if (record?.kind === 'payment') return 'project';
   if (Array.isArray(match?.candidates) && match.candidates.length > 0) return 'project';
   if (['contract_identity_mismatch', 'ambiguous_contract', 'ambiguous_existing_record', 'project_deleted']
     .includes(String(match?.reason || ''))) return 'project';

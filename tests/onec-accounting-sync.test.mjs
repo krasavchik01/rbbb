@@ -26,14 +26,16 @@ const project = {
 };
 
 test('1C accounting direction separates supplier expenses without guessing unknown counterparties', () => {
-  const [outgoingPayment, incomingPayment, unknownInvoice] = normalizeOneCPayload({ records: [
+  const [outgoingPayment, incomingPayment, directionlessPayment, unknownInvoice] = normalizeOneCPayload({ records: [
     { type: 'payment', id: 'pay-out', date: '2026-08-31', amount: 10_000, direction: 'Исходящий', counterpartyBin: '111111111111' },
     { type: 'payment', id: 'pay-in', date: '2026-08-31', amount: 20_000, direction: 'Входящий', counterpartyBin: '222222222222' },
+    { type: 'payment', id: 'pay-default-in', date: '2026-08-31', amount: 5_000, counterpartyName: 'ТОО Клиент' },
     { type: 'invoice', id: 'invoice-unknown', date: '2026-08-31', amount: 30_000, counterpartyName: 'ТОО Неизвестный' },
   ] }).records;
 
   assert.equal(inferOneCAccountingScope(outgoingPayment), 'supplier');
   assert.equal(inferOneCAccountingScope(incomingPayment), 'project');
+  assert.equal(inferOneCAccountingScope(directionlessPayment, { project: null, reason: 'missing_contract' }), 'project');
   assert.equal(inferOneCAccountingScope(unknownInvoice, { project: null, reason: 'contract_not_found' }), 'review');
   assert.equal(oneCCounterpartyScopeKey(outgoingPayment, 'MAK'), 'MAK\u0000organization:unknown\u0000bin:111111111111');
 });
